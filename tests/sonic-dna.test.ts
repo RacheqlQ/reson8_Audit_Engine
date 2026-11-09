@@ -78,11 +78,19 @@ describe("Sonic DNA",()=>{
   expect(key.mode).toBe("major");
   expect(key.keyConfidence).toBeGreaterThan(0);
  });
- it("keeps six-minute 44.1 kHz analysis bounded while retaining tempo and spectral measurements",()=>{
-  const samples=pulse(120,360,44100),result=analyzePcm(samples,44100);
+ it("keeps six-minute 44.1 kHz analysis bounded while retaining chroma, tempo and spectral measurements",()=>{
+  const sampleRate=44100,samples=pulse(120,360,sampleRate);
+  const chordLoop=Float32Array.from({length:2048},(_,i)=>(
+   Math.sin(2*Math.PI*12*i/2048)+Math.sin(2*Math.PI*15*i/2048)+Math.sin(2*Math.PI*18*i/2048)
+  )/3);
+  for(let i=0;i<samples.length;i++)samples[i]+=0.1*chordLoop[i%chordLoop.length];
+  const result=analyzePcm(samples,sampleRate);
   expect(result.durationSeconds).toBe(360);
   expect(result.bpm).toBeGreaterThanOrEqual(115);
   expect(result.bpm).toBeLessThanOrEqual(125);
+  expect(result.key).toBe("C");
+  expect(result.mode).toBe("major");
+  expect(result.keyConfidence).toBeGreaterThan(0);
   expect(result.spectralCentroidHz).toBeGreaterThan(0);
   expect(result.zeroCrossingRate).toBeGreaterThan(0);
  });
