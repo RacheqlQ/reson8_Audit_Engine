@@ -98,11 +98,11 @@ function sonicLines(input: AuditReportInput): string[] {
     : "OBSERVED: sonic measurements are derived from the supplied audio master.";
   return [
     source,
-    "BPM: " + value(input.sonicDna.bpm),
-    "Alternate tempo: " + value(input.sonicDna.alternateTempo),
+    "BPM: " + (input.sonicDna.bpm === null || input.sonicDna.bpm === undefined ? "Not determined" : value(input.sonicDna.bpm)),
+    "Alternate tempo: " + (input.sonicDna.alternateTempo === null || input.sonicDna.alternateTempo === undefined ? "Not determined" : value(input.sonicDna.alternateTempo)),
     "Tempo confidence: " + value(input.sonicDna.tempoConfidence),
-    "Key: " + value(input.sonicDna.key),
-    "Mode: " + value(input.sonicDna.mode),
+    "Key: " + (input.sonicDna.key === null || input.sonicDna.key === undefined ? "Not determined" : value(input.sonicDna.key)),
+    "Mode: " + (input.sonicDna.mode === null || input.sonicDna.mode === undefined ? "Not determined" : value(input.sonicDna.mode)),
     "Key confidence: " + value(input.sonicDna.keyConfidence),
     "Analysis limitations: " + value(input.sonicDna.limitations),
     "Loudness LUFS: " + value(input.sonicDna.loudnessLufs),
