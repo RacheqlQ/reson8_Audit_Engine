@@ -2,12 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_GROQ_MODEL, GroqClient } from "../src/providers/groq/client.js";
 
 describe("GroqClient", () => {
-  it("uses the standardized model when GROQ_MODEL is not configured", () => {
+  it("uses the standardized model when GROQ_MODEL is not configured", async () => {
     const previous = process.env.GROQ_MODEL;
     delete process.env.GROQ_MODEL;
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "{}" } }]
+    }), { status: 200 }));
     try {
-      expect(new GroqClient("test-key").constructor).toBe(GroqClient);
-      expect(DEFAULT_GROQ_MODEL).toBe("openai/gpt-oss-120b");
+      const client = new GroqClient("test-key", undefined, fetchMock as typeof fetch);
+      await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow();
+      const body = JSON.parse(String((fetchMock.mock.calls[0] as any)[1].body));
+      expect(body.model).toBe(DEFAULT_GROQ_MODEL);
+      expect(body.model).toBe("openai/gpt-oss-120b");
     } finally {
       if (previous === undefined) delete process.env.GROQ_MODEL;
       else process.env.GROQ_MODEL = previous;
