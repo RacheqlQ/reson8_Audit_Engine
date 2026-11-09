@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import type { ArAssessment } from "../providers/groq/client.js";
 import { loadReportFonts } from "./fonts.js";
-import { chartPanelHeight, chartCaptionCollisionErrors, countEvidenceLayers, drawChartPanel, type ChartPanelInput } from "./charts.js";
+import { chartPanelHeight, chartPanelLayoutErrors, countEvidenceLayers, drawChartPanel, type ChartPanelInput } from "./charts.js";
 
 export type AuditReportTier = "sample" | "full";
 export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; }
@@ -79,7 +79,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  {title:"Tempo and energy spectrum",kind:"spectrum",unavailable:!hasAudio,rows:[{label:"TEMPO",value:hasAudio?chartValue(s?.bpm):null},{label:"RMS ENERGY",value:hasAudio?chartValue(s?.rmsEnergy):null},{label:"DYNAMIC RANGE",value:hasAudio?chartValue(s?.dynamicRangeDb):null}],shows:"Available master-derived tempo and energy measurements.",cantShow:"A genre verdict or listener reaction from these measurements alone."}];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"Dynamic / loudness",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
- if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",rows:[{label:"Strengths",value:a.strengths.length},{label:"Risks",value:a.risks.length},...a.strengths.slice(0,10).map(v=>({label:v.split(/\s+/).slice(0,10).join(" "),value:null})),...a.risks.slice(0,10).map(v=>({label:v.split(/\s+/).slice(0,10).join(" "),value:null}))],shows:"Counts of documented strengths and risks in the assessment.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
+ if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",rows:[{label:"Strengths",value:a.strengths.length},{label:"Risks",value:a.risks.length},...a.strengths.slice(0,10).map(v=>({label:v,value:null})),...a.risks.slice(0,10).map(v=>({label:v,value:null}))],shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
  if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:a.promotionPlan.playlistCategories[0]??"Category to investigate"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
  if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
  return [];
@@ -108,7 +108,7 @@ function sections(i:AuditReportInput):Section[]{
  ];
 }
 export function chartLayoutIssuesForReport(input:AuditReportInput):string[]{
- const issues:string[]=[];for(const section of sections(input)){for(const panel of chartsForSection(input,section.title)){issues.push(...chartCaptionCollisionErrors(panel.kind??"bars",panel.rows,M,TOP,chartPanelHeight(panel.kind)));}}return issues;
+ const issues:string[]=[];for(const section of sections(input)){for(const panel of chartsForSection(input,section.title)){issues.push(...chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,TOP,chartPanelHeight(panel.kind)));}}return issues;
 }
 export function planAuditReportPages(input:AuditReportInput,tier:AuditReportTier):ReportPagePlan[]{const all=sections(input);return (tier==="sample"?all.slice(0,8):all).map(s=>({title:s.title,text:s.body}));}
 export async function generateAuditReport(input:AuditReportInput,tier:AuditReportTier):Promise<Uint8Array>{
@@ -163,7 +163,8 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   for(const panel of chartsForSection(input,section.title)){
    const panelHeight=chartPanelHeight(panel.kind);
    const captionIssues=chartCaptionCollisionErrors(panel.kind??"bars",panel.rows,M,y-8,panelHeight);if(captionIssues.length)throw new Error(captionIssues.join("; "));
-   if(y-panelHeight<BOTTOM+45){
+   // Keep the chart on this page whenever its complete card clears the footer; low page fill alone is not a reason to orphan it.
+   if(y-8-panelHeight<BOTTOM+45){
     nextPage(section.title,accent);
     const visualHeading=wrap(section.title,fonts.bold,14,W-2*M-20);
     visualHeading.forEach((part,index)=>page.drawText(part,{x:M+8,y:TOP-20-index*18,size:14,font:fonts.bold,color:accent}));

@@ -1,7 +1,8 @@
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { countEvidenceLayers, drawChartPanel } from "../src/reports/charts.js";
-import { longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
+import { chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
+import { checkLayout } from "../src/reports/generate-audit-report.js";
+import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("native PDF chart helpers", () => {
   it("renders complete, partial and null data without throwing", async () => {
@@ -46,6 +47,53 @@ describe("native PDF chart helpers", () => {
       expect(()=>drawChartPanel(nullPage,{title:"Null "+kind,kind,rows:nullRows,shows:"no supplied values",cantShow:"unknown measurements"},font,bold)).not.toThrow();
     }
     expect(await pdf.save()).toBeInstanceOf(Uint8Array);
+  });
+
+
+  it("keeps every chart drawing footprint inside its own card for all four fixtures and all chart types", () => {
+    const kinds: ChartKind[] = ["bars","sonic","spectrum","constellation","layers","tension","timeline","chain","radar"];
+    const fixtures = [fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture];
+    for (const fixture of fixtures) {
+      const sonic = fixture.sonicDna;
+      const standardRows: ChartRow[] = [
+        {label:"TEMPO",value:sonic?.bpm??null},
+        {label:"RMS ENERGY",value:sonic?.rmsEnergy??null},
+        {label:"DYNAMIC RANGE",value:sonic?.dynamicRangeDb??null},
+        {label:"Rhythmic consistency",value:78},
+        {label:"Release readiness",value:null},
+        {label:"Metadata completeness",value:91},
+      ];
+      const tensionRows: ChartRow[] = [
+        {label:"Strengths",value:10},{label:"Risks",value:10},
+        ...Array.from({length:10},(_,i)=>({label:"A documented strength with enough words to exercise safe two-line wrapping "+(i+1),value:null})),
+        ...Array.from({length:10},(_,i)=>({label:"A documented risk with enough words to exercise safe two-line wrapping "+(i+1),value:null})),
+      ];
+      for (const kind of kinds) {
+        const rows = kind==="tension" ? tensionRows : standardRows;
+        expect(chartPanelLayoutErrors(kind,rows,48,700,chartPanelHeight(kind))).toEqual([]);
+        const rects=chartPanelLayoutRects(kind,rows,48,700,chartPanelHeight(kind));
+        const card=rects.find(rect=>rect.id==="card-bounds");
+        expect(card).toBeDefined();
+        if(card)expect(chartShapeBoundsErrors(card,rects.filter(rect=>rect.id.startsWith("shape-")||rect.id.startsWith("label-")))).toEqual([]);
+        if(card)expect(checkLayout([card,{x:card.x+12,y:card.y+12,width:80,height:18,id:"overlapping-page-paragraph"}]).ok).toBe(false);
+      }
+    }
+  });
+
+  it("wraps Strengths/Risks summaries to two complete-word lines at readable size", async () => {
+    const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica);
+    const source="A substantial documented strength with multiple meaningful words that must be shortened only at a complete word boundary when the chart column is full.";
+    const lines=wrapChartSummary(source,font,7.5,186,2);
+    expect(lines.length).toBeLessThanOrEqual(2);
+    expect(lines[1]).toMatch(/…$/);
+    const shown=lines.join(" ").replace("…","").split(/\s+/);
+    expect(source.split(/\s+/).slice(0,shown.length)).toEqual(shown);
+  });
+
+  it("rejects the legacy Strengths/Risks column geometry that escaped above the card", () => {
+    const card = {x:48,y:310,width:499,height:390,id:"card-bounds"};
+    const legacyColumn = {x:62,y:637,width:220,height:286,id:"legacy-tension-column"};
+    expect(chartShapeBoundsErrors(card,[legacyColumn])).toContain("Chart shape outside card: legacy-tension-column");
   });
 
   it("renders the long-form fixture with full-length chart captions and narrative content", async () => {

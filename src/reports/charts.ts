@@ -33,71 +33,165 @@ function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.
 function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
 export function chartPanelHeight(kind:ChartKind="bars"):number{
  if(kind==="radar")return 410;
- if(kind==="layers")return 224;if(kind==="tension")return 250;
+ if(kind==="layers")return 224;if(kind==="tension")return 390;
  if(kind==="sonic")return 230;
- if(kind==="spectrum"||kind==="constellation"||kind==="timeline"||kind==="chain")return 202;
+ if(kind==="spectrum")return 270;
+ if(kind==="constellation"||kind==="timeline"||kind==="chain")return 202;
  if(kind==="bars")return 205;
  return 190;
 }
 export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind)):ChartRect[]{
- const bottom=top-height,captionY=bottom+8,captionTop=captionY+CAPTION_H-8;
- const bodyBottom=captionTop+3,bodyTop=top-HEADER_H-8;
- const result:ChartRect[]=[{x:x+8,y:captionY,width:CARD_W-16,height:CAPTION_H-8,id:"caption-zone"},
-  {x:x+8,y:bodyBottom,width:CARD_W-16,height:bodyTop-bodyBottom,id:"chart-content-zone"}];
- if(kind==="radar"){
-  result.push({x:x+80,y:bodyBottom+5,width:CARD_W-160,height:bodyTop-bodyBottom-10,id:"radar-plot"});
-  const cx=x+CARD_W/2,cy=top-200,radius=130,outer=150,n=Math.max(3,rows.slice(0,5).length);
-  rows.slice(0,5).forEach((row,i)=>{const angle=-Math.PI/2+i*2*Math.PI/n,ax=cx+Math.cos(angle)*outer,ay=cy+Math.sin(angle)*outer,label=row.label.length>23?row.label.slice(0,21)+"…":row.label,w=Math.min(94,Math.max(22,label.length*3.3),100),left=Math.cos(angle)>.35?ax+5:Math.cos(angle)<-.35?ax-w-5:ax-w/2,base=ay+(Math.sin(angle)>.4?-4:Math.sin(angle)<-.4?1:-2);result.push({x:left,y:base-12,width:w,height:19,id:"label-radar-"+i});});
- }else if(kind==="layers"){
-  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"evidence-stack"});
-  rows.slice(0,4).forEach((row,i)=>result.push({x:x+28+(i%2)*248,y:bottom+78-Math.floor(i/2)*25,width:180,height:7,id:"label-layer-"+i}));
- }else if(kind==="tension"){
-  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"strengths-risks-columns"});
-  rows.slice(2,22).forEach((row,i)=>result.push({x:x+35+(i>=10?230:0),y:top-121-(i%10)*9.2,width:185,height:6,id:"label-tension-"+i}));
- }else if(kind==="sonic"){
-  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"sonic-metrics"});
-  rows.slice(0,6).forEach((row,i)=>result.push({x:x+18+(i%3)*166,y:top-69-Math.floor(i/3)*69,width:150,height:43,id:"label-sonic-"+i}));
+ const bottom=top-height,captionY=bottom+8,captionH=CAPTION_H-8;
+ const contentTop=top-HEADER_H-8,contentBottom=captionY+captionH+3;
+ const card:ChartRect={x,y:bottom,width:CARD_W,height,id:"card-bounds"};
+ const result:ChartRect[]=[card,
+  {x:x+8,y:captionY,width:CARD_W-16,height:captionH,id:"caption-zone"},
+  {x:x+8,y:contentBottom,width:CARD_W-16,height:contentTop-contentBottom,id:"chart-content-zone"},
+  {x:x+CARD_W-3,y:bottom+3,width:2,height:height-6,id:"shape-card-shadow-right"},
+  {x:x+3,y:bottom+2,width:CARD_W-6,height:2,id:"shape-card-shadow-bottom"},
+  {x,y:bottom,width:CARD_W,height,id:"shape-card-background"},
+  {x:x+1,y:bottom+1,width:CARD_W-2,height:height-2,id:"shape-card-gradient"},
+  {x,y:top-HEADER_H,width:CARD_W,height:HEADER_H,id:"shape-header-band"},
+  {x,y:top-HEADER_H,width:5,height:HEADER_H,id:"shape-header-accent"},
+  {x:x+13,y:top-24,width:230,height:12,id:"shape-header-title"},
+  {x:x+CARD_W-91,y:top-24,width:82,height:10,id:"shape-header-status"},
+  {x:x+9,y:captionY+captionH,width:CARD_W-18,height:1,id:"shape-caption-divider"},
+  {x:x+12,y:captionY+2,width:CARD_W-24,height:29,id:"shape-caption-text"}
+ ];
+ if(kind==="tension"){
+  const panelTop=contentTop-4,panelBottom=contentBottom+7,panelH=panelTop-panelBottom;
+  const columns=[x+14,x+CARD_W/2+10],colW=220;
+  columns.forEach((cx,col)=>{
+   result.push({x:cx+2,y:panelBottom+2,width:colW-4,height:panelH-4,id:"shape-tension-shadow-"+col});
+   result.push({x:cx,y:panelBottom,width:colW,height:panelH,id:"shape-tension-column-"+col});
+   result.push({x:cx,y:panelTop-17,width:colW,height:17,id:"shape-tension-header-"+col});
+   result.push({x:cx+9,y:panelTop-15,width:colW-18,height:12,id:"label-tension-title-"+col});
+   result.push({x:cx+9,y:panelTop-42,width:colW-18,height:12,id:"label-tension-count-"+col});
+   result.push({x:cx+9,y:panelTop-58,width:colW-13,height:15,id:"shape-tension-count-bar-and-shadow-"+col});
+   let baseline=panelTop-75;
+   rows.slice(2+col*10,12+col*10).slice(0,10).forEach((row,index)=>{
+    const charsPerLine=Math.max(1,Math.floor((colW-34)/(7.5*.52)));
+    const lineCount=Math.min(2,Math.max(1,Math.ceil(row.label.length/charsPerLine)));
+    result.push({x:cx+8,y:baseline-2,width:13,height:9,id:"label-tension-index-"+col+"-"+index});
+    result.push({x:cx+21,y:baseline-10,width:colW-32,height:lineCount*9.5,id:"label-tension-item-"+col+"-"+index});
+    baseline-=Math.max(11,lineCount*9.5+2);
+   });
+  });
  }else if(kind==="spectrum"){
-  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"spectrum-chart"});
-  rows.slice(0,4).forEach((row,i)=>result.push({x:x+14,y:top-24-i*26-3,width:145,height:10,id:"label-spectrum-"+i}));
+  const trackX=x+170,trackW=240;
+  rows.slice(0,3).forEach((row,index)=>{
+   const labelY=contentTop-14-index*57,trackY=labelY-24;
+   result.push({x:x+14,y:labelY-3,width:145,height:11,id:"label-spectrum-name-"+index});
+   result.push({x:trackX,y:trackY,width:trackW,height:8,id:"shape-spectrum-gradient-track-"+index});
+   result.push({x:trackX-1,y:trackY-1,width:trackW+2,height:10,id:"shape-spectrum-track-outline-"+index});
+   result.push({x:trackX-4,y:trackY-4,width:trackW+8,height:16,id:"shape-spectrum-marker-range-"+index});
+   result.push({x:trackX,y:trackY-16,width:trackW,height:9,id:"label-spectrum-scale-"+index});
+   result.push({x:trackX+trackW+7,y:trackY-2,width:70,height:11,id:"label-spectrum-value-"+index});
+  });
+ }else if(kind==="radar"){
+  const cx=x+CARD_W/2,cy=top-200,radius=130,outer=150,n=Math.max(3,rows.slice(0,5).length);
+  result.push({x:cx-radius,y:cy-radius,width:radius*2,height:radius*2,id:"shape-radar-grid-and-polygon"});
+  rows.slice(0,5).forEach((row,i)=>{
+   const angle=-Math.PI/2+i*2*Math.PI/n,ax=cx+Math.cos(angle)*outer,ay=cy+Math.sin(angle)*outer;
+   const label=row.label.length>23?row.label.slice(0,21)+"…":row.label,w=Math.min(86,Math.max(22,label.length*3.8));
+   const left=Math.cos(angle)>.35?ax+5:Math.cos(angle)<-.35?ax-w-5:ax-w/2;
+   const base=ay+(Math.sin(angle)>.4?-4:Math.sin(angle)<-.4?1:-2);
+   result.push({x:cx+Math.cos(angle)*radius*.72-5,y:cy+Math.sin(angle)*radius*.72-5,width:10,height:10,id:"shape-radar-value-marker-"+i});
+   result.push({x:left,y:base-13,width:w,height:21,id:"label-radar-axis-"+i});
+  });
+ }else if(kind==="layers"){
+  const stackX=x+16,stackY=contentTop-44,stackW=CARD_W-32,stackH=24;
+  result.push({x:stackX+3,y:stackY-3,width:stackW+5,height:stackH+7,id:"shape-evidence-stack-and-shadow"});
+  const columns=[x+16,x+264];
+  rows.slice(0,4).forEach((row,i)=>{
+   const lx=columns[i%2],ly=contentBottom+34-Math.floor(i/2)*25;
+   result.push({x:lx,y:ly-2,width:10,height:10,id:"shape-layer-swatch-"+i});
+   result.push({x:lx+17,y:ly-2,width:205,height:10,id:"label-layer-name-"+i});
+   result.push({x:lx+17,y:ly-12,width:205,height:9,id:"label-layer-value-"+i});
+  });
+ }else if(kind==="sonic"){
+  const columns=[x+18,x+184,x+350],metricTop=contentTop-22;
+  rows.slice(0,6).forEach((row,i)=>{
+   const cx=columns[i%3],cy=metricTop-Math.floor(i/3)*69;
+   result.push({x:cx,y:cy-53,width:145,height:54,id:"shape-sonic-metric-"+i});
+  });
  }else if(kind==="bars"){
-  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"bar-chart"});
-  rows.slice(0,6).forEach((row,i)=>result.push({x:x+13,y:top-58-i*19-3,width:155,height:10,id:"label-bar-"+i}));
+  rows.slice(0,6).forEach((row,i)=>{
+   const baseline=contentTop-20-i*19;
+   result.push({x:x+13,y:baseline-3,width:320,height:11,id:"label-bar-row-"+i});
+  });
  }else if(kind==="constellation"){
-  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"constellation-chart"});
-  const cx=x+CARD_W/2,cy=bottom+48+80;
-  rows.slice(0,5).forEach((row,i)=>{const a=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(a)*100,py=cy+Math.sin(a)*30;result.push({x:px-48,y:py-10,width:96,height:14,id:"label-constellation-"+i});});
+  const cx=x+CARD_W/2,cy=contentBottom+80;
+  result.push({x:cx-23,y:cy-23,width:46,height:46,id:"shape-constellation-core"});
+  rows.slice(0,5).forEach((row,i)=>{
+   const angle=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(angle)*100,py=cy+Math.sin(angle)*30;
+   result.push({x:Math.min(cx,px)-1,y:Math.min(cy,py)-1,width:Math.abs(px-cx)+2,height:Math.abs(py-cy)+2,id:"shape-constellation-link-"+i});
+   result.push({x:px-15,y:py-15,width:30,height:30,id:"shape-constellation-node-"+i});
+   result.push({x:px-36,y:py-5,width:72,height:10,id:"label-constellation-value-"+i});
+  });
  }else if(kind==="timeline"){
-  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"timeline-chart"});
-  const y=bottom+48+80;
-  rows.slice(0,3).forEach((row,i)=>{const px=x+48+i*210;result.push({x:px-36,y:y-35,width:118,height:35,id:"label-timeline-"+i});});
+  const lineY=contentBottom+80;
+  result.push({x:x+42,y:lineY-1,width:CARD_W-84,height:2,id:"shape-timeline-line"});
+  rows.slice(0,3).forEach((row,i)=>{
+   const px=x+58+i*190;
+   result.push({x:px-7,y:lineY-7,width:14,height:14,id:"shape-timeline-node-"+i});
+   result.push({x:px-28,y:lineY+14,width:80,height:10,id:"label-timeline-stage-"+i});
+   result.push({x:px-36,y:lineY-35,width:118,height:18,id:"label-timeline-description-"+i});
+  });
  }else if(kind==="chain"){
-  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"chain-chart"});
-  const y=bottom+48+78;
-  rows.slice(0,3).forEach((row,i)=>{const px=x+82+i*166;result.push({x:px-56,y:y-52,width:112,height:18,id:"label-chain-"+i});});
- }else{
-  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"chart-data"});
+  const lineY=contentBottom+78,names=["CONTENT","DISCOVERY","LISTENER ACTION"];
+  names.forEach((name,i)=>{
+   const px=x+82+i*166;
+   if(i<2)result.push({x:px+30,y:lineY-1,width:136,height:2,id:"shape-chain-link-"+i});
+   result.push({x:px-25,y:lineY-25,width:50,height:50,id:"shape-chain-node-"+i});
+   result.push({x:px-31,y:lineY-8,width:62,height:12,id:"label-chain-title-"+i});
+   result.push({x:px-54,y:lineY-52,width:112,height:18,id:"label-chain-value-"+i});
+  });
  }
  return result;
 }
-export function chartCaptionCollisionErrors(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind)):string[]{
- const rects=chartPanelLayoutRects(kind,rows,x,top,height),caption=rects.find(r=>r.id==="caption-zone");
- if(!caption)return ["Missing caption zone"];
+export function chartShapeBoundsErrors(card:ChartRect,shapes:ChartRect[]):string[]{
+ return shapes.filter(shape=>shape.id!=="card-bounds"&&(shape.x<card.x-.01||shape.y<card.y-.01||shape.x+shape.width>card.x+card.width+.01||shape.y+shape.height>card.y+card.height+.01)).map(shape=>"Chart shape outside card: "+shape.id);
+}
+export function chartPanelLayoutErrors(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind)):string[]{
+ const rects=chartPanelLayoutRects(kind,rows,x,top,height),card=rects.find(r=>r.id==="card-bounds"),caption=rects.find(r=>r.id==="caption-zone");
+ if(!card||!caption)return ["Missing chart card or caption bounds"];
+ const shapes=rects.filter(r=>r.id.startsWith("shape-")||r.id.startsWith("label-"));
+ const errors=chartShapeBoundsErrors(card,shapes);
+ for(const shape of shapes){
+  if(shape.id==="shape-card-background"||shape.id==="shape-card-gradient"||shape.id==="shape-caption-text"||shape.id==="shape-caption-divider")continue;
+  const hit=shape.x<caption.x+caption.width&&shape.x+shape.width>caption.x&&shape.y<caption.y+caption.height&&shape.y+shape.height>caption.y;
+  if(hit)errors.push("Chart/caption collision: "+shape.id);
+ }
  const labels=rects.filter(r=>r.id.startsWith("label-"));
- const errors:string[]=[];
- for(let i=0;i<labels.length;i++){
-  const a=labels[i];
-  if(a.x<caption.x+caption.width&&a.x+a.width>caption.x&&a.y<caption.y+caption.height&&a.y+a.height>caption.y)errors.push("Chart/caption collision: "+a.id);
-  for(let j=i+1;j<labels.length;j++){const b=labels[j];if(a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y)errors.push("Chart label collision: "+a.id+" / "+b.id);}
+ for(let i=0;i<labels.length;i++)for(let j=i+1;j<labels.length;j++){
+  const a=labels[i],b=labels[j];
+  if(a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y)errors.push("Chart label collision: "+a.id+" / "+b.id);
  }
  return errors;
 }
+export function chartCaptionCollisionErrors(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind)):string[]{
+ return chartPanelLayoutErrors(kind,rows,x,top,height);
+}
+export function wrapChartSummary(value:string,font:PDFFont,size:number,width:number,maxLines=2):string[]{
+ const words=value.split(/\s+/).filter(Boolean),lines:string[]=[];let current="";
+ for(const word of words){const next=current?current+" "+word:word;if(font.widthOfTextAtSize(next,size)>width&&current){lines.push(current);current=word;}else current=next;}
+ if(current)lines.push(current);
+ if(lines.length>maxLines){
+  const kept=lines.slice(0,maxLines),lastWords=kept[maxLines-1].split(/\s+/);
+  while(lastWords.length&&font.widthOfTextAtSize(lastWords.join(" ")+"…",size)>width)lastWords.pop();
+  kept[maxLines-1]=lastWords.length?lastWords.join(" ")+"…":"…";
+  return kept;
+ }
+ return lines;
+}
 function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,height:number){
  const x=CARD_X,w=CARD_W,top=input.y??700,bottom=top-height;
- p.drawRectangle({x:x+3,y:bottom-3,width:w,height,color:C.navy,opacity:.10});
  p.drawRectangle({x,y:bottom,width:w,height,color:C.paper,borderColor:C.line,borderWidth:.6});
  // Sixteen horizontal strips provide a restrained vertical gradient.
  for(let i=0;i<16;i++){const t=i/15;p.drawRectangle({x:x+1,y:bottom+1+(height-2)*i/16,width:w-2,height:(height-2)/16+.2,color:rgb(.985-.035*t,.99-.025*t,1-.015*t)});}
+ p.drawRectangle({x:x+w-3,y:bottom+3,width:2,height:height-6,color:C.navy,opacity:.10});
+ p.drawRectangle({x:x+3,y:bottom+2,width:w-6,height:2,color:C.navy,opacity:.08});
  p.drawRectangle({x,y:top-HEADER_H,width:w,height:HEADER_H,color:C.navy});
  p.drawRectangle({x,y:top-HEADER_H,width:5,height:HEADER_H,color:input.inferred?C.violet:input.unavailable?C.coral:C.teal});
  tracked(p,input.title.toUpperCase(),x+13,top-19,bold,8,C.white,.65);
@@ -188,30 +282,47 @@ function drawRadar(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<ty
 function drawTension(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const mid=g.x+g.width/2,cols=[g.x+14,mid+10],colW=220;
  const maxCount=Math.max(1,validNumber(rows[0]?.value)??0,validNumber(rows[1]?.value)??0);
+ const panelTop=g.contentTop-4,panelBottom=g.contentBottom+7,panelHeight=panelTop-panelBottom;
  for(let c=0;c<2;c++){
   const row=rows[c],accent=c===0?C.teal:C.coral,title=c===0?"STRENGTHS":"RISKS";
-  const count=validNumber(row?.value)??0,x=cols[c],top=g.contentTop-17;
-  p.drawRectangle({x:x+2,y:top-10,width:colW,height:top-g.contentBottom-1,color:C.navy,opacity:.08});
-  p.drawRectangle({x,y:top-8,width:colW,height:top-g.contentBottom-1,color:C.white,borderColor:accent,borderWidth:.8});
-  p.drawRectangle({x,y:top-8,width:colW,height:17,color:accent});
-  tracked(p,title,x+9,top-3,b,7,C.white,.5);
-  text(p,String(count)+" documented",x+9,top-33,b,9,accent);
-  shadowBar(p,x+9,top-49,(colW-18)*count/maxCount,5,accent,c);
+  const count=validNumber(row?.value)??0,x=cols[c];
+  p.drawRectangle({x:x+2,y:panelBottom+2,width:colW-4,height:panelHeight-4,color:C.navy,opacity:.08});
+  p.drawRectangle({x,y:panelBottom,width:colW,height:panelHeight,color:C.white,borderColor:accent,borderWidth:.8});
+  p.drawRectangle({x,y:panelTop-17,width:colW,height:17,color:accent});
+  tracked(p,title,x+9,panelTop-12,b,7,C.white,.5);
+  text(p,String(count)+" documented",x+9,panelTop-37,b,9,accent);
+  shadowBar(p,x+9,panelTop-56,(colW-18)*count/maxCount,5,accent,c);
   const summaries=rows.slice(2+c*10,12+c*10);
-  let y=top-61;
+  let y=panelTop-75;
   summaries.slice(0,10).forEach((item,index)=>{
-   let summary=item.label.split(/\s+/).slice(0,10).join(" "),size=5.35;
-   while(f.widthOfTextAtSize(summary,size)>colW-31&&summary.split(/\s+/).length>8){summary=summary.split(/\s+/).slice(0,-1).join(" ");}
-   while(f.widthOfTextAtSize(summary,size)>colW-31&&size>4.5)size-=.15;
-   text(p,String(index+1)+".",x+8,y,b,5.2,accent);
-   text(p,summary,x+21,y,f,size,C.ink);
-   y-=9.2;
+   const lines=wrapChartSummary(item.label,f,7.5,colW-34,2);
+   text(p,String(index+1)+".",x+8,y,b,7.5,accent);
+   lines.forEach((part,lineIndex)=>text(p,part,x+21,y-lineIndex*9.5,f,7.5,C.ink));
+   y-=Math.max(11,lines.length*9.5+2);
   });
  }
- text(p,"COUNTS ARE DOCUMENTED ITEMS, NOT WEIGHTS OR SEVERITY SCORES",g.x+68,g.contentBottom+4,b,5.8,C.muted);
 }
 function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
- rows.slice(0,4).forEach((r,i)=>{const y=g.contentTop-24-i*26,c=color(i);tracked(p,r.label.toUpperCase(),g.x+14,y,b,6.5,c,.4);const v=shown(r.value);if(v==="Not determined"){line(p,g.x+160,y+2,g.x+360,y+2,C.line,1);text(p,v,g.x+370,y,f,6,C.muted);}else{text(p,v,g.x+160,y,f,8,C.ink);}});
+ const trackX=g.x+170,trackW=240,trackH=8;
+ rows.slice(0,3).forEach((row,index)=>{
+  const label=row.label.toUpperCase(),labelY=g.contentTop-14-index*57,trackY=labelY-24;
+  tracked(p,label,g.x+14,labelY,b,6.5,color(index),.4);
+  const raw=validNumber(row.value)??(typeof row.value==="string"?Number.parseFloat(row.value):NaN);
+  const range=/TEMPO|BPM/.test(label)?{min:60,max:180,unit:"BPM"}:/RMS|ENERGY/.test(label)?{min:0,max:1,unit:""}:{min:0,max:20,unit:"dB"};
+  const known=Number.isFinite(raw),ratio=known?Math.max(0,Math.min(1,(raw-range.min)/(range.max-range.min))):null;
+  if(ratio===null){
+   for(let strip=0;strip<16;strip++){const sx=trackX+strip*(trackW/16);p.drawRectangle({x:sx,y:trackY,width:trackW/32,height:trackH,color:C.muted,opacity:.42});}
+   text(p,"Not determined",trackX+trackW+7,trackY+1,f,6.5,C.muted);
+  }else{
+   for(let strip=0;strip<16;strip++){const t=strip/15;p.drawRectangle({x:trackX+strip*(trackW/16),y:trackY,width:trackW/16+.2,height:trackH,color:rgb(.18+.04*t,.42+.32*t,.96-.48*t)});}
+   const markerX=trackX+ratio*trackW;
+   p.drawLine({start:{x:markerX,y:trackY-4},end:{x:markerX,y:trackY+trackH+4},color:C.coral,thickness:2});
+   p.drawCircle({x:markerX,y:trackY+trackH/2,size:4,color:C.coral,borderColor:C.white,borderWidth:.8});
+   text(p,String(raw)+(range.unit?" "+range.unit:""),trackX+trackW+7,trackY+1,b,7,C.ink);
+  }
+  text(p,String(range.min),trackX,trackY-13,f,5.8,C.muted);
+  text(p,String(range.max)+(range.unit?" "+range.unit:""),trackX+trackW-36,trackY-13,f,5.8,C.muted);
+ });
 }
 function drawBars(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  rows.slice(0,6).forEach((r,i)=>{const y=g.contentTop-20-i*19,c=color(i);text(p,r.label.slice(0,25),g.x+13,y,b,7,c);text(p,shown(r.value).slice(0,48),g.x+178,y,f,7,C.ink);});
