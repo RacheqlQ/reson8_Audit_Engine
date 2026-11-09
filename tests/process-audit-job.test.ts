@@ -23,6 +23,16 @@ const assessment = {
   evidenceGaps: ["Audience telemetry"],
   confidence: 0.8,
   limitations: ["Evidence-limited assessment"],
+  scorecard: {
+    sonicIdentity: { score: 70, rationale: "The supplied audio measurements provide a useful but incomplete sonic profile. This score reflects descriptive coverage and does not claim audience demand or artistic quality." },
+    metadataIntegrity: { score: 65, rationale: "Some identity fields are present, but the payload does not independently corroborate every release and rights field. This score reflects supplied metadata completeness only." },
+    commercialEvidence: { score: null, rationale: "No verified audience, streaming, sales, revenue, or playlist-conversion evidence was supplied. A numeric score would imply unsupported certainty, so this dimension remains unscored." },
+    releaseReadiness: { score: 55, rationale: "Identity and sonic context support preliminary planning, but audience validation and metadata checks remain outstanding. This score reflects evidence readiness rather than predicted performance." },
+  },
+  evidenceLabels: [
+    { label: "OBSERVED" as const, claim: "The supplied audio analysis reports a tempo measurement for the recording.", source: "sonicDna.bpm" },
+    { label: "INFERRED" as const, claim: "The proposed creative lane is an interpretation and not a measured genre fact.", source: "sonicDna.genreContext" },
+  ],
 };
 
 describe("processAuditJob", () => {
