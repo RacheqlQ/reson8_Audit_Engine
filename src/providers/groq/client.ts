@@ -83,7 +83,60 @@ const SYSTEM_PROMPT = [
   "Return JSON only. Do not wrap it in markdown. Meet every minimum length and array threshold in the requested schema."
 ].join(" ");
 
-type GroupSchema = typeof NarrativeSchema | typeof PositioningSchema | typeof ReleaseSchema | typeof EvidenceScoreSchema;
+function countWords(value: string): number {
+  return value.trim().split(/\\s+/).filter(Boolean).length;
+}
+
+function wordThresholdError(groupName: string, value: unknown): string | null {
+  const data = value as Record<string, unknown>;
+  const checkText = (label: string, text: unknown, minimum: number): string | null => {
+    if (typeof text !== "string" || countWords(text) < minimum) {
+      return label + " must contain at least " + minimum + " words.";
+    }
+    return null;
+  };
+  const checkList = (label: string, items: unknown, minimumItems: number, minimumWords: number): string | null => {
+    if (!Array.isArray(items) || items.length < minimumItems) {
+      return label + " must contain at least " + minimumItems + " items.";
+    }
+    for (let index = 0; index < items.length; index++) {
+      const error = checkText(label + "[" + index + "]", items[index], minimumWords);
+      if (error) return error;
+    }
+    return null;
+  };
+
+  if (groupName === "narrative") {
+    return checkText("executiveSummary", data.executiveSummary, 45)
+      ?? checkText("creativeIdentity", data.creativeIdentity, 35)
+      ?? checkList("strengths", data.strengths, 3, 10)
+      ?? checkList("risks", data.risks, 2, 10);
+  }
+  if (groupName === "positioning") {
+    const positioning = data.aAndRPositioning as Record<string, unknown> | undefined;
+    const commercial = data.commercialRead as Record<string, unknown> | undefined;
+    return checkText("aAndRPositioning.rationale", positioning?.rationale, 40)
+      ?? checkText("commercialRead.rationale", commercial?.rationale, 40);
+  }
+  if (groupName === "release") {
+    const strategy = data.releaseStrategy as Record<string, unknown> | undefined;
+    return checkText("releaseStrategy.recommendation", strategy?.recommendation, 40)
+      ?? checkList("releaseStrategy.priorities", strategy?.priorities, 3, 8);
+  }
+  if (groupName === "evidence-score") {
+    const scorecard = data.scorecard as Record<string, Record<string, unknown>> | undefined;
+    const labels = data.evidenceLabels as Array<Record<string, unknown>> | undefined;
+    return checkList("evidenceGaps", data.evidenceGaps, 1, 8)
+      ?? checkList("limitations", data.limitations, 1, 8)
+      ?? checkText("scorecard.sonicIdentity.rationale", scorecard?.sonicIdentity?.rationale, 25)
+      ?? checkText("scorecard.metadataIntegrity.rationale", scorecard?.metadataIntegrity?.rationale, 25)
+      ?? checkText("scorecard.commercialEvidence.rationale", scorecard?.commercialEvidence?.rationale, 25)
+      ?? checkText("scorecard.releaseReadiness.rationale", scorecard?.releaseReadiness?.rationale, 25)
+      ?? (labels ?? []).reduce<string | null>((error, label, index) =>
+        error ?? checkText("evidenceLabels[" + index + "].claim", label.claim, 8), null);
+  }
+  return null;
+}
 
 async function requestGroup<T>(
   fetchImpl: typeof fetch,
@@ -153,8 +206,16 @@ async function requestGroup<T>(
     }
 
     const result = schema.safeParse(parsed);
-    if (result.success) return result.data;
-    lastValidationError = result.error.message;
+    if (!result.success) {
+      lastValidationError = result.error.message;
+      continue;
+    }
+    const thresholdError = wordThresholdError(groupName, result.data);
+    if (thresholdError) {
+      lastValidationError = thresholdError;
+      continue;
+    }
+    return result.data;
   }
 
   throw new Error("Groq " + groupName + " response failed Zod validation after one retry: " + lastValidationError);
