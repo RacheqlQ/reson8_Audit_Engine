@@ -80,22 +80,15 @@ export const sampleReportInput = {
       "The assessment is constrained to the supplied catalog metadata and cannot establish listener demand.",
     ],
     scorecard: {
-      sonicIdentity: {
-        score: null,
-        rationale: "No master-derived measurements are available in this metadata-only fixture. A numeric sonic identity score would overstate the evidence, so this dimension remains unscored until the recording is analyzed.",
-      },
-      metadataIntegrity: {
-        score: 70,
-        rationale: "Artist and title are present and linked to a named catalog source, but the fixture does not independently verify every release field. The score reflects partial metadata coverage only.",
-      },
-      commercialEvidence: {
-        score: null,
-        rationale: "No verified streams, listeners, sales, revenue, or playlist conversion data is present. A commercial score cannot be responsibly calculated from catalog popularity alone, so this dimension remains unscored.",
-      },
-      releaseReadiness: {
-        score: 45,
-        rationale: "The catalog identity supports initial preparation, but master review, release-field confirmation, and audience evidence are still outstanding. The score reflects the current evidence readiness, not predicted release success.",
-      },
+      sonicIdentity: { score: null, rationale: "No master-derived measurements are available in this metadata-only fixture. A numeric sonic identity score would overstate the evidence, so this dimension remains unscored until the recording is analyzed." },
+      metadataIntegrity: { score: 70, rationale: "Artist and title are present and linked to a named catalog source, but the fixture does not independently verify every release field. The score reflects partial metadata coverage only." },
+      commercialEvidence: { score: null, rationale: "No verified streams, listeners, sales, revenue, or playlist conversion data is present. A commercial score cannot be responsibly calculated from catalog popularity alone, so this dimension remains unscored." },
+      releaseReadiness: { score: 45, rationale: "The catalog identity supports initial preparation, but master review, release-field confirmation, and audience evidence are still outstanding. The score reflects the current evidence readiness, not predicted release success." },
+      hook: { score: null, rationale: "No supported hook-specific listening annotation or structural evidence was supplied for this fixture. The dimension remains unscored until complete master review identifies a repeatable hook." },
+      originality: { score: null, rationale: "No comparative catalogue review or verified reference set is included, so originality cannot be judged without unsupported comparisons. This dimension remains unscored pending documented listening review." },
+      production: { score: null, rationale: "The available measurements do not isolate mix, arrangement, vocal capture, mastering, or production decisions sufficiently to support a production-quality score. A detailed master review is required." },
+      replayValue: { score: null, rationale: "No repeat-listening, completion, save, or retention telemetry is supplied. Replay value cannot be inferred from tempo or genre metadata, so this dimension remains unscored pending listener evidence." },
+      laneClarity: { score: null, rationale: "The current metadata provides a provisional lane hypothesis, but no validated comparative listening review confirms how clearly the recording occupies that lane. Leave this dimension unscored until reviewed." },
     },
     evidenceLabels: [
       {
