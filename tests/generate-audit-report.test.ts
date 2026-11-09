@@ -2,6 +2,26 @@ import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
 import { generateAuditReport, type AuditReportInput } from "../src/reports/generate-audit-report.js";
 
+
+function extractPdfText(bytes: Uint8Array): string {
+  const source = new TextDecoder().decode(bytes);
+  const decoded: string[] = [];
+  for (const match of source.matchAll(/<([0-9a-fA-F]{4,})>/g)) {
+    const hex = match[1];
+    if (hex.length % 4 !== 0) continue;
+    const data = new Uint8Array(hex.length / 2);
+    for (let index = 0; index < data.length; index++) {
+      data[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+    }
+    if (data[0] === 0xfe && data[1] === 0xff) {
+      decoded.push(new TextDecoder("utf-16be").decode(data.slice(2)));
+    } else {
+      decoded.push(new TextDecoder().decode(data));
+    }
+  }
+  return source + "\\n" + decoded.join("\\n");
+}
+
 const input: AuditReportInput = {
   auditId: "job-123",
   generatedAt: "2026-10-04T03:00:00.000Z",
@@ -111,7 +131,7 @@ describe("generateAuditReport", () => {
     expect(document.getPageCount()).toBeLessThanOrEqual(20);
 
     // The PDF content streams use native PDF text operators; verify the emitted text.
-    const extractedText = new TextDecoder().decode(bytes);
+    const extractedText = extractPdfText(bytes);
     expect(extractedText).toContain("Not determined");
     expect(extractedText).toContain("SHOWS:");
     expect(extractedText).toContain("CAN'T SHOW:");
