@@ -152,7 +152,7 @@ function drawTension(page: PDFPage, rows: ChartRow[], x: number, top: number, fo
     const y = top - 56 - (index % 3) * 25;
     const tx = left ? x + 18 : mid + 16;
     page.drawCircle({ x: tx + 3, y: y + 2, size: 2.5, color: left ? SAGE : CLAY });
-    page.drawText(row.value.toString().slice(0, 52), { x: tx + 10, y, size: 6.2, font, color: INK });
+    page.drawText(shown(row.value).slice(0, 52), { x: tx + 10, y, size: 6.2, font, color: INK });
   });
 }
 
@@ -163,7 +163,7 @@ function drawTimeline(page: PDFPage, rows: ChartRow[], x: number, top: number, f
     const px = x + 48 + index * 210;
     page.drawCircle({ x: px, y, size: 7, borderColor: BLUE, borderWidth: 1, color: PAPER });
     page.drawText("SEQUENCE " + (index + 1), { x: px - 25, y: y + 17, size: 6, font: bold, color: MUTED });
-    page.drawText(row.value.toString().slice(0, 48), { x: px - 28, y: y - 22, size: 6.2, font, color: INK });
+    page.drawText(shown(row.value).slice(0, 48), { x: px - 28, y: y - 22, size: 6.2, font, color: INK });
   });
   page.drawText("30 / 60 / 90-DAY DATES: NOT DETERMINED BY THE ASSESSMENT", { x: x + 105, y: top - 127, size: 5.8, font: bold, color: MUTED });
 }
