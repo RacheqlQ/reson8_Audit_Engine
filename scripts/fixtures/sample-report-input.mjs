@@ -42,32 +42,32 @@ export const sampleReportInput = {
   },
   assessment: {
     assessmentVersion: "2.0",
-    executiveSummary: "The fixture contains verified catalog identity and provider-supplied sonic metadata. It supports a preliminary creative positioning hypothesis, but it does not contain master-derived audio measurements or verified audience-performance data.",
-    creativeIdentity: "The supplied catalog context suggests a groove-led R&B direction. This is a provisional creative interpretation of the provider metadata and should not be mistaken for a measured genre classification or audience preference.",
+    executiveSummary: "The fixture contains a reconciled catalog identity and provider-supplied sonic context suitable for preliminary A&R discovery. It does not contain an uploaded master, master-derived production measurements or verified audience-performance data. The report therefore separates recognized identity from inferred creative positioning and leaves commercial marketability undetermined until independent listener and campaign evidence is supplied.",
+    creativeIdentity: "The supplied catalog context suggests a groove-led R&B direction with a restrained rhythmic character. This is a provisional creative interpretation of provider metadata, not a measured genre classification or evidence of audience preference. Listening review of the complete approved master remains necessary before finalizing the artist proposition.",
     strengths: [
-      "The artist and title are present in the catalog identity supplied for this fixture.",
-      "The provider exposes a tempo value that can inform preliminary rhythmic positioning.",
-      "The catalog metadata includes a platform source that can be traced in the evidence record.",
+      "The reconciled artist and title provide a usable identity foundation for release documentation and subsequent source checks.",
+      "The provider-supplied tempo field can inform preliminary rhythmic positioning, subject to confirmation against the complete recording.",
+      "The catalog record identifies its provider source, allowing the supplied identity fields to be traced during later reconciliation.",
     ],
     risks: [
-      "The audit has no uploaded master, so audio measurements and detailed production analysis are unavailable.",
-      "No verified listener, streaming, revenue, or playlist-conversion data is present in this fixture.",
+      "The audit has no uploaded master, so master-derived audio measurements and detailed production analysis remain unavailable.",
+      "No verified listener, streaming, revenue or playlist-conversion evidence is present, so commercial demand cannot be established.",
     ],
     aAndRPositioning: {
       primaryLane: "R&B",
       adjacentLanes: ["Alternative R&B"],
-      rationale: "The provider-supplied genre context and tempo can inform an initial A&R discovery hypothesis. The available metadata is not sufficient to confirm the final genre lane or predict audience response, so this positioning requires listening review and audience validation.",
+      rationale: "The provider-supplied genre context and tempo can inform an initial A&R discovery hypothesis. The available metadata is not sufficient to confirm the final genre lane or predict audience response. Validate this positioning through full-master listening, catalogue review and measurable audience response before using it in external pitches.",
     },
     commercialRead: {
       marketability: "undetermined",
-      rationale: "The fixture contains no verified audience telemetry, streaming performance, sales, revenue, or playlist-conversion evidence. Catalog popularity is a provider-specific indicator and cannot be substituted for commercial performance, so marketability remains undetermined.",
+      rationale: "The fixture contains no verified audience telemetry, streaming performance, sales, revenue or playlist-conversion evidence. No catalog popularity value is supplied, and marketability therefore remains undetermined. Any commercial assessment requires platform-native metrics with a defined source, reporting period and measurement method.",
     },
     releaseStrategy: {
-      recommendation: "Use the verified catalog identity to prepare a preliminary release brief, then validate the sonic direction against the full recording and collect real campaign telemetry before making commercial or audience claims.",
+      recommendation: "Use the reconciled catalog identity to prepare a preliminary release brief, then validate the creative direction against the complete approved recording. Collect platform-native campaign and audience evidence before making commercial claims or committing additional promotional spend.",
       priorities: [
-        "Confirm the final artist, title, release date, label, and ISRC against the distributor's release record.",
-        "Review the complete master before finalizing the creative lane or production commentary.",
-        "Collect verified streaming, audience, and campaign measurements before evaluating commercial traction.",
+        "Confirm the final artist, title, release date, label and ISRC against authoritative distributor records before delivery.",
+        "Review the complete approved master before finalizing the creative lane, production commentary or external pitch.",
+        "Collect verified platform-native audience and campaign measurements before evaluating commercial traction or conversion.",
       ],
     },
     evidenceGaps: [
