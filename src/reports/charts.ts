@@ -5,6 +5,7 @@ export interface ChartRow {
   value: string | number | null | undefined;
   rationale?: string;
   proportion?: number | null;
+  group?: "strength" | "risk";
 }
 export type ChartKind = "bars" | "sonic" | "spectrum" | "constellation" | "layers" | "tension" | "timeline" | "chain" | "radar";
 export interface ChartPanelInput {
@@ -22,6 +23,18 @@ const PALETTE=[C.blue,C.violet,C.teal,C.coral,C.gold,C.sky,C.green];
 const CARD_X=48,CARD_W=499,HEADER_H=29,CAPTION_H=43,PAD=12;
 function color(index:number){return PALETTE[index%PALETTE.length];}
 function validNumber(v:ChartRow["value"]):number|null{return typeof v==="number"&&Number.isFinite(v)?v:null;}
+export function buildStrengthRiskChartRows(strengths:string[],risks:string[]):ChartRow[]{
+ return [
+  {label:"Strengths",value:strengths.length},
+  {label:"Risks",value:risks.length},
+  ...strengths.map(label=>({label,value:null,group:"strength" as const})),
+  ...risks.map(label=>({label,value:null,group:"risk" as const})),
+ ];
+}
+export function strengthRiskItemsForColumn(rows:ChartRow[],group:"strength"|"risk"):ChartRow[]{
+ return rows.filter(row=>row.group===group);
+}
+
 function shown(v:ChartRow["value"]):string{return v===null||v===undefined||v===""||(typeof v==="number"&&!Number.isFinite(v))?"Not determined":String(v);}
 function line(p:PDFPage,x1:number,y1:number,x2:number,y2:number,c=C.line,w=.8){p.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},color:c,thickness:w});}
 function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
@@ -69,7 +82,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
    result.push({x:cx+9,y:panelTop-42,width:colW-18,height:12,id:"label-tension-count-"+col});
    result.push({x:cx+9,y:panelTop-58,width:colW-13,height:15,id:"shape-tension-count-bar-and-shadow-"+col});
    let baseline=panelTop-75;
-   rows.slice(2+col*10,12+col*10).slice(0,10).forEach((row,index)=>{
+   strengthRiskItemsForColumn(rows,col===0?"strength":"risk").slice(0,10).forEach((row,index)=>{
     const charsPerLine=Math.max(1,Math.floor((colW-34)/(7.5*.52)));
     const lineCount=Math.min(2,Math.max(1,Math.ceil(row.label.length/charsPerLine)));
     result.push({x:cx+8,y:baseline-2,width:13,height:9,id:"label-tension-index-"+col+"-"+index});
@@ -292,7 +305,7 @@ function drawTension(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<
   tracked(p,title,x+9,panelTop-12,b,7,C.white,.5);
   text(p,String(count)+" documented",x+9,panelTop-37,b,9,accent);
   shadowBar(p,x+9,panelTop-56,(colW-18)*count/maxCount,5,accent,c);
-  const summaries=rows.slice(2+c*10,12+c*10);
+  const summaries=strengthRiskItemsForColumn(rows,c===0?"strength":"risk").slice(0,10);
   let y=panelTop-75;
   summaries.slice(0,10).forEach((item,index)=>{
    const lines=wrapChartSummary(item.label,f,7.5,colW-34,2);
