@@ -3,26 +3,26 @@ import { processAuditJob } from "../src/jobs/process-audit-job.js";
 
 const assessment = {
   assessmentVersion: "1.0",
-  executiveSummary: "Evidence-based assessment.",
-  creativeIdentity: "Rhythmic R&B identity.",
-  strengths: ["Rhythm"],
-  risks: ["Limited market evidence"],
+  executiveSummary: "The supplied evidence supports a preliminary assessment of the recording's creative identity while leaving audience and market performance unverified. The report distinguishes measurable audio traits from interpretive positioning and records the limits of the available source material.",
+  creativeIdentity: "The recording presents a groove-led R&B identity with a restrained rhythmic character. This is an interpretation of the supplied sonic context rather than a claim about audience response, commercial performance or confirmed genre classification.",
+  strengths: ["The supplied tempo measurement gives the arrangement a concrete rhythmic reference for listening review.", "The audio profile provides measurable production characteristics that can support comparisons across approved masters.", "The reconciled identity fields provide a reliable starting point for track-level release documentation."],
+  risks: ["No verified audience telemetry is available to establish listener demand, retention or conversion behaviour.", "The available evidence does not confirm release readiness, rights status or commercial performance across relevant platforms."],
   aAndRPositioning: {
     primaryLane: "R&B",
     adjacentLanes: ["Afro-R&B"],
-    rationale: "Supported by supplied evidence.",
+    rationale: "The proposed R&B lane is a working creative hypothesis based on the supplied identity and sonic context. It should be validated against the complete master and the artist's catalogue before being used in an external A&R pitch.",
   },
   commercialRead: {
     marketability: "undetermined" as const,
-    rationale: "No market data supplied.",
+    rationale: "No verified streaming, listener, sales, revenue or playlist-conversion evidence was supplied. Marketability remains undetermined until platform-native analytics are available with a clear source, reporting period and measurement definition.",
   },
   releaseStrategy: {
-    recommendation: "Lead with the strongest sonic identity.",
-    priorities: ["Validate audience response"],
+    recommendation: "Use the strongest verified creative and identity signals to frame the release, then validate the positioning through listening review and measurable audience response. Avoid commercial claims or increased campaign spend until source evidence is available.",
+    priorities: ["Confirm release identity and rights metadata against authoritative distributor records.", "Review the complete approved master before finalizing creative positioning and production commentary.", "Collect verified platform and campaign measurements before evaluating commercial traction."],
   },
-  evidenceGaps: ["Audience telemetry"],
+  evidenceGaps: ["No verified audience telemetry, listener retention history or campaign conversion data was supplied."],
   confidence: 0.8,
-  limitations: ["Evidence-limited assessment"],
+  limitations: ["The assessment is limited to supplied identity and audio evidence and cannot establish listener demand or commercial performance."],
   scorecard: {
     sonicIdentity: { score: 70, rationale: "The supplied audio measurements provide a useful but incomplete sonic profile. This score reflects descriptive coverage and does not claim audience demand or artistic quality." },
     metadataIntegrity: { score: 65, rationale: "Some identity fields are present, but the payload does not independently corroborate every release and rights field. This score reflects supplied metadata completeness only." },
