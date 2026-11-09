@@ -119,8 +119,8 @@ function shadowBar(p:PDFPage,x:number,y:number,w:number,h:number,c:ReturnType<ty
  p.drawSvgPath(`M ${x+w} ${y} L ${x+w+5} ${y+4} L ${x+w+5} ${y+h+4} L ${x+w} ${y+h} Z`,{color:C.navy,opacity:.24});
 }
 function ring(p:PDFPage,cx:number,cy:number,r:number,value:number|null,c:ReturnType<typeof rgb>,font:PDFFont,bold:PDFFont){
+ if(value===null){for(let a=0;a<360;a+=24){const a1=a*Math.PI/180,a2=(a+12)*Math.PI/180;line(p,cx+Math.cos(a1)*(r-2),cy+Math.sin(a1)*(r-2),cx+Math.cos(a2)*(r-2),cy+Math.sin(a2)*(r-2),C.muted,1.4);}text(p,"N/D",cx-7,cy-3,bold,6,C.muted);return;}
  p.drawCircle({x:cx,y:cy,size:r,borderColor:C.line,borderWidth:5});
- if(value===null){p.drawCircle({x:cx,y:cy,size:r,borderColor:C.muted,borderWidth:1.2,color:C.paper});for(let a=0;a<360;a+=24){const a1=a*Math.PI/180,a2=(a+12)*Math.PI/180;line(p,cx+Math.cos(a1)*(r-2),cy+Math.sin(a1)*(r-2),cx+Math.cos(a2)*(r-2),cy+Math.sin(a2)*(r-2),C.muted,1.2);}text(p,"N/D",cx-7,cy-3,bold,6,C.muted);return;}
  const clamped=Math.max(0,Math.min(100,value));
  const segments=Math.max(1,Math.round(clamped/100*48));
  for(let i=0;i<segments;i++){const a1=(-90+i*7.5)*Math.PI/180,a2=(-90+(i+1)*7.5-1)*Math.PI/180;line(p,cx+Math.cos(a1)*r,cy+Math.sin(a1)*r,cx+Math.cos(a2)*r,cy+Math.sin(a2)*r,c,4.5);}
@@ -169,7 +169,7 @@ function drawRadar(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<ty
  // The full plot/label footprint is 60%+ of the card width.
  for(let ringIndex=1;ringIndex<=4;ringIndex++){const r=radius*ringIndex/4;const pts=data.map((_,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;return{x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r};});for(let i=0;i<pts.length;i++)line(p,pts[i].x,pts[i].y,pts[(i+1)%pts.length].x,pts[(i+1)%pts.length].y,C.line,.65);}
  const pts=data.map((row,i)=>{const angle=-Math.PI/2+i*2*Math.PI/n,score=validNumber(row.value),r=score===null?0:radius*Math.max(0,Math.min(100,score))/100;return{row,angle,score,x:cx+Math.cos(angle)*r,y:cy+Math.sin(angle)*r};});
- if(pts.length>=3&&pts.every(q=>q.score!==null)){const path=pts.map((q,i)=>(i?"L ":"M ")+q.x.toFixed(2)+" "+q.y.toFixed(2)).join(" ")+" Z";p.drawSvgPath(path,{color:C.teal,opacity:.24,borderColor:C.blue,borderOpacity:1,borderWidth:1.7});}
+ const scored=pts.filter(q=>q.score!==null);if(scored.length>=3){const path=scored.map((q,i)=>(i?"L ":"M ")+q.x.toFixed(2)+" "+q.y.toFixed(2)).join(" ")+" Z";p.drawSvgPath(path,{color:C.teal,opacity:.24,borderColor:C.blue,borderOpacity:1,borderWidth:1.7});}
  pts.forEach((q,i)=>{
   const ax=cx+Math.cos(q.angle)*outer,ay=cy+Math.sin(q.angle)*outer;
   line(p,cx+Math.cos(q.angle)*radius,cy+Math.sin(q.angle)*radius,ax,ay,C.muted,.6);
