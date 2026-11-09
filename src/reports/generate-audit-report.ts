@@ -162,7 +162,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   }
   for(const panel of chartsForSection(input,section.title)){
    const panelHeight=chartPanelHeight(panel.kind);
-   const captionIssues=chartCaptionCollisionErrors(panel.kind??"bars",panel.rows,M,y-8,panelHeight);if(captionIssues.length)throw new Error(captionIssues.join("; "));
+   const layoutIssues=chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,y-8,panelHeight);if(layoutIssues.length)throw new Error(layoutIssues.join("; "));
    // Keep the chart on this page whenever its complete card clears the footer; low page fill alone is not a reason to orphan it.
    if(y-8-panelHeight<BOTTOM+45){
     nextPage(section.title,accent);
