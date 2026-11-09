@@ -64,9 +64,11 @@ function captionLines(value: string, font: PDFFont, width: number): string[] {
   if (current) lines.push(current); return lines;
 }
 function captions(page: PDFPage, input: ChartPanelInput, x: number, bottom: number, font: PDFFont): void {
-  let y = bottom + 25;
-  for (const value of captionLines("SHOWS: " + input.shows, font, 475).slice(0, 2)) { page.drawText(value,{x:x+10,y,size:5.6,font,color:MUTED}); y-=7; }
-  for (const value of captionLines("CAN'T SHOW: " + input.cantShow, font, 475).slice(0, 2)) { page.drawText(value,{x:x+10,y,size:5.6,font,color:MUTED}); y-=7; }
+  let y=bottom+25;
+  for(const [prefix,value] of [["SHOWS: ",input.shows],["CAN'T SHOW: ",input.cantShow]] as const){
+    const lines=captionLines(prefix+value,font,475);
+    for(const part of lines){if(y<bottom+3)break;page.drawText(part,{x:x+10,y,size:5.6,font,color:MUTED});y-=7;}
+  }
 }
 
 function drawBars(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont, maxRows = 6): void {
@@ -94,9 +96,10 @@ function drawSonic(page: PDFPage, rows: ChartRow[], x: number, top: number, font
     const col = index % 3, r = Math.floor(index / 3), cx = columns[col], cy = top - r * 57;
     page.drawCircle({ x: cx + 17, y: cy - 7, size: 12, borderColor: LINE, borderWidth: 1, color: PAPER });
     page.drawCircle({ x: cx + 17, y: cy - 7, size: 3, color: shown(row.value) === "Not determined" ? LINE : BLUE });
-    page.drawText(row.label.toUpperCase().slice(0, 22), { x: cx + 36, y: cy, size: 6.2, font: bold, color: MUTED });
+    page.drawText(captionLines(row.label.toUpperCase(),bold,112)[0]??"", { x: cx + 36, y: cy, size: 6.2, font: bold, color: MUTED });
     const val = shown(row.value);
-    page.drawText(val.slice(0, 26), { x: cx + 36, y: cy - 13, size: 8, font, color: val === "Not determined" ? MUTED : INK });
+    const valueLines=captionLines(val,font,112);
+    valueLines.slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:cx+36,y:cy-13-lineIndex*9,size:7.2,font,color:val==="Not determined"?MUTED:INK}));
     if (val === "Not determined") dashed(page, cx + 36, cy - 19, 74);
   });
 }
@@ -202,7 +205,7 @@ function drawChain(page: PDFPage, rows: ChartRow[], x: number, top: number, font
     page.drawText(label, { x: cx - 30, y: cy - 3, size: 4.8, font: bold, color: INK });
     if (index < 2) line(page, cx + 28, cy, xs[index + 1] - 29, cy, BLUE, 1);
     const value = shown(rows[index]?.value);
-    page.drawText(value.slice(0, 32), { x: cx - 55, y: cy - 43, size: 6, font, color: MUTED });
+    captionLines(value,font,108).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:cx-55,y:cy-43-lineIndex*8,size:5.4,font,color:MUTED}));
   });
 }
 

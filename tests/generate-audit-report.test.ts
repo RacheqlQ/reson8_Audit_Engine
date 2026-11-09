@@ -1,8 +1,8 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it } from "vitest";
 import { checkLayout,checkPageDensity,generateAuditReport,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
-import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
-const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture] as unknown as AuditReportInput[];
+import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
+const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
 describe("A4 report layout and fixture coverage",()=>{
  it("detects element intersections and page overflow",()=>{
   expect(checkLayout([{x:0,y:0,width:20,height:20,id:"a"},{x:10,y:10,width:20,height:20,id:"b"}]).ok).toBe(false);
@@ -28,6 +28,9 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(partialAudioFixture.assessment.confidence).toBe(0.28);
   expect(metadataOnlyFixture.sonicDna).toBeNull();
   expect(metadataOnlyFixture.evidence.artist).toBe("Fixture Artist");
+  expect(longFormAudioFixture.evidence.fixture).toBe(true);
+  expect(longFormAudioFixture.assessment.executiveSummary.split(/\\s+/).length).toBeGreaterThan(70);
+  expect(longFormAudioFixture.assessment.strengths.length).toBeGreaterThanOrEqual(4);
  });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
   const pages=planAuditReportPages(fixtures[0],"full");
