@@ -101,8 +101,11 @@ describe("Sonic DNA",()=>{
   expect(result.spectralCentroidHz).toBeGreaterThan(4800);
   expect(result.spectralCentroidHz).toBeLessThan(5200);
  });
- it("does not invent a tempo for a steady non-rhythmic signal",()=>{
-  expect(estimateTempo(new Float32Array(8000*8).fill(0.25),8000).bpm).toBeNull();
+ it("does not invent a tempo for steady DC or a sustained sine wave",()=>{
+  const dc=new Float32Array(8000*8).fill(0.25);
+  const tone=Float32Array.from({length:8000*8},(_,i)=>Math.sin(2*Math.PI*440*i/8000));
+  expect(estimateTempo(dc,8000).bpm).toBeNull();
+  expect(estimateTempo(tone,8000).bpm).toBeNull();
  });
  it("maps tempo to broad genre context without asserting genre as fact",()=>{
   expect(classifyGenreFromBpm(75)).toContain("R&B");
