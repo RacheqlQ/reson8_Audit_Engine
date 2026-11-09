@@ -67,13 +67,15 @@ describe("processAuditJob", () => {
       saveRecognition: async () => events.push("recognition"),
       saveEvidence: async () => events.push("evidence"),
       decode: async () => ({
-        samples: new Float32Array([0, 0.1, -0.1, 0]),
+        samples: new Float32Array([0, 0, 0.1, 0.1, -0.1, -0.1, 0, 0]),
         sampleRate: 44100,
-        channels: 1,
+        channels: 2,
       }),
       saveSonicDna: async (_jobId, dna) => {
         events.push("dna");
         expect(dna.sampleRate).toBe(44100);
+        expect(dna.channels).toBe(2);
+        expect(dna.durationSeconds).toBe(4 / 44100);
       },
       generateAssessment: async (input) => {
         events.push("assessment");
