@@ -119,6 +119,11 @@ function scoreLines(assessment: ArAssessment): string[] {
     ["Metadata integrity", assessment.scorecard.metadataIntegrity],
     ["Commercial evidence", assessment.scorecard.commercialEvidence],
     ["Release readiness", assessment.scorecard.releaseReadiness],
+    ["Hook", assessment.scorecard.hook],
+    ["Originality", assessment.scorecard.originality],
+    ["Production", assessment.scorecard.production],
+    ["Replay value", assessment.scorecard.replayValue],
+    ["Lane clarity", assessment.scorecard.laneClarity],
   ] as const;
   return rows.flatMap(([name, item]) => [
     name + " score: " + (item.score === null ? "NOT SCORED" : String(item.score) + "/100"),
