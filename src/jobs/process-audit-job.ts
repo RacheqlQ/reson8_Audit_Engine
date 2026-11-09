@@ -134,6 +134,7 @@ function reconciliationEvidence(reconciliation: MetadataReconciliation): Record<
 
 function catalogEvidence(metadata: CatalogMetadata, identity: TrackIdentity, reconciliation?: MetadataReconciliation): Record<string, unknown> {
   return {
+    auditType: "METADATA-BASED AUDIT",
     status: metadata.evidenceStatus,
     platform: metadata.platform,
     artist: metadata.artist,
@@ -231,6 +232,7 @@ export async function processAuditJob(
       const identity = reconciliation.identity;
       const evidence = recognition
         ? {
+            auditType: "METADATA-BASED AUDIT",
             ...recognitionEvidence(recognition),
             ...identityEvidence(identity),
             identity: identityEvidence(identity),
@@ -278,6 +280,7 @@ export async function processAuditJob(
     });
     const identity = reconciliation.identity;
     const evidence = {
+      auditType: "MASTER-BASED AUDIT",
       ...recognitionEvidence(recognition),
       ...identityEvidence(identity),
       identity: identityEvidence(identity),
