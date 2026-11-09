@@ -51,7 +51,7 @@ const EvidenceScoreSchema = z.object({
     commercialEvidence: ScoreSchema,
     releaseReadiness: ScoreSchema,
   }),
-  evidenceLabels: z.array(EvidenceLabelSchema).max(24),
+  evidenceLabels: z.array(EvidenceLabelSchema).min(1).max(24),
 });
 
 const AssessmentSchema = NarrativeSchema
