@@ -133,7 +133,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
   const lineY=contentBottom+80;
   result.push({x:x+42,y:lineY-1,width:CARD_W-84,height:2,id:"shape-timeline-line"});
   rows.slice(0,3).forEach((row,i)=>{
-   const px=x+58+i*190;
+   const px=i===0?x+58:i===1?x+CARD_W/2:x+CARD_W-90;
    result.push({x:px-7,y:lineY-7,width:14,height:14,id:"shape-timeline-node-"+i});
    result.push({x:px-28,y:lineY+14,width:80,height:10,id:"label-timeline-stage-"+i});
    result.push({x:px-36,y:lineY-35,width:118,height:18,id:"label-timeline-description-"+i});
@@ -333,7 +333,8 @@ function drawConstellation(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:Retur
 }
 function drawTimeline(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const y=g.contentBottom+80;line(p,g.x+42,y,g.x+g.width-42,y,C.line,1.4);
- rows.slice(0,3).forEach((r,i)=>{const x=g.x+58+i*190;p.drawCircle({x,y,size:7,color:color(i)});text(p,"STAGE "+(i+1),x-20,y+18,b,6,color(i));wrap(shown(r.value),f,6,115).slice(0,2).forEach((s,j)=>text(p,s,x-35,y-18-j*8,f,6,C.ink));});
+ const nodes=[g.x+58,g.x+g.width/2,g.x+g.width-90];
+ rows.slice(0,3).forEach((r,i)=>{const x=nodes[i];p.drawCircle({x,y,size:7,color:color(i)});text(p,"STAGE "+(i+1),x-20,y+18,b,6,color(i));wrap(shown(r.value),f,6,115).slice(0,2).forEach((s,j)=>text(p,s,x-35,y-18-j*8,f,6,C.ink));});
 }
 function drawChain(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const names=["CONTENT","DISCOVERY","LISTENER ACTION"];
