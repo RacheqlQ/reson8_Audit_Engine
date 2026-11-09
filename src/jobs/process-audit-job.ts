@@ -132,7 +132,7 @@ function reconciliationEvidence(reconciliation: MetadataReconciliation): Record<
   };
 }
 
-function catalogEvidence(metadata: CatalogMetadata, identity: TrackIdentity, reconciliation?: MetadataReconciliation): Record<string, unknown> {
+function catalogEvidence(metadata: CatalogMetadata, identity: TrackIdentity): Record<string, unknown> {
   return {
     auditType: "METADATA-BASED AUDIT",
     status: metadata.evidenceStatus,
@@ -238,7 +238,7 @@ export async function processAuditJob(
             identity: identityEvidence(identity),
             reconciliation: reconciliationEvidence(reconciliation),
           }
-        : catalogEvidence(metadata, identity, reconciliation);
+        : catalogEvidence(metadata, identity);
       const sonicDna = catalogSonicDna(metadata);
       const assessment = await deps.generateAssessment({
         evidence,
