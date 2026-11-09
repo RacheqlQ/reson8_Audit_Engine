@@ -106,7 +106,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  const prepared=prepareAnalysisPcm(samples,sampleRate,channels),a=prepared.samples,rate=prepared.sampleRate,energy=rms(a);
  let crossings=0;
  for(let i=1;i<a.length;i++)if((a[i-1]<0&&a[i]>=0)||(a[i-1]>=0&&a[i]<0))crossings++;
- const size=2048,dec=4,bins=128,available=Math.max(1,Math.floor((a.length-size)/(size/2))+1),count=Math.min(12,available);
+ const size=2048,bins=size/2,available=Math.max(1,Math.floor((a.length-size)/(size/2))+1),count=Math.min(12,available);
  let csum=0,bsum=0,rsum=0,used=0;
  for(let w=0;w<count;w++){
   const start=count===1?0:Math.floor(w*(available-1)/(count-1))*Math.floor(size/2);
@@ -114,7 +114,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
   const mags:number[]=[];let total=0,weighted=0;
   for(let b=1;b<=bins;b++){
    const hz=b*rate/size;let re=0,im=0;
-   for(let n=0;n<size;n+=dec){const angle=2*Math.PI*b*n/size,x=a[start+n];re+=x*Math.cos(angle);im-=x*Math.sin(angle);}
+   for(let n=0;n<size;n++){const angle=2*Math.PI*b*n/size,x=a[start+n];re+=x*Math.cos(angle);im-=x*Math.sin(angle);}
    const m=Math.hypot(re,im);mags.push(m);total+=m;weighted+=hz*m;
   }
   if(total<=EPSILON)continue;
