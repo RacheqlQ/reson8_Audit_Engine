@@ -457,7 +457,7 @@ function drawSectionCharts(
       draw("Lane constellation — qualitative positioning", "lane", "constellation", 250, "primary and adjacent A&R lanes", "measured genre distance or market share", true);
       return true;
     case "strengths":
-      draw("Strengths versus risks", "tension", "tension", 250, "assessment-listed strengths and risks", "a numeric balance or probability");
+      draw("Strengths versus risks", "tension", "tension", 250, "assessment-listed strengths and risks", "a numeric balance or probability", true);
       return true;
     case "scorecard":
       if (metadataOnly) draw("Scorecard", "sonic", "bars", 250, "master-derived creative scores are unavailable", "hook, originality, production, replay and lane scores until audio upload", false, true);
