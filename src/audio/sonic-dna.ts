@@ -113,8 +113,13 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
   if(start+size>a.length)continue;
   const mags:number[]=[];let total=0,weighted=0;
   for(let b=1;b<=bins;b++){
-   const hz=b*rate/size;let re=0,im=0;
-   for(let n=0;n<size;n++){const angle=2*Math.PI*b*n/size,x=a[start+n];re+=x*Math.cos(angle);im-=x*Math.sin(angle);}
+   const hz=b*rate/size,angle=2*Math.PI*b/size,stepCos=Math.cos(angle),stepSin=Math.sin(angle);
+   let re=0,im=0,cos=1,sin=0;
+   for(let n=0;n<size;n++){
+    const x=a[start+n];re+=x*cos;im-=x*sin;
+    const nextCos=cos*stepCos-sin*stepSin;
+    sin=sin*stepCos+cos*stepSin;cos=nextCos;
+   }
    const m=Math.hypot(re,im);mags.push(m);total+=m;weighted+=hz*m;
   }
   if(total<=EPSILON)continue;
