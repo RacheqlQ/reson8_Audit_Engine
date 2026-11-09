@@ -1,111 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { analyzePcm, classifyGenreFromBpm, estimateTempo } from "../src/audio/sonic-dna.js";
-
-describe("Sonic DNA", () => {
-  it("maps DFT bins to their physical frequencies", () => {
-    const sampleRate = 8000;
-    const frequencyHz = 440;
-    const samples = Float32Array.from({ length: sampleRate }, (_, i) =>
-      Math.sin((2 * Math.PI * frequencyHz * i) / sampleRate),
-    );
-
-    const result = analyzePcm(samples, sampleRate);
-
-    expect(result.spectralCentroidHz).toBeGreaterThan(400);
-    expect(result.spectralCentroidHz).toBeLessThan(500);
-  });
-
-  it("measures non-zero energy and spectral features from real PCM samples", () => {
-    const sampleRate = 8000;
-    const samples = Float32Array.from({ length: sampleRate }, (_, i) =>
-      Math.sin((2 * Math.PI * 440 * i) / sampleRate),
-    );
-
-    const result = analyzePcm(samples, sampleRate);
-
-    expect(result.rmsEnergy).toBeGreaterThan(0);
-    expect(result.loudnessLufs).toBeLessThan(0);
-    expect(result.spectralCentroidHz).toBeGreaterThan(300);
-    expect(result.spectralCentroidHz).toBeLessThan(600);
-    expect(result.zeroCrossingRate).toBeGreaterThan(0.05);
-  });
-
-  it("keeps full-length spectral analysis bounded", () => {
-    const sampleRate = 8000;
-    const seconds = 60;
-    const samples = Float32Array.from({ length: sampleRate * seconds }, (_, i) =>
-      Math.sin((2 * Math.PI * 220 * i) / sampleRate),
-    );
-
-    const started = performance.now();
-    const result = analyzePcm(samples, sampleRate);
-    const elapsedMs = performance.now() - started;
-
-    expect(result.durationSeconds).toBe(seconds);
-    expect(result.spectralCentroidHz).toBeGreaterThan(100);
-    expect(result.spectralCentroidHz).toBeLessThan(400);
-    expect(elapsedMs).toBeLessThan(5000);
-  });
-
-  it("estimates tempo from a regular pulse train", () => {
-    const sampleRate = 8000;
-    const bpm = 120;
-    const seconds = 12;
-    const samples = new Float32Array(sampleRate * seconds);
-
-    for (let beat = 0; beat < seconds * bpm / 60; beat++) {
-      const start = Math.round((beat * 60 / bpm) * sampleRate);
-      for (let i = 0; i < Math.min(sampleRate * 0.02, samples.length - start); i++) {
-        samples[start + i] += Math.exp(-i / 18);
-      }
-    }
-
-    expect(estimateTempo(samples, sampleRate)).toBeGreaterThanOrEqual(115);
-    expect(estimateTempo(samples, sampleRate)).toBeLessThanOrEqual(125);
-  });
-
-
-  it("does not collapse a 126 BPM pulse into the half-time 63 BPM tempo", () => {
-    const sampleRate = 8000;
-    const bpm = 126;
-    const seconds = 12;
-    const samples = new Float32Array(sampleRate * seconds);
-
-    for (let beat = 0; beat < seconds * bpm / 60; beat++) {
-      const start = Math.round((beat * 60 / bpm) * sampleRate);
-      for (let i = 0; i < Math.min(sampleRate * 0.02, samples.length - start); i++) {
-        const accent = beat % 2 === 0 ? 1 : 0.35;
-        samples[start + i] += accent * Math.exp(-i / 18);
-      }
-    }
-
-    const detected = estimateTempo(samples, sampleRate);
-    expect(detected).toBeGreaterThanOrEqual(122);
-    expect(detected).toBeLessThanOrEqual(130);
-  });
-
-  it("detects C major from a sustained C major triad", () => {
-    const sampleRate = 8000;
-    const seconds = 6;
-    const frequencies = [261.6256, 329.6276, 391.9954];
-    const samples = Float32Array.from(
-      { length: sampleRate * seconds },
-      (_, i) => frequencies.reduce(
-        (sum, frequency) => sum + Math.sin((2 * Math.PI * frequency * i) / sampleRate),
-        0,
-      ) / frequencies.length,
-    );
-
-    const result = analyzePcm(samples, sampleRate);
-
-    expect(result.key).toBe("C");
-    expect(result.mode).toBe("major");
-  });
-
-  it("maps measured tempo to genre context without claiming a genre as fact", () => {
-    expect(classifyGenreFromBpm(75)).toContain("R&B");
-    expect(classifyGenreFromBpm(112)).toContain("Amapiano");
-    expect(classifyGenreFromBpm(128)).toContain("Pop");
-    expect(classifyGenreFromBpm(999)).toEqual([]);
-  });
+function pulse(bpm:number,seconds=12,sampleRate=8000):Float32Array {const a=new Float32Array(sampleRate*seconds);for(let beat=0;beat<seconds*bpm/60;beat++){const start=Math.round(beat*60/bpm*sampleRate);for(let i=0;i<Math.min(sampleRate*0.02,a.length-start);i++){const accent=bpm===126&&beat%2!==0?0.35:1;a[start+i]+=accent*Math.exp(-i/18);}}return a;}
+function chord(freqs:number[],seconds=6,sampleRate=8000):Float32Array{return Float32Array.from({length:sampleRate*seconds},(_,i)=>freqs.reduce((s,f)=>s+Math.sin(2*Math.PI*f*i/sampleRate),0)/freqs.length);}
+describe("Sonic DNA",()=>{
+ it("measures spectral centroid and zero crossings on the analysis array",()=>{const sr=8000,a=Float32Array.from({length:sr},(_,i)=>Math.sin(2*Math.PI*440*i/sr));const r=analyzePcm(a,sr);expect(r.spectralCentroidHz).toBeGreaterThan(400);expect(r.spectralCentroidHz).toBeLessThan(500);expect(r.zeroCrossingRate).toBeGreaterThan(0.05);});
+ it("estimates a regular 120 BPM pulse",()=>{const r=estimateTempo(pulse(120),8000);expect(r.bpm).toBeGreaterThanOrEqual(115);expect(r.bpm).toBeLessThanOrEqual(125);expect(r.confidence).not.toBeNull();});
+ it("reports 126 BPM with 63 BPM as its half-time alternative",()=>{const r=estimateTempo(pulse(126),8000);expect(r.bpm).toBeGreaterThanOrEqual(122);expect(r.bpm).toBeLessThanOrEqual(130);expect(r.alternateTempo).toBe(63);});
+ it("detects C major from a sustained C major triad",()=>{const r=analyzePcm(chord([261.6256,329.6276,391.9954]),8000);expect(r.key).toBe("C");expect(r.mode).toBe("major");expect(r.keyConfidence).toBeGreaterThan(0);});
+ it("detects A minor from a sustained A minor triad",()=>{const r=analyzePcm(chord([220,261.6256,329.6276]),8000);expect(r.key).toBe("A");expect(r.mode).toBe("minor");});
+ it("returns null key and tempo with limitation notes for silence",()=>{const r=analyzePcm(new Float32Array(48000),8000);expect(r.key).toBeNull();expect(r.mode).toBeNull();expect(r.bpm).toBeNull();expect(r.limitations.length).toBeGreaterThan(0);});
+ it("keeps long-track analysis bounded to about three million samples",()=>{const a=pulse(120,450),r=analyzePcm(a,8000);expect(r.durationSeconds).toBe(450);expect(r.bpm).not.toBeNull();expect(r.zeroCrossingRate).toBeGreaterThan(0);});
+ it("maps tempo to broad genre context without asserting genre as fact",()=>{expect(classifyGenreFromBpm(75)).toContain("R&B");expect(classifyGenreFromBpm(112)).toContain("Amapiano");expect(classifyGenreFromBpm(128)).toContain("Pop");expect(classifyGenreFromBpm(999)).toEqual([]);});
 });

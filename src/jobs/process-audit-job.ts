@@ -183,8 +183,12 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
     channels: dna.channels,
     durationSeconds: dna.durationSeconds,
     bpm: dna.bpm,
+    alternateTempo: dna.alternateTempo,
+    tempoConfidence: dna.tempoConfidence,
     key: dna.key,
     mode: dna.mode,
+    keyConfidence: dna.keyConfidence,
+    limitations: dna.limitations,
     loudnessLufs: dna.loudnessLufs,
     rmsEnergy: dna.rmsEnergy,
     dynamicRangeDb: dna.dynamicRangeDb,
@@ -248,10 +252,10 @@ export async function processAuditJob(
       await deps.saveAssessment(jobId, assessment);
 
       const generatedAt = new Date().toISOString();
-      const pdf = await deps.generateReport(
-        { auditId: jobId, generatedAt, evidence, sonicDna, assessment },
-        "full",
-      );
+      const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
+      const samplePdf = await deps.generateReport(reportInput, "sample");
+      await deps.saveReport(jobId, "sample", samplePdf);
+      const pdf = await deps.generateReport(reportInput, "full");
       await deps.saveReport(jobId, "full", pdf);
 
       await deps.markCompleted(jobId);
@@ -294,10 +298,10 @@ export async function processAuditJob(
     });
     await deps.saveAssessment(jobId, assessment);
     const generatedAt = new Date().toISOString();
-    const pdf = await deps.generateReport(
-      { auditId: jobId, generatedAt, evidence, sonicDna, assessment },
-      "full",
-    );
+    const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
+    const samplePdf = await deps.generateReport(reportInput, "sample");
+    await deps.saveReport(jobId, "sample", samplePdf);
+    const pdf = await deps.generateReport(reportInput, "full");
     await deps.saveReport(jobId, "full", pdf);
 
     await deps.markCompleted(jobId);

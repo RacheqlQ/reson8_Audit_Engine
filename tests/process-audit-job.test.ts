@@ -103,6 +103,8 @@ describe("processAuditJob", () => {
       "dna",
       "assessment",
       "assessment-saved",
+      "report-sample",
+      "report-saved-sample",
       "report-full",
       "report-saved-full",
       "completed",

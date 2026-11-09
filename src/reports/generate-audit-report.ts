@@ -99,8 +99,12 @@ function sonicLines(input: AuditReportInput): string[] {
   return [
     source,
     "BPM: " + value(input.sonicDna.bpm),
+    "Alternate tempo: " + value(input.sonicDna.alternateTempo),
+    "Tempo confidence: " + value(input.sonicDna.tempoConfidence),
     "Key: " + value(input.sonicDna.key),
     "Mode: " + value(input.sonicDna.mode),
+    "Key confidence: " + value(input.sonicDna.keyConfidence),
+    "Analysis limitations: " + value(input.sonicDna.limitations),
     "Loudness LUFS: " + value(input.sonicDna.loudnessLufs),
     "RMS energy: " + value(input.sonicDna.rmsEnergy),
     "Dynamic range dB: " + value(input.sonicDna.dynamicRangeDb),
@@ -360,12 +364,12 @@ function chartRows(input: AuditReportInput, field: string): ChartRow[] {
     const bpm = chartValue(sonic, "bpm");
     const alternate = chartValue(sonic, "alternateTempo");
     return [
-      { label: "BPM / alternate", value: bpm === null || bpm === undefined ? null : String(bpm) + " BPM; alternate: " + (alternate === null || alternate === undefined ? "Not determined" : String(alternate)) },
+      { label: "Measured BPM", value: bpm as string | number | null },
+      { label: "Alternate tempo", value: alternate as string | number | null },
+      { label: "Tempo confidence", value: chartValue(sonic, "tempoConfidence") as string | number | null },
       { label: "Key and mode", value: keyMode || null },
       { label: "Key confidence", value: chartValue(sonic, "keyConfidence") as string | number | null },
       { label: "Energy", value: (chartValue(sonic, "energy") ?? chartValue(sonic, "rmsEnergy")) as string | number | null },
-      { label: "Duration (seconds)", value: chartValue(sonic, "durationSeconds") as string | number | null },
-      { label: "Loudness / dynamic range", value: (chartValue(sonic, "loudnessLufs") ?? chartValue(sonic, "dynamicRangeDb")) as string | number | null },
     ];
   }
   if (field === "spectrum") {
@@ -481,6 +485,43 @@ function drawSectionCharts(
     default:
       return false;
   }
+}
+
+export interface ReportPagePlan { title: string; field: string; text: string[]; }
+
+/** Pure report text plan for assertions without parsing compressed PDF content streams. */
+export function planAuditReportPages(input: AuditReportInput, tier: AuditReportTier): ReportPagePlan[] {
+  const sections = tier === "sample" ? sampleSections(input) : fullSections(input);
+  return sections.map((section) => {
+    const text = [section.title, ...section.body];
+    const metadataOnly = auditLabel(input) === "METADATA-BASED AUDIT";
+    let chart: { title: string; rows: ChartRow[]; shows: string; cantShow: string } | null = null;
+    if (tier === "sample" && section.field === "evidence_snapshot") {
+      chart = { title: "Sonic DNA dashboard", rows: chartRows(input, "sonic"), shows: "available sonic fields and explicit gaps", cantShow: metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties" };
+    } else if (tier === "sample" && section.field === "ar_positioning") {
+      chart = metadataOnly
+        ? { title: "Scorecard preview", rows: chartRows(input, "sonic"), shows: "master-derived scorecard is unavailable in a metadata-only audit", cantShow: "creative scores until audio upload" }
+        : { title: "Scorecard preview", rows: chartRows(input, "scorecard"), shows: "the five requested dimensions when supplied by the assessment", cantShow: "missing dimension scores and commercial outcomes" };
+    } else {
+      const map: Record<string, { title: string; key: string; shows: string; cantShow: string }> = {
+        evidence_ledger: { title: "Evidence layers", key: "evidence", shows: "claim counts by actual provenance label", cantShow: "truth or quality beyond the supplied labels" },
+        sonic_dna: { title: "Sonic DNA dashboard", key: "sonic", shows: "measured audio fields where available", cantShow: metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties" },
+        creative_identity: { title: "Lane constellation — qualitative positioning", key: "lane", shows: "primary and adjacent A&R lanes", cantShow: "measured genre distance or market share" },
+        strengths: { title: "Strengths versus risks", key: "tension", shows: "assessment-listed strengths and risks", cantShow: "a numeric balance or probability" },
+        scorecard: { title: "Scorecard", key: metadataOnly ? "sonic" : "scorecard", shows: "the five requested dimensions when supplied by the assessment", cantShow: "unscored dimensions and commercial outcomes" },
+        curator_readiness: { title: "Promotion causal chain", key: "promotion", shows: "whether content-to-action recommendations are explicitly present", cantShow: "conversion rates, reach or causal proof" },
+        release_strategy: { title: "Release priorities timeline", key: "timeline", shows: "the first three assessment priorities in sequence", cantShow: "30/60/90-day dates not supplied in the assessment" },
+        commercial_read: { title: "Energy and tempo spectrum", key: "spectrum", shows: "available audio energy and tempo evidence", cantShow: "market size, audience demographics or unmeasured mood" }
+      };
+      const item = map[section.field];
+      if (item) chart = { title: item.title, rows: chartRows(input, item.key), shows: item.shows, cantShow: item.cantShow };
+    }
+    if (chart) {
+      text.push("CHART: " + chart.title, "SHOWS: " + chart.shows, "CAN'T SHOW: " + chart.cantShow);
+      for (const row of chart.rows) text.push(row.label + ": " + (row.value === null || row.value === undefined || row.value === "" ? "Not determined" : String(row.value)));
+    }
+    return { title: section.title, field: section.field, text };
+  });
 }
 
 export async function generateAuditReport(input: AuditReportInput, tier: AuditReportTier): Promise<Uint8Array> {
