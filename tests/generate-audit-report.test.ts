@@ -70,6 +70,7 @@ describe("generateAuditReport", () => {
     const names = document.getForm().getFields().map((field) => field.getName());
     expect(names).toContain("executive_summary");
     expect(names).toContain("ar_positioning");
+    expect(document.getForm().getTextField("executive_summary").getText()).toContain("SAMPLE / PREVIEW");
     expect(document.getForm().getTextField("executive_summary").getText()).toContain("METADATA-BASED AUDIT");
     expect(names).not.toContain("risks");
     expect(names).not.toContain("release_strategy");
@@ -81,7 +82,7 @@ describe("generateAuditReport", () => {
     expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe("%PDF-");
 
     const document = await PDFDocument.load(pdf);
-    expect(document.getPageCount()).toBeGreaterThanOrEqual(12);
+    expect(document.getPageCount()).toBeGreaterThanOrEqual(16);
     expect(document.getPageCount()).toBeLessThanOrEqual(20);
   });
 });
