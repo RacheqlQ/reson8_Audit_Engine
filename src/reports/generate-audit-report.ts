@@ -1,9 +1,8 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import type { ArAssessment } from "../providers/groq/client.js";
-import { countEvidenceLayers, drawChartPanel, type ChartKind, type ChartRow } from "./charts.js";
+import { loadReportFonts } from "./fonts.js";
 
 export type AuditReportTier = "sample" | "full";
-
 export interface AuditReportInput {
   auditId: string;
   generatedAt: string;
@@ -11,553 +10,182 @@ export interface AuditReportInput {
   sonicDna: Record<string, unknown> | null;
   assessment: ArAssessment;
 }
-
-function value(input: unknown): string {
-  if (input === null || input === undefined || input === "") return "Not available";
-  if (Array.isArray(input)) return input.map((item) => value(item)).join(", ");
-  if (typeof input === "object") return JSON.stringify(input);
-  return String(input);
-}
-
-function wrap(input: string, max = 88): string[] {
-  const words = input.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let line = "";
-  for (const word of words) {
-    const next = line ? line + " " + word : word;
-    if (next.length > max && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
+export interface ReportRect { x:number; y:number; width:number; height:number; id:string }
+export interface ReportPagePlan { title:string; text:string[] }
+const W=595.28, H=841.89, M=48, CONTENT_TOP=735, CONTENT_BOTTOM=76;
+const C={
+ navy:rgb(11/255,27/255,58/255), blue:rgb(47/255,107/255,1),
+ violet:rgb(124/255,77/255,1), teal:rgb(31/255,209/255,178/255),
+ coral:rgb(1,107/255,94/255), paper:rgb(247/255,245/255,240/255),
+ ink:rgb(22/255,29/255,43/255), muted:rgb(91/255,101/255,119/255),
+ line:rgb(220/255,222/255,226/255), white:rgb(1,1,1),
+};
+const txt=(v:unknown):string=>{
+ if(v===null||v===undefined||v==="")return "";
+ if(Array.isArray(v))return v.map(txt).filter(Boolean).join(", ");
+ if(typeof v==="object")return "";
+ return String(v);
+};
+const nonempty=(v:unknown,fallback="Evidence not supplied"):string=>txt(v)||fallback;
+function wrapMeasured(text:string,font:PDFFont,size:number,width:number):string[]{
+ const words=text.split(/\s+/).filter(Boolean),lines:string[]=[];let line="";
+ for(const word of words){
+  if(font.widthOfTextAtSize(word,size)>width) {
+   if(line){lines.push(line);line="";}
+   let part="";
+   for(const char of word){if(font.widthOfTextAtSize(part+char,size)>width&&part){lines.push(part);part=char;}else part+=char;}
+   line=part;continue;
   }
-  if (line) lines.push(line);
-  return lines;
+  const candidate=line?line+" "+word:word;
+  if(font.widthOfTextAtSize(candidate,size)>width&&line){lines.push(line);line=word;}else line=candidate;
+ }
+ if(line)lines.push(line);return lines;
 }
-
-function addEditableField(
-  pdf: PDFDocument,
-  page: PDFPage,
-  font: PDFFont,
-  name: string,
-  content: string,
-): void {
-  const field = pdf.getForm().createTextField(name);
-  field.enableMultiline();
-  field.setText(content.slice(0, 8000));
-  field.addToPage(page, { x: 48, y: 105, width: 516, height: 42 });
-  field.setFontSize(9);
-  field.updateAppearances(font);
+export function checkLayout(rects:ReportRect[]):{ok:boolean;errors:string[]}{
+ const errors:string[]=[];
+ for(let i=0;i<rects.length;i++)for(let j=i+1;j<rects.length;j++){
+  const a=rects[i],b=rects[j];
+  if(a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y)errors.push("Intersecting elements: "+a.id+" / "+b.id);
+ }
+ for(const r of rects)if(r.x<0||r.y<0||r.x+r.width>W||r.y+r.height>H)errors.push("Out-of-page element: "+r.id);
+ return {ok:errors.length===0,errors};
 }
-
-function drawPageHeader(page: PDFPage, title: string, pageNumber: number, font: PDFFont, bold: PDFFont): void {
-  page.drawText("RESON8 | A&R INTELLIGENCE", { x: 48, y: 754, size: 8, font: bold, color: rgb(0.25, 0.28, 0.33) });
-  page.drawText(title, { x: 48, y: 716, size: 19, font: bold, color: rgb(0.05, 0.07, 0.1) });
-  page.drawText("PRIVATE AUDIT | " + pageNumber, { x: 490, y: 28, size: 7, font, color: rgb(0.35, 0.37, 0.4) });
+function drawText(page:PDFPage,text:string,x:number,y:number,font:PDFFont,size:number,color=C.ink):number{
+ const lines=wrapMeasured(text,font,size,W-2*M);
+ for(const line of lines){if(font.widthOfTextAtSize(line,size)>W-2*M+0.01)throw new Error("Text overflow: "+line);page.drawText(line,{x,y,size,font,color});y-=size*1.48;}
+ return y;
 }
-
-function drawBody(
-  page: PDFPage,
-  paragraphs: string[],
-  font: PDFFont,
-  startY = 680,
-  startParagraph = 0,
-  startLine = 0,
-  stopY = 62,
-): { paragraph: number; line: number; y: number } {
-  let y = startY;
-  for (let paragraphIndex = startParagraph; paragraphIndex < paragraphs.length; paragraphIndex++) {
-    const lines = wrap(paragraphs[paragraphIndex]);
-    const firstLine = paragraphIndex === startParagraph ? startLine : 0;
-    for (let lineIndex = firstLine; lineIndex < lines.length; lineIndex++) {
-      if (y < stopY) return { paragraph: paragraphIndex, line: lineIndex, y };
-      page.drawText(lines[lineIndex], { x: 48, y, size: 9, font, color: rgb(0.12, 0.14, 0.17) });
-      y -= 14;
-    }
-    y -= 10;
+function header(page:PDFPage,title:string,pageNo:number,fonts:{regular:PDFFont;bold:PDFFont},accent= C.blue){
+ page.drawRectangle({x:0,y:H-7,width:W,height:7,color:accent});
+ page.drawText("RESON8  /  A&R INTELLIGENCE",{x:M,y:H-34,size:8,font:fonts.bold,color:C.navy});
+ page.drawText(title.toUpperCase(),{x:M,y:H-58,size:7,font:fonts.bold,color:accent});
+ page.drawLine({start:{x:M,y:H-68},end:{x:W-M,y:H-68},color:C.line,thickness:.7});
+ page.drawLine({start:{x:M,y:43},end:{x:W-M,y:43},color:C.line,thickness:.7});
+ page.drawText("CONFIDENTIAL  •  EVIDENCE-LED ASSESSMENT",{x:M,y:28,size:6.5,font:fonts.regular,color:C.muted});
+ page.drawText(String(pageNo).padStart(2,"0"),{x:W-M-18,y:27,size:8,font:fonts.bold,color:C.navy});
+}
+function cover(pdf:PDFDocument,input:AuditReportInput,fonts:{regular:PDFFont;bold:PDFFont}):void{
+ const page=pdf.addPage([W,H]);page.drawRectangle({x:0,y:0,width:W,height:H,color:C.paper});
+ page.drawRectangle({x:0,y:H-14,width:W,height:14,color:C.navy});
+ page.drawText("RESON8",{x:M,y:H-82,size:17,font:fonts.bold,color:C.navy});
+ page.drawText("A&R INTELLIGENCE",{x:M,y:H-103,size:8,font:fonts.bold,color:C.blue});
+ page.drawText("TRACK AUDIT",{x:M,y:H-210,size:11,font:fonts.bold,color:C.violet});
+ page.drawText("Artist & release",{x:M,y:H-260,size:31,font:fonts.bold,color:C.navy});
+ page.drawText("decision brief",{x:M,y:H-299,size:31,font:fonts.bold,color:C.navy});
+ const artist=nonempty(input.evidence.artist,"Artist not supplied"),title=nonempty(input.evidence.title,"Track not supplied");
+ page.drawText(artist.slice(0,70),{x:M,y:H-360,size:15,font:fonts.bold,color:C.ink});
+ page.drawText(title.slice(0,70),{x:M,y:H-384,size:12,font:fonts.regular,color:C.muted});
+ page.drawRectangle({x:M,y:250,width:W-2*M,height:104,color:C.navy});
+ page.drawText("ASSESSMENT VERDICT",{x:M+18,y:326,size:7,font:fonts.bold,color:C.teal});
+ const verdict=nonempty(input.assessment.commercialRead.marketability,"UNDETERMINED").toUpperCase();
+ page.drawText(verdict,{x:M+18,y:292,size:19,font:fonts.bold,color:C.white});
+ page.drawText("CONFIDENCE",{x:W-M-116,y:326,size:7,font:fonts.bold,color:C.teal});
+ const cx=W-M-72,cy=290,r=25,conf=Math.max(0,Math.min(1,input.assessment.confidence||0));
+ page.drawCircle({x:cx,y:cy,size:r,borderColor:C.muted,borderWidth:5});
+ page.drawCircle({x:cx,y:cy,size:r-5,borderColor:C.teal,borderWidth:2});
+ page.drawText(Math.round(conf*100)+"%",{x:cx-13,y:cy-3,size:9,font:fonts.bold,color:C.white});
+ page.drawText("Generated "+input.generatedAt.slice(0,10)+"   •   Version "+nonempty(input.assessment.assessmentVersion,"1.0"),{x:M,y:210,size:8,font:fonts.regular,color:C.muted});
+ page.drawText("Audit "+input.auditId,{x:M,y:190,size:7,font:fonts.regular,color:C.muted});
+ page.drawText("PRIVATE & CONFIDENTIAL",{x:M,y:54,size:7,font:fonts.bold,color:C.navy});
+}
+interface Section{title:string;accent:keyof typeof C;body:string[];kind?:"chart"|"checklist"}
+function sections(input:AuditReportInput):Section[]{
+ const a=input.assessment,e=input.evidence,s=input.sonicDna;
+ const audio=Boolean(s&&s.provenance==="uploaded_audio_master");
+ const missingAudio=!audio;
+ const score=(label:string,entry:{score:number|null;rationale:string})=>label+"  "+(entry.score===null?"NOT SCORED":entry.score+"/100")+" — "+entry.rationale;
+ const lane=nonempty(a.aAndRPositioning.primaryLane,"the proposed lane");
+ const industry=[
+  "INDUSTRY PRACTICE — GENERAL LANE GUIDANCE, NOT A CLAIM ABOUT THIS RECORDING.",
+  "In "+lane+", release teams commonly establish the central musical proposition before selecting a lead single, sequencing supporting content and preparing DSP metadata. Confirm the convention against current specialist releases rather than treating it as a rule.",
+  "Arrangement review commonly considers the opening seconds, vocal or instrumental entry, section contrast, transitions, low-end translation and the clarity of the final chorus or drop. These are listening prompts, not findings about this track.",
+  "Pitching angles should connect a verifiable artist story to a specific musical feature and a timely release reason. Playlist categories to investigate may include lane-specific R&B, alternative/left-field, mood-led, regional discovery and independent new-music programming; these are categories, not placements or named curators.",
+  "Content concepts can include a performance excerpt, lyric or story context, a production breakdown, a visual motif and a short-form alternate edit. Select formats only after checking rights, artist capacity and platform fit.",
+  "Labels and partners in this lane typically assess identity clarity, repeatable creative direction, recording quality, rights readiness, credible release execution and evidence of audience response. No label interest or market demand is implied here."
+ ];
+ const scoreRows=[
+  score("Tempo and lane fit",a.scorecard.sonicIdentity),
+  score("Rhythmic consistency",a.scorecard.metadataIntegrity),
+  score("Dynamic range / loudness readiness",a.scorecard.commercialEvidence),
+  score("Metadata completeness",a.scorecard.releaseReadiness),
+ ];
+ const human=[
+  "HUMAN LISTENING CHECKLIST — UN-SCORED",
+  "Does the opening establish a distinctive musical or lyrical reason to keep listening?",
+  "Can a listener identify and recall the hook after one play? Which exact phrase or motif carries it?",
+  "Does the vocal performance communicate a specific point of view, and does the delivery remain compelling across sections?",
+  "What feels genuinely distinctive compared with verified listening references? Which similarities are intentional?",
+  "Does the arrangement create meaningful development, contrast and payoff without unnecessary repetition?",
+  "Does the mix translate across headphones, phone speakers, mono and a full-range system?",
+  "Would a listener replay, share or save this track? What observed listening behaviour supports that view?"
+ ];
+ return [
+  {title:"Executive assessment",accent:"blue",body:[a.executiveSummary,"Verdict: "+nonempty(a.commercialRead.marketability,"undetermined"),"Confidence: "+Math.round((a.confidence||0)*100)+"%","Audit basis: "+(missingAudio?"Metadata / provider evidence; no uploaded master.":"Uploaded master supplied.") ]},
+  {title:"Identity and source reconciliation",accent:"violet",body:["Artist: "+nonempty(e.artist),"Track: "+nonempty(e.title),"ISRC: "+nonempty(e.isrc),"Album: "+nonempty(e.album),"Release date: "+nonempty(e.releaseDate),"Label: "+nonempty(e.label),"Sources: "+nonempty(e.sources??e.sourceProviders),"Confirm every release field against the distributor's authoritative delivery record before external pitching."]},
+  {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>x.label+" — "+x.claim+"  [Source: "+x.source+"]").concat(["Evidence classes: OBSERVED, RECOGNIZED, RECONCILED, INFERRED and INDUSTRY PRACTICE. INDUSTRY PRACTICE is general craft knowledge and is not track-specific evidence."])},
+  {title:"Sonic DNA and technical profile",accent:"blue",body:missingAudio?["Requires audio upload","Not measured: no master audio supplied."]:["OBSERVED: values below are derived from supplied master audio.","Tempo: "+nonempty(s?.bpm,"Not measured"),"Alternate tempo: "+nonempty(s?.alternateTempo,"Not measured"),"Key / mode: "+[txt(s?.key),txt(s?.mode)].filter(Boolean).join(" ")||"Not measured","Loudness LUFS: "+nonempty(s?.loudnessLufs,"Not measured"),"Dynamic range dB: "+nonempty(s?.dynamicRangeDb,"Not measured"),"Spectral centroid Hz: "+nonempty(s?.spectralCentroidHz,"Not measured"),"Mood: "+nonempty(s?.moodTags,"Not measured")]},
+  {title:"Creative identity and A&R positioning",accent:"violet",body:[a.creativeIdentity,"Primary lane: "+lane,"Adjacent lanes: "+nonempty(a.aAndRPositioning.adjacentLanes),"Positioning rationale: "+a.aAndRPositioning.rationale]},
+  {title:"Strengths and creative leverage",accent:"teal",body:a.strengths},
+  {title:"Risks and diligence",accent:"coral",body:a.risks},
+  {title:"Evidence-derived scorecard",accent:"blue",body:scoreRows.concat(["A numeric value is retained only where the supplied evidence supports a defensible measurement. These scores do not predict streams, signing decisions or listener response."])},
+  {title:"Human listening checklist",accent:"violet",body:human,kind:"checklist"},
+  {title:"Production and arrangement guidance",accent:"teal",body:["Review the opening, section transitions, vocal/instrumental balance, low-end translation, dynamic contrast and ending against the final master.", "Separate measured technical properties from aesthetic judgement. A&R production notes require a complete listening pass and time-coded observations.", ...a.limitations]},
+  {title:"Comparable lanes and listening references to verify",accent:"violet",body:["INFERRED — NOT VERIFIED COMPARISONS.","Start with the primary lane "+lane+" and adjacent lanes "+nonempty(a.aAndRPositioning.adjacentLanes)+". Build a reference set from recent, independently verified releases and compare arrangement, vocal treatment, tempo feel, sound palette and release context.", "No artist, track or performance comparison is asserted as verified by this report."]},
+  {title:"INDUSTRY PRACTICE: release craft",accent:"teal",body:industry},
+  {title:"Promotion plan",accent:"coral",body:["Pre-release: lock master, artwork, metadata, rights and a concise verified story; prepare a short performance asset and a vertical visual concept.","Release window: coordinate DSP delivery, artist-owned channels, press materials and short-form content. Test one clear creative angle at a time; do not promise playlist placements.","Post-release: review platform-native saves, completion, returning listeners and attributable traffic at consistent intervals. Adjust content based on observed response.","Budget, reach and conversion targets remain unset until a verified baseline and spend ceiling are supplied."]},
+  {title:"Label and partner fit",accent:"blue",body:["Potential partner profile: independent labels, artist-development teams and distributors whose current catalogues demonstrably align with "+lane+". This is a category-level fit hypothesis, not a claim of interest.","Prepare a concise package: approved master, one-paragraph artist proposition, credits/rights status, release plan and source-backed performance evidence.","Validate each partner's current roster, submission route, rights expectations and deal terms before contact."]},
+  {title:"30 / 60 / 90-day execution plan",accent:"violet",body:["DAYS 01–30 — FOUNDATION: verify master and rights; reconcile metadata; complete human listening checklist; select the release proposition and create approved assets.","DAYS 31–60 — ACTIVATION: coordinate delivery and artist-owned content; test a small number of creative angles; log source, date, reach and response for each action.","DAYS 61–90 — REVIEW: compare like-for-like platform reporting windows; assess saves, completion, returning listeners and attributable traffic where available; decide whether to sustain, revise or pause the campaign.","Dates are relative planning windows, not a confirmed release calendar."]},
+  {title:"Commercial evidence, audience and measurement",accent:"blue",body:[a.commercialRead.rationale,"Catalog popularity: "+nonempty(e.catalogPopularity,"Not supplied"),"Audience telemetry: "+nonempty(e.audienceTelemetry,"Not supplied"),"No streams, playlists, curator relationships, demographics or market-size figures are invented."]},
+  {title:"Decision record and next evidence gates",accent:"coral",body:["Recommendation: "+a.releaseStrategy.recommendation,...a.releaseStrategy.priorities.map((p,i)=>"Priority "+(i+1)+": "+p),"Evidence gaps: "+a.evidenceGaps.join(" "), "Limitations: "+a.limitations.join(" ")]}
+ ];
+}
+function drawCard(page:PDFPage,title:string,body:string[],accent:typeof C[keyof typeof C],fonts:{regular:PDFFont;bold:PDFFont},y:number):number{
+ const x=M,width=W-2*M;page.drawRectangle({x:x+2,y:y-3,width,height:44,color:rgb(0.90,0.91,0.93)});
+ page.drawRectangle({x,y:y-44,width,height:44,color:C.white,borderColor:C.line,borderWidth:.5});
+ page.drawRectangle({x,y:y-44,width:4,height:44,color:accent});
+ page.drawText(title.toUpperCase().slice(0,64),{x:x+13,y:y-17,size:7,font:fonts.bold,color:accent});
+ const sample=body.join(" ").slice(0,190);
+ const lines=wrapMeasured(sample,fonts.regular,7.2,width-28);
+ let yy=y-29;for(const l of lines.slice(0,2)){page.drawText(l,{x:x+13,y:yy,size:7.2,font:fonts.regular,color:C.ink});yy-=10;}
+ return y-55;
+}
+export function planAuditReportPages(input:AuditReportInput,tier:AuditReportTier):ReportPagePlan[]{
+ const all=sections(input),chosen=tier==="sample"?all.slice(0,5):all;
+ return chosen.map(s=>({title:s.title,text:s.body}));
+}
+export async function generateAuditReport(input:AuditReportInput,tier:AuditReportTier):Promise<Uint8Array>{
+ const pdf=await PDFDocument.create(),fonts=loadReportFonts(pdf);
+ cover(pdf,input,fonts);
+ const chosen=tier==="sample"?sections(input).slice(0,5):sections(input);
+ let pageNo=1,page=pdf.addPage([W,H]),y=CONTENT_TOP,rects:ReportRect[]=[];
+ header(page,"Audit findings",pageNo,fonts,C.blue);
+ for(const section of chosen){
+  const accent=C[section.accent];
+  const titleLines=wrapMeasured(section.title,fonts.bold,16,W-2*M);
+  const estimatedTitle=titleLines.length*22;
+  if(y-estimatedTitle<CONTENT_BOTTOM+40){pageNo++;page=pdf.addPage([W,H]);header(page,"Audit findings",pageNo,fonts,accent);y=CONTENT_TOP;rects=[];}
+  page.drawText(String(chosen.indexOf(section)+1).padStart(2,"0"),{x:M,y:y-2,size:8,font:fonts.bold,color:accent});
+  let ty=y;for(const line of titleLines){page.drawText(line,{x:M+34,y:ty,size:16,font:fonts.bold,color:C.navy});ty-=22;}
+  y=ty-10;
+  for(const para of section.body){
+   const size=para===para.toUpperCase()&&para.length<100?7.2:9;
+   const lines=wrapMeasured(para,fonts.regular,size,W-2*M-12);
+   const height=lines.length*size*1.48+8;
+   if(y-height<CONTENT_BOTTOM){const layout=checkLayout(rects);if(!layout.ok)throw new Error(layout.errors.join("; "));pageNo++;page=pdf.addPage([W,H]);header(page,section.title,pageNo,fonts,accent);y=CONTENT_TOP;rects=[];}
+   const box={x:M,y:y-height,width:W-2*M,height:height,id:section.title+":"+section.body.indexOf(para)};
+   rects.push(box);
+   page.drawRectangle({x:M-5,y:y-height+2,width:W-2*M+10,height:height,color:section.body.indexOf(para)%2===0?C.paper:C.white});
+   let yy=y;for(const line of lines){page.drawText(line,{x:M+3,y:yy,size,font:fonts.regular,color:size<8?accent:C.ink});yy-=size*1.48;}
+   y-=height;
   }
-  return { paragraph: paragraphs.length, line: 0, y };
-}
-
-function auditLabel(input: AuditReportInput): string {
-  if (input.evidence.auditType === "METADATA-BASED AUDIT" || input.sonicDna?.provenance === "tidal_catalog_metadata") {
-    return "METADATA-BASED AUDIT";
-  }
-  return "MASTER-BASED AUDIT";
-}
-
-function evidenceLabelLines(assessment: ArAssessment): string[] {
-  return assessment.evidenceLabels.map((item) => item.label + " | " + item.claim + " | Source: " + item.source);
-}
-
-function sonicLines(input: AuditReportInput): string[] {
-  if (!input.sonicDna) return ["No master-derived or provider sonic profile was available for this audit."];
-  const source = input.sonicDna.provenance === "tidal_catalog_metadata"
-    ? "METADATA-BASED AUDIT: sonic details are provider catalog metadata, not master-derived measurements."
-    : "OBSERVED: sonic measurements are derived from the supplied audio master.";
-  return [
-    source,
-    "BPM: " + (input.sonicDna.bpm === null || input.sonicDna.bpm === undefined ? "Not determined" : value(input.sonicDna.bpm)),
-    "Alternate tempo: " + (input.sonicDna.alternateTempo === null || input.sonicDna.alternateTempo === undefined ? "Not determined" : value(input.sonicDna.alternateTempo)),
-    "Tempo confidence: " + value(input.sonicDna.tempoConfidence),
-    "Key: " + (input.sonicDna.key === null || input.sonicDna.key === undefined ? "Not determined" : value(input.sonicDna.key)),
-    "Mode: " + (input.sonicDna.mode === null || input.sonicDna.mode === undefined ? "Not determined" : value(input.sonicDna.mode)),
-    "Key confidence: " + value(input.sonicDna.keyConfidence),
-    "Analysis limitations: " + value(input.sonicDna.limitations),
-    "Loudness LUFS: " + value(input.sonicDna.loudnessLufs),
-    "RMS energy: " + value(input.sonicDna.rmsEnergy),
-    "Dynamic range dB: " + value(input.sonicDna.dynamicRangeDb),
-    "Spectral centroid Hz: " + value(input.sonicDna.spectralCentroidHz),
-    "Spectral bandwidth Hz: " + value(input.sonicDna.spectralBandwidthHz),
-    "Spectral rolloff Hz: " + value(input.sonicDna.spectralRolloffHz),
-    "Zero-crossing rate: " + value(input.sonicDna.zeroCrossingRate),
-    "Mood tags: " + value(input.sonicDna.moodTags),
-    "Genre context: " + value(input.sonicDna.genreContext),
-  ];
-}
-
-function scoreLines(assessment: ArAssessment): string[] {
-  const rows = [
-    ["Sonic identity", assessment.scorecard.sonicIdentity],
-    ["Metadata integrity", assessment.scorecard.metadataIntegrity],
-    ["Commercial evidence", assessment.scorecard.commercialEvidence],
-    ["Release readiness", assessment.scorecard.releaseReadiness],
-    ["Hook", assessment.scorecard.hook],
-    ["Originality", assessment.scorecard.originality],
-    ["Production", assessment.scorecard.production],
-    ["Replay value", assessment.scorecard.replayValue],
-    ["Lane clarity", assessment.scorecard.laneClarity],
-  ] as const;
-  return rows.flatMap(([name, item]) => [
-    name + " score: " + (item.score === null ? "NOT SCORED" : String(item.score) + "/100"),
-    "Rationale: " + item.rationale,
-  ]);
-}
-
-function fullSections(input: AuditReportInput): Array<{ title: string; field: string; body: string[] }> {
-  const a = input.assessment;
-  const evidence = input.evidence;
-  const sonic = sonicLines(input);
-  return [
-    {
-      title: "01 | Executive assessment",
-      field: "executive_summary",
-      body: [auditLabel(input), a.executiveSummary, "Assessment confidence: " + Math.round(a.confidence * 100) + "%", "Evidence status: " + value(evidence.status), "This assessment distinguishes supplied observations, recognized identity, reconciled metadata and interpretive A&R hypotheses."],
-    },
-    {
-      title: "02 | Track identity and source reconciliation",
-      field: "track_identity",
-      body: [
-        "Artist: " + value(evidence.artist),
-        "Title: " + value(evidence.title),
-        "ISRC: " + value(evidence.isrc),
-        "Album: " + value(evidence.album),
-        "Release date: " + value(evidence.releaseDate),
-        "Label: " + value(evidence.label),
-        "Identity object: " + value(evidence.identity),
-        "Reconciliation record: " + value(evidence.reconciliation),
-        "Source providers: " + value(evidence.sources ?? evidence.sourceProviders),
-        "Identity fields should be checked against the distributor's release record before pitching or campaign setup.",
-      ],
-    },
-    {
-      title: "03 | Evidence ledger and provenance",
-      field: "evidence_ledger",
-      body: evidenceLabelLines(a).length ? evidenceLabelLines(a) : ["No individually labelled evidence claims were returned. Treat unlabelled statements as unverified until their sources are confirmed."],
-    },
-    {
-      title: "04 | Sonic DNA and audio profile",
-      field: "sonic_dna",
-      body: [
-        ...sonic,
-        "Interpretation boundary: provider catalog fields are not equivalent to measurements extracted from an uploaded master.",
-        "A final production assessment requires listening to the complete approved master, including its vocal, arrangement and mix context.",
-      ],
-    },
-    {
-      title: "05 | Creative identity and artistic proposition",
-      field: "creative_identity",
-      body: [
-        a.creativeIdentity,
-        "Primary A&R lane: " + a.aAndRPositioning.primaryLane,
-        "Adjacent lanes: " + value(a.aAndRPositioning.adjacentLanes),
-        "The lane is a working discovery hypothesis. It should be tested against the complete recording, artist catalogue and intended release context.",
-      ],
-    },
-    {
-      title: "06 | Strengths and creative leverage",
-      field: "strengths",
-      body: [
-        ...a.strengths,
-        "A strength is actionable only when it can be tied to a source, a listening observation or a clearly stated creative interpretation.",
-        "Use these points to shape the artist narrative; do not convert them into unsupported claims about audience size or commercial traction.",
-      ],
-    },
-    {
-      title: "07 | Risks, constraints and diligence",
-      field: "risks",
-      body: [
-        ...a.risks,
-        "Confirm rights, contributor credits, release metadata and asset ownership through the relevant primary records.",
-        "Resolve missing evidence before making claims to a label, distributor, media contact or curator.",
-      ],
-    },
-    {
-      title: "08 | A&R positioning rationale",
-      field: "ar_positioning",
-      body: [
-        "Primary lane: " + a.aAndRPositioning.primaryLane,
-        "Adjacent lanes: " + value(a.aAndRPositioning.adjacentLanes),
-        a.aAndRPositioning.rationale,
-        "Positioning should remain specific to the recording rather than relying on broad genre labels alone.",
-        "The final pitch should explain the track's musical identity, artist context and reason for release now, with unsupported comparisons removed.",
-      ],
-    },
-    {
-      title: "09 | Evidence-based scorecard",
-      field: "scorecard",
-      body: [
-        ...scoreLines(a),
-        "Scores describe the completeness and usefulness of the supplied evidence. They are not a prediction of streaming outcomes, signing decisions or listener response.",
-      ],
-    },
-    {
-      title: "10 | Commercial evidence and marketability",
-      field: "commercial_read",
-      body: [
-        "Marketability: " + a.commercialRead.marketability.toUpperCase(),
-        a.commercialRead.rationale,
-        "Catalog popularity: " + value(evidence.catalogPopularity),
-        "Catalog popularity scale: " + value(evidence.catalogPopularityScale),
-        "A catalog popularity indicator is not streams, revenue, sales, listener retention, playlist conversion or proof of demand.",
-        "No commercial conclusion should be upgraded until platform analytics and campaign outcomes are supplied with their reporting period and source.",
-      ],
-    },
-    {
-      title: "11 | Audience evidence and validation plan",
-      field: "audience_evidence",
-      body: [
-        "Verified audience telemetry supplied: " + value(evidence.audienceTelemetry),
-        "Audience segments or demographics supplied: " + value(evidence.audienceSegments),
-        "Listener retention or completion evidence supplied: " + value(evidence.listenerRetention),
-        "The current evidence does not establish audience demographics, geographic concentration, listener loyalty or conversion behaviour.",
-        "Validation plan: collect platform-native audience geography, returning-listener behaviour, saves, completion and follower conversion after the release has measurable exposure.",
-        "Keep the source platform, date range, sample size and definition attached to every metric before using it in an A&R decision.",
-      ],
-    },
-    {
-      title: "12 | DSP and curator discovery readiness",
-      field: "curator_readiness",
-      body: [
-        "No named curator, playlist placement or editorial relationship is asserted by this report unless an independently verified source is present in the evidence.",
-        "Build a target shortlist only after confirming the track's sound, clean metadata, release timing, rights status and fit with each outlet's published submission criteria.",
-        "Prioritize genuine stylistic fit and current activity over follower counts or unverified placement promises.",
-        "Record the source, contact route, submission requirements, last verification date and response outcome for every future target.",
-        "Do not treat a suggested target category as an existing relationship or a guaranteed placement.",
-      ],
-    },
-    {
-      title: "13 | Release strategy and priorities",
-      field: "release_strategy",
-      body: [
-        a.releaseStrategy.recommendation,
-        ...a.releaseStrategy.priorities.map((item, index) => "Priority " + (index + 1) + ": " + item),
-        "Sequence execution around confirmed assets and evidence. Do not commit campaign spend against unverified reach assumptions.",
-      ],
-    },
-    {
-      title: "14 | Campaign measurement framework",
-      field: "campaign_measurement",
-      body: [
-        "Before launch, record the baseline and the exact reporting window for each connected DSP and social platform.",
-        "Track qualified reach, listener conversion, saves, repeat listening, completion, follower change and attributable traffic where the platform exposes those measures.",
-        "Separate organic response from paid exposure and identify campaign actions that can reasonably explain a change.",
-        "Compare like-for-like periods and retain the raw source export so later A&R decisions can be audited.",
-        "No forecast or target value is inserted here because no verified baseline was supplied.",
-      ],
-    },
-    {
-      title: "15 | Operational readiness and asset checklist",
-      field: "operational_readiness",
-      body: [
-        "Confirm final master, clean and explicit versions where applicable, artwork, artist and contributor credits, ISRC, release date, label and distributor delivery status.",
-        "Confirm that all contributors, samples and visual assets have the permissions required for the intended release and promotional use.",
-        "Prepare a concise track description that matches the final recording and does not overstate the available audience evidence.",
-        "Keep the final metadata, approved assets and campaign links in one version-controlled release record.",
-        "Items not present in the supplied evidence remain open checks, not assumed approvals.",
-      ],
-    },
-    {
-      title: "16 | Evidence gaps, limitations and decision record",
-      field: "limitations",
-      body: [
-        "Evidence gaps:",
-        ...a.evidenceGaps,
-        "Limitations:",
-        ...a.limitations,
-        "Decision boundary: do not treat inferred positioning as observed fact or metadata popularity as audience performance.",
-        "Next decision gate: update this assessment only when the missing source material is supplied and independently reconciled.",
-      ],
-    },
-  ];
-}
-function sampleSections(input: AuditReportInput): Array<{ title: string; field: string; body: string[] }> {
-  const a = input.assessment;
-  return [
-    {
-      title: "Executive overview",
-      field: "executive_summary",
-      body: [
-        "SAMPLE / PREVIEW — NOT A FULL CAMPAIGN REPORT",
-        "RESON8 | CONFIDENTIAL SAMPLE A&R AUDIT",
-        auditLabel(input),
-        value(input.evidence.artist) + " — " + value(input.evidence.title),
-        "Audit ID: " + input.auditId + " | Generated: " + input.generatedAt.slice(0, 10),
-        a.executiveSummary,
-        "This sample is an initial evidence-led view, not a full campaign recommendation.",
-      ],
-    },
-    {
-      title: "Evidence snapshot",
-      field: "evidence_snapshot",
-      body: [
-        "Identity status: " + value(input.evidence.status),
-        "Artist: " + value(input.evidence.artist),
-        "Title: " + value(input.evidence.title),
-        "ISRC: " + value(input.evidence.isrc),
-        ...sonicLines(input),
-        ...evidenceLabelLines(a).slice(0, 4),
-      ],
-    },
-    {
-      title: "Preliminary A&R view",
-      field: "ar_positioning",
-      body: [
-        a.creativeIdentity,
-        "Primary lane: " + a.aAndRPositioning.primaryLane,
-        "Positioning rationale: " + a.aAndRPositioning.rationale,
-        "Strength signals:",
-        ...a.strengths.slice(0, 3),
-        "Risks to validate:",
-        ...a.risks.slice(0, 2),
-        "Evidence gaps:",
-        ...a.evidenceGaps.slice(0, 3),
-        "Limitations: " + a.limitations.join(" "),
-        "Full scorecard, expanded risk analysis and release priorities are reserved for the full report.",
-      ],
-    },
-  ];
-}
-
-
-function chartValue(source: Record<string, unknown> | null | undefined, key: string): unknown {
-  return source ? source[key] : null;
-}
-
-function chartRows(input: AuditReportInput, field: string): ChartRow[] {
-  const sonic = input.sonicDna;
-  const metadataOnly = auditLabel(input) === "METADATA-BASED AUDIT";
-  if (field === "sonic") {
-    if (metadataOnly) return [{ label: "Audio profile", value: "Requires audio upload" }];
-    const bpm = chartValue(sonic, "bpm");
-    const alternate = chartValue(sonic, "alternateTempo");
-    return [
-      { label: "Measured BPM", value: bpm as string | number | null },
-      { label: "Alternate tempo", value: alternate as string | number | null },
-      { label: "Tempo confidence", value: chartValue(sonic, "tempoConfidence") as string | number | null },
-      { label: "Key", value: chartValue(sonic, "key") as string | number | null },
-      { label: "Mode", value: chartValue(sonic, "mode") as string | number | null },
-      { label: "Key confidence", value: chartValue(sonic, "keyConfidence") as string | number | null },
-    ];
-  }
-  if (field === "spectrum") {
-    if (metadataOnly) return [{ label: "Audio spectrum", value: "Requires audio upload" }];
-    const mood = chartValue(sonic, "moodTags");
-    return [
-      { label: "Energy", value: (chartValue(sonic, "energy") ?? chartValue(sonic, "rmsEnergy")) as string | number | null },
-      { label: "Tempo (BPM)", value: chartValue(sonic, "bpm") as string | number | null },
-      { label: "Mood evidence", value: Array.isArray(mood) && mood.length ? mood.join(", ") : null },
-    ];
-  }
-  if (field === "scorecard") {
-    const scores = input.assessment.scorecard;
-    return [
-      { label: "Hook", value: scores.hook.score, rationale: scores.hook.rationale },
-      { label: "Originality", value: scores.originality.score, rationale: scores.originality.rationale },
-      { label: "Production", value: scores.production.score, rationale: scores.production.rationale },
-      { label: "Replay value", value: scores.replayValue.score, rationale: scores.replayValue.rationale },
-      { label: "Lane clarity", value: scores.laneClarity.score, rationale: scores.laneClarity.rationale },
-    ];
-  }
-  if (field === "evidence") {
-    const counts = countEvidenceLayers(input.assessment.evidenceLabels);
-    return (Object.keys(counts) as Array<keyof typeof counts>).map((label) => ({
-      label,
-      value: counts[label],
-      proportion: Object.values(counts).reduce((sum, count) => sum + count, 0)
-        ? counts[label] / Object.values(counts).reduce((sum, count) => sum + count, 0)
-        : null,
-    }));
-  }
-  if (field === "lane") {
-    return [
-      { label: "Primary lane", value: input.assessment.aAndRPositioning.primaryLane },
-      ...input.assessment.aAndRPositioning.adjacentLanes.slice(0, 4).map((lane, index) => ({ label: "Adjacent lane " + (index + 1), value: lane })),
-    ];
-  }
-  if (field === "tension") {
-    return [
-      ...input.assessment.strengths.slice(0, 3).map((item, index) => ({ label: "Strength " + (index + 1), value: item })),
-      ...input.assessment.risks.slice(0, 3).map((item, index) => ({ label: "Risk " + (index + 1), value: item })),
-    ];
-  }
-  if (field === "timeline") {
-    return input.assessment.releaseStrategy.priorities.slice(0, 3).map((item, index) => ({
-      label: "Sequence " + (index + 1),
-      value: item,
-    }));
-  }
-  if (field === "promotion") {
-    return [
-      { label: "Content", value: null },
-      { label: "Discovery", value: null },
-      { label: "Listener action", value: null },
-    ];
-  }
-  return [];
-}
-
-function drawSectionCharts(
-  page: PDFPage,
-  input: AuditReportInput,
-  tier: AuditReportTier,
-  field: string,
-  font: PDFFont,
-  bold: PDFFont,
-): boolean {
-  const metadataOnly = auditLabel(input) === "METADATA-BASED AUDIT";
-  const draw = (title: string, key: string, kind: ChartKind, y: number, shows: string, cantShow: string, inferred = false, unavailable = false) => {
-    drawChartPanel(page, { title, rows: chartRows(input, key), kind, y, inferred, unavailable, shows, cantShow }, font, bold);
-  };
-  if (tier === "sample") {
-    if (field === "evidence_snapshot") {
-      draw("Sonic DNA dashboard", "sonic", "sonic", 255, "available sonic fields and explicit gaps", metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties", false, metadataOnly);
-      return true;
-    }
-    if (field === "ar_positioning") {
-      if (metadataOnly) {
-        draw("Scorecard preview", "sonic", "bars", 255, "the master-derived scorecard is not available in a metadata-only audit", "creative scores until audio upload", false, true);
-      } else {
-        draw("Scorecard preview", "scorecard", "bars", 255, "the five requested dimensions when supplied by the assessment", "missing dimension scores and commercial outcomes", true);
-      }
-      return true;
-    }
-    return false;
-  }
-  switch (field) {
-    case "evidence_ledger":
-      draw("Evidence layers", "evidence", "layers", 250, "claim counts by actual provenance label", "truth or quality beyond the supplied labels");
-      return true;
-    case "sonic_dna":
-      draw("Sonic DNA dashboard", "sonic", "sonic", 260, "measured audio fields where available", metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties", false, metadataOnly);
-      return true;
-    case "creative_identity":
-      draw("Lane constellation — qualitative positioning", "lane", "constellation", 250, "primary and adjacent A&R lanes", "measured genre distance or market share", true);
-      return true;
-    case "strengths":
-      draw("Strengths versus risks", "tension", "tension", 250, "assessment-listed strengths and risks", "a numeric balance or probability", true);
-      return true;
-    case "scorecard":
-      if (metadataOnly) draw("Scorecard", "sonic", "bars", 250, "master-derived creative scores are unavailable", "hook, originality, production, replay and lane scores until audio upload", false, true);
-      else draw("Scorecard", "scorecard", "bars", 250, "the five requested dimensions when supplied by the assessment", "unscored dimensions and commercial outcomes", true);
-      return true;
-    case "curator_readiness":
-      draw("Promotion causal chain", "promotion", "chain", 250, "whether content-to-action recommendations are explicitly present", "conversion rates, reach or causal proof", true);
-      return true;
-    case "release_strategy":
-      draw("Release priorities timeline", "timeline", "timeline", 250, "the first three assessment priorities in sequence", "30/60/90-day dates not supplied in the assessment", true);
-      return true;
-    case "commercial_read":
-      draw("Energy and tempo spectrum", "spectrum", "spectrum", 250, "available audio energy and tempo evidence", "market size, audience demographics or unmeasured mood", true, metadataOnly);
-      return true;
-    default:
-      return false;
-  }
-}
-
-export interface ReportPagePlan { title: string; field: string; text: string[]; }
-
-/** Pure report text plan for assertions without parsing compressed PDF content streams. */
-export function planAuditReportPages(input: AuditReportInput, tier: AuditReportTier): ReportPagePlan[] {
-  const sections = tier === "sample" ? sampleSections(input) : fullSections(input);
-  return sections.map((section) => {
-    const text = [section.title, ...section.body];
-    const metadataOnly = auditLabel(input) === "METADATA-BASED AUDIT";
-    let chart: { title: string; rows: ChartRow[]; shows: string; cantShow: string } | null = null;
-    if (tier === "sample" && section.field === "evidence_snapshot") {
-      chart = { title: "Sonic DNA dashboard", rows: chartRows(input, "sonic"), shows: "available sonic fields and explicit gaps", cantShow: metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties" };
-    } else if (tier === "sample" && section.field === "ar_positioning") {
-      chart = metadataOnly
-        ? { title: "Scorecard preview", rows: chartRows(input, "sonic"), shows: "master-derived scorecard is unavailable in a metadata-only audit", cantShow: "creative scores until audio upload" }
-        : { title: "Scorecard preview", rows: chartRows(input, "scorecard"), shows: "the five requested dimensions when supplied by the assessment", cantShow: "missing dimension scores and commercial outcomes" };
-    } else {
-      const map: Record<string, { title: string; key: string; shows: string; cantShow: string }> = {
-        evidence_ledger: { title: "Evidence layers", key: "evidence", shows: "claim counts by actual provenance label", cantShow: "truth or quality beyond the supplied labels" },
-        sonic_dna: { title: "Sonic DNA dashboard", key: "sonic", shows: "measured audio fields where available", cantShow: metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties" },
-        creative_identity: { title: "Lane constellation — qualitative positioning", key: "lane", shows: "primary and adjacent A&R lanes", cantShow: "measured genre distance or market share" },
-        strengths: { title: "Strengths versus risks", key: "tension", shows: "assessment-listed strengths and risks", cantShow: "a numeric balance or probability" },
-        scorecard: { title: "Scorecard", key: metadataOnly ? "sonic" : "scorecard", shows: "the five requested dimensions when supplied by the assessment", cantShow: "unscored dimensions and commercial outcomes" },
-        curator_readiness: { title: "Promotion causal chain", key: "promotion", shows: "whether content-to-action recommendations are explicitly present", cantShow: "conversion rates, reach or causal proof" },
-        release_strategy: { title: "Release priorities timeline", key: "timeline", shows: "the first three assessment priorities in sequence", cantShow: "30/60/90-day dates not supplied in the assessment" },
-        commercial_read: { title: "Energy and tempo spectrum", key: "spectrum", shows: "available audio energy and tempo evidence", cantShow: "market size, audience demographics or unmeasured mood" }
-      };
-      const item = map[section.field];
-      if (item) chart = { title: item.title, rows: chartRows(input, item.key), shows: item.shows, cantShow: item.cantShow };
-    }
-    if (chart) {
-      text.push("CHART: " + chart.title, "SHOWS: " + chart.shows, "CAN'T SHOW: " + chart.cantShow);
-      for (const row of chart.rows) text.push(row.label + ": " + (row.value === null || row.value === undefined || row.value === "" ? "Not determined" : String(row.value)));
-    }
-    return { title: section.title, field: section.field, text };
-  });
-}
-
-export async function generateAuditReport(input: AuditReportInput, tier: AuditReportTier): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const sections = tier === "sample" ? sampleSections(input) : fullSections(input);
-  const maxPages = tier === "sample" ? 4 : 20;
-  let pageNumber = 0;
-
-  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
-    const section = sections[sectionIndex];
-    if (pageNumber >= maxPages) break;
-    pageNumber++;
-    let page = pdf.addPage([612, 792]);
-    drawPageHeader(page, tier === "sample" ? "SAMPLE / PREVIEW | " + section.title : section.title, pageNumber, font, bold);
-    const paragraphs = section.body.length ? section.body : ["No evidence was supplied for this section."];
-    const hasChart = drawSectionCharts(page, input, tier, section.field, font, bold);
-    let position = drawBody(page, paragraphs, font, 680, 0, 0, hasChart ? 360 : 62);
-
-    if (section.field === "executive_summary" || section.field === "creative_identity" || section.field === "ar_positioning") {
-      const fieldText = paragraphs.join("\n\n");
-      addEditableField(pdf, page, font, section.field, fieldText);
-    }
-
-    while (position.paragraph < paragraphs.length && pageNumber < maxPages - (sections.length - sectionIndex - 1)) {
-      pageNumber++;
-      page = pdf.addPage([612, 792]);
-      drawPageHeader(page, (tier === "sample" ? "SAMPLE / PREVIEW | " : "") + section.title + " | continued", pageNumber, font, bold);
-      position = drawBody(page, paragraphs, font, 680, position.paragraph, position.line, 62);
-    }
-  }
-
-  const finalPage = pdf.getPages()[pdf.getPageCount() - 1];
-  finalPage.drawText("Evidence before opinion. Inferences are labelled; missing evidence remains missing.", {
-    x: 48, y: 44, size: 7, font, color: rgb(0.35, 0.37, 0.4),
-  });
-
-  return pdf.save();
+  y-=18;
+ }
+ // One editable field, isolated on its own page and outside all body-text regions.
+ const notes=pdf.addPage([W,H]);pageNo++;header(notes,"A&R notes",pageNo,fonts,C.violet);
+ notes.drawText("A&R NOTES",{x:M,y:CONTENT_TOP,size:20,font:fonts.bold,color:C.navy});
+ notes.drawText("Private working notes — editable field",{x:M,y:CONTENT_TOP-27,size:9,font:fonts.regular,color:C.muted});
+ const form=pdf.getForm(),field=form.createTextField("ar_notes");field.enableMultiline();field.addToPage(notes,{x:M,y:145,width:W-2*M,height:470,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});field.setFontSize(10);field.updateAppearances(fonts.regular);
+ const check=checkLayout([{x:M,y:145,width:W-2*M,height:470,id:"A&R notes"}]);
+ if(!check.ok)throw new Error(check.errors.join("; "));
+ if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");\n return pdf.save();
 }
