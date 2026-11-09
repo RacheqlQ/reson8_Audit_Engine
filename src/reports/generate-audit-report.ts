@@ -41,8 +41,6 @@ function addEditableField(
   font: PDFFont,
   name: string,
   content: string,
-  y: number,
-  height: number,
 ): void {
   const field = pdf.getForm().createTextField(name);
   field.enableMultiline();
@@ -360,7 +358,7 @@ export async function generateAuditReport(input: AuditReportInput, tier: AuditRe
 
     if (section.field === "executive_summary" || section.field === "creative_identity" || section.field === "ar_positioning") {
       const fieldText = paragraphs.join("\n\n");
-      addEditableField(pdf, page, font, section.field, fieldText, 350, 190);
+      addEditableField(pdf, page, font, section.field, fieldText);
     }
 
     while (position.paragraph < paragraphs.length && pageNumber < maxPages - (sections.length - sectionIndex - 1)) {
