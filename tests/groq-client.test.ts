@@ -79,6 +79,31 @@ const groupPayloads = {
   }
 };
 
+function padToWords(input: string, minimum: number): string {
+  const sentence = "This conclusion remains limited to the supplied evidence and requires independent listening and source validation before any commercial decision is made.";
+  let output = input;
+  while (output.trim().split(/\\s+/).filter(Boolean).length < minimum) output += " " + sentence;
+  return output;
+}
+
+groupPayloads.narrative.executiveSummary = padToWords(groupPayloads.narrative.executiveSummary, 45);
+groupPayloads.narrative.creativeIdentity = padToWords(groupPayloads.narrative.creativeIdentity, 35);
+groupPayloads.narrative.strengths = groupPayloads.narrative.strengths.map((item) => padToWords(item, 10));
+groupPayloads.narrative.risks = groupPayloads.narrative.risks.map((item) => padToWords(item, 10));
+groupPayloads.positioning.aAndRPositioning.rationale = padToWords(groupPayloads.positioning.aAndRPositioning.rationale, 40);
+groupPayloads.positioning.commercialRead.rationale = padToWords(groupPayloads.positioning.commercialRead.rationale, 40);
+groupPayloads.release.releaseStrategy.recommendation = padToWords(groupPayloads.release.releaseStrategy.recommendation, 40);
+groupPayloads.release.releaseStrategy.priorities = groupPayloads.release.releaseStrategy.priorities.map((item) => padToWords(item, 8));
+groupPayloads["evidence-score"].evidenceGaps = groupPayloads["evidence-score"].evidenceGaps.map((item) => padToWords(item, 8));
+groupPayloads["evidence-score"].limitations = groupPayloads["evidence-score"].limitations.map((item) => padToWords(item, 8));
+for (const score of Object.values(groupPayloads["evidence-score"].scorecard)) {
+  score.rationale = padToWords(score.rationale, 25);
+}
+groupPayloads["evidence-score"].evidenceLabels = groupPayloads["evidence-score"].evidenceLabels.map((item) => ({
+  ...item,
+  claim: padToWords(item.claim, 8),
+}));
+
 function createFetchMock(invalidFirstGroup?: string) {
   const attempts = new Map<string, number>();
   const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
