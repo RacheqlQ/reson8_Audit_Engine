@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import type { ArAssessment } from "../providers/groq/client.js";
+import { countEvidenceLayers, drawChartPanel, type ChartRow } from "./charts.js";
 
 export type AuditReportTier = "sample" | "full";
 
@@ -63,13 +64,14 @@ function drawBody(
   startY = 680,
   startParagraph = 0,
   startLine = 0,
+  stopY = 62,
 ): { paragraph: number; line: number; y: number } {
   let y = startY;
   for (let paragraphIndex = startParagraph; paragraphIndex < paragraphs.length; paragraphIndex++) {
     const lines = wrap(paragraphs[paragraphIndex]);
     const firstLine = paragraphIndex === startParagraph ? startLine : 0;
     for (let lineIndex = firstLine; lineIndex < lines.length; lineIndex++) {
-      if (y < 62) return { paragraph: paragraphIndex, line: lineIndex, y };
+      if (y < stopY) return { paragraph: paragraphIndex, line: lineIndex, y };
       page.drawText(lines[lineIndex], { x: 48, y, size: 9, font, color: rgb(0.12, 0.14, 0.17) });
       y -= 14;
     }
@@ -339,6 +341,134 @@ function sampleSections(input: AuditReportInput): Array<{ title: string; field: 
   ];
 }
 
+
+function chartValue(source: Record<string, unknown> | null | undefined, key: string): unknown {
+  return source ? source[key] : null;
+}
+
+function chartRows(input: AuditReportInput, field: string): ChartRow[] {
+  const assessment = input.assessment as unknown as Record<string, unknown>;
+  const sonic = input.sonicDna;
+  const metadataOnly = auditLabel(input) === "METADATA-BASED AUDIT";
+  const scorecard = (assessment.scorecard ?? {}) as Record<string, unknown>;
+  if (field === "sonic") {
+    if (metadataOnly) return [{ label: "Audio profile", value: "Requires audio upload" }];
+    return [
+      { label: "BPM", value: chartValue(sonic, "bpm") as string | number | null },
+      { label: "Alternate tempo", value: chartValue(sonic, "alternateTempo") as string | number | null },
+      { label: "Key / mode", value: [chartValue(sonic, "key"), chartValue(sonic, "mode")].filter(Boolean).join(" ") || null },
+      { label: "Key confidence", value: chartValue(sonic, "keyConfidence") as string | number | null },
+      { label: "Energy", value: (chartValue(sonic, "energy") ?? chartValue(sonic, "rmsEnergy")) as string | number | null },
+      { label: "Duration (seconds)", value: chartValue(sonic, "durationSeconds") as string | number | null },
+      { label: "Loudness / range", value: (chartValue(sonic, "loudnessLufs") ?? chartValue(sonic, "dynamicRangeDb")) as string | number | null },
+    ];
+  }
+  if (field === "spectrum") {
+    if (metadataOnly) return [{ label: "Energy / tempo spectrum", value: "Requires audio upload" }];
+    return [
+      { label: "Energy", value: (chartValue(sonic, "energy") ?? chartValue(sonic, "rmsEnergy")) as string | number | null },
+      { label: "Tempo (BPM)", value: chartValue(sonic, "bpm") as string | number | null },
+      { label: "Mood spectrum", value: chartValue(sonic, "moodTags") as string | number | null },
+    ];
+  }
+  if (field === "scorecard") {
+    const dimensions = ["hook", "originality", "production", "replayValue", "laneClarity"];
+    return dimensions.map((key) => ({
+      label: key === "replayValue" ? "Replay value" : key === "laneClarity" ? "Lane clarity" : key[0].toUpperCase() + key.slice(1),
+      value: chartValue(scorecard, key) as string | number | null,
+      rationale: typeof chartValue(scorecard, key + "Rationale") === "string" ? String(chartValue(scorecard, key + "Rationale")) : undefined,
+    }));
+  }
+  if (field === "evidence") {
+    const counts = countEvidenceLayers(input.assessment.evidenceLabels);
+    const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+    return (Object.keys(counts) as Array<keyof typeof counts>).map((label) => ({
+      label,
+      value: counts[label],
+      proportion: total ? counts[label] / total : null,
+    }));
+  }
+  if (field === "lane") {
+    return [
+      { label: "Primary lane", value: input.assessment.aAndRPositioning.primaryLane },
+      ...input.assessment.aAndRPositioning.adjacentLanes.slice(0, 4).map((lane, index) => ({ label: "Adjacent lane " + (index + 1), value: lane })),
+    ];
+  }
+  if (field === "tension") {
+    return [
+      ...input.assessment.strengths.slice(0, 3).map((item, index) => ({ label: "Strength " + (index + 1), value: item })),
+      ...input.assessment.risks.slice(0, 3).map((item, index) => ({ label: "Risk " + (index + 1), value: item })),
+    ];
+  }
+  if (field === "timeline") {
+    return input.assessment.releaseStrategy.priorities.slice(0, 3).map((item, index) => ({
+      label: "Priority " + (index + 1) + " — timing not determined",
+      value: item,
+    }));
+  }
+  if (field === "promotion") {
+    return [
+      { label: "Content", value: null },
+      { label: "Discovery", value: null },
+      { label: "Listener action", value: null },
+    ];
+  }
+  return [];
+}
+
+function drawSectionCharts(
+  page: PDFPage,
+  input: AuditReportInput,
+  tier: AuditReportTier,
+  field: string,
+  font: PDFFont,
+  bold: PDFFont,
+): boolean {
+  const metadataOnly = auditLabel(input) === "METADATA-BASED AUDIT";
+  const draw = (title: string, key: string, y: number, shows: string, cantShow: string, inferred = false) => {
+    drawChartPanel(page, { title, rows: chartRows(input, key), y, inferred, shows, cantShow }, font, bold);
+  };
+  if (tier === "sample") {
+    if (field === "evidence_snapshot") {
+      draw("Sonic DNA dashboard", "sonic", 255, "supplied sonic fields and their availability", "unmeasured master properties", false);
+      return true;
+    }
+    if (field === "ar_positioning") {
+      draw("Scorecard preview", "scorecard", 255, "the five requested creative dimensions when assessed", "missing dimension scores and commercial outcomes", false);
+      return true;
+    }
+    return false;
+  }
+  switch (field) {
+    case "evidence_ledger":
+      draw("Evidence layers", "evidence", 250, "claim counts by actual provenance label", "truth or quality beyond the supplied labels");
+      return true;
+    case "sonic_dna":
+      draw("Sonic DNA dashboard", "sonic", 260, "measured audio fields where available", metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties");
+      return true;
+    case "creative_identity":
+      draw("Lane constellation — qualitative positioning", "lane", 250, "primary and adjacent A&R lanes", "measured genre distance or market share", true);
+      return true;
+    case "strengths":
+      draw("Strengths versus risks", "tension", 250, "assessment-listed strengths and risks", "a numeric balance or probability");
+      return true;
+    case "scorecard":
+      draw("Scorecard", "scorecard", 250, "available hook, originality, production, replay and lane scores", "unscored dimensions and commercial outcomes");
+      return true;
+    case "curator_readiness":
+      draw("Promotion causal chain", "promotion", 250, "only explicitly supplied content-to-action recommendations", "conversion rates, reach or causal proof", true);
+      return true;
+    case "release_strategy":
+      draw("Release priorities timeline", "timeline", 250, "the first three assessment priorities in sequence", "30/60/90-day dates not supplied in the assessment", true);
+      return true;
+    case "commercial_read":
+      draw("Energy and tempo spectrum", "spectrum", 250, "available audio energy and tempo evidence", "market size, audience demographics or unmeasured mood", true);
+      return true;
+    default:
+      return false;
+  }
+}
+
 export async function generateAuditReport(input: AuditReportInput, tier: AuditReportTier): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -354,7 +484,8 @@ export async function generateAuditReport(input: AuditReportInput, tier: AuditRe
     let page = pdf.addPage([612, 792]);
     drawPageHeader(page, tier === "sample" ? "SAMPLE / PREVIEW | " + section.title : section.title, pageNumber, font, bold);
     const paragraphs = section.body.length ? section.body : ["No evidence was supplied for this section."];
-    let position = drawBody(page, paragraphs, font);
+    const hasChart = drawSectionCharts(page, input, tier, section.field, font, bold);
+    let position = drawBody(page, paragraphs, font, 680, 0, 0, hasChart ? 360 : 62);
 
     if (section.field === "executive_summary" || section.field === "creative_identity" || section.field === "ar_positioning") {
       const fieldText = paragraphs.join("\n\n");
@@ -365,7 +496,7 @@ export async function generateAuditReport(input: AuditReportInput, tier: AuditRe
       pageNumber++;
       page = pdf.addPage([612, 792]);
       drawPageHeader(page, (tier === "sample" ? "SAMPLE / PREVIEW | " : "") + section.title + " | continued", pageNumber, font, bold);
-      position = drawBody(page, paragraphs, font, 680, position.paragraph, position.line);
+      position = drawBody(page, paragraphs, font, 680, position.paragraph, position.line, 62);
     }
   }
 
