@@ -7,78 +7,196 @@ export interface ChartRow {
   proportion?: number | null;
 }
 
+export type ChartKind = "bars" | "sonic" | "spectrum" | "constellation" | "layers" | "tension" | "timeline" | "chain";
+
 export interface ChartPanelInput {
   title: string;
   rows: ChartRow[];
   shows: string;
   cantShow: string;
+  kind?: ChartKind;
   inferred?: boolean;
   y?: number;
 }
 
-const INK = rgb(0.12, 0.14, 0.18);
-const MUTED = rgb(0.38, 0.41, 0.46);
-const LINE = rgb(0.78, 0.8, 0.83);
-const FILL = rgb(0.28, 0.42, 0.58);
+const INK = rgb(0.14, 0.16, 0.19);
+const MUTED = rgb(0.39, 0.42, 0.46);
+const LINE = rgb(0.78, 0.79, 0.78);
+const PAPER = rgb(0.985, 0.98, 0.96);
+const SAGE = rgb(0.55, 0.62, 0.55);
+const CLAY = rgb(0.69, 0.48, 0.4);
+const BLUE = rgb(0.43, 0.54, 0.62);
 
-function display(value: ChartRow["value"]): string {
+function shown(value: ChartRow["value"]): string {
   if (value === null || value === undefined || value === "") return "Not determined";
   if (typeof value === "number" && !Number.isFinite(value)) return "Not determined";
   return String(value);
 }
 
-function drawDashedState(page: PDFPage, x: number, y: number, width: number): void {
-  for (let offset = 0; offset < width; offset += 7) {
-    page.drawLine({ start: { x: x + offset, y }, end: { x: Math.min(x + offset + 3, x + width), y }, thickness: 1, color: LINE });
+function line(page: PDFPage, x1: number, y1: number, x2: number, y2: number, color = LINE, thickness = 0.8): void {
+  page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, color, thickness });
+}
+
+function dashed(page: PDFPage, x: number, y: number, width: number): void {
+  for (let offset = 0; offset < width; offset += 8) {
+    line(page, x + offset, y, Math.min(x + offset + 3, x + width), y, LINE, 1);
   }
 }
 
-export function drawChartPanel(
-  page: PDFPage,
-  input: ChartPanelInput,
-  font: PDFFont,
-  bold: PDFFont,
-): void {
-  const x = 48;
-  const width = 516;
-  const top = input.y ?? 250;
-  const rows = input.rows.slice(0, 7);
-  const rowHeight = rows.length > 4 ? 17 : 20;
-  const panelHeight = Math.max(112, 70 + rows.length * rowHeight);
-  const bottom = top - panelHeight;
+function panelFrame(page: PDFPage, input: ChartPanelInput, font: PDFFont, bold: PDFFont, height: number): { x: number; top: number; bottom: number; width: number } {
+  const x = 48, width = 516, top = input.y ?? 250, bottom = top - height;
+  page.drawRectangle({ x, y: bottom, width, height, borderColor: LINE, borderWidth: 0.7, color: PAPER });
+  page.drawText(input.title.toUpperCase(), { x: x + 11, y: top - 17, size: 8, font: bold, color: INK });
+  if (input.inferred) page.drawText("INFERRED", { x: x + width - 68, y: top - 17, size: 7, font: bold, color: CLAY });
+  else page.drawText("OBSERVED", { x: x + width - 68, y: top - 17, size: 7, font: bold, color: SAGE });
+  line(page, x + 10, top - 25, x + width - 10, top - 25);
+  return { x, top, bottom, width };
+}
 
-  page.drawRectangle({ x, y: bottom, width, height: panelHeight, borderColor: LINE, borderWidth: 0.7, color: rgb(0.98, 0.985, 0.99) });
-  page.drawText(input.title.toUpperCase(), { x: x + 10, y: top - 16, size: 8, font: bold, color: INK });
-  if (input.inferred) {
-    page.drawText("INFERRED", { x: x + width - 70, y: top - 16, size: 7, font: bold, color: MUTED });
-  }
+function captions(page: PDFPage, input: ChartPanelInput, x: number, bottom: number, font: PDFFont): void {
+  page.drawText(("SHOWS: " + input.shows).slice(0, 112), { x: x + 10, y: bottom + 17, size: 5.8, font, color: MUTED });
+  page.drawText(("CAN'T SHOW: " + input.cantShow).slice(0, 112), { x: x + 10, y: bottom + 7, size: 5.8, font, color: MUTED });
+}
 
-  let y = top - 34;
-  for (const row of rows) {
-    const label = row.label.slice(0, 25);
-    page.drawText(label, { x: x + 10, y, size: 7, font, color: INK });
-    const shown = display(row.value);
-    if (shown === "Not determined") {
-      drawDashedState(page, x + 166, y + 2, 112);
-      page.drawText("Not determined", { x: x + 286, y, size: 7, font, color: MUTED });
-    } else if (row.proportion !== undefined && row.proportion !== null && Number.isFinite(row.proportion)) {
-      const ratio = Math.max(0, Math.min(1, row.proportion));
-      page.drawRectangle({ x: x + 166, y: y - 1, width: 112, height: 6, color: rgb(0.9, 0.92, 0.94) });
-      if (ratio > 0) page.drawRectangle({ x: x + 166, y: y - 1, width: 112 * ratio, height: 6, color: FILL });
-      page.drawText(shown, { x: x + 286, y, size: 7, font, color: INK });
+function drawBars(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont, maxRows = 6): void {
+  let y = top;
+  for (const row of rows.slice(0, maxRows)) {
+    page.drawText(row.label.slice(0, 25), { x: x + 11, y, size: 7, font: bold, color: INK });
+    const value = shown(row.value);
+    if (value === "Not determined") {
+      dashed(page, x + 174, y + 2, 105);
+      page.drawText(value, { x: x + 290, y, size: 7, font, color: MUTED });
     } else {
-      page.drawText(shown.slice(0, 38), { x: x + 166, y, size: 7, font, color: INK });
+      page.drawText(value.slice(0, 42), { x: x + 174, y, size: 7, font, color: INK });
     }
-    y -= rowHeight;
-    if (row.rationale && y > bottom + 28) {
-      page.drawText(("Rationale: " + row.rationale).slice(0, 92), { x: x + 22, y, size: 6, font, color: MUTED });
-      y -= 10;
+    y -= 17;
+    if (row.rationale && y > top - 85) {
+      page.drawText(("RATIONALE: " + row.rationale).slice(0, 105), { x: x + 22, y, size: 5.8, font, color: MUTED });
+      y -= 11;
     }
   }
+}
 
-  const captionY = bottom + 9;
-  page.drawText(("SHOWS: " + input.shows).slice(0, 102), { x: x + 10, y: captionY + 9, size: 6, font, color: MUTED });
-  page.drawText(("CAN'T SHOW: " + input.cantShow).slice(0, 102), { x: x + 10, y: captionY, size: 6, font, color: MUTED });
+function drawSonic(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
+  const columns = [x + 12, x + 183, x + 354];
+  rows.slice(0, 6).forEach((row, index) => {
+    const col = index % 3, r = Math.floor(index / 3), cx = columns[col], cy = top - r * 57;
+    page.drawCircle({ x: cx + 17, y: cy - 7, size: 12, borderColor: LINE, borderWidth: 1, color: PAPER });
+    page.drawCircle({ x: cx + 17, y: cy - 7, size: 3, color: shown(row.value) === "Not determined" ? LINE : BLUE });
+    page.drawText(row.label.toUpperCase().slice(0, 22), { x: cx + 36, y: cy, size: 6.2, font: bold, color: MUTED });
+    const val = shown(row.value);
+    page.drawText(val.slice(0, 26), { x: cx + 36, y: cy - 13, size: 8, font, color: val === "Not determined" ? MUTED : INK });
+    if (val === "Not determined") dashed(page, cx + 36, cy - 19, 74);
+  });
+}
+
+function drawSpectrum(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
+  rows.slice(0, 3).forEach((row, index) => {
+    const y = top - 30 - index * 34;
+    page.drawText(row.label.toUpperCase(), { x: x + 12, y, size: 6.5, font: bold, color: MUTED });
+    line(page, x + 155, y + 2, x + 470, y + 2, LINE, 1);
+    const val = shown(row.value);
+    if (val === "Not determined") {
+      dashed(page, x + 155, y + 2, 315);
+      page.drawText(val, { x: x + 365, y: y + 7, size: 6, font, color: MUTED });
+    } else {
+      page.drawText(val.slice(0, 48), { x: x + 165, y: y + 7, size: 7, font, color: INK });
+    }
+  });
+}
+
+function drawConstellation(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
+  const cx = x + 258, cy = top - 72;
+  page.drawCircle({ x: cx, y: cy, size: 25, borderColor: BLUE, borderWidth: 1, color: PAPER });
+  const primary = shown(rows[0]?.value);
+  page.drawText(primary.slice(0, 22), { x: cx - 42, y: cy - 3, size: 7, font: bold, color: INK });
+  const adjacent = rows.slice(1, 5);
+  adjacent.forEach((row, i) => {
+    const px = cx + (i % 2 === 0 ? -116 : 116);
+    const py = cy + (i < 2 ? 30 : -30);
+    line(page, cx + (px < cx ? -25 : 25), cy, px, py, LINE);
+    page.drawCircle({ x: px, y: py, size: 17, borderColor: SAGE, borderWidth: 0.8, color: PAPER });
+    page.drawText(shown(row.value).slice(0, 24), { x: px - 48, y: py - 3, size: 6.2, font, color: INK });
+  });
+  page.drawText("QUALITATIVE POSITIONING — DISTANCE IS NOT MEASURED", { x: x + 115, y: top - 132, size: 5.8, font: bold, color: MUTED });
+}
+
+function drawLayers(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
+  const colors = [BLUE, SAGE, CLAY, rgb(0.62, 0.58, 0.68)];
+  const total = rows.reduce((sum, row) => sum + (typeof row.value === "number" && Number.isFinite(row.value) ? row.value : 0), 0);
+  const barX = x + 14, barY = top - 58, barWidth = 488;
+  if (total > 0) {
+    let offset = 0;
+    rows.forEach((row, index) => {
+      const count = typeof row.value === "number" && Number.isFinite(row.value) ? row.value : 0;
+      const segment = barWidth * count / total;
+      if (segment > 0) page.drawRectangle({ x: barX + offset, y: barY, width: segment, height: 18, color: colors[index] });
+      offset += segment;
+    });
+  } else dashed(page, barX, barY + 9, barWidth);
+  rows.forEach((row, index) => {
+    const y = top - 88 - index * 14;
+    page.drawRectangle({ x: x + 15, y: y - 1, width: 7, height: 7, color: colors[index] });
+    page.drawText(row.label + ": " + shown(row.value), { x: x + 29, y, size: 7, font, color: INK });
+  });
+  page.drawText(total ? "CLAIMS COUNTED FROM ASSESSMENT EVIDENCE LABELS" : "NO LABELLED CLAIMS — PROPORTIONS NOT AVAILABLE", { x: x + 270, y: top - 88, size: 5.6, font: bold, color: MUTED });
+}
+
+function drawTension(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
+  const mid = x + 258;
+  line(page, mid, top - 34, mid, top - 132, LINE, 1);
+  page.drawText("STRENGTHS", { x: x + 18, y: top - 37, size: 7, font: bold, color: SAGE });
+  page.drawText("RISKS", { x: mid + 16, y: top - 37, size: 7, font: bold, color: CLAY });
+  rows.slice(0, 6).forEach((row, index) => {
+    const left = index < 3;
+    const y = top - 56 - (index % 3) * 25;
+    const tx = left ? x + 18 : mid + 16;
+    page.drawCircle({ x: tx + 3, y: y + 2, size: 2.5, color: left ? SAGE : CLAY });
+    page.drawText(row.value.toString().slice(0, 52), { x: tx + 10, y, size: 6.2, font, color: INK });
+  });
+}
+
+function drawTimeline(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
+  const y = top - 67;
+  line(page, x + 38, y, x + 478, y, LINE, 1.2);
+  rows.slice(0, 3).forEach((row, index) => {
+    const px = x + 48 + index * 210;
+    page.drawCircle({ x: px, y, size: 7, borderColor: BLUE, borderWidth: 1, color: PAPER });
+    page.drawText("SEQUENCE " + (index + 1), { x: px - 25, y: y + 17, size: 6, font: bold, color: MUTED });
+    page.drawText(row.value.toString().slice(0, 48), { x: px - 28, y: y - 22, size: 6.2, font, color: INK });
+  });
+  page.drawText("30 / 60 / 90-DAY DATES: NOT DETERMINED BY THE ASSESSMENT", { x: x + 105, y: top - 127, size: 5.8, font: bold, color: MUTED });
+}
+
+function drawChain(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
+  const labels = ["CONTENT", "DISCOVERY", "LISTENER ACTION"];
+  const xs = [x + 93, x + 258, x + 423];
+  labels.forEach((label, index) => {
+    const cx = xs[index], cy = top - 67;
+    page.drawCircle({ x: cx, y: cy, size: 27, borderColor: LINE, borderWidth: 1, color: PAPER });
+    page.drawText(label, { x: cx - 34, y: cy - 3, size: 5.7, font: bold, color: INK });
+    if (index < 2) line(page, cx + 28, cy, xs[index + 1] - 29, cy, BLUE, 1);
+    const value = shown(rows[index]?.value);
+    page.drawText(value.slice(0, 32), { x: cx - 55, y: cy - 43, size: 6, font, color: MUTED });
+  });
+}
+
+export function drawChartPanel(page: PDFPage, input: ChartPanelInput, font: PDFFont, bold: PDFFont): void {
+  const kind = input.kind ?? "bars";
+  const height = kind === "sonic" ? 165 : kind === "layers" ? 160 : kind === "constellation" || kind === "tension" || kind === "timeline" || kind === "chain" ? 155 : 145;
+  const frame = panelFrame(page, input, font, bold, height);
+  const contentTop = frame.top - 39;
+  switch (kind) {
+    case "sonic": drawSonic(page, input.rows, frame.x, contentTop, font, bold); break;
+    case "spectrum": drawSpectrum(page, input.rows, frame.x, contentTop, font, bold); break;
+    case "constellation": drawConstellation(page, input.rows, frame.x, contentTop, font, bold); break;
+    case "layers": drawLayers(page, input.rows, frame.x, contentTop, font, bold); break;
+    case "tension": drawTension(page, input.rows, frame.x, contentTop, font, bold); break;
+    case "timeline": drawTimeline(page, input.rows, frame.x, contentTop, font, bold); break;
+    case "chain": drawChain(page, input.rows, frame.x, contentTop, font, bold); break;
+    default: drawBars(page, input.rows, frame.x, contentTop, font, bold); break;
+  }
+  captions(page, input, frame.x, frame.bottom, font);
 }
 
 export interface EvidenceLayerCounts {
@@ -91,7 +209,7 @@ export interface EvidenceLayerCounts {
 export function countEvidenceLayers(labels: Array<{ label: string }>): EvidenceLayerCounts {
   const counts: EvidenceLayerCounts = { OBSERVED: 0, RECOGNIZED: 0, RECONCILED: 0, INFERRED: 0 };
   for (const item of labels) {
-    if (item.label in counts) counts[item.label as keyof EvidenceLayerCounts] += 1;
+    if (Object.prototype.hasOwnProperty.call(counts, item.label)) counts[item.label as keyof EvidenceLayerCounts] += 1;
   }
   return counts;
 }
