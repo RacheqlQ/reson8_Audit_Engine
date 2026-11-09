@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
 import { countEvidenceLayers, drawChartPanel } from "../src/reports/charts.js";
+import { sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("native PDF chart helpers", () => {
   it("renders complete, partial and null data without throwing", async () => {
@@ -43,4 +44,14 @@ describe("native PDF chart helpers", () => {
       { label: "INFERRED" },
     ])).toEqual({ OBSERVED: 1, RECOGNIZED: 1, RECONCILED: 0, INFERRED: 2 });
   });
+
+  it("matches the evidence-layer counts in the sample report fixture", () => {
+    expect(countEvidenceLayers(sampleReportInput.assessment.evidenceLabels)).toEqual({
+      OBSERVED: 1,
+      RECOGNIZED: 1,
+      RECONCILED: 0,
+      INFERRED: 1,
+    });
+  });
+
 });
