@@ -70,6 +70,7 @@ describe("generateAuditReport", () => {
     const names = document.getForm().getFields().map((field) => field.getName());
     expect(names).toContain("executive_summary");
     expect(names).toContain("ar_positioning");
+    expect(document.getForm().getTextField("executive_summary").getText()).toContain("METADATA-BASED AUDIT");
     expect(names).not.toContain("risks");
     expect(names).not.toContain("release_strategy");
     expect(names).not.toContain("scorecard");
