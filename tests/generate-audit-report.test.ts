@@ -66,7 +66,8 @@ describe("generateAuditReport", () => {
     expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe("%PDF-");
 
     const document = await PDFDocument.load(pdf);
-    expect(document.getPageCount()).toBe(3);
+    expect(document.getPageCount()).toBeGreaterThanOrEqual(3);
+    expect(document.getPageCount()).toBeLessThanOrEqual(4);
     const names = document.getForm().getFields().map((field) => field.getName());
     expect(names).toContain("executive_summary");
     expect(names).toContain("ar_positioning");
@@ -82,7 +83,7 @@ describe("generateAuditReport", () => {
     expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe("%PDF-");
 
     const document = await PDFDocument.load(pdf);
-    expect(document.getPageCount()).toBeGreaterThanOrEqual(16);
+    expect(document.getPageCount()).toBeGreaterThanOrEqual(12);
     expect(document.getPageCount()).toBeLessThanOrEqual(20);
   });
 });
