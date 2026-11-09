@@ -8,7 +8,7 @@ describe("sample-report command", () => {
     const script = await readFile(new URL("scripts/sample-report.mjs", root), "utf8");
     expect(script).toContain("../dist/reports/generate-audit-report.js");
     expect(script).toContain("./fixtures/sample-report-input.mjs");
-    expect(script).not.toMatch(/GroqClient|SupabaseClient|createSupabaseAuditStore|fetch\\s*\\(/);
+    expect(script).not.toMatch(/GroqClient|SupabaseClient|createSupabaseAuditStore|fetch\s*\(/);
   });
 
   it("is exposed as an npm script that builds before generating PDFs", async () => {
