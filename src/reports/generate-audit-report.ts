@@ -373,13 +373,14 @@ function chartRows(input: AuditReportInput, field: string): ChartRow[] {
     ];
   }
   if (field === "scorecard") {
-    // These five dimensions are not present in the current assessment schema.
-    // Preserve the gap rather than remapping unrelated scorecard fields.
-    return ["Hook", "Originality", "Production", "Replay value", "Lane clarity"].map((label) => ({
-      label,
-      value: null,
-      rationale: "Not determined — this dimension is not supplied by the current assessment schema.",
-    }));
+    const scores = input.assessment.scorecard;
+    return [
+      { label: "Hook", value: scores.hook.score, rationale: scores.hook.rationale },
+      { label: "Originality", value: scores.originality.score, rationale: scores.originality.rationale },
+      { label: "Production", value: scores.production.score, rationale: scores.production.rationale },
+      { label: "Replay value", value: scores.replayValue.score, rationale: scores.replayValue.rationale },
+      { label: "Lane clarity", value: scores.laneClarity.score, rationale: scores.laneClarity.rationale },
+    ];
   }
   if (field === "evidence") {
     const counts = countEvidenceLayers(input.assessment.evidenceLabels);
