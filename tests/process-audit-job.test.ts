@@ -49,6 +49,8 @@ describe("processAuditJob", () => {
         status: "queued" as const,
       }),
       markProcessing: async () => events.push("processing"),
+      collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
+      recognizeUrl: async () => ({ matched: false as const }),
       downloadMaster: async () => new Uint8Array([1, 2, 3]),
       createRecognitionSample: async () => new Uint8Array([4, 5]),
       recognize: async () => ({
@@ -217,6 +219,8 @@ describe("processAuditJob", () => {
         status: "queued" as const,
       }),
       markProcessing: async () => { events.push("processing"); },
+      collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
+      recognizeUrl: async () => ({ matched: false as const }),
       downloadMaster: async () => new Uint8Array([1, 2, 3]),
       createRecognitionSample: async () => new Uint8Array([4, 5]),
       recognize: async () => ({ matched: false as const }),
@@ -262,6 +266,8 @@ describe("processAuditJob", () => {
         status: "queued" as const,
       }),
       markProcessing: async () => {},
+      collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
+      recognizeUrl: async () => ({ matched: false as const }),
       downloadMaster: async () => {
         throw new Error("master unavailable");
       },
