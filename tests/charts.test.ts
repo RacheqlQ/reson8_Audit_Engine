@@ -43,7 +43,16 @@ describe("native PDF chart helpers", () => {
     expect(await pdf.save()).toBeInstanceOf(Uint8Array);
   });
 
-  it("renders the long-form fixture with full-length chart captions and narrative content", async () => {\n    const pdf=await PDFDocument.create();const font=await pdf.embedFont(StandardFonts.Helvetica);const bold=await pdf.embedFont(StandardFonts.HelveticaBold);const page=pdf.addPage([595.28,841.89]);\n    expect(longFormAudioFixture.evidence.fixture).toBe(true);expect(()=>drawChartPanel(page,{title:"Long-form evidence",kind:"layers",rows:[{label:"OBSERVED",value:3},{label:"RECOGNIZED",value:1},{label:"RECONCILED",value:2},{label:"INFERRED",value:4}],shows:"A complete set of source-labelled claims with multiple independently attributed fields.",cantShow:"Truth, completeness, commercial relevance or listener response."},font,bold)).not.toThrow();\n  });\n\n  it("counts evidence layers exactly from the supplied labels", () => {
+  it("renders the long-form fixture with full-length chart captions and narrative content", async () => {
+    const pdf=await PDFDocument.create();
+    const font=await pdf.embedFont(StandardFonts.Helvetica);
+    const bold=await pdf.embedFont(StandardFonts.HelveticaBold);
+    const page=pdf.addPage([595.28,841.89]);
+    expect(longFormAudioFixture.evidence.fixture).toBe(true);
+    expect(()=>drawChartPanel(page,{title:"Long-form evidence",kind:"layers",rows:[{label:"OBSERVED",value:3},{label:"RECOGNIZED",value:1},{label:"RECONCILED",value:2},{label:"INFERRED",value:4}],shows:"A complete set of source-labelled claims with multiple independently attributed fields.",cantShow:"Truth, completeness, commercial relevance or listener response."},font,bold)).not.toThrow();
+  });
+
+  it("counts evidence layers exactly from the supplied labels", () => {
     expect(countEvidenceLayers([
       { label: "OBSERVED" },
       { label: "RECOGNIZED" },

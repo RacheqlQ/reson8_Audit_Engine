@@ -114,7 +114,7 @@ function drawSpectrum(page: PDFPage, rows: ChartRow[], x: number, top: number, f
       dashed(page, x + 155, y + 2, 315);
       page.drawText(val, { x: x + 365, y: y + 7, size: 6, font, color: MUTED });
     } else {
-      page.drawText(val.slice(0, 48), { x: x + 165, y: y + 7, size: 7, font, color: INK });
+      captionLines(val,font,300).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:x+165,y:y+7-lineIndex*8,size:6.4,font,color:INK}));
     }
   });
 }
@@ -123,14 +123,14 @@ function drawConstellation(page: PDFPage, rows: ChartRow[], x: number, top: numb
   const cx = x + 258, cy = top - 72;
   page.drawCircle({ x: cx, y: cy, size: 25, borderColor: BLUE, borderWidth: 1, color: PAPER });
   const primary = shown(rows[0]?.value);
-  page.drawText(primary.slice(0, 22), { x: cx - 42, y: cy - 3, size: 7, font: bold, color: INK });
+  captionLines(primary,bold,82).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:cx-42,y:cy-3-lineIndex*8,size:6.2,font:bold,color:INK}));
   const adjacent = rows.slice(1, 5);
   adjacent.forEach((row, i) => {
     const px = cx + (i % 2 === 0 ? -116 : 116);
     const py = cy + (i < 2 ? 30 : -30);
     line(page, cx + (px < cx ? -25 : 25), cy, px, py, LINE);
     page.drawCircle({ x: px, y: py, size: 17, borderColor: SAGE, borderWidth: 0.8, color: PAPER });
-    page.drawText(shown(row.value).slice(0, 24), { x: px - 48, y: py - 3, size: 6.2, font, color: INK });
+    captionLines(shown(row.value),font,90).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:px-48,y:py-3-lineIndex*8,size:5.8,font,color:INK}));
   });
   page.drawText("QUALITATIVE POSITIONING — DISTANCE IS NOT MEASURED", { x: x + 115, y: top - 115, size: 5.8, font: bold, color: MUTED });
 }
@@ -182,8 +182,7 @@ function drawTimeline(page: PDFPage, rows: ChartRow[], x: number, top: number, f
     page.drawCircle({ x: px, y, size: 7, borderColor: BLUE, borderWidth: 1, color: PAPER });
     page.drawText("SEQUENCE " + (index + 1), { x: px - 25, y: y + 17, size: 6, font: bold, color: MUTED });
     const priority = shown(row.value);
-    page.drawText(priority.slice(0, 24), { x: px - 28, y: y - 22, size: 6.2, font, color: INK });
-    if (priority.length > 24) page.drawText(priority.slice(24, 48), { x: px - 28, y: y - 31, size: 5.8, font, color: INK });
+    captionLines(priority,font,112).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:px-28,y:y-22-lineIndex*8,size:5.8,font,color:INK}));
   });
   page.drawText("30 / 60 / 90-DAY DATES: NOT DETERMINED BY THE ASSESSMENT", { x: x + 105, y: top - 115, size: 5.8, font: bold, color: MUTED });
 }
@@ -193,7 +192,7 @@ function drawRadar(page:PDFPage,rows:ChartRow[],x:number,top:number,font:PDFFont
  for(let ring=1;ring<=4;ring++){const r=radius*ring/4;for(let i=0;i<usable.length;i++){const a1=-Math.PI/2+i*Math.PI*2/usable.length,a2=-Math.PI/2+(i+1)*Math.PI*2/usable.length;line(page,cx+Math.cos(a1)*r,cy+Math.sin(a1)*r,cx+Math.cos(a2)*r,cy+Math.sin(a2)*r,LINE,.45);}}
  const points=usable.map((row,index)=>{const angle=-Math.PI/2+index*Math.PI*2/Math.max(1,usable.length),score=typeof row.value==="number"&&Number.isFinite(row.value)?Math.max(0,Math.min(100,row.value)):null,r=score===null?0:radius*score/100;return{x:cx+Math.cos(angle)*r,y:cy+Math.sin(angle)*r,angle,row,score};});
  if(points.length>=3&&points.every(p=>p.score!==null)){const path=points.map((p,i)=>(i?"L ":"M ")+p.x.toFixed(2)+" "+p.y.toFixed(2)).join(" ")+" Z";page.drawSvgPath(path,{color:BLUE,opacity:.18,borderColor:BLUE,borderOpacity:.8,borderWidth:1.2});}
- points.forEach(p=>{page.drawCircle({x:p.x,y:p.y,size:3.5,color:p.score===null?LINE:BLUE});const lx=cx+Math.cos(p.angle)*(radius+13),ly=cy+Math.sin(p.angle)*(radius+13);page.drawText(p.row.label.slice(0,22),{x:lx-34,y:ly-2,size:5.2,font:bold,color:MUTED});page.drawText(p.score===null?"N/D":String(p.score),{x:lx-8,y:ly-12,size:5.2,font,color:INK});});
+ points.forEach(p=>{page.drawCircle({x:p.x,y:p.y,size:3.5,color:p.score===null?LINE:BLUE});const lx=cx+Math.cos(p.angle)*(radius+13),ly=cy+Math.sin(p.angle)*(radius+13);captionLines(p.row.label,bold,74).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:lx-37,y:ly-2-lineIndex*6,size:4.8,font:bold,color:MUTED}));page.drawText(p.score===null?"N/D":String(p.score),{x:lx-8,y:ly-12,size:5.2,font,color:INK});});
  page.drawText("EVIDENCE-DERIVED DIMENSIONS ONLY · NULL = INSUFFICIENT EVIDENCE",{x:x+120,y:top-115,size:5.5,font:bold,color:MUTED});
 }
 function drawChain(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {

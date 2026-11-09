@@ -29,7 +29,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(metadataOnlyFixture.sonicDna).toBeNull();
   expect(metadataOnlyFixture.evidence.artist).toBe("Fixture Artist");
   expect(longFormAudioFixture.evidence.fixture).toBe(true);
-  expect(longFormAudioFixture.assessment.executiveSummary.split(/\\s+/).length).toBeGreaterThan(70);
+  expect(longFormAudioFixture.assessment.executiveSummary.split(/\s+/).length).toBeGreaterThan(70);
   expect(longFormAudioFixture.assessment.strengths.length).toBeGreaterThanOrEqual(4);
  });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
