@@ -6,243 +6,243 @@ export interface ChartRow {
   rationale?: string;
   proportion?: number | null;
 }
-
 export type ChartKind = "bars" | "sonic" | "spectrum" | "constellation" | "layers" | "tension" | "timeline" | "chain" | "radar";
-
 export interface ChartPanelInput {
-  title: string;
-  rows: ChartRow[];
-  shows: string;
-  cantShow: string;
-  kind?: ChartKind;
-  inferred?: boolean;
-  unavailable?: boolean;
-  y?: number;
+  title: string; rows: ChartRow[]; shows: string; cantShow: string;
+  kind?: ChartKind; inferred?: boolean; unavailable?: boolean; y?: number;
 }
-
-const INK = rgb(0.14, 0.16, 0.19);
-const MUTED = rgb(0.39, 0.42, 0.46);
-const LINE = rgb(0.78, 0.79, 0.78);
-const PAPER = rgb(0.985, 0.98, 0.96);
-const SAGE = rgb(0.55, 0.62, 0.55);
-const CLAY = rgb(0.69, 0.48, 0.4);
-const BLUE = rgb(0.43, 0.54, 0.62);
-
-function shown(value: ChartRow["value"]): string {
-  if (value === null || value === undefined || value === "") return "Not determined";
-  if (typeof value === "number" && !Number.isFinite(value)) return "Not determined";
-  return String(value);
+export interface ChartRect { x:number; y:number; width:number; height:number; id:string; }
+const C = {
+ ink:rgb(.08,.12,.2), muted:rgb(.34,.4,.5), line:rgb(.78,.82,.88), paper:rgb(.97,.98,.99),
+ navy:rgb(.035,.075,.16), blue:rgb(.18,.42,1), violet:rgb(.49,.3,.94), teal:rgb(.08,.72,.62),
+ coral:rgb(.96,.36,.32), gold:rgb(.94,.67,.22), sky:rgb(.22,.68,.88), green:rgb(.2,.62,.42),
+ white:rgb(1,1,1), pale:rgb(.9,.94,.98)
+};
+const PALETTE=[C.blue,C.violet,C.teal,C.coral,C.gold,C.sky,C.green];
+const CARD_X=48,CARD_W=499,HEADER_H=29,CAPTION_H=43,PAD=12;
+function color(index:number){return PALETTE[index%PALETTE.length];}
+function validNumber(v:ChartRow["value"]):number|null{return typeof v==="number"&&Number.isFinite(v)?v:null;}
+function shown(v:ChartRow["value"]):string{return v===null||v===undefined||v===""||(typeof v==="number"&&!Number.isFinite(v))?"Not determined":String(v);}
+function line(p:PDFPage,x1:number,y1:number,x2:number,y2:number,c=C.line,w=.8){p.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},color:c,thickness:w});}
+function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
+ const out:string[]=[];let current="";
+ for(const word of s.split(/\s+/).filter(Boolean)){const next=current?current+" "+word:word;if(font.widthOfTextAtSize(next,size)>width&&current){out.push(current);current=word;}else current=next;}
+ if(current)out.push(current);return out;
 }
-
-function line(page: PDFPage, x1: number, y1: number, x2: number, y2: number, color = LINE, thickness = 0.8): void {
-  page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, color, thickness });
-}
-
-function dashed(page: PDFPage, x: number, y: number, width: number): void {
-  for (let offset = 0; offset < width; offset += 8) {
-    line(page, x + offset, y, Math.min(x + offset + 3, x + width), y, LINE, 1);
-  }
-}
-
-function panelFrame(page: PDFPage, input: ChartPanelInput, font: PDFFont, bold: PDFFont, height: number): { x: number; top: number; bottom: number; width: number } {
-  const x = 48, width = 499, top = input.y ?? 250, bottom = top - height;
-  page.drawRectangle({ x, y: bottom, width, height, borderColor: LINE, borderWidth: 0.7, color: PAPER });
-  page.drawText(input.title.toUpperCase(), { x: x + 11, y: top - 17, size: 8, font: bold, color: INK });
-  if (input.unavailable) page.drawText("REQUIRES AUDIO", { x: x + width - 88, y: top - 17, size: 7, font: bold, color: MUTED });
-  else if (input.inferred) page.drawText("INFERRED", { x: x + width - 68, y: top - 17, size: 7, font: bold, color: CLAY });
-  else page.drawText("OBSERVED", { x: x + width - 68, y: top - 17, size: 7, font: bold, color: SAGE });
-  line(page, x + 10, top - 25, x + width - 10, top - 25);
-  return { x, top, bottom, width };
-}
-
-function captionLines(value: string, font: PDFFont, width: number): string[] {
-  const lines: string[] = []; let current = "";
-  for (const word of value.split(/\s+/).filter(Boolean)) {
-    const next = current ? current + " " + word : word;
-    if (font.widthOfTextAtSize(next, 5.6) > width && current) { lines.push(current); current = word; } else current = next;
-  }
-  if (current) lines.push(current); return lines;
-}
-function captions(page: PDFPage, input: ChartPanelInput, x: number, bottom: number, font: PDFFont): void {
-  let y=bottom+25;
-  for(const [prefix,value] of [["SHOWS: ",input.shows],["CAN'T SHOW: ",input.cantShow]] as const){
-    const lines=captionLines(prefix+value,font,475);
-    for(const part of lines){if(y<bottom+3)break;page.drawText(part,{x:x+10,y,size:5.6,font,color:MUTED});y-=7;}
-  }
-}
-
-function drawBars(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont, maxRows = 6): void {
-  let y = top;
-  for (const row of rows.slice(0, maxRows)) {
-    page.drawText(row.label.slice(0, 25), { x: x + 11, y, size: 7, font: bold, color: INK });
-    const value = shown(row.value);
-    if (value === "Not determined") {
-      dashed(page, x + 174, y + 2, 105);
-      page.drawText(value, { x: x + 290, y, size: 7, font, color: MUTED });
-    } else {
-      page.drawText(value.slice(0, 42), { x: x + 174, y, size: 7, font, color: INK });
-    }
-    y -= 17;
-    if (row.rationale && y > top - 85) {
-      page.drawText(("RATIONALE: " + row.rationale).slice(0, 105), { x: x + 22, y, size: 5.8, font, color: MUTED });
-      y -= 11;
-    }
-  }
-}
-
-function drawSonic(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
-  const columns = [x + 12, x + 183, x + 354];
-  rows.slice(0, 6).forEach((row, index) => {
-    const col = index % 3, r = Math.floor(index / 3), cx = columns[col], cy = top - r * 57;
-    page.drawCircle({ x: cx + 17, y: cy - 7, size: 12, borderColor: LINE, borderWidth: 1, color: PAPER });
-    page.drawCircle({ x: cx + 17, y: cy - 7, size: 3, color: shown(row.value) === "Not determined" ? LINE : BLUE });
-    page.drawText(captionLines(row.label.toUpperCase(),bold,112)[0]??"", { x: cx + 36, y: cy, size: 6.2, font: bold, color: MUTED });
-    const val = shown(row.value);
-    const valueLines=captionLines(val,font,112);
-    valueLines.slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:cx+36,y:cy-13-lineIndex*9,size:7.2,font,color:val==="Not determined"?MUTED:INK}));
-    if (val === "Not determined") dashed(page, cx + 36, cy - 19, 74);
-  });
-}
-
-function drawSpectrum(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
-  rows.slice(0, 3).forEach((row, index) => {
-    const y = top - 25 - index * 31;
-    page.drawText(row.label.toUpperCase(), { x: x + 12, y, size: 6.5, font: bold, color: MUTED });
-    line(page, x + 155, y + 2, x + 470, y + 2, LINE, 1);
-    const val = shown(row.value);
-    if (val === "Not determined") {
-      dashed(page, x + 155, y + 2, 315);
-      page.drawText(val, { x: x + 365, y: y + 7, size: 6, font, color: MUTED });
-    } else {
-      captionLines(val,font,300).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:x+165,y:y+7-lineIndex*8,size:6.4,font,color:INK}));
-    }
-  });
-}
-
-function drawConstellation(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
-  const cx = x + 258, cy = top - 72;
-  page.drawCircle({ x: cx, y: cy, size: 25, borderColor: BLUE, borderWidth: 1, color: PAPER });
-  const primary = shown(rows[0]?.value);
-  captionLines(primary,bold,82).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:cx-42,y:cy-3-lineIndex*8,size:6.2,font:bold,color:INK}));
-  const adjacent = rows.slice(1, 5);
-  adjacent.forEach((row, i) => {
-    const px = cx + (i % 2 === 0 ? -116 : 116);
-    const py = cy + (i < 2 ? 30 : -30);
-    line(page, cx + (px < cx ? -25 : 25), cy, px, py, LINE);
-    page.drawCircle({ x: px, y: py, size: 17, borderColor: SAGE, borderWidth: 0.8, color: PAPER });
-    captionLines(shown(row.value),font,90).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:px-48,y:py-3-lineIndex*8,size:5.8,font,color:INK}));
-  });
-  page.drawText("QUALITATIVE POSITIONING — DISTANCE IS NOT MEASURED", { x: x + 115, y: top - 115, size: 5.8, font: bold, color: MUTED });
-}
-
-function drawLayers(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
-  const colors = [BLUE, SAGE, CLAY, rgb(0.62, 0.58, 0.68)];
-  const total = rows.reduce((sum, row) => sum + (typeof row.value === "number" && Number.isFinite(row.value) ? row.value : 0), 0);
-  const barX = x + 14, barY = top - 58, barWidth = 470;
-  if (total > 0) {
-    page.drawRectangle({ x: barX + 2, y: barY - 2, width: barWidth, height: 20, color: INK, opacity: 0.12 });
-    let offset = 0;
-    rows.forEach((row, index) => {
-      const count = typeof row.value === "number" && Number.isFinite(row.value) ? row.value : 0;
-      const segment = barWidth * count / total;
-      if (segment > 0) page.drawRectangle({ x: barX + offset, y: barY, width: segment, height: 18, color: colors[index] });
-      offset += segment;
-    });
-    page.drawRectangle({ x: barX, y: barY + 12, width: barWidth, height: 6, color: PAPER, opacity: 0.16 });
-  } else dashed(page, barX, barY + 9, barWidth);
-  rows.forEach((row, index) => {
-    const y = top - 88 - index * 14;
-    page.drawRectangle({ x: x + 15, y: y - 1, width: 7, height: 7, color: colors[index] });
-    page.drawText(row.label + ": " + shown(row.value), { x: x + 29, y, size: 7, font, color: INK });
-  });
-  page.drawText(total ? "CLAIMS COUNTED FROM ASSESSMENT EVIDENCE LABELS" : "NO LABELLED CLAIMS — PROPORTIONS NOT AVAILABLE", { x: x + 270, y: top - 88, size: 5.6, font: bold, color: MUTED });
-}
-
-function drawTension(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
-  const mid=x+249, strength=rows[0], risk=rows[1], base=top-96;
-  page.drawText("STRENGTHS", {x:x+20,y:top-38,size:7,font:bold,color:SAGE});
-  page.drawText("RISKS", {x:mid+18,y:top-38,size:7,font:bold,color:CLAY});
-  const strengthCount=typeof strength?.value==="number"?strength.value:0;
-  const riskCount=typeof risk?.value==="number"?risk.value:0;
-  const max=Math.max(1,strengthCount,riskCount);
-  page.drawRectangle({x:x+20,y:base,width:205,height:22,color:LINE,opacity:.22});
-  page.drawRectangle({x:mid+18,y:base,width:205,height:22,color:LINE,opacity:.22});
-  page.drawRectangle({x:x+20,y:base,width:205*strengthCount/max,height:22,color:SAGE,opacity:.72});
-  page.drawRectangle({x:mid+18,y:base,width:205*riskCount/max,height:22,color:CLAY,opacity:.72});
-  page.drawText(String(strengthCount)+" documented items",{x:x+20,y:base-18,size:7,font,color:INK});
-  page.drawText(String(riskCount)+" documented items",{x:mid+18,y:base-18,size:7,font,color:INK});
-  page.drawText("COUNTS ONLY · NOT WEIGHTED SEVERITY",{x:x+145,y:top-145,size:5.6,font:bold,color:MUTED});
-}
-
-function drawTimeline(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
-  const y = top - 67;
-  line(page, x + 38, y, x + 478, y, LINE, 1.2);
-  rows.slice(0, 3).forEach((row, index) => {
-    const px = x + 48 + index * 210;
-    page.drawCircle({ x: px, y, size: 7, borderColor: BLUE, borderWidth: 1, color: PAPER });
-    page.drawText("SEQUENCE " + (index + 1), { x: px - 25, y: y + 17, size: 6, font: bold, color: MUTED });
-    const priority = shown(row.value);
-    captionLines(priority,font,112).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:px-28,y:y-22-lineIndex*8,size:5.8,font,color:INK}));
-  });
-  page.drawText("30 / 60 / 90-DAY DATES: NOT DETERMINED BY THE ASSESSMENT", { x: x + 105, y: top - 115, size: 5.8, font: bold, color: MUTED });
-}
-
-function drawRadar(page:PDFPage,rows:ChartRow[],x:number,top:number,font:PDFFont,bold:PDFFont):void{
- const cx=x+249,cy=top-70,radius=43,usable=rows.slice(0,5);
- for(let ring=1;ring<=4;ring++){const r=radius*ring/4;for(let i=0;i<usable.length;i++){const a1=-Math.PI/2+i*Math.PI*2/usable.length,a2=-Math.PI/2+(i+1)*Math.PI*2/usable.length;line(page,cx+Math.cos(a1)*r,cy+Math.sin(a1)*r,cx+Math.cos(a2)*r,cy+Math.sin(a2)*r,LINE,.45);}}
- const points=usable.map((row,index)=>{const angle=-Math.PI/2+index*Math.PI*2/Math.max(1,usable.length),score=typeof row.value==="number"&&Number.isFinite(row.value)?Math.max(0,Math.min(100,row.value)):null,r=score===null?0:radius*score/100;return{x:cx+Math.cos(angle)*r,y:cy+Math.sin(angle)*r,angle,row,score};});
- if(points.length>=3&&points.every(p=>p.score!==null)){const path=points.map((p,i)=>(i?"L ":"M ")+p.x.toFixed(2)+" "+p.y.toFixed(2)).join(" ")+" Z";page.drawSvgPath(path,{color:BLUE,opacity:.18,borderColor:BLUE,borderOpacity:.8,borderWidth:1.2});}
- points.forEach(p=>{page.drawCircle({x:p.x,y:p.y,size:3.5,color:p.score===null?LINE:BLUE});const lx=cx+Math.cos(p.angle)*(radius+13),ly=cy+Math.sin(p.angle)*(radius+13);captionLines(p.row.label,bold,74).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:lx-37,y:ly-2-lineIndex*6,size:4.8,font:bold,color:MUTED}));page.drawText(p.score===null?"N/D":String(p.score),{x:lx-8,y:ly-12,size:5.2,font,color:INK});});
- page.drawText("EVIDENCE-DERIVED DIMENSIONS ONLY · NULL = INSUFFICIENT EVIDENCE",{x:x+120,y:top-115,size:5.5,font:bold,color:MUTED});
-}
-function drawChain(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
-  const labels = ["CONTENT", "DISCOVERY", "LISTENER ACTION"];
-  const xs = [x + 93, x + 258, x + 423];
-  labels.forEach((label, index) => {
-    const cx = xs[index], cy = top - 67;
-    page.drawCircle({ x: cx, y: cy, size: 27, borderColor: LINE, borderWidth: 1, color: PAPER });
-    page.drawText(label, { x: cx - 30, y: cy - 3, size: 4.8, font: bold, color: INK });
-    if (index < 2) line(page, cx + 28, cy, xs[index + 1] - 29, cy, BLUE, 1);
-    const value = shown(rows[index]?.value);
-    captionLines(value,font,108).slice(0,2).forEach((part,lineIndex)=>page.drawText(part,{x:cx-55,y:cy-43-lineIndex*8,size:5.4,font,color:MUTED}));
-  });
-}
-
+function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink){p.drawText(s,{x,y,font,size,color:c});}\nfunction tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
 export function chartPanelHeight(kind:ChartKind="bars"):number{
- if(kind==="sonic")return 165;if(kind==="spectrum")return 160;if(kind==="layers")return 200;
- if(kind==="constellation"||kind==="tension"||kind==="timeline"||kind==="chain"||kind==="radar")return 190;
+ if(kind==="radar")return 410;
+ if(kind==="layers")return 224;if(kind==="tension")return 250;
+ if(kind==="sonic")return 230;
+ if(kind==="spectrum"||kind==="constellation"||kind==="timeline"||kind==="chain")return 202;\n if(kind==="bars")return 205;
  return 190;
 }
-export function drawChartPanel(page: PDFPage, input: ChartPanelInput, font: PDFFont, bold: PDFFont): void {
-  const kind = input.kind ?? "bars";
-  const height = chartPanelHeight(kind);
-  const frame = panelFrame(page, input, font, bold, height);
-  const contentTop = frame.top - 39;
-  switch (kind) {
-    case "sonic": drawSonic(page, input.rows, frame.x, contentTop, font, bold); break;
-    case "spectrum": drawSpectrum(page, input.rows, frame.x, contentTop, font, bold); break;
-    case "constellation": drawConstellation(page, input.rows, frame.x, contentTop, font, bold); break;
-    case "layers": drawLayers(page, input.rows, frame.x, contentTop, font, bold); break;
-    case "tension": drawTension(page, input.rows, frame.x, contentTop, font, bold); break;
-    case "timeline": drawTimeline(page, input.rows, frame.x, contentTop, font, bold); break;
-    case "chain": drawChain(page, input.rows, frame.x, contentTop, font, bold); break;
-    case "radar": drawRadar(page, input.rows, frame.x, contentTop, font, bold); break;
-    default: drawBars(page, input.rows, frame.x, contentTop, font, bold); break;
-  }
-  captions(page, input, frame.x, frame.bottom, font);
+export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind)):ChartRect[]{
+ const bottom=top-height,captionY=bottom+8,captionTop=captionY+CAPTION_H-8;
+ const bodyBottom=captionTop+3,bodyTop=top-HEADER_H-8;
+ const result:ChartRect[]=[{x:x+8,y:captionY,width:CARD_W-16,height:CAPTION_H-8,id:"caption-zone"},
+  {x:x+8,y:bodyBottom,width:CARD_W-16,height:bodyTop-bodyBottom,id:"chart-content-zone"}];
+ if(kind==="radar"){
+  result.push({x:x+80,y:bodyBottom+5,width:CARD_W-160,height:bodyTop-bodyBottom-10,id:"radar-plot"});
+  const cx=x+CARD_W/2,cy=top-200,radius=130,outer=150,n=Math.max(3,rows.slice(0,5).length);
+  rows.slice(0,5).forEach((row,i)=>{const angle=-Math.PI/2+i*2*Math.PI/n,ax=cx+Math.cos(angle)*outer,ay=cy+Math.sin(angle)*outer,label=row.label.length>23?row.label.slice(0,21)+"…":row.label,w=Math.min(94,Math.max(22,label.length*3.3),100),left=Math.cos(angle)>.35?ax+5:Math.cos(angle)<-.35?ax-w-5:ax-w/2,base=ay+(Math.sin(angle)>.4?-4:Math.sin(angle)<-.4?1:-2);result.push({x:left,y:base-12,width:w,height:19,id:"label-radar-"+i});});
+ }else if(kind==="layers"){
+  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"evidence-stack"});
+  rows.slice(0,4).forEach((row,i)=>result.push({x:x+28+(i%2)*248,y:bottom+48-Math.floor(i/2)*25,width:180,height:18,id:"label-layer-"+i}));
+ }else if(kind==="tension"){
+  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"strengths-risks-columns"});
+  rows.slice(2,22).forEach((row,i)=>result.push({x:x+35+(i>=10?230:0),y:top-121-(i%10)*9.2,width:185,height:6,id:"label-tension-"+i}));
+ }else if(kind==="sonic"){
+  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"sonic-metrics"});
+  rows.slice(0,6).forEach((row,i)=>result.push({x:x+18+(i%3)*166,y:top-69-Math.floor(i/3)*69,width:150,height:43,id:"label-sonic-"+i}));
+ }else if(kind==="spectrum"){
+  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"spectrum-chart"});
+  rows.slice(0,4).forEach((row,i)=>result.push({x:x+14,y:top-24-i*26-3,width:145,height:10,id:"label-spectrum-"+i}));
+ }else if(kind==="bars"){
+  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"bar-chart"});
+  rows.slice(0,6).forEach((row,i)=>result.push({x:x+13,y:top-58-i*19-3,width:155,height:10,id:"label-bar-"+i}));
+ }else if(kind==="constellation"){
+  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"constellation-chart"});
+  const cx=x+CARD_W/2,cy=bottom+48+80;
+  rows.slice(0,5).forEach((row,i)=>{const a=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(a)*100,py=cy+Math.sin(a)*30;result.push({x:px-48,y:py-10,width:96,height:14,id:"label-constellation-"+i});});
+ }else if(kind==="timeline"){
+  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"timeline-chart"});
+  const y=bottom+48+80;
+  rows.slice(0,3).forEach((row,i)=>{const px=x+48+i*210;result.push({x:px-36,y:y-35,width:118,height:35,id:"label-timeline-"+i});});
+ }else if(kind==="chain"){
+  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"chain-chart"});
+  const y=bottom+48+78;
+  rows.slice(0,3).forEach((row,i)=>{const px=x+82+i*166;result.push({x:px-56,y:y-52,width:112,height:18,id:"label-chain-"+i});});
+ }else{
+  result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"chart-data"});
+ }
+ return result;
 }
-
-export interface EvidenceLayerCounts {
-  OBSERVED: number;
-  RECOGNIZED: number;
-  RECONCILED: number;
-  INFERRED: number;
+export function chartCaptionCollisionErrors(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind)):string[]{
+ const rects=chartPanelLayoutRects(kind,rows,x,top,height),caption=rects.find(r=>r.id==="caption-zone");
+ if(!caption)return ["Missing caption zone"];
+ const labels=rects.filter(r=>r.id.startsWith("label-"));
+ const errors:string[]=[];
+ for(let i=0;i<labels.length;i++){
+  const a=labels[i];
+  if(a.x<caption.x+caption.width&&a.x+a.width>caption.x&&a.y<caption.y+caption.height&&a.y+a.height>caption.y)errors.push("Chart/caption collision: "+a.id);
+  for(let j=i+1;j<labels.length;j++){const b=labels[j];if(a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y)errors.push("Chart label collision: "+a.id+" / "+b.id);}
+ }
+ return errors;
 }
-
-export function countEvidenceLayers(labels: Array<{ label: string }>): EvidenceLayerCounts {
-  const counts: EvidenceLayerCounts = { OBSERVED: 0, RECOGNIZED: 0, RECONCILED: 0, INFERRED: 0 };
-  for (const item of labels) {
-    if (Object.prototype.hasOwnProperty.call(counts, item.label)) counts[item.label as keyof EvidenceLayerCounts] += 1;
+function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,height:number){
+ const x=CARD_X,w=CARD_W,top=input.y??700,bottom=top-height;
+ p.drawRectangle({x:x+3,y:bottom-3,width:w,height,color:C.navy,opacity:.10});
+ p.drawRectangle({x,y:bottom,width:w,height,color:C.paper,borderColor:C.line,borderWidth:.6});
+ // Sixteen horizontal strips provide a restrained vertical gradient.
+ for(let i=0;i<16;i++){const t=i/15;p.drawRectangle({x:x+1,y:bottom+1+(height-2)*i/16,width:w-2,height:(height-2)/16+.2,color:rgb(.985-.035*t,.99-.025*t,1-.015*t)});}
+ p.drawRectangle({x,y:top-HEADER_H,width:w,height:HEADER_H,color:C.navy});
+ p.drawRectangle({x,y:top-HEADER_H,width:5,height:HEADER_H,color:input.inferred?C.violet:input.unavailable?C.coral:C.teal});
+ tracked(p,input.title.toUpperCase(),x+13,top-19,bold,8,C.white,.65);
+ const status=input.unavailable?"REQUIRES AUDIO":input.inferred?"INFERRED":"OBSERVED";
+ tracked(p,status,x+w-90,top-19,bold,6.2,input.inferred?C.gold:C.teal,.45);
+ const captionTop=bottom+CAPTION_H;
+ line(p,x+9,captionTop,x+w-9,captionTop,C.line,.65);
+ let cy=bottom+CAPTION_H-12;
+ for(const [label,value] of [["SHOWS: ",input.shows],["CAN'T SHOW: ",input.cantShow]] as const){
+  const lines=wrap(label+value,font,5.7,w-24).slice(0,2);
+  for(const part of lines){text(p,part,x+12,cy,font,5.7,C.muted);cy-=7;}
+ }
+ return {x,top,bottom,width:w,height,contentTop:top-HEADER_H-9,contentBottom:captionTop+5};
+}
+function shadowBar(p:PDFPage,x:number,y:number,w:number,h:number,c:ReturnType<typeof rgb>,index:number){
+ p.drawRectangle({x:x+2,y:y-2,width:w,height:h,color:C.navy,opacity:.13});
+ p.drawRectangle({x,y,width:w,height:h,color:c});
+ p.drawSvgPath(`M ${x} ${y+h} L ${x+5} ${y+h+4} L ${x+w+5} ${y+h+4} L ${x+w} ${y+h} Z`,{color:C.white,opacity:.25});
+ p.drawSvgPath(`M ${x+w} ${y} L ${x+w+5} ${y+4} L ${x+w+5} ${y+h+4} L ${x+w} ${y+h} Z`,{color:C.navy,opacity:.24});
+}
+function ring(p:PDFPage,cx:number,cy:number,r:number,value:number|null,c:ReturnType<typeof rgb>,font:PDFFont,bold:PDFFont){
+ p.drawCircle({x:cx,y:cy,size:r,borderColor:C.line,borderWidth:5});
+ if(value===null){p.drawCircle({x:cx,y:cy,size:r,borderColor:C.muted,borderWidth:1.2,color:C.paper});for(let a=0;a<360;a+=24){const a1=a*Math.PI/180,a2=(a+12)*Math.PI/180;line(p,cx+Math.cos(a1)*(r-2),cy+Math.sin(a1)*(r-2),cx+Math.cos(a2)*(r-2),cy+Math.sin(a2)*(r-2),C.muted,1.2);}text(p,"N/D",cx-7,cy-3,bold,6,C.muted);return;}
+ const clamped=Math.max(0,Math.min(100,value));
+ const segments=Math.max(1,Math.round(clamped/100*48));
+ for(let i=0;i<segments;i++){const a1=(-90+i*7.5)*Math.PI/180,a2=(-90+(i+1)*7.5-1)*Math.PI/180;line(p,cx+Math.cos(a1)*r,cy+Math.sin(a1)*r,cx+Math.cos(a2)*r,cy+Math.sin(a2)*r,c,4.5);}
+ text(p,Math.round(clamped)+"%",cx-10,cy-3,bold,7,C.ink);
+}
+function drawSonic(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
+ const cols=[g.x+18,g.x+184,g.x+350],top=g.contentTop-22;
+ rows.slice(0,6).forEach((row,i)=>{
+  const col=i%3,r=Math.floor(i/3),x=cols[col],y=top-r*69,c=color(i),v=validNumber(row.value);
+  const label=row.label.toUpperCase();
+  tracked(p,label,x,y,b,6.3,C.muted,.35);
+  const isPercent=/CONFIDENCE|SCORE|PERCENT/i.test(label)||typeof row.value==="string"&&/%$/.test(row.value);
+  if(isPercent){
+   const parsed=v??(typeof row.value==="string"&&/%$/.test(row.value)?Number.parseFloat(row.value):null),n=typeof parsed==="number"&&Number.isFinite(parsed)?parsed:null;
+   ring(p,x+22,y-29,15,n===null?null:n,c,f,b);
+   if(n===null)text(p,"Not determined",x+45,y-32,f,6.5,C.muted);
+  }else if(v!==null){
+   text(p,String(v),x,y-34,b,25,c);
+   if(/LUFS/i.test(label))text(p,"LUFS",x+Math.min(74,String(v).length*14),y-32,b,7,C.muted);
+   else if(/BPM/i.test(label))text(p,"BPM",x+Math.min(70,String(v).length*14),y-32,b,7,C.muted);
+   else if(/RANGE/i.test(label))text(p,"dB",x+Math.min(80,String(v).length*14),y-32,b,7,C.muted);
+  }else if(/KEY/i.test(label)&&shown(row.value)!=="Not determined"){
+   text(p,shown(row.value),x,y-33,b,15,c);
+  }else{
+   ring(p,x+14,y-30,13,null,c,f,b);
+   text(p,"Not determined",x+35,y-32,f,6.2,C.muted);
   }
-  return counts;
+ });
+}
+function drawLayers(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
+ const valid=rows.map(r=>Math.max(0,validNumber(r.value)??0)),total=valid.reduce((a,v)=>a+v,0);
+ const x=g.x+16,y=g.contentTop-44,w=g.width-32,h=24;
+ p.drawRectangle({x:x+3,y:y-3,width:w,height:h,color:C.navy,opacity:.13});
+ if(total>0){let offset=0;valid.forEach((n,i)=>{const sw=w*n/total;if(sw>0)shadowBar(p,x+offset,y,sw,h,color(i),i);offset+=sw;});}
+ else{for(let k=0;k<w;k+=12)line(p,x+k,y+12,Math.min(x+k+5,x+w),y+12,C.muted,1);}
+ const columns=[g.x+16,g.x+264];
+ rows.slice(0,4).forEach((row,i)=>{const col=i%2,r=Math.floor(i/2),lx=columns[col],ly=g.contentBottom+34-r*25,c=color(i);
+  p.drawRectangle({x:lx,y:ly-2,width:10,height:10,color:c});
+  tracked(p,row.label.toUpperCase(),lx+17,ly,b,6.7,c,.35);
+  text(p,shown(row.value),lx+17,ly-10,f,6.3,C.ink);
+ });
+}
+function drawRadar(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
+ const data=rows.slice(0,5),cx=g.x+g.width/2,cy=(g.contentTop+g.contentBottom)/2-1;
+ const radius=130,n=Math.max(3,data.length),outer=150;
+ // The full plot/label footprint is 60%+ of the card width.
+ for(let ringIndex=1;ringIndex<=4;ringIndex++){const r=radius*ringIndex/4;const pts=data.map((_,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;return{x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r};});for(let i=0;i<pts.length;i++)line(p,pts[i].x,pts[i].y,pts[(i+1)%pts.length].x,pts[(i+1)%pts.length].y,C.line,.65);}
+ const pts=data.map((row,i)=>{const angle=-Math.PI/2+i*2*Math.PI/n,score=validNumber(row.value),r=score===null?0:radius*Math.max(0,Math.min(100,score))/100;return{row,angle,score,x:cx+Math.cos(angle)*r,y:cy+Math.sin(angle)*r};});
+ if(pts.length>=3&&pts.every(q=>q.score!==null)){const path=pts.map((q,i)=>(i?"L ":"M ")+q.x.toFixed(2)+" "+q.y.toFixed(2)).join(" ")+" Z";p.drawSvgPath(path,{color:C.teal,opacity:.24,borderColor:C.blue,borderOpacity:1,borderWidth:1.7});}
+ pts.forEach((q,i)=>{
+  const ax=cx+Math.cos(q.angle)*outer,ay=cy+Math.sin(q.angle)*outer;
+  line(p,cx+Math.cos(q.angle)*radius,cy+Math.sin(q.angle)*radius,ax,ay,C.muted,.6);
+  if(q.score===null){p.drawCircle({x:cx+Math.cos(q.angle)*radius*.72,y:cy+Math.sin(q.angle)*radius*.72,size:4,borderColor:C.coral,borderWidth:1.2,color:C.paper});}
+  else p.drawCircle({x:q.x,y:q.y,size:4,color:C.coral,borderColor:C.white,borderWidth:.7});
+  const label=q.row.label.length>23?q.row.label.slice(0,21)+"…":q.row.label;
+  const align=Math.cos(q.angle)>.35?"left":Math.cos(q.angle)<-.35?"right":"center";
+  const width=b.widthOfTextAtSize(label,6.2),lx=align==="left"?ax+5:align==="right"?ax-width-5:ax-width/2;
+  const ly=ay+(Math.sin(q.angle)>.4?-4:Math.sin(q.angle)<-.4?1:-2);
+  text(p,label,lx,ly,b,6.2,C.ink);
+  const scoreText=q.score===null?"N/D":String(Math.round(q.score));
+  const scoreWidth=f.widthOfTextAtSize(scoreText,6.2);
+  text(p,scoreText,align==="left"?lx:align==="right"?lx+width-scoreWidth:lx+(width-scoreWidth)/2,ly-9,b,6.2,q.score===null?C.coral:C.blue);
+ });
+}
+function drawTension(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
+ const mid=g.x+g.width/2,cols=[g.x+14,mid+10],colW=220;
+ const maxCount=Math.max(1,validNumber(rows[0]?.value)??0,validNumber(rows[1]?.value)??0);
+ for(let c=0;c<2;c++){
+  const row=rows[c],accent=c===0?C.teal:C.coral,title=c===0?"STRENGTHS":"RISKS";
+  const count=validNumber(row?.value)??0,x=cols[c],top=g.contentTop-17;
+  p.drawRectangle({x:x+2,y:top-10,width:colW,height:top-g.contentBottom-1,color:C.navy,opacity:.08});
+  p.drawRectangle({x,y:top-8,width:colW,height:top-g.contentBottom-1,color:C.white,borderColor:accent,borderWidth:.8});
+  p.drawRectangle({x,y:top-8,width:colW,height:17,color:accent});
+  tracked(p,title,x+9,top-3,b,7,C.white,.5);
+  text(p,String(count)+" documented",x+9,top-33,b,9,accent);
+  shadowBar(p,x+9,top-49,(colW-18)*count/maxCount,5,accent,c);
+  const summaries=rows.slice(2+c*10,12+c*10);
+  let y=top-61;
+  summaries.slice(0,10).forEach((item,index)=>{
+   let summary=item.label.split(/\s+/).slice(0,10).join(" "),size=5.35;
+   while(f.widthOfTextAtSize(summary,size)>colW-31&&summary.split(/\s+/).length>8){summary=summary.split(/\s+/).slice(0,-1).join(" ");}
+   while(f.widthOfTextAtSize(summary,size)>colW-31&&size>4.5)size-=.15;
+   text(p,String(index+1)+".",x+8,y,b,5.2,accent);
+   text(p,summary,x+21,y,f,size,C.ink);
+   y-=9.2;
+  });
+ }
+ text(p,"COUNTS ARE DOCUMENTED ITEMS, NOT WEIGHTS OR SEVERITY SCORES",g.x+68,g.contentBottom+4,b,5.8,C.muted);
+}
+function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
+ rows.slice(0,4).forEach((r,i)=>{const y=g.contentTop-24-i*26,c=color(i);tracked(p,r.label.toUpperCase(),g.x+14,y,b,6.5,c,.4);const v=shown(r.value);if(v==="Not determined"){line(p,g.x+160,y+2,g.x+360,y+2,C.line,1);text(p,v,g.x+370,y,f,6,C.muted);}else{text(p,v,g.x+160,y,f,8,C.ink);}});
+}
+function drawBars(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
+ rows.slice(0,6).forEach((r,i)=>{const y=g.contentTop-20-i*19,c=color(i);text(p,r.label.slice(0,25),g.x+13,y,b,7,c);text(p,shown(r.value).slice(0,48),g.x+178,y,f,7,C.ink);});
+}
+function drawConstellation(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
+ const cx=g.x+g.width/2,cy=g.contentBottom+80;p.drawCircle({x:cx,y:cy,size:23,borderColor:C.violet,borderWidth:1.4,color:C.paper});
+ rows.slice(0,5).forEach((r,i)=>{const a=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(a)*100,py=cy+Math.sin(a)*30;line(p,cx,cy,px,py,color(i),1);p.drawCircle({x:px,y:py,size:15,borderColor:color(i),borderWidth:1,color:C.white});text(p,shown(r.value).slice(0,18),px-34,py-2,f,5.6,C.ink);});
+}
+function drawTimeline(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
+ const y=g.contentBottom+80;line(p,g.x+42,y,g.x+g.width-42,y,C.line,1.4);
+ rows.slice(0,3).forEach((r,i)=>{const x=g.x+58+i*190;p.drawCircle({x,y,size:7,color:color(i)});text(p,"STAGE "+(i+1),x-20,y+18,b,6,color(i));wrap(shown(r.value),f,6,115).slice(0,2).forEach((s,j)=>text(p,s,x-35,y-18-j*8,f,6,C.ink));});
+}
+function drawChain(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
+ const names=["CONTENT","DISCOVERY","LISTENER ACTION"];
+ names.forEach((name,i)=>{const x=g.x+82+i*166,y=g.contentBottom+78;if(i<2)line(p,x+30,y,g.x+82+(i+1)*166-30,y,C.blue,1.5);p.drawCircle({x,y,size:25,borderColor:color(i),borderWidth:1.3,color:C.white});text(p,name,x-30,y-3,b,4.7,color(i));wrap(shown(rows[i]?.value),f,5.8,110).slice(0,2).forEach((s,j)=>text(p,s,x-54,y-39-j*8,f,5.8,C.ink));});
+}
+export function drawChartPanel(page:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont):void{
+ const kind=input.kind??"bars",height=chartPanelHeight(kind),g=drawFrame(page,input,font,bold,height);
+ switch(kind){
+  case "sonic":drawSonic(page,input.rows,font,bold,g);break;
+  case "layers":drawLayers(page,input.rows,font,bold,g);break;
+  case "radar":drawRadar(page,input.rows,font,bold,g);break;
+  case "tension":drawTension(page,input.rows,font,bold,g);break;
+  case "spectrum":drawSpectrum(page,input.rows,font,bold,g);break;
+  case "constellation":drawConstellation(page,input.rows,font,bold,g);break;
+  case "timeline":drawTimeline(page,input.rows,font,bold,g);break;
+  case "chain":drawChain(page,input.rows,font,bold,g);break;
+  default:drawBars(page,input.rows,font,bold,g);
+ }
+}
+export interface EvidenceLayerCounts{OBSERVED:number;RECOGNIZED:number;RECONCILED:number;INFERRED:number;}
+export function countEvidenceLayers(labels:Array<{label:string}>):EvidenceLayerCounts{
+ const counts:EvidenceLayerCounts={OBSERVED:0,RECOGNIZED:0,RECONCILED:0,INFERRED:0};
+ for(const item of labels){if(Object.prototype.hasOwnProperty.call(counts,item.label))counts[item.label as keyof EvidenceLayerCounts]+=1;}
+ return counts;
 }

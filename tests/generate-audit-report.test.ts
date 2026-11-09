@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it } from "vitest";
-import { checkLayout,checkPageDensity,generateAuditReport,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,generateAuditReport,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
 describe("A4 report layout and fixture coverage",()=>{
@@ -13,7 +13,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(checkPageDensity([{x:48,y:600,width:499,height:100,id:"sparse"}]).ok).toBe(false);
   expect(checkPageDensity([],true).ok).toBe(true);
  });
- it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
+ it("checks chart-caption separation for every chart in all four fixtures",()=>{\n  for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);\n });\n it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
   for(const input of fixtures)for(const tier of ["sample","full"] as const){
    const bytes=await generateAuditReport(input,tier),pdf=await PDFDocument.load(bytes);
    for(const page of pdf.getPages()){const size=page.getSize();expect(size.width).toBeCloseTo(595.28,0);expect(size.height).toBeCloseTo(841.89,0);}

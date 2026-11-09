@@ -40,7 +40,7 @@ describe("native PDF chart helpers", () => {
       shows: "supplied values", cantShow: "unknown values",
     }, font, bold)).not.toThrow();
 
-    expect(await pdf.save()).toBeInstanceOf(Uint8Array);
+    const nullRows=[{label:"Null metric",value:null},{label:"Missing metric",value:undefined}];\n    for(const kind of ["bars","sonic","spectrum","constellation","layers","tension","timeline","chain","radar"] as const){\n      const nullPage=pdf.addPage([595.28,841.89]);\n      expect(()=>drawChartPanel(nullPage,{title:"Null "+kind,kind,rows:nullRows,shows:"no supplied values",cantShow:"unknown measurements"},font,bold)).not.toThrow();\n    }\n    expect(await pdf.save()).toBeInstanceOf(Uint8Array);
   });
 
   it("renders the long-form fixture with full-length chart captions and narrative content", async () => {

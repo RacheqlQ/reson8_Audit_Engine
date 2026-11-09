@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import type { ArAssessment } from "../providers/groq/client.js";
 import { loadReportFonts } from "./fonts.js";
-import { chartPanelHeight, countEvidenceLayers, drawChartPanel, type ChartPanelInput } from "./charts.js";
+import { chartPanelHeight, chartCaptionCollisionErrors, countEvidenceLayers, drawChartPanel, type ChartPanelInput } from "./charts.js";
 
 export type AuditReportTier = "sample" | "full";
 export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; }
@@ -79,7 +79,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  {title:"Tempo and energy spectrum",kind:"spectrum",unavailable:!hasAudio,rows:[{label:"TEMPO",value:hasAudio?chartValue(s?.bpm):null},{label:"RMS ENERGY",value:hasAudio?chartValue(s?.rmsEnergy):null},{label:"DYNAMIC RANGE",value:hasAudio?chartValue(s?.dynamicRangeDb):null}],shows:"Available master-derived tempo and energy measurements.",cantShow:"A genre verdict or listener reaction from these measurements alone."}];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"Dynamic / loudness",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
- if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",rows:[{label:"Strengths",value:a.strengths.length},{label:"Risks",value:a.risks.length}],shows:"Counts of documented strengths and risks in the assessment.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
+ if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",rows:[{label:"Strengths",value:a.strengths.length},{label:"Risks",value:a.risks.length},...a.strengths.slice(0,10).map(v=>({label:v.split(/\s+/).slice(0,10).join(" "),value:null})),...a.risks.slice(0,10).map(v=>({label:v.split(/\s+/).slice(0,10).join(" "),value:null}))],shows:"Counts of documented strengths and risks in the assessment.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
  if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:a.promotionPlan.playlistCategories[0]??"Category to investigate"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
  if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
  return [];
@@ -107,14 +107,17 @@ function sections(i:AuditReportInput):Section[]{
  {title:"Decision record and evidence gates",accent:"coral",body:[a.releaseStrategy.recommendation,...a.releaseStrategy.priorities.map((p,n)=>"Priority "+(n+1)+": "+p),"Evidence gaps: "+a.evidenceGaps.join(" "),"Limitations: "+a.limitations.join(" ")]}
  ];
 }
+export function chartLayoutIssuesForReport(input:AuditReportInput):string[]{
+ const issues:string[]=[];for(const section of sections(input)){for(const panel of chartsForSection(input,section.title)){issues.push(...chartCaptionCollisionErrors(panel.kind??"bars",panel.rows,M,TOP,chartPanelHeight(panel.kind)));}}return issues;
+}
 export function planAuditReportPages(input:AuditReportInput,tier:AuditReportTier):ReportPagePlan[]{const all=sections(input);return (tier==="sample"?all.slice(0,8):all).map(s=>({title:s.title,text:s.body}));}
 export async function generateAuditReport(input:AuditReportInput,tier:AuditReportTier):Promise<Uint8Array>{
  const pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);cover(pdf,input,fonts);
  const selected=tier==="sample"?sections(input).slice(0,8):sections(input);
  const estimatedHeight=selected.reduce((total,section)=>{
-  const titleHeight=wrap(section.title,fonts.bold,15,W-2*M-34).length*20+10;
+  const titleHeight=wrap(section.title,fonts.bold,19.5,W-2*M-34).length*25+10;
   const bodyHeight=section.body.reduce((sum,para)=>{
-   const size=para===para.toUpperCase()&&para.length<100?7.2:8.7,lineHeight=size*1.42;
+   const size=para===para.toUpperCase()&&para.length<100?8:9.7,lineHeight=size*1.4;
    const lineCount=wrap(para,fonts.regular,size,W-2*M-16).length;
    const perPage=Math.max(1,Math.floor((AVAILABLE-50)/lineHeight));
    return sum+lineCount*lineHeight+Math.ceil(lineCount/perPage)*8;
@@ -132,19 +135,19 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  const validate=(densityExempt=false)=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));const density=checkPageDensity(rects,densityExempt);if(!density.ok)console.warn("[report-layout] Page "+pageNo+" density below 65% content occupancy ("+Math.round((1-density.emptyRatio)*100)+"%); warning only.");};
  const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent);y=TOP;rects=[];};
  for(let si=0;si<selected.length;si++){
-  const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,15,W-2*M-34),titleH=titleLines.length*20+10;
-  const first=section.body[0]??"",firstSize=first===first.toUpperCase()&&first.length<100?7.2:8.7,firstHeight=wrap(first,fonts.regular,firstSize,W-2*M-16).length*firstSize*1.42+8;
+  const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
+  const first=section.body[0]??"",firstSize=first===first.toUpperCase()&&first.length<100?8:9.7,firstHeight=wrap(first,fonts.regular,firstSize,W-2*M-16).length*firstSize*1.4+8;
   const sonicBlock=section.title==="Sonic DNA and technical profile";
-  const sonicHeight=sonicBlock?section.body.reduce((sum,p)=>{const size=p===p.toUpperCase()&&p.length<100?7.2:8.7;return sum+wrap(p,fonts.regular,size,W-2*M-16).length*size*1.42+8;},0):0;
+  const sonicHeight=sonicBlock?section.body.reduce((sum,p)=>{const size=p===p.toUpperCase()&&p.length<100?8:9.7;return sum+wrap(p,fonts.regular,size,W-2*M-16).length*size*1.4+8;},0):0;
   if(rects.length>0&&y<TOP-targetFill)nextPage(section.title,accent);
   if(y-titleH-firstHeight<BOTTOM+45||(sonicBlock&&y-titleH-sonicHeight<BOTTOM+45))nextPage(section.title,accent);
   const titleRect={x:M,y:y-titleH,width:W-2*M,height:titleH,id:"section-title-"+si};rects.push(titleRect);
   page.drawText(String(si+1).padStart(2,"0"),{x:M,y:y-2,size:8,font:fonts.bold,color:accent});
-  let ty=y;for(const line of titleLines){page.drawText(line,{x:M+34,y:ty,size:15,font:fonts.bold,color:C.navy});ty-=20;}y=ty-10;
+  let ty=y;for(const line of titleLines){page.drawText(line,{x:M+34,y:ty,size:19.5,font:fonts.bold,color:C.navy});ty-=25;}y=ty-10;
   for(let pi=0;pi<section.body.length;pi++){
    if(pi>0&&rects.length>0&&y<TOP-targetFill)nextPage(section.title,accent);
-   const para=section.body[pi],size=para===para.toUpperCase()&&para.length<100?7.2:8.7;
-   const lines=wrap(para,fonts.regular,size,W-2*M-16),lineHeight=size*1.42;
+   const para=section.body[pi],size=para===para.toUpperCase()&&para.length<100?8:9.7;
+   const lines=wrap(para,fonts.regular,size,W-2*M-16),lineHeight=size*1.4;
    let offset=0,chunk=0;
    while(offset<lines.length){
     let capacity=Math.floor((y-BOTTOM-8)/lineHeight);
@@ -152,14 +155,22 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
     const count=Math.min(capacity,lines.length-offset),height=count*lineHeight+8;
     const r={x:M,y:y-height,width:W-2*M,height,id:"section-"+si+"-paragraph-"+pi+"-part-"+chunk};rects.push(r);
 
-    for(let li=0;li<count;li++){const line=lines[offset+li];if(fonts.regular.widthOfTextAtSize(line,size)>W-2*M-16+.01)throw new Error("Text width overflow in "+r.id);page.drawText(line,{x:M+8,y:y-li*lineHeight,size,font:fonts.regular,color:size<8?accent:C.ink});}
+    for(let li=0;li<count;li++){const line=lines[offset+li];if(fonts.regular.widthOfTextAtSize(line,size)>W-2*M-16+.01)throw new Error("Text width overflow in "+r.id);page.drawText(line,{x:M+8,y:y-li*lineHeight,size,font:fonts.regular,color:size<9?accent:C.ink});}
     y-=height;offset+=count;chunk++;
     if(offset<lines.length)nextPage(section.title,accent);
    }
   }
   for(const panel of chartsForSection(input,section.title)){
    const panelHeight=chartPanelHeight(panel.kind);
-   if(y-panelHeight<BOTTOM+45)nextPage(section.title,accent);
+   const captionIssues=chartCaptionCollisionErrors(panel.kind??"bars",panel.rows,M,y-8,panelHeight);if(captionIssues.length)throw new Error(captionIssues.join("; "));
+   if(y-panelHeight<BOTTOM+45){
+    nextPage(section.title,accent);
+    const visualHeading=wrap(section.title,fonts.bold,14,W-2*M-20);
+    visualHeading.forEach((part,index)=>page.drawText(part,{x:M+8,y:TOP-20-index*18,size:14,font:fonts.bold,color:accent}));
+    page.drawText("Visual summary of the evidence and recommendations in this section.",{x:M+8,y:TOP-20-visualHeading.length*18,size:9.7,font:fonts.regular,color:C.muted});
+    rects.push({x:M+8,y:TOP-20-visualHeading.length*18-5,width:W-2*M-16,height:visualHeading.length*18+30,id:"chart-context-"+si});
+    y=TOP-20-visualHeading.length*18-35;
+   }
    const panelTop=y-8;
    drawChartPanel(page,{...panel,y:panelTop},fonts.regular,fonts.bold);
    rects.push({x:M,y:panelTop-panelHeight,width:W-2*M,height:panelHeight,id:"chart-"+si+"-"+panel.title.replace(/\s+/g,"-")});
