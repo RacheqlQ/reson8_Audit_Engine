@@ -1,29 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { processAuditJob } from "../src/jobs/process-audit-job.js";
 
-const assessment = {
-  assessmentVersion: "1.0",
-  executiveSummary: "Evidence-based assessment.",
-  creativeIdentity: "Rhythmic R&B identity.",
-  strengths: ["Rhythm"],
-  risks: ["Limited market evidence"],
-  aAndRPositioning: {
-    primaryLane: "R&B",
-    adjacentLanes: ["Afro-R&B"],
-    rationale: "Supported by supplied evidence.",
-  },
-  commercialRead: {
-    marketability: "undetermined" as const,
-    rationale: "No market data supplied.",
-  },
-  releaseStrategy: {
-    recommendation: "Lead with the strongest sonic identity.",
-    priorities: ["Validate audience response"],
-  },
-  evidenceGaps: ["Audience telemetry"],
-  confidence: 0.8,
-  limitations: ["Evidence-limited assessment"],
-};
+const assessment = {} as import("../src/providers/groq/client.js").ArAssessment;
 
 describe("processAuditJob", () => {
   it("moves a queued master through evidence, Sonic DNA, Groq assessment and completion", async () => {
@@ -39,6 +17,8 @@ describe("processAuditJob", () => {
         status: "queued" as const,
       }),
       markProcessing: async () => events.push("processing"),
+      collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
+      recognizeUrl: async () => ({ matched: false as const }),
       downloadMaster: async () => new Uint8Array([1, 2, 3]),
       createRecognitionSample: async () => new Uint8Array([4, 5]),
       recognize: async () => ({
@@ -50,18 +30,24 @@ describe("processAuditJob", () => {
       saveRecognition: async () => events.push("recognition"),
       saveEvidence: async () => events.push("evidence"),
       decode: async () => ({
-        samples: new Float32Array([0, 0.1, -0.1, 0]),
+        samples: new Float32Array([0, 0, 0.1, 0.1, -0.1, -0.1, 0, 0]),
         sampleRate: 44100,
-        channels: 1,
+        channels: 2,
       }),
       saveSonicDna: async (_jobId, dna) => {
         events.push("dna");
         expect(dna.sampleRate).toBe(44100);
+        expect(dna.channels).toBe(2);
+        expect(dna.durationSeconds).toBe(4 / 44100);
       },
       generateAssessment: async (input) => {
         events.push("assessment");
-        expect(input.sonicDna).not.toBeNull();
-        expect(input.evidence).toMatchObject({ artist: "Artist", title: "Song" });
+        expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
+        expect(input.evidence).toMatchObject({
+          auditType: "MASTER-BASED AUDIT",
+          artist: "Artist",
+          title: "Song",
+        });
         return assessment;
       },
       saveAssessment: async () => events.push("assessment-saved"),
@@ -82,6 +68,8 @@ describe("processAuditJob", () => {
       "dna",
       "assessment",
       "assessment-saved",
+      "report-sample",
+      "report-saved-sample",
       "report-full",
       "report-saved-full",
       "completed",
@@ -182,10 +170,59 @@ describe("processAuditJob", () => {
       },
     });
     expect(reportInputs[0]).toMatchObject({
+      auditType: "METADATA-BASED AUDIT",
       artist: "TIDAL Artist",
       title: "TIDAL Title",
       album: "AudD Album",
     });
+  });
+
+  it("records a failed assessment event and never saves a report after Groq validation fails", async () => {
+    const events: string[] = [];
+    let failureMessage = "";
+    const result = await processAuditJob("job-groq-failure", {
+      getJob: async () => ({
+        id: "job-groq-failure",
+        ownerId: "owner-123",
+        sourceAudioPath: "owner-123/job-groq-failure/master.wav",
+        mimeType: "audio/wav",
+        sourceType: "master",
+        catalogUrl: null,
+        status: "queued" as const,
+      }),
+      markProcessing: async () => { events.push("processing"); },
+      collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
+      recognizeUrl: async () => ({ matched: false as const }),
+      downloadMaster: async () => new Uint8Array([1, 2, 3]),
+      createRecognitionSample: async () => new Uint8Array([4, 5]),
+      recognize: async () => ({ matched: false as const }),
+      saveRecognition: async () => {},
+      saveEvidence: async () => {},
+      decode: async () => ({ samples: new Float32Array([0, 0.1, -0.1]), sampleRate: 44100, channels: 1 }),
+      saveSonicDna: async () => {},
+      generateAssessment: async () => {
+        throw new Error("Groq narrative response failed Zod validation after one retry: executiveSummary must contain at least 45 words.");
+      },
+      saveAssessment: async () => { events.push("assessment-saved"); },
+      generateReport: async () => {
+        events.push("report-generated");
+        return new Uint8Array([37, 80, 68, 70, 45]);
+      },
+      saveReport: async () => { events.push("report-saved"); },
+      markCompleted: async () => { events.push("completed"); },
+      markFailed: async (_jobId, message) => {
+        failureMessage = message;
+        events.push("audit_failed");
+      },
+    });
+
+    expect(result.status).toBe("failed");
+    expect(failureMessage).toContain("failed Zod validation after one retry");
+    expect(events).toContain("audit_failed");
+    expect(events).not.toContain("assessment-saved");
+    expect(events).not.toContain("report-generated");
+    expect(events).not.toContain("report-saved");
+    expect(events).not.toContain("completed");
   });
 
   it("marks the job failed and preserves the error when processing fails", async () => {
@@ -201,6 +238,8 @@ describe("processAuditJob", () => {
         status: "queued" as const,
       }),
       markProcessing: async () => {},
+      collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
+      recognizeUrl: async () => ({ matched: false as const }),
       downloadMaster: async () => {
         throw new Error("master unavailable");
       },

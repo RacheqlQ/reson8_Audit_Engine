@@ -132,8 +132,9 @@ function reconciliationEvidence(reconciliation: MetadataReconciliation): Record<
   };
 }
 
-function catalogEvidence(metadata: CatalogMetadata, identity: TrackIdentity, reconciliation?: MetadataReconciliation): Record<string, unknown> {
+function catalogEvidence(metadata: CatalogMetadata, identity: TrackIdentity): Record<string, unknown> {
   return {
+    auditType: "METADATA-BASED AUDIT",
     status: metadata.evidenceStatus,
     platform: metadata.platform,
     artist: metadata.artist,
@@ -178,12 +179,17 @@ function catalogSonicDna(metadata: CatalogMetadata): Record<string, unknown> | n
 
 function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
   return {
+    provenance: "uploaded_audio_master",
     sampleRate: dna.sampleRate,
     channels: dna.channels,
     durationSeconds: dna.durationSeconds,
     bpm: dna.bpm,
+    alternateTempo: dna.alternateTempo,
+    tempoConfidence: dna.tempoConfidence,
     key: dna.key,
     mode: dna.mode,
+    keyConfidence: dna.keyConfidence,
+    limitations: dna.limitations,
     loudnessLufs: dna.loudnessLufs,
     rmsEnergy: dna.rmsEnergy,
     dynamicRangeDb: dna.dynamicRangeDb,
@@ -231,12 +237,13 @@ export async function processAuditJob(
       const identity = reconciliation.identity;
       const evidence = recognition
         ? {
+            auditType: "METADATA-BASED AUDIT",
             ...recognitionEvidence(recognition),
             ...identityEvidence(identity),
             identity: identityEvidence(identity),
             reconciliation: reconciliationEvidence(reconciliation),
           }
-        : catalogEvidence(metadata, identity, reconciliation);
+        : catalogEvidence(metadata, identity);
       const sonicDna = catalogSonicDna(metadata);
       const assessment = await deps.generateAssessment({
         evidence,
@@ -246,10 +253,10 @@ export async function processAuditJob(
       await deps.saveAssessment(jobId, assessment);
 
       const generatedAt = new Date().toISOString();
-      const pdf = await deps.generateReport(
-        { auditId: jobId, generatedAt, evidence, sonicDna, assessment },
-        "full",
-      );
+      const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
+      const samplePdf = await deps.generateReport(reportInput, "sample");
+      await deps.saveReport(jobId, "sample", samplePdf);
+      const pdf = await deps.generateReport(reportInput, "full");
       await deps.saveReport(jobId, "full", pdf);
 
       await deps.markCompleted(jobId);
@@ -263,12 +270,12 @@ export async function processAuditJob(
     await deps.saveRecognition(jobId, recognition);
     await deps.saveEvidence(jobId, recognition);
     const decoded = await deps.decode(master, job.mimeType);
-    const dna = analyzePcm(decoded.samples, decoded.sampleRate);
+    const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
     const normalizedDna = {
       ...dna,
       sampleRate: decoded.sampleRate,
       channels: decoded.channels,
-      durationSeconds: decoded.samples.length / decoded.sampleRate,
+      durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
     };
     await deps.saveSonicDna(jobId, normalizedDna);
 
@@ -278,6 +285,7 @@ export async function processAuditJob(
     });
     const identity = reconciliation.identity;
     const evidence = {
+      auditType: "MASTER-BASED AUDIT",
       ...recognitionEvidence(recognition),
       ...identityEvidence(identity),
       identity: identityEvidence(identity),
@@ -291,10 +299,10 @@ export async function processAuditJob(
     });
     await deps.saveAssessment(jobId, assessment);
     const generatedAt = new Date().toISOString();
-    const pdf = await deps.generateReport(
-      { auditId: jobId, generatedAt, evidence, sonicDna, assessment },
-      "full",
-    );
+    const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
+    const samplePdf = await deps.generateReport(reportInput, "sample");
+    await deps.saveReport(jobId, "sample", samplePdf);
+    const pdf = await deps.generateReport(reportInput, "full");
     await deps.saveReport(jobId, "full", pdf);
 
     await deps.markCompleted(jobId);

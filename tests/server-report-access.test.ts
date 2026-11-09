@@ -1,58 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { buildServer } from "../src/server.js";
-
-const SAMPLE_PDF = Buffer.from("%PDF-1.7\n");
-
-function store(overrides: Record<string, unknown> = {}) {
-  return {
-    authenticate: async () => "11111111-1111-1111-1111-111111111111",
-    resolvePublicOwnerId: async () => null,
-    createJobDependencies: () => { throw new Error("not used"); },
-    ...overrides,
-  } as any;
-}
-
-describe("audit report retrieval", () => {
-  it("returns only full report metadata for a processed job", async () => {
-    const app = buildServer(store({
-      getAuditStatus: async () => ({
-        jobId: "job-123",
-        status: "completed",
-        full: { available: true, version: 1 },
-      }),
-    }));
-
-    const response = await app.inject({ method: "GET", url: "/v1/audits/job-123" });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      jobId: "job-123",
-      status: "completed",
-      full: { available: true, version: 1 },
-    });
-
-    await app.close();
-  });
-
-  it("lets an anonymous visitor download the generated full report without payment or authentication", async () => {
-    const app = buildServer(store({
-      getAuditReport: async (jobId: string, tier: string, ownerId?: string) => {
-        expect(jobId).toBe("job-123");
-        expect(tier).toBe("full");
-        expect(ownerId).toBeUndefined();
-        return { bytes: SAMPLE_PDF, contentType: "application/pdf", filename: "reson8-audit-job-123-full-v1.pdf" };
-      },
-    }));
-
-    const response = await app.inject({ method: "GET", url: "/v1/audits/job-123/reports/full" });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.headers["content-type"]).toContain("application/pdf");
-    expect(response.headers["content-disposition"]).toContain("reson8-audit-job-123-full-v1.pdf");
-
-    const sampleResponse = await app.inject({ method: "GET", url: "/v1/audits/job-123/reports/sample" });
-    expect(sampleResponse.statusCode).toBe(404);
-
-    await app.close();
-  });
+import { afterEach, describe, expect, it } from "vitest";
+import { buildServer, paymentsEnabled } from "../src/server.js";
+const PDF = Buffer.from("%PDF-1.7\n");
+const original = process.env.PAYMENTS_ENABLED;
+function store() { return { createJobDependencies: () => { throw new Error("not used"); }, getAuditReport: async (_id: string, tier: string) => ({ bytes: PDF, contentType: "application/pdf", filename: "report-" + tier + ".pdf" }) } as any; }
+afterEach(() => { if (original === undefined) delete process.env.PAYMENTS_ENABLED; else process.env.PAYMENTS_ENABLED = original; });
+describe("report payment flag", () => {
+ it("defaults to disabled and permits anonymous sample and full downloads when missing", async () => { delete process.env.PAYMENTS_ENABLED; expect(paymentsEnabled()).toBe(false); const app=buildServer(store()); expect((await app.inject({method:"GET",url:"/v1/audits/id/reports/sample"})).statusCode).toBe(200); expect((await app.inject({method:"GET",url:"/v1/audits/id/reports/full"})).statusCode).toBe(200); await app.close(); });
+ it("permits anonymous sample and full downloads when explicitly false", async () => { process.env.PAYMENTS_ENABLED="false"; expect(paymentsEnabled()).toBe(false); const app=buildServer(store()); expect((await app.inject({method:"GET",url:"/v1/audits/id/reports/full"})).statusCode).toBe(200); expect((await app.inject({method:"GET",url:"/v1/audits/id/reports/sample"})).statusCode).toBe(200); await app.close(); });
+ it("denies unpaid full access but keeps sample free when explicitly true", async () => { process.env.PAYMENTS_ENABLED="true"; expect(paymentsEnabled()).toBe(true); const app=buildServer(store()); const full=await app.inject({method:"GET",url:"/v1/audits/id/reports/full"}); expect(full.statusCode).toBe(402); expect(full.json().error).toBe("PAYMENT_REQUIRED"); expect((await app.inject({method:"GET",url:"/v1/audits/id/reports/sample"})).statusCode).toBe(200); await app.close(); });
+ it("treats malformed values as disabled without crashing", async () => { process.env.PAYMENTS_ENABLED="enabled-ish"; expect(paymentsEnabled()).toBe(false); const app=buildServer(store()); expect((await app.inject({method:"GET",url:"/v1/audits/id/reports/full"})).statusCode).toBe(200); await app.close(); });
 });

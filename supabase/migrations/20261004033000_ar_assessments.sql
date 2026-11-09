@@ -18,6 +18,7 @@ create index if not exists audit_assessments_job_idx
 alter table public.audit_assessments enable row level security;
 
 drop policy if exists audit_assessments_no_public_access on public.audit_assessments;
+drop policy if exists audit_assessments_service_only on public.audit_assessments;
 create policy audit_assessments_no_public_access
   on public.audit_assessments
   for all

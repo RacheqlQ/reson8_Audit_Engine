@@ -17,6 +17,8 @@ create index if not exists audit_reports_job_idx
 
 alter table public.audit_reports enable row level security;
 
+drop policy if exists audit_reports_service_only on public.audit_reports;
+
 create policy audit_reports_service_only
   on public.audit_reports
   for all

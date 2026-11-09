@@ -1,85 +1,72 @@
 import { describe, expect, it, vi } from "vitest";
-import { GroqClient } from "../src/providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GroqClient, GROQ_PROMPT_VERSION } from "../src/providers/groq/client.js";
 
-describe("GroqClient", () => {
-  it("parses a strict JSON A&R assessment from Groq", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      choices: [{
-        message: {
-          content: JSON.stringify({
-            assessmentVersion: "1.0",
-            executiveSummary: "Strong rhythmic identity with a clear low-energy R&B lane.",
-            creativeIdentity: "Introspective, groove-led R&B with a dark tonal profile.",
-            strengths: ["Rhythmic identity", "Controlled energy"],
-            risks: ["Limited evidence for market performance"],
-            aAndRPositioning: {
-              primaryLane: "Afro-R&B",
-              adjacentLanes: ["Alternative R&B"],
-              rationale: "The observed Sonic DNA supports the lane."
-            },
-            commercialRead: {
-              marketability: "undetermined",
-              rationale: "No market-performance evidence was supplied."
-            },
-            releaseStrategy: {
-              recommendation: "Position around the song's strongest sonic identity.",
-              priorities: ["Lead with the strongest hook", "Validate audience response"]
-            },
-            evidenceGaps: ["No audience telemetry supplied"],
-            confidence: 0.82,
-            limitations: ["Assessment is limited to supplied evidence."]
-          })
-        }
-      }]
-    }), { status: 200, headers: { "content-type": "application/json" } }));
-
-    const client = new GroqClient("test-key", "test-model", fetchMock as typeof fetch);
-    const result = await client.assess({
-      evidence: {
-        status: "verified",
-        artist: "Artist",
-        title: "Song",
-        isrc: "NGABC2600001",
-        sources: ["audd", "spotify"]
-      },
-      sonicDna: {
-        bpm: 94,
-        key: null,
-        mode: null,
-        loudnessLufs: -12.4,
-        rmsEnergy: 0.08,
-        dynamicRangeDb: 9.2,
-        spectralCentroidHz: 1800,
-        spectralBandwidthHz: 0,
-        spectralRolloffHz: 0,
-        zeroCrossingRate: 0.04,
-        moodTags: ["Low Energy"],
-        genreContext: ["R&B", "Afrobeats"]
-      }
-    });
-
-    expect(result.assessmentVersion).toBe("1.0");
-    expect(result.confidence).toBe(0.82);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(String((fetchMock.mock.calls[0] as any)[1].body));
-    expect(body.model).toBe("test-model");
-    expect(body.response_format.type).toBe("json_schema");
-    expect(body.response_format.json_schema.name).toBe("ar_assessment");
-    expect(body.response_format.json_schema.strict).toBe(true);
-    expect(body.response_format.json_schema.schema.properties.assessmentVersion).toBeDefined();
-    expect(body.response_format.json_schema.schema.required).toContain("executiveSummary");
+const long=(s:string,n=65)=>{let v=s;while(v.trim().split(/\s+/).length<n)v+=" "+s;return v;};
+const p=(group:string):Record<string,unknown>=>{
+ const rationale=long("The supplied evidence supports this limited assessment while important source limitations remain and require verification before any external decision.");
+ switch(group){
+ case "narrative":return {assessmentVersion:"3.0",executiveSummary:long("This assessment separates supplied track evidence from interpretation and general industry practice. No unsupported audience or commercial claims are made."),creativeIdentity:long("This creative identity description is a provisional interpretation of the supplied evidence and requires full listening review before external use."),strengths:[long("The source record provides a traceable identity field for this assessment."),long("The supplied evidence supports a limited and clearly bounded analysis."),long("The assessment records the outstanding verification requirements.")],risks:[long("No verified audience telemetry is present to establish demand or conversion."),long("Rights and release readiness require independent source verification.")]};
+ case "positioning":return {aAndRPositioning:{primaryLane:"R&B",adjacentLanes:["Alternative R&B"],rationale},commercialRead:{marketability:"high",rationale}};
+ case "release":return {releaseStrategy:{recommendation:rationale,priorities:[long("Verify master and release identity fields against authoritative source records."),long("Complete a human listening review and document time-coded observations."),long("Collect platform-native performance data before making commercial claims.")] }};
+ case "evidence-score":return {evidenceGaps:[long("No verified audience telemetry or conversion evidence was supplied.")],confidence:0.5,limitations:[long("The assessment is limited to the evidence fields supplied for this request.")],scorecard:Object.fromEntries(["tempoLaneFit","rhythmicConsistency","dynamicRangeLoudness","metadataCompleteness","releaseReadiness"].map(k=>[k,{score:k==="dynamicRangeLoudness"?76:k==="metadataCompleteness"?65:k==="releaseReadiness"?55:null,rationale}])),humanListeningChecklist:["Does the opening create a clear reason to continue listening?","Can the hook be recalled after one play and which phrase carries it?","Does the vocal delivery communicate a distinctive point of view?","What feels genuinely original against verified references, and what production details should be checked?","Does the arrangement create development and payoff without excess repetition?","Can a first-time listener describe the lane without prompting, and which audible details support it?"].map(x=>long(x,8)),evidenceLabels:[{label:"INDUSTRY PRACTICE",claim:long("General release craft guidance is separate from claims about this particular recording."),source:"industry_practice"}]};
+ case "production":return {productionArrangementGuidance:rationale,industryPractice:rationale,listeningChecks:[long("Check the opening and section transitions against the complete approved master."),long("Review vocal and instrumental balance across dense and sparse sections."),long("Check low-end translation and the ending on multiple playback systems."),long("Record any production observation with a time-coded reference.") ]};
+ case "comparables":return {laneHypothesis:rationale,referencesToVerify:[long("Search verified releases for similar arrangement and vocal treatment."),long("Compare tempo feel and sound palette using full recordings."),long("Verify release identity and context before naming a reference.")],verificationMethod:rationale};
+ case "promotion":return {promotionPlan:{preRelease:rationale,releaseWindow:rationale,postRelease:rationale,contentIdeas:[long("Create an approved performance excerpt."),long("Prepare a verified artist-story clip."),long("Develop a rights-cleared production breakdown."),long("Test an approved visual motif.")],pitchingAngles:[long("Lead with the verified musical feature that distinguishes the approved recording."),long("Connect the artist story to a specific and source-checked release reason."),long("Frame the track for a relevant lane category without implying acceptance.")],playlistCategories:["Lane-specific R&B discovery","Alternative R&B programming","Mood-led independent discovery"].map(x=>long(x,4)),industryPractice:rationale}};
+ case "label-fit":return {labelPartnerFit:{partnerProfile:rationale,criteriaToDemonstrate:[long("Demonstrate a clear artist proposition with approved recordings."),long("Provide complete rights and credits information."),long("Show a consistent creative direction."),long("Document a credible release plan and responsibilities.")],diligenceBeforeContact:rationale,industryPractice:rationale}};
+ default:return {executionPlan:{days30:rationale,days60:rationale,days90:rationale}};
+ }
+};
+function fetchMock(invalid?:string){const counts=new Map<string,number>();const mock=vi.fn(async (_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const name=body.response_format.json_schema.name.replace(/^ar_/,"");const n=(counts.get(name)??0)+1;counts.set(name,n);const value=name===invalid&&n===1?{}:p(name);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});return {mock,counts};}
+describe("GroqClient section groups",()=>{
+ it("requests and validates all nine Zod section groups with evidence guardrails",async()=>{
+  let active=0,maxActive=0;
+  const {mock:baseMock}=fetchMock();
+  const mock=vi.fn(async(url:RequestInfo|URL,init?:RequestInit)=>{
+    active++;maxActive=Math.max(maxActive,active);
+    await Promise.resolve();
+    const result=await (baseMock as typeof fetch)(url,init);
+    active--;return result;
   });
-
-  it("rejects non-JSON or schema-invalid model output", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      choices: [{ message: { content: "not-json" } }]
-    }), { status: 200 }));
-
-    const client = new GroqClient("test-key", "test-model", fetchMock as typeof fetch);
-
-    await expect(client.assess({
-      evidence: { status: "unresolved", sources: [] },
-      sonicDna: null
-    })).rejects.toThrow();
+  const client=new GroqClient("test-key",undefined,mock as typeof fetch,async()=>{});
+  const result=await client.assess({evidence:{artist:"Fixture Artist"},sonicDna:null});
+  expect(mock).toHaveBeenCalledTimes(9);expect(maxActive).toBeLessThanOrEqual(3);expect(maxActive).toBe(3);expect(result.scorecard.tempoLaneFit.score).toBeNull();expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();expect(result.commercialRead.marketability).toBe("undetermined");expect(result.scorecard.metadataCompleteness.score).toBe(65);expect(result.scorecard.releaseReadiness.score).toBeNull();
+  expect(result.evidenceLabels[0].label).toBe("INDUSTRY PRACTICE");expect(result.humanListeningChecklist.length).toBeGreaterThanOrEqual(5);
+  expect(result.productionArrangementGuidance).toBeTruthy();expect(result.promotionPlan.playlistCategories.length).toBeGreaterThanOrEqual(3);expect(result.promotionPlan.pitchingAngles.length).toBeGreaterThanOrEqual(3);
+  for(const call of mock.mock.calls){const body=JSON.parse(String(call[1]?.body));expect(body.model).toBe(DEFAULT_GROQ_MODEL);expect(body.response_format.type).toBe("json_schema");expect(body.messages[0].content).toContain("Never invent streams");expect(body.messages[1].content).toContain(GROQ_PROMPT_VERSION);}
+ });
+ it("leaves metadata and release scores null when identity evidence is absent",async()=>{
+  const {mock}=fetchMock();const client=new GroqClient("test-key","test-model",mock as typeof fetch);
+  const result=await client.assess({evidence:{},sonicDna:null});
+  expect(result.scorecard.metadataCompleteness.score).toBeNull();expect(result.scorecard.releaseReadiness.score).toBeNull();
+ });
+ it("retains dynamic-range scoring only when uploaded-master measurements exist",async()=>{
+  const {mock}=fetchMock();const client=new GroqClient("test-key","test-model",mock as typeof fetch);
+  const result=await client.assess({evidence:{},sonicDna:{provenance:"uploaded_audio_master",bpm:96,dynamicRangeDb:8.4,loudnessLufs:-9.8}});
+  expect(result.scorecard.dynamicRangeLoudness.score).toBe(76);
+ });
+ it("retries a section once after schema validation fails",async()=>{const {mock,counts}=fetchMock("production");const client=new GroqClient("test-key","test-model",mock as typeof fetch);await client.assess({evidence:{},sonicDna:null});expect(counts.get("production")).toBe(2);expect(mock).toHaveBeenCalledTimes(10);});
+ it("retries schema-valid output that misses a section word threshold",async()=>{
+  const counts=new Map<string,number>();
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   const n=(counts.get(group)??0)+1;counts.set(group,n);let value=p(group);
+   if(group==="production"&&n===1)value={...p(group),productionArrangementGuidance:Array(30).fill("arrangement").join(" ")};
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});
   });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch);
+  await client.assess({evidence:{},sonicDna:null});
+  expect(counts.get("production")).toBe(2);
+ });
+ it("retries a mocked rate-limit response and succeeds",async()=>{
+  let narrativeCalls=0;
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="narrative"&&narrativeCalls++===0)return new Response("rate limited",{status:429,headers:{"retry-after":"0"}});
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  const result=await client.assess({evidence:{},sonicDna:null});
+  expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);
+ });
+ it("stops after one retry when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=body.response_format.json_schema.name.replace(/^ar_/,"");const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed Zod validation after one retry");expect(mock.mock.calls.filter(c=>JSON.parse(String(c[1]?.body)).response_format.json_schema.name==="ar_narrative")).toHaveLength(2);});
 });

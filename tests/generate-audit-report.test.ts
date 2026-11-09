@@ -1,77 +1,50 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
-import { describe, expect, it } from "vitest";
-import { generateAuditReport, type AuditReportInput } from "../src/reports/generate-audit-report.js";
-
-const input: AuditReportInput = {
-  auditId: "job-123",
-  generatedAt: "2026-10-04T03:00:00.000Z",
-  evidence: {
-    status: "verified",
-    artist: "Artist",
-    title: "Song",
-    isrc: "NGABC2600001",
-    sources: ["audd", "spotify"],
-  },
-  sonicDna: {
-    provenance: "tidal_catalog_metadata",
-    bpm: 94,
-    key: null,
-    mode: null,
-    loudnessLufs: -12.4,
-    rmsEnergy: 0.08,
-    dynamicRangeDb: 9.2,
-    spectralCentroidHz: 1800,
-    moodTags: ["Low Energy"],
-    genreContext: ["R&B", "Afrobeats"],
-  },
-  assessment: {
-    assessmentVersion: "1.0",
-    executiveSummary: "Strong rhythmic identity.",
-    creativeIdentity: "Introspective R&B.",
-    strengths: ["Rhythm", "Vocal identity"],
-    risks: ["Limited market evidence"],
-    aAndRPositioning: {
-      primaryLane: "Afro-R&B",
-      adjacentLanes: ["Alternative R&B"],
-      rationale: "Supported by observed evidence.",
-    },
-    commercialRead: {
-      marketability: "undetermined",
-      rationale: "No market evidence supplied.",
-    },
-    releaseStrategy: {
-      recommendation: "Lead with the strongest sonic identity.",
-      priorities: ["Validate audience response"],
-    },
-    evidenceGaps: ["Audience telemetry"],
-    confidence: 0.82,
-    limitations: ["Evidence-limited assessment"],
-  },
-};
-
-describe("generateAuditReport", () => {
-  it("creates an editable sample PDF that excludes paid-only assessment fields", async () => {
-    const pdf = await generateAuditReport(input, "sample");
-    expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe("%PDF-");
-
-    const document = await PDFDocument.load(pdf);
-    const names = document.getForm().getFields().map((field) => field.getName());
-    expect(names).toContain("executive_summary");
-    expect(names).toContain("creative_identity");
-    expect(names).toContain("ar_positioning");
-    expect(names).not.toContain("risks");
-    expect(names).not.toContain("release_strategy");
-  });
-
-  it("creates a fuller editable PDF containing the paid assessment fields", async () => {
-    const pdf = await generateAuditReport(input, "full");
-    expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe("%PDF-");
-
-    const document = await PDFDocument.load(pdf);
-    const names = document.getForm().getFields().map((field) => field.getName());
-    expect(names).toContain("risks");
-    expect(names).toContain("commercial_read");
-    expect(names).toContain("release_strategy");
-    expect(names).toContain("sonic_dna");
-  });
+import { describe,expect,it } from "vitest";
+import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,generateAuditReport,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
+const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
+describe("A4 report layout and fixture coverage",()=>{
+ it("detects element intersections and page overflow",()=>{
+  expect(checkLayout([{x:0,y:0,width:20,height:20,id:"a"},{x:10,y:10,width:20,height:20,id:"b"}]).ok).toBe(false);
+  expect(checkLayout([{x:590,y:0,width:20,height:20,id:"overflow"}]).ok).toBe(false);
+ });
+ it("enforces the 35 percent maximum empty-area threshold",()=>{
+  expect(checkPageDensity([{x:48,y:76,width:499,height:659,id:"dense"}]).ok).toBe(true);
+  expect(checkPageDensity([{x:48,y:600,width:499,height:100,id:"sparse"}]).ok).toBe(false);
+  expect(checkPageDensity([],true).ok).toBe(true);
+ });
+ it("checks chart-caption separation for every chart in all four fixtures",()=>{
+  for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
+ });
+ it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
+  for(const input of fixtures)for(const tier of ["sample","full"] as const){
+   const bytes=await generateAuditReport(input,tier),pdf=await PDFDocument.load(bytes);
+   for(const page of pdf.getPages()){const size=page.getSize();expect(size.width).toBeCloseTo(595.28,0);expect(size.height).toBeCloseTo(841.89,0);}
+   expect(pdf.getForm().getFields().map(f=>f.getName())).toEqual(["ar_notes"]);
+   expect(pdf.getPageCount()).toBeLessThanOrEqual(20);
+  }
+ });
+ it("marks the audio fixture variants as synthetic, including partial null-key and low-confidence data",()=>{
+  expect(fullAudioFixture.evidence.artist).toBe("Fixture Artist");
+  expect(fullAudioFixture.sonicDna.bpm).toBe(96);
+  expect(partialAudioFixture.sonicDna.key).toBeNull();
+  expect(partialAudioFixture.assessment.confidence).toBe(0.28);
+  expect(metadataOnlyFixture.sonicDna).toBeNull();
+  expect(metadataOnlyFixture.evidence.artist).toBe("Fixture Artist");
+  expect(longFormAudioFixture.evidence.fixture).toBe(true);
+  expect(longFormAudioFixture.assessment.executiveSummary.split(/\s+/).length).toBeGreaterThan(70);
+  expect(longFormAudioFixture.assessment.strengths.length).toBeGreaterThanOrEqual(4);
+ });
+ it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
+  const pages=planAuditReportPages(fixtures[0],"full");
+  const report=pages.flatMap(p=>[p.title,...p.text]).join(" ");
+  expect(report).toContain("Tempo and lane fit");expect(report).toContain("Rhythmic consistency");
+  expect(report).toContain("Dynamic range and loudness readiness");expect(report).toContain("Human listening checklist");
+  expect(report).toContain("INDUSTRY PRACTICE");expect(report).toContain("references to verify");
+ });
+ it("collapses all missing audio measurements into one empty state",()=>{
+  const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");
+  expect(report).toContain("Not measured: no master audio supplied.");
+  expect(report).not.toContain("Key / mode: Not measured");
+ });
 });

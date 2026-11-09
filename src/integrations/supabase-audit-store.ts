@@ -5,7 +5,7 @@ import type { AuditRecognition } from "../providers/audd/normalize.js";
 import { type CatalogMetadata } from "../providers/dsp/catalog.js";
 import { buildSongEvidence } from "../jobs/song-evidence.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
-import type { ArAssessment } from "../providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportTier } from "../reports/generate-audit-report.js";
 import { sha256 } from "../jobs/content-hash.js";
 
@@ -187,16 +187,16 @@ export function createSupabaseAuditStore(
       const { error } = await admin.from("audit_assessments").upsert({
         audit_job_id: jobId,
         provider: "groq",
-        model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
-        prompt_version: "audit-ar-v1",
+        model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
+        prompt_version: GROQ_PROMPT_VERSION,
         status: "completed",
         assessment,
       }, { onConflict: "audit_job_id" });
       if (error) throw new Error(`Unable to save A&R assessment: ${error.message}`);
       await event(jobId, "ar_assessment", "completed", undefined, {
         provider: "groq",
-        model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
-        promptVersion: "audit-ar-v1",
+        model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
+        promptVersion: GROQ_PROMPT_VERSION,
         confidence: assessment.confidence,
       });
     },

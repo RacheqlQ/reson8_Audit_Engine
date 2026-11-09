@@ -15,7 +15,7 @@ export interface AuditStore {
     errorMessage?: string | null;
     full: { available: boolean; version?: number };
   }>;
-  getAuditReport(jobId: string, tier: "full", ownerId?: string): Promise<{
+  getAuditReport(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<{
     bytes: Uint8Array;
     contentType: string;
     filename: string;
@@ -41,6 +41,10 @@ function allowPublicRequest(ip: string): boolean {
 
 async function servePublicFile(filename: string) {
   return readFile(new URL(`../public/${filename}`, import.meta.url));
+}
+
+export function paymentsEnabled(value: string | undefined = process.env.PAYMENTS_ENABLED): boolean {
+  return typeof value === "string" && value.trim().toLowerCase() === "true";
 }
 
 export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
@@ -130,21 +134,17 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
   });
 
   app.get<{
-    Params: { jobId: string };
-  }>("/v1/audits/:jobId/reports/full", async (request, reply) => {
-    const tier = "full" as const;
-
+    Params: { jobId: string; tier: "sample" | "full" };
+  }>("/v1/audits/:jobId/reports/:tier", async (request, reply) => {
+    const tier = request.params.tier;
+    if (tier !== "sample" && tier !== "full") return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
+    if (tier === "full" && paymentsEnabled()) return reply.code(402).send({ error: "PAYMENT_REQUIRED", message: "Payment verification is not configured for full report access." });
     try {
       const report = await store.getAuditReport(request.params.jobId, tier);
-      return reply
-        .type(report.contentType)
-        .header("content-disposition", `attachment; filename="${report.filename}"`)
-        .send(Buffer.from(report.bytes));
+      return reply.type(report.contentType).header("content-disposition", `attachment; filename="${report.filename}"`).send(Buffer.from(report.bytes));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to retrieve report";
-       if (message === "Audit job not found" || message === "Report not found") {
-        return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
-      }
+      if (message === "Audit job not found" || message === "Report not found") return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
       request.log.error({ err: error }, "audit report retrieval failed");
       return reply.code(500).send({ error: "REPORT_RETRIEVAL_FAILED", message: "Unable to retrieve report" });
     }
