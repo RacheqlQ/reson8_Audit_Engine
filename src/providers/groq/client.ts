@@ -257,7 +257,7 @@ export class GroqClient implements GroqAssessmentClient {
       requestGroup(this.fetchImpl, this.apiKey, this.model, input, "release",
         "Write a release recommendation and at least three concrete priorities grounded in the supplied evidence.", ReleaseSchema),
       requestGroup(this.fetchImpl, this.apiKey, this.model, input, "evidence-score",
-        "List evidence gaps and limitations, provide four evidence-based scorecard dimensions with rationales, and label factual claims with their provenance.", EvidenceScoreSchema),
+        "List evidence gaps and limitations, provide the four evidence scorecard dimensions plus hook, originality, production, replayValue and laneClarity with evidence-grounded rationales, using null scores when unsupported, and label factual claims with their provenance.", EvidenceScoreSchema),
     ]);
 
     const combined = AssessmentSchema.safeParse({
