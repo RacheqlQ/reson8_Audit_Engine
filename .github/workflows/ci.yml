@@ -41,12 +41,15 @@ jobs:
         run: npm install
 
       - name: Run test suite
+        if: always()
         run: npm test
 
       - name: Build
+        if: always()
         run: npm run build
 
       - name: Generate sample reports
+        if: always()
         run: npm run sample-report
 
       - name: Upload report PDFs
