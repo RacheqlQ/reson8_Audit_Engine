@@ -16,6 +16,7 @@ export interface ChartPanelInput {
   cantShow: string;
   kind?: ChartKind;
   inferred?: boolean;
+  unavailable?: boolean;
   y?: number;
 }
 
@@ -47,7 +48,8 @@ function panelFrame(page: PDFPage, input: ChartPanelInput, font: PDFFont, bold: 
   const x = 48, width = 516, top = input.y ?? 250, bottom = top - height;
   page.drawRectangle({ x, y: bottom, width, height, borderColor: LINE, borderWidth: 0.7, color: PAPER });
   page.drawText(input.title.toUpperCase(), { x: x + 11, y: top - 17, size: 8, font: bold, color: INK });
-  if (input.inferred) page.drawText("INFERRED", { x: x + width - 68, y: top - 17, size: 7, font: bold, color: CLAY });
+  if (input.unavailable) page.drawText("REQUIRES AUDIO", { x: x + width - 88, y: top - 17, size: 7, font: bold, color: MUTED });
+  else if (input.inferred) page.drawText("INFERRED", { x: x + width - 68, y: top - 17, size: 7, font: bold, color: CLAY });
   else page.drawText("OBSERVED", { x: x + width - 68, y: top - 17, size: 7, font: bold, color: SAGE });
   line(page, x + 10, top - 25, x + width - 10, top - 25);
   return { x, top, bottom, width };
