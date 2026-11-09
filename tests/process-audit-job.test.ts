@@ -203,6 +203,52 @@ describe("processAuditJob", () => {
     });
   });
 
+  it("records a failed assessment event and never saves a report after Groq validation fails", async () => {
+    const events: string[] = [];
+    let failureMessage = "";
+    const result = await processAuditJob("job-groq-failure", {
+      getJob: async () => ({
+        id: "job-groq-failure",
+        ownerId: "owner-123",
+        sourceAudioPath: "owner-123/job-groq-failure/master.wav",
+        mimeType: "audio/wav",
+        sourceType: "master",
+        catalogUrl: null,
+        status: "queued" as const,
+      }),
+      markProcessing: async () => { events.push("processing"); },
+      downloadMaster: async () => new Uint8Array([1, 2, 3]),
+      createRecognitionSample: async () => new Uint8Array([4, 5]),
+      recognize: async () => ({ matched: false as const }),
+      saveRecognition: async () => {},
+      saveEvidence: async () => {},
+      decode: async () => ({ samples: new Float32Array([0, 0.1, -0.1]), sampleRate: 44100, channels: 1 }),
+      saveSonicDna: async () => {},
+      generateAssessment: async () => {
+        throw new Error("Groq narrative response failed Zod validation after one retry: executiveSummary must contain at least 45 words.");
+      },
+      saveAssessment: async () => { events.push("assessment-saved"); },
+      generateReport: async () => {
+        events.push("report-generated");
+        return new Uint8Array([37, 80, 68, 70, 45]);
+      },
+      saveReport: async () => { events.push("report-saved"); },
+      markCompleted: async () => { events.push("completed"); },
+      markFailed: async (_jobId, message) => {
+        failureMessage = message;
+        events.push("audit_failed");
+      },
+    });
+
+    expect(result.status).toBe("failed");
+    expect(failureMessage).toContain("failed Zod validation after one retry");
+    expect(events).toContain("audit_failed");
+    expect(events).not.toContain("assessment-saved");
+    expect(events).not.toContain("report-generated");
+    expect(events).not.toContain("report-saved");
+    expect(events).not.toContain("completed");
+  });
+
   it("marks the job failed and preserves the error when processing fails", async () => {
     let failure = "";
     const result = await processAuditJob("job-123", {
