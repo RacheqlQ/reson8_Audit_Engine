@@ -86,4 +86,37 @@ describe("generateAuditReport", () => {
     expect(document.getPageCount()).toBeGreaterThanOrEqual(12);
     expect(document.getPageCount()).toBeLessThanOrEqual(20);
   });
+
+  it("renders null Sonic DNA as Not determined and preserves chart captions and headings", async () => {
+    const nullInput: AuditReportInput = {
+      ...input,
+      evidence: { ...input.evidence, auditType: "MASTER-BASED AUDIT" },
+      sonicDna: {
+        provenance: "uploaded_audio_master",
+        bpm: null,
+        alternateTempo: null,
+        key: null,
+        mode: null,
+        keyConfidence: null,
+        energy: null,
+        durationSeconds: null,
+        loudnessLufs: null,
+        dynamicRangeDb: null,
+        moodTags: null,
+      },
+    };
+    const bytes = await generateAuditReport(nullInput, "full");
+    const document = await PDFDocument.load(bytes);
+    expect(document.getPageCount()).toBeGreaterThanOrEqual(12);
+    expect(document.getPageCount()).toBeLessThanOrEqual(20);
+
+    // The PDF content streams use native PDF text operators; verify the emitted text.
+    const extractedText = new TextDecoder().decode(bytes);
+    expect(extractedText).toContain("Not determined");
+    expect(extractedText).toContain("SHOWS:");
+    expect(extractedText).toContain("CAN'T SHOW:");
+    expect(extractedText).toContain("04 | Sonic DNA and audio profile");
+    expect(extractedText).toContain("09 | Evidence-based scorecard");
+  });
+
 });
