@@ -11,8 +11,8 @@ export const sampleReportInput = {
     label: "Independent",
     isrc: "NGABC2600001",
     platform: "tidal",
-    catalogPopularity: 0.61,
-    catalogPopularityScale: "0_1",
+    catalogPopularity: null,
+    catalogPopularityScale: null,
     sources: ["tidal_catalog_metadata"],
     identity: {
       artist: "Fixture Artist",
