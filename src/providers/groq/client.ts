@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const GROQ_PROMPT_VERSION = "audit-ar-v1";
+export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 
 const AssessmentSchema = z.object({
   assessmentVersion: z.string().min(1),
@@ -57,7 +58,7 @@ export class GroqClient implements GroqAssessmentClient {
 
   constructor(
     apiKey = process.env.GROQ_API_KEY ?? process.env.GROQ_API,
-    model = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
+    model = process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
     fetchImpl: typeof fetch = fetch,
   ) {
     if (!apiKey) throw new Error("GROQ_API is required");
