@@ -355,7 +355,7 @@ function chartRows(input: AuditReportInput, field: string): ChartRow[] {
     const bpm = chartValue(sonic, "bpm");
     const alternate = chartValue(sonic, "alternateTempo");
     return [
-      { label: "BPM / alternate", value: bpm === null || bpm === undefined ? null : String(bpm) + " BPM; alternate: " + value(alternate) },
+      { label: "BPM / alternate", value: bpm === null || bpm === undefined ? null : String(bpm) + " BPM; alternate: " + (alternate === null || alternate === undefined ? "Not determined" : String(alternate)) },
       { label: "Key and mode", value: keyMode || null },
       { label: "Key confidence", value: chartValue(sonic, "keyConfidence") as string | number | null },
       { label: "Energy", value: (chartValue(sonic, "energy") ?? chartValue(sonic, "rmsEnergy")) as string | number | null },
