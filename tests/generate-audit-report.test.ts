@@ -13,7 +13,10 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(checkPageDensity([{x:48,y:600,width:499,height:100,id:"sparse"}]).ok).toBe(false);
   expect(checkPageDensity([],true).ok).toBe(true);
  });
- it("checks chart-caption separation for every chart in all four fixtures",()=>{\n  for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);\n });\n it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
+ it("checks chart-caption separation for every chart in all four fixtures",()=>{
+  for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
+ });
+ it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
   for(const input of fixtures)for(const tier of ["sample","full"] as const){
    const bytes=await generateAuditReport(input,tier),pdf=await PDFDocument.load(bytes);
    for(const page of pdf.getPages()){const size=page.getSize();expect(size.width).toBeCloseTo(595.28,0);expect(size.height).toBeCloseTo(841.89,0);}

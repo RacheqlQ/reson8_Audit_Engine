@@ -29,12 +29,14 @@ function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
  for(const word of s.split(/\s+/).filter(Boolean)){const next=current?current+" "+word:word;if(font.widthOfTextAtSize(next,size)>width&&current){out.push(current);current=word;}else current=next;}
  if(current)out.push(current);return out;
 }
-function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink){p.drawText(s,{x,y,font,size,color:c});}\nfunction tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
+function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink){p.drawText(s,{x,y,font,size,color:c});}
+function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
 export function chartPanelHeight(kind:ChartKind="bars"):number{
  if(kind==="radar")return 410;
  if(kind==="layers")return 224;if(kind==="tension")return 250;
  if(kind==="sonic")return 230;
- if(kind==="spectrum"||kind==="constellation"||kind==="timeline"||kind==="chain")return 202;\n if(kind==="bars")return 205;
+ if(kind==="spectrum"||kind==="constellation"||kind==="timeline"||kind==="chain")return 202;
+ if(kind==="bars")return 205;
  return 190;
 }
 export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind)):ChartRect[]{
