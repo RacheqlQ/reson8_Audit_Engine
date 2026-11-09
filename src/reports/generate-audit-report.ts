@@ -428,17 +428,17 @@ function drawSectionCharts(
   bold: PDFFont,
 ): boolean {
   const metadataOnly = auditLabel(input) === "METADATA-BASED AUDIT";
-  const draw = (title: string, key: string, kind: ChartKind, y: number, shows: string, cantShow: string, inferred = false) => {
-    drawChartPanel(page, { title, rows: chartRows(input, key), kind, y, inferred, shows, cantShow }, font, bold);
+  const draw = (title: string, key: string, kind: ChartKind, y: number, shows: string, cantShow: string, inferred = false, unavailable = false) => {
+    drawChartPanel(page, { title, rows: chartRows(input, key), kind, y, inferred, unavailable, shows, cantShow }, font, bold);
   };
   if (tier === "sample") {
     if (field === "evidence_snapshot") {
-      draw("Sonic DNA dashboard", "sonic", "sonic", 255, "available sonic fields and explicit gaps", metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties");
+      draw("Sonic DNA dashboard", "sonic", "sonic", 255, "available sonic fields and explicit gaps", metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties", false, metadataOnly);
       return true;
     }
     if (field === "ar_positioning") {
       if (metadataOnly) {
-        draw("Scorecard preview", "sonic", "bars", 255, "the master-derived scorecard is not available in a metadata-only audit", "creative scores until audio upload");
+        draw("Scorecard preview", "sonic", "bars", 255, "the master-derived scorecard is not available in a metadata-only audit", "creative scores until audio upload", false, true);
       } else {
         draw("Scorecard preview", "scorecard", "bars", 255, "the five requested dimensions when supplied by the assessment", "missing dimension scores and commercial outcomes", true);
       }
@@ -451,7 +451,7 @@ function drawSectionCharts(
       draw("Evidence layers", "evidence", "layers", 250, "claim counts by actual provenance label", "truth or quality beyond the supplied labels");
       return true;
     case "sonic_dna":
-      draw("Sonic DNA dashboard", "sonic", "sonic", 260, "measured audio fields where available", metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties");
+      draw("Sonic DNA dashboard", "sonic", "sonic", 260, "measured audio fields where available", metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties", false, metadataOnly);
       return true;
     case "creative_identity":
       draw("Lane constellation — qualitative positioning", "lane", "constellation", 250, "primary and adjacent A&R lanes", "measured genre distance or market share", true);
@@ -460,7 +460,7 @@ function drawSectionCharts(
       draw("Strengths versus risks", "tension", "tension", 250, "assessment-listed strengths and risks", "a numeric balance or probability");
       return true;
     case "scorecard":
-      if (metadataOnly) draw("Scorecard", "sonic", "bars", 250, "master-derived creative scores are unavailable", "hook, originality, production, replay and lane scores until audio upload");
+      if (metadataOnly) draw("Scorecard", "sonic", "bars", 250, "master-derived creative scores are unavailable", "hook, originality, production, replay and lane scores until audio upload", false, true);
       else draw("Scorecard", "scorecard", "bars", 250, "the five requested dimensions when supplied by the assessment", "unscored dimensions and commercial outcomes", true);
       return true;
     case "curator_readiness":
@@ -470,7 +470,7 @@ function drawSectionCharts(
       draw("Release priorities timeline", "timeline", "timeline", 250, "the first three assessment priorities in sequence", "30/60/90-day dates not supplied in the assessment", true);
       return true;
     case "commercial_read":
-      draw("Energy and tempo spectrum", "spectrum", "spectrum", 250, "available audio energy and tempo evidence", "market size, audience demographics or unmeasured mood", true);
+      draw("Energy and tempo spectrum", "spectrum", "spectrum", 250, "available audio energy and tempo evidence", "market size, audience demographics or unmeasured mood", true, metadataOnly);
       return true;
     default:
       return false;
