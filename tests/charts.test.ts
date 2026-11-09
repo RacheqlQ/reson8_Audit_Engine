@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows, strengthRiskItemsForColumn, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
 import { checkLayout } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
 
@@ -65,8 +65,10 @@ describe("native PDF chart helpers", () => {
       ];
       const tensionRows: ChartRow[] = [
         {label:"Strengths",value:10},{label:"Risks",value:10},
-        ...Array.from({length:10},(_,i)=>({label:"A documented strength with enough words to exercise safe two-line wrapping "+(i+1),value:null})),
-        ...Array.from({length:10},(_,i)=>({label:"A documented risk with enough words to exercise safe two-line wrapping "+(i+1),value:null})),
+        ...buildStrengthRiskChartRows(
+          Array.from({length:fixture.assessment.strengths.length},(_,i)=>"A documented strength with enough words to exercise safe two-line wrapping "+(i+1)),
+          Array.from({length:fixture.assessment.risks.length},(_,i)=>"A documented risk with enough words to exercise safe two-line wrapping "+(i+1)),
+        ),
       ];
       for (const kind of kinds) {
         const rows = kind==="tension" ? tensionRows : standardRows;
@@ -78,6 +80,25 @@ describe("native PDF chart helpers", () => {
         if(card)expect(checkLayout([card,{x:card.x+12,y:card.y+12,width:80,height:18,id:"overlapping-page-paragraph"}]).ok).toBe(false);
       }
     }
+  });
+
+
+  it("keeps planned Strengths and Risks content in their own columns for every fixture, including four-item long-form lists", () => {
+    for (const fixture of [fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture]) {
+      const rows = buildStrengthRiskChartRows(fixture.assessment.strengths, fixture.assessment.risks);
+      const strengths = strengthRiskItemsForColumn(rows, "strength");
+      const risks = strengthRiskItemsForColumn(rows, "risk");
+
+      expect(strengths.map(row => row.label)).toEqual(fixture.assessment.strengths);
+      expect(risks.map(row => row.label)).toEqual(fixture.assessment.risks);
+      expect(strengths.every(row => row.group === "strength")).toBe(true);
+      expect(risks.every(row => row.group === "risk")).toBe(true);
+      expect(strengths.some(row => fixture.assessment.risks.includes(row.label))).toBe(false);
+      expect(risks.some(row => fixture.assessment.strengths.includes(row.label))).toBe(false);
+    }
+
+    expect(longFormAudioFixture.assessment.strengths).toHaveLength(4);
+    expect(longFormAudioFixture.assessment.risks).toHaveLength(4);
   });
 
   it("wraps Strengths/Risks summaries to two complete-word lines at readable size", async () => {
