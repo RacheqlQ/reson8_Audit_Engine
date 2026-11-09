@@ -116,7 +116,8 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
    const hz=b*rate/size,angle=2*Math.PI*b/size,stepCos=Math.cos(angle),stepSin=Math.sin(angle);
    let re=0,im=0,cos=1,sin=0;
    for(let n=0;n<size;n++){
-    const x=a[start+n];re+=x*cos;im-=x*sin;
+    const window=0.5-0.5*Math.cos(2*Math.PI*n/(size-1)),x=a[start+n]*window;
+    re+=x*cos;im-=x*sin;
     const nextCos=cos*stepCos-sin*stepSin;
     sin=sin*stepCos+cos*stepSin;cos=nextCos;
    }
