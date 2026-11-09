@@ -126,17 +126,26 @@ function thresholdError(name: string, value: unknown): string | null {
 }
 
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
-  groupName: string, instructions: string, schema: z.ZodType<T>): Promise<T> {
+  groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number)=>Promise<void>): Promise<T> {
   let lastError = "No valid response was returned";
   for(let attempt=0;attempt<2;attempt++){
-    const response=await fetchImpl("https://api.groq.com/openai/v1/chat/completions",{
-      method:"POST",headers:{authorization:"Bearer "+apiKey,"content-type":"application/json"},
-      body:JSON.stringify({model,temperature:0.1,response_format:{type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
-        messages:[{role:"system",content:SYSTEM_PROMPT+" "+instructions},
-          {role:"user",content:JSON.stringify({promptVersion:GROQ_PROMPT_VERSION,sectionGroup:groupName,evidence:input.evidence,
-            sonicDna:input.sonicDna,catalogMetadata:input.catalogMetadata??null,correction:attempt===0?null:lastError})}]})
-    });
-    if(!response.ok){const detail=await response.text().catch(()=>"");throw new Error("Groq "+groupName+" assessment failed with HTTP "+response.status+(detail?": "+detail.slice(0,300):""));}
+    let response:Response|null=null;
+    for(let networkAttempt=0;networkAttempt<3;networkAttempt++){
+      response=await fetchImpl("https://api.groq.com/openai/v1/chat/completions",{
+        method:"POST",headers:{authorization:"Bearer "+apiKey,"content-type":"application/json"},
+        body:JSON.stringify({model,temperature:0.1,response_format:{type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
+          messages:[{role:"system",content:SYSTEM_PROMPT+" "+instructions},
+            {role:"user",content:JSON.stringify({promptVersion:GROQ_PROMPT_VERSION,sectionGroup:groupName,evidence:input.evidence,
+              sonicDna:input.sonicDna,catalogMetadata:input.catalogMetadata??null,correction:attempt===0?null:lastError})}]})
+      });
+      if(response.ok)break;
+      const transient=response.status===429||response.status>=500;
+      if(!transient||networkAttempt===2)break;
+      const retryHeader=response.headers.get("retry-after");
+      const retryMs=retryHeader&&Number.isFinite(Number(retryHeader))?Math.min(2000,Math.max(0,Number(retryHeader)*1000)):Math.min(2000,250*Math.pow(2,networkAttempt));
+      await sleepImpl(retryMs);
+    }
+    if(!response||!response.ok){const detail=await response?.text().catch(()=>"")??"";throw new Error("Groq "+groupName+" assessment failed with HTTP "+(response?.status??"unknown")+(detail?": "+detail.slice(0,300):""));}
     const payload=await response.json() as {choices?:Array<{message?:{content?:string|null}}>};
     const content=payload.choices?.[0]?.message?.content;
     if(!content){lastError="The response contained no JSON content.";continue;}
@@ -149,22 +158,24 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 }
 
 export class GroqClient implements GroqAssessmentClient {
-  private readonly apiKey:string; private readonly model:string; private readonly fetchImpl:typeof fetch;
-  constructor(apiKey=process.env.GROQ_API_KEY??process.env.GROQ_API,model=process.env.GROQ_MODEL??DEFAULT_GROQ_MODEL,fetchImpl:typeof fetch=fetch){
-    if(!apiKey)throw new Error("GROQ_API is required");this.apiKey=apiKey;this.model=model;this.fetchImpl=fetchImpl;
+  private readonly apiKey:string; private readonly model:string; private readonly fetchImpl:typeof fetch; private readonly sleepImpl:(ms:number)=>Promise<void>;
+  constructor(apiKey=process.env.GROQ_API_KEY??process.env.GROQ_API,model=process.env.GROQ_MODEL??DEFAULT_GROQ_MODEL,fetchImpl:typeof fetch=fetch,sleepImpl:(ms:number)=>Promise<void>=(ms)=>new Promise(resolve=>setTimeout(resolve,ms))){
+    if(!apiKey)throw new Error("GROQ_API is required");this.apiKey=apiKey;this.model=model;this.fetchImpl=fetchImpl;this.sleepImpl=sleepImpl;
   }
   async assess(input:GroqAssessmentInput):Promise<ArAssessment>{
-    const groups=await Promise.all([
-      requestGroup(this.fetchImpl,this.apiKey,this.model,input,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema),
-      requestGroup(this.fetchImpl,this.apiKey,this.model,input,"positioning","Write evidence-bounded A&R positioning and commercial read.",PositioningSchema),
-      requestGroup(this.fetchImpl,this.apiKey,this.model,input,"release","Write a grounded release recommendation and priorities.",ReleaseSchema),
-      requestGroup(this.fetchImpl,this.apiKey,this.model,input,"evidence-score","Score only evidence-derivable dimensions. Return the unscored human listening checklist.",EvidenceScoreSchema),
-      requestGroup(this.fetchImpl,this.apiKey,this.model,input,"production","Give actionable production and arrangement guidance. Separate lane-general craft as INDUSTRY PRACTICE.",ProductionSchema),
-      requestGroup(this.fetchImpl,this.apiKey,this.model,input,"comparables","Provide inferred lane descriptors and reference-search criteria to verify; do not invent named artists or tracks.",ComparableSchema),
-      requestGroup(this.fetchImpl,this.apiKey,this.model,input,"promotion","Build a staged promotion plan, general pitching angles, content concepts and playlist categories only. Include INDUSTRY PRACTICE separately.",PromotionSchema),
-      requestGroup(this.fetchImpl,this.apiKey,this.model,input,"label-fit","Describe category-level partner fit and evidence criteria; no claims of label interest. Include INDUSTRY PRACTICE separately.",LabelFitSchema),
-      requestGroup(this.fetchImpl,this.apiKey,this.model,input,"timeline","Build actionable 30/60/90-day steps without inventing dates, budgets or targets.",TimelineSchema),
-    ]);
+    const tasks=[
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema,this.sleepImpl),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"positioning","Write evidence-bounded A&R positioning and commercial read.",PositioningSchema,this.sleepImpl),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"release","Write a grounded release recommendation and priorities.",ReleaseSchema,this.sleepImpl),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"evidence-score","Score only evidence-derivable dimensions. Return the unscored human listening checklist.",EvidenceScoreSchema,this.sleepImpl),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"production","Give actionable production and arrangement guidance. Separate lane-general craft as INDUSTRY PRACTICE.",ProductionSchema,this.sleepImpl),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"comparables","Provide inferred lane descriptors and reference-search criteria to verify; do not invent named artists or tracks.",ComparableSchema,this.sleepImpl),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"promotion","Build a staged promotion plan, general pitching angles, content concepts and playlist categories only. Include INDUSTRY PRACTICE separately.",PromotionSchema,this.sleepImpl),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"label-fit","Describe category-level partner fit and evidence criteria; no claims of label interest. Include INDUSTRY PRACTICE separately.",LabelFitSchema,this.sleepImpl),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"timeline","Build actionable 30/60/90-day steps without inventing dates, budgets or targets.",TimelineSchema,this.sleepImpl)
+    ];
+    const groups:unknown[]=new Array(tasks.length);let cursor=0;
+    await Promise.all(Array.from({length:3},async()=>{while(cursor<tasks.length){const index=cursor++;groups[index]=await tasks[index]();}}));
     const assembled=Object.assign({},...groups) as z.infer<typeof AssessmentSchema>;
     const dna=input.sonicDna;
     const audioMaster=Boolean(dna && dna.provenance==="uploaded_audio_master");

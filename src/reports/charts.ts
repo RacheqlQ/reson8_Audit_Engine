@@ -7,7 +7,7 @@ export interface ChartRow {
   proportion?: number | null;
 }
 
-export type ChartKind = "bars" | "sonic" | "spectrum" | "constellation" | "layers" | "tension" | "timeline" | "chain";
+export type ChartKind = "bars" | "sonic" | "spectrum" | "constellation" | "layers" | "tension" | "timeline" | "chain" | "radar";
 
 export interface ChartPanelInput {
   title: string;
@@ -45,7 +45,7 @@ function dashed(page: PDFPage, x: number, y: number, width: number): void {
 }
 
 function panelFrame(page: PDFPage, input: ChartPanelInput, font: PDFFont, bold: PDFFont, height: number): { x: number; top: number; bottom: number; width: number } {
-  const x = 48, width = 516, top = input.y ?? 250, bottom = top - height;
+  const x = 48, width = 499, top = input.y ?? 250, bottom = top - height;
   page.drawRectangle({ x, y: bottom, width, height, borderColor: LINE, borderWidth: 0.7, color: PAPER });
   page.drawText(input.title.toUpperCase(), { x: x + 11, y: top - 17, size: 8, font: bold, color: INK });
   if (input.unavailable) page.drawText("REQUIRES AUDIO", { x: x + width - 88, y: top - 17, size: 7, font: bold, color: MUTED });
@@ -55,9 +55,18 @@ function panelFrame(page: PDFPage, input: ChartPanelInput, font: PDFFont, bold: 
   return { x, top, bottom, width };
 }
 
+function captionLines(value: string, font: PDFFont, width: number): string[] {
+  const lines: string[] = []; let current = "";
+  for (const word of value.split(/\s+/).filter(Boolean)) {
+    const next = current ? current + " " + word : word;
+    if (font.widthOfTextAtSize(next, 5.6) > width && current) { lines.push(current); current = word; } else current = next;
+  }
+  if (current) lines.push(current); return lines;
+}
 function captions(page: PDFPage, input: ChartPanelInput, x: number, bottom: number, font: PDFFont): void {
-  page.drawText(("SHOWS: " + input.shows).slice(0, 112), { x: x + 10, y: bottom + 17, size: 5.8, font, color: MUTED });
-  page.drawText(("CAN'T SHOW: " + input.cantShow).slice(0, 112), { x: x + 10, y: bottom + 7, size: 5.8, font, color: MUTED });
+  let y = bottom + 25;
+  for (const value of captionLines("SHOWS: " + input.shows, font, 475).slice(0, 2)) { page.drawText(value,{x:x+10,y,size:5.6,font,color:MUTED}); y-=7; }
+  for (const value of captionLines("CAN'T SHOW: " + input.cantShow, font, 475).slice(0, 2)) { page.drawText(value,{x:x+10,y,size:5.6,font,color:MUTED}); y-=7; }
 }
 
 function drawBars(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont, maxRows = 6): void {
@@ -94,7 +103,7 @@ function drawSonic(page: PDFPage, rows: ChartRow[], x: number, top: number, font
 
 function drawSpectrum(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
   rows.slice(0, 3).forEach((row, index) => {
-    const y = top - 30 - index * 34;
+    const y = top - 25 - index * 31;
     page.drawText(row.label.toUpperCase(), { x: x + 12, y, size: 6.5, font: bold, color: MUTED });
     line(page, x + 155, y + 2, x + 470, y + 2, LINE, 1);
     const val = shown(row.value);
@@ -120,13 +129,13 @@ function drawConstellation(page: PDFPage, rows: ChartRow[], x: number, top: numb
     page.drawCircle({ x: px, y: py, size: 17, borderColor: SAGE, borderWidth: 0.8, color: PAPER });
     page.drawText(shown(row.value).slice(0, 24), { x: px - 48, y: py - 3, size: 6.2, font, color: INK });
   });
-  page.drawText("QUALITATIVE POSITIONING — DISTANCE IS NOT MEASURED", { x: x + 115, y: top - 132, size: 5.8, font: bold, color: MUTED });
+  page.drawText("QUALITATIVE POSITIONING — DISTANCE IS NOT MEASURED", { x: x + 115, y: top - 115, size: 5.8, font: bold, color: MUTED });
 }
 
 function drawLayers(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
   const colors = [BLUE, SAGE, CLAY, rgb(0.62, 0.58, 0.68)];
   const total = rows.reduce((sum, row) => sum + (typeof row.value === "number" && Number.isFinite(row.value) ? row.value : 0), 0);
-  const barX = x + 14, barY = top - 58, barWidth = 488;
+  const barX = x + 14, barY = top - 58, barWidth = 470;
   if (total > 0) {
     let offset = 0;
     rows.forEach((row, index) => {
@@ -169,9 +178,17 @@ function drawTimeline(page: PDFPage, rows: ChartRow[], x: number, top: number, f
     page.drawText(priority.slice(0, 24), { x: px - 28, y: y - 22, size: 6.2, font, color: INK });
     if (priority.length > 24) page.drawText(priority.slice(24, 48), { x: px - 28, y: y - 31, size: 5.8, font, color: INK });
   });
-  page.drawText("30 / 60 / 90-DAY DATES: NOT DETERMINED BY THE ASSESSMENT", { x: x + 105, y: top - 127, size: 5.8, font: bold, color: MUTED });
+  page.drawText("30 / 60 / 90-DAY DATES: NOT DETERMINED BY THE ASSESSMENT", { x: x + 105, y: top - 115, size: 5.8, font: bold, color: MUTED });
 }
 
+function drawRadar(page:PDFPage,rows:ChartRow[],x:number,top:number,font:PDFFont,bold:PDFFont):void{
+ const cx=x+249,cy=top-70,radius=43,usable=rows.slice(0,5);
+ for(let ring=1;ring<=4;ring++){const r=radius*ring/4;for(let i=0;i<usable.length;i++){const a1=-Math.PI/2+i*Math.PI*2/usable.length,a2=-Math.PI/2+(i+1)*Math.PI*2/usable.length;line(page,cx+Math.cos(a1)*r,cy+Math.sin(a1)*r,cx+Math.cos(a2)*r,cy+Math.sin(a2)*r,LINE,.45);}}
+ const points=usable.map((row,index)=>{const angle=-Math.PI/2+index*Math.PI*2/Math.max(1,usable.length),score=typeof row.value==="number"&&Number.isFinite(row.value)?Math.max(0,Math.min(100,row.value)):null,r=score===null?0:radius*score/100;return{x:cx+Math.cos(angle)*r,y:cy+Math.sin(angle)*r,angle,row,score};});
+ if(points.length>=3&&points.every(p=>p.score!==null)){const path=points.map((p,i)=>(i?"L ":"M ")+p.x.toFixed(2)+" "+p.y.toFixed(2)).join(" ")+" Z";page.drawSvgPath(path,{color:BLUE,opacity:.18,borderColor:BLUE,borderOpacity:.8,borderWidth:1.2});}
+ points.forEach(p=>{page.drawCircle({x:p.x,y:p.y,size:3.5,color:p.score===null?LINE:BLUE});const lx=cx+Math.cos(p.angle)*(radius+13),ly=cy+Math.sin(p.angle)*(radius+13);page.drawText(p.row.label.slice(0,22),{x:lx-34,y:ly-2,size:5.2,font:bold,color:MUTED});page.drawText(p.score===null?"N/D":String(p.score),{x:lx-8,y:ly-12,size:5.2,font,color:INK});});
+ page.drawText("EVIDENCE-DERIVED DIMENSIONS ONLY · NULL = INSUFFICIENT EVIDENCE",{x:x+120,y:top-115,size:5.5,font:bold,color:MUTED});
+}
 function drawChain(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
   const labels = ["CONTENT", "DISCOVERY", "LISTENER ACTION"];
   const xs = [x + 93, x + 258, x + 423];
@@ -185,9 +202,14 @@ function drawChain(page: PDFPage, rows: ChartRow[], x: number, top: number, font
   });
 }
 
+export function chartPanelHeight(kind:ChartKind="bars"):number{
+ if(kind==="sonic")return 165;if(kind==="spectrum")return 160;if(kind==="layers")return 200;
+ if(kind==="constellation"||kind==="tension"||kind==="timeline"||kind==="chain"||kind==="radar")return 190;
+ return 190;
+}
 export function drawChartPanel(page: PDFPage, input: ChartPanelInput, font: PDFFont, bold: PDFFont): void {
   const kind = input.kind ?? "bars";
-  const height = kind === "sonic" ? 165 : kind === "layers" ? 160 : kind === "constellation" || kind === "tension" || kind === "timeline" || kind === "chain" ? 155 : kind === "bars" ? 190 : 145;
+  const height = chartPanelHeight(kind);
   const frame = panelFrame(page, input, font, bold, height);
   const contentTop = frame.top - 39;
   switch (kind) {
@@ -198,6 +220,7 @@ export function drawChartPanel(page: PDFPage, input: ChartPanelInput, font: PDFF
     case "tension": drawTension(page, input.rows, frame.x, contentTop, font, bold); break;
     case "timeline": drawTimeline(page, input.rows, frame.x, contentTop, font, bold); break;
     case "chain": drawChain(page, input.rows, frame.x, contentTop, font, bold); break;
+    case "radar": drawRadar(page, input.rows, frame.x, contentTop, font, bold); break;
     default: drawBars(page, input.rows, frame.x, contentTop, font, bold); break;
   }
   captions(page, input, frame.x, frame.bottom, font);

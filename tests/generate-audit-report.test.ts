@@ -30,7 +30,8 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(metadataOnlyFixture.evidence.artist).toBe("Fixture Artist");
  });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
-  const report=planAuditReportPages(fixtures[0],"full").flatMap(p=>p.text).join(" ");
+  const pages=planAuditReportPages(fixtures[0],"full");
+  const report=pages.flatMap(p=>[p.title,...p.text]).join(" ");
   expect(report).toContain("Tempo and lane fit");expect(report).toContain("Rhythmic consistency");
   expect(report).toContain("Dynamic range and loudness readiness");expect(report).toContain("Human listening checklist");
   expect(report).toContain("INDUSTRY PRACTICE");expect(report).toContain("references to verify");

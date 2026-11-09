@@ -49,5 +49,16 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   expect(counts.get("production")).toBe(2);
  });
+ it("retries a mocked rate-limit response and succeeds",async()=>{
+  let narrativeCalls=0;
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="narrative"&&narrativeCalls++===0)return new Response("rate limited",{status:429,headers:{"retry-after":"0"}});
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  const result=await client.assess({evidence:{},sonicDna:null});
+  expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);
+ });
  it("stops after one retry when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=body.response_format.json_schema.name.replace(/^ar_/,"");const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed Zod validation after one retry");expect(mock.mock.calls.filter(c=>JSON.parse(String(c[1]?.body)).response_format.json_schema.name==="ar_narrative")).toHaveLength(2);});
 });

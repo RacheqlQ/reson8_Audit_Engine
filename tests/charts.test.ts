@@ -28,6 +28,13 @@ describe("native PDF chart helpers", () => {
     }, font, bold)).not.toThrow();
 
     expect(() => drawChartPanel(page, {
+      title: "Evidence scorecard", kind: "radar",
+      rows: [{ label: "Tempo / lane fit", value: 78 }, { label: "Rhythmic consistency", value: 82 },
+        { label: "Dynamic / loudness", value: 74 }, { label: "Metadata", value: 80 }, { label: "Release readiness", value: null }],
+      shows: "supported evidence-derived scores", cantShow: "artistic taste or unmeasured outcomes",
+    }, font, bold)).not.toThrow();
+
+    expect(() => drawChartPanel(page, {
       title: "Null data", kind: "spectrum",
       rows: [{ label: "Energy", value: null }, { label: "Tempo", value: undefined }],
       shows: "supplied values", cantShow: "unknown values",

@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import type { ArAssessment } from "../providers/groq/client.js";
 import { loadReportFonts } from "./fonts.js";
+import { chartPanelHeight, countEvidenceLayers, drawChartPanel, type ChartPanelInput } from "./charts.js";
 
 export type AuditReportTier = "sample" | "full";
 export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; }
@@ -53,7 +54,7 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
  if(titleY<365)throw new Error("Cover identity text exceeds its allocated area");
  p.drawRectangle({x:M,y:250,width:W-2*M,height:104,color:C.navy});
  p.drawText("ASSESSMENT VERDICT",{x:M+18,y:326,size:7,font:f.bold,color:C.teal});add("cover-verdict-label",M+18,323,130,9);
- p.drawText(val(input.assessment.commercialRead.marketability,"UNDETERMINED").toUpperCase(),{x:M+18,y:292,size:19,font:f.bold,color:C.white});add("cover-verdict",M+18,289,180,22);
+ p.drawText(verdictLabel(val(input.assessment.commercialRead.marketability,"undetermined")).toUpperCase(),{x:M+18,y:292,size:15,font:f.bold,color:C.white});add("cover-verdict",M+18,289,180,22);
  p.drawText("CONFIDENCE",{x:W-M-116,y:326,size:7,font:f.bold,color:C.teal});add("cover-confidence-label",W-M-116,323,80,9);
  const cx=W-M-72,cy=290;p.drawCircle({x:cx,y:cy,size:25,borderColor:C.muted,borderWidth:5});p.drawCircle({x:cx,y:cy,size:20,borderColor:C.teal,borderWidth:2});
  p.drawText(Math.round(input.assessment.confidence*100)+"%",{x:cx-13,y:cy-3,size:9,font:f.bold,color:C.white});add("cover-confidence-value",cx-14,cy-6,30,12);
@@ -66,11 +67,28 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
  const coverCheck=checkLayout(coverRects);if(!coverCheck.ok)throw new Error(coverCheck.errors.join("; "));
 }
 interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string[];}
+function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"Insufficient evidence"};return m[v.toLowerCase()]??"Insufficient evidence";}
+function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready to pitch requires verified commercial-performance evidence, a defined reporting period and a supportable release proposition.",moderate:"Develop applies when evidence supports a credible direction but important execution or positioning work remains.",low:"Needs work applies when supplied evidence identifies material gaps that should be addressed before pitching.",undetermined:"Insufficient evidence applies when source-attributed commercial or release evidence is missing; no demand or partner interest is inferred."};return m[v.toLowerCase()]??m.undetermined;}
+function industryPractice(v:string):string{return "INDUSTRY PRACTICE — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
+function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
+ const a=i.assessment,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),counts=countEvidenceLayers(a.evidenceLabels);
+ if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",rows:[{label:"OBSERVED",value:counts.OBSERVED},{label:"RECOGNIZED",value:counts.RECOGNIZED},{label:"RECONCILED",value:counts.RECONCILED},{label:"INFERRED",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful."}];
+ if(title==="Sonic DNA and technical profile")return [
+ {title:"Sonic DNA dashboard",kind:"sonic",unavailable:!hasAudio,rows:[{label:"BPM",value:hasAudio?s?.bpm:null},{label:"KEY / MODE",value:hasAudio?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},{label:"KEY CONFIDENCE",value:hasAudio&&typeof s?.keyConfidence==="number"?Math.round(s.keyConfidence*100)+"%":null},{label:"LOUDNESS LUFS",value:hasAudio?s?.loudnessLufs:null},{label:"DYNAMIC RANGE",value:hasAudio?s?.dynamicRangeDb:null},{label:"RMS ENERGY",value:hasAudio?s?.rmsEnergy:null}],shows:"Master-derived tempo, key confidence, loudness, dynamic range and RMS fields when an uploaded master exists.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."},
+ {title:"Tempo and energy spectrum",kind:"spectrum",unavailable:!hasAudio,rows:[{label:"TEMPO",value:hasAudio?s?.bpm:null},{label:"RMS ENERGY",value:hasAudio?s?.rmsEnergy:null},{label:"DYNAMIC RANGE",value:hasAudio?s?.dynamicRangeDb:null}],shows:"Available master-derived tempo and energy measurements.",cantShow:"A genre verdict or listener reaction from these measurements alone."}];
+ if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
+ if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"Dynamic / loudness",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
+ if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",rows:[...a.strengths.slice(0,3).map(v=>({label:"Strength",value:v})),...a.risks.slice(0,3).map(v=>({label:"Risk",value:v}))],shows:"The assessment's stated strengths and risks.",cantShow:"An independently measured balance or probability of success."}];
+ if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:a.promotionPlan.playlistCategories[0]??"Category to investigate"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
+ if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
+ return [];
+}
+
 function sections(i:AuditReportInput):Section[]{
  const a=i.assessment,e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master");
  const score=(name:string,v:{score:number|null;rationale:string})=>name+" — "+(v.score===null?"NOT SCORED":v.score+"/100")+" — "+v.rationale;
  return [
- {title:"Executive assessment",accent:"blue",body:[...(e.fixture?["FIXTURE — synthetic renderer test data; not a real analysis."]:[]),a.executiveSummary,"Verdict: "+a.commercialRead.marketability,"Confidence: "+Math.round(a.confidence*100)+"%","Assessment basis: "+(hasAudio?"Uploaded master and supplied identity evidence.":"Metadata/provider evidence only; no uploaded master.") ]},
+ {title:"Executive assessment",accent:"blue",body:[...(e.fixture?["FIXTURE — synthetic renderer test data; not a real analysis."]:[]),a.executiveSummary,"Verdict: "+verdictLabel(a.commercialRead.marketability),"Verdict rule: "+verdictRule(a.commercialRead.marketability),"Reason: "+a.commercialRead.rationale,"Confidence: "+Math.round(a.confidence*100)+"%","Assessment basis: "+(hasAudio?"Uploaded master and supplied identity evidence.":"Metadata/provider evidence only; no uploaded master.") ]},
  {title:"Identity and source reconciliation",accent:"violet",body:["Artist: "+val(e.artist),"Track: "+val(e.title),"Album: "+val(e.album),"ISRC: "+val(e.isrc),"Release date: "+val(e.releaseDate),"Label: "+val(e.label),"Evidence sources: "+val(e.sources??e.sourceProviders)]},
  {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>x.label+" — "+x.claim+" [Source: "+x.source+"]")},
  {title:"Sonic DNA and technical profile",accent:"blue",body:!hasAudio?(s?["Provider-supplied sonic context (not master-measured)","Provider BPM: "+val(s.bpm),"Provider key / mode: "+[text(s.key),text(s.mode)].filter(Boolean).join(" "),"Provider mood tags: "+val(s.moodTags),"Not measured: no master audio supplied."]:["Requires audio upload","Not measured: no master audio supplied."]):[e.fixture?"FIXTURE VALUES — synthetic audio-profile test data":"OBSERVED master-derived values","Tempo: "+val(s?.bpm),"Key / mode: "+[text(s?.key),text(s?.mode)].filter(Boolean).join(" "),"Loudness LUFS: "+val(s?.loudnessLufs),"Dynamic range dB: "+val(s?.dynamicRangeDb),"RMS energy: "+val(s?.rmsEnergy)]},
@@ -79,10 +97,10 @@ function sections(i:AuditReportInput):Section[]{
  {title:"Risks and diligence",accent:"coral",body:a.risks},
  {title:"Evidence-derived scorecard",accent:"blue",body:[score("Tempo and lane fit",a.scorecard.tempoLaneFit),score("Rhythmic consistency",a.scorecard.rhythmicConsistency),score("Dynamic range and loudness readiness",a.scorecard.dynamicRangeLoudness),score("Metadata completeness",a.scorecard.metadataCompleteness),score("Release readiness",a.scorecard.releaseReadiness)]},
  {title:"Human listening checklist (unscored)",accent:"violet",body:a.humanListeningChecklist},
- {title:"Production and arrangement guidance",accent:"teal",body:[a.productionArrangementGuidance,"INDUSTRY PRACTICE — general lane craft knowledge, not track-specific evidence.",a.industryPractice,...a.listeningChecks]},
+ {title:"Production and arrangement guidance",accent:"teal",body:[a.productionArrangementGuidance,industryPractice("General lane craft knowledge, not track-specific evidence."),industryPractice(a.industryPractice),...a.listeningChecks]},
  {title:"Comparable lanes and listening references to verify",accent:"violet",body:["INFERRED — hypotheses, not verified comparisons",a.laneHypothesis,...a.referencesToVerify,a.verificationMethod]},
- {title:"Promotion plan",accent:"coral",body:[a.promotionPlan.preRelease,a.promotionPlan.releaseWindow,a.promotionPlan.postRelease,"Content concepts: "+a.promotionPlan.contentIdeas.join(" • "),"INDUSTRY PRACTICE — pitching angles to adapt to verified track facts: "+a.promotionPlan.pitchingAngles.join(" • "),"Playlist categories to investigate only: "+a.promotionPlan.playlistCategories.join(", "),"INDUSTRY PRACTICE — "+a.promotionPlan.industryPractice]},
- {title:"Label and partner fit",accent:"blue",body:[a.labelPartnerFit.partnerProfile,...a.labelPartnerFit.criteriaToDemonstrate,a.labelPartnerFit.diligenceBeforeContact,"INDUSTRY PRACTICE — "+a.labelPartnerFit.industryPractice]},
+ {title:"Promotion plan",accent:"coral",body:[a.promotionPlan.preRelease,a.promotionPlan.releaseWindow,a.promotionPlan.postRelease,"Content concepts: "+a.promotionPlan.contentIdeas.join(" • "),"INDUSTRY PRACTICE — pitching angles to adapt to verified track facts: "+a.promotionPlan.pitchingAngles.join(" • "),"Playlist categories to investigate only: "+a.promotionPlan.playlistCategories.join(", "),industryPractice(a.promotionPlan.industryPractice)]},
+ {title:"Label and partner fit",accent:"blue",body:[a.labelPartnerFit.partnerProfile,...a.labelPartnerFit.criteriaToDemonstrate,a.labelPartnerFit.diligenceBeforeContact,industryPractice(a.labelPartnerFit.industryPractice)]},
  {title:"30 / 60 / 90-day execution plan",accent:"violet",body:["DAYS 01–30 — "+a.executionPlan.days30,"DAYS 31–60 — "+a.executionPlan.days60,"DAYS 61–90 — "+a.executionPlan.days90]},
  {title:"Commercial evidence and measurement",accent:"blue",body:[a.commercialRead.rationale,"Catalog popularity: "+val(e.catalogPopularity),"Audience telemetry: "+val(e.audienceTelemetry)]},
  {title:"Decision record and evidence gates",accent:"coral",body:[a.releaseStrategy.recommendation,...a.releaseStrategy.priorities.map((p,n)=>"Priority "+(n+1)+": "+p),"Evidence gaps: "+a.evidenceGaps.join(" "),"Limitations: "+a.limitations.join(" ")]}
@@ -102,9 +120,11 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   },0);
   return total+titleHeight+bodyHeight+12;
  },0);
- const plannedPages=Math.max(1,Math.ceil(estimatedHeight/AVAILABLE),Math.floor(estimatedHeight/(AVAILABLE*.75)));
+ const chartAllowance=selected.reduce((n,section)=>n+chartsForSection(input,section.title).reduce((sum,p)=>sum+chartPanelHeight(p.kind)+14,0),0);
+ const totalEstimatedHeight=estimatedHeight+chartAllowance;
+ const plannedPages=Math.max(1,Math.ceil(totalEstimatedHeight/AVAILABLE),Math.floor(totalEstimatedHeight/(AVAILABLE*.75)));
  if(plannedPages>18)throw new Error("Estimated report body exceeds the 20-page cap");
- const targetFill=estimatedHeight/plannedPages;
+ const targetFill=totalEstimatedHeight/plannedPages;
  let pageNo=1,page=pdf.addPage([W,H]),y=TOP,rects:ReportRect[]=[];
  header(page,"Audit findings",pageNo,fonts);
  const chromeRects=():ReportRect[]=>[{x:M,y:H-44,width:220,height:10,id:"header-brand"},{x:M,y:H-64,width:W-2*M,height:8,id:"header-title"},{x:M,y:H-68,width:W-2*M,height:0.7,id:"header-rule"},{x:M,y:43,width:W-2*M,height:0.7,id:"footer-rule"},{x:M,y:25,width:250,height:10,id:"footer-text"},{x:W-M-18,y:25,width:18,height:10,id:"footer-page-number"}];
@@ -112,8 +132,11 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent);y=TOP;rects=[];};
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,15,W-2*M-34),titleH=titleLines.length*20+10;
+  const first=section.body[0]??"",firstSize=first===first.toUpperCase()&&first.length<100?7.2:8.7,firstHeight=wrap(first,fonts.regular,firstSize,W-2*M-16).length*firstSize*1.42+8;
+  const sonicBlock=section.title==="Sonic DNA and technical profile";
+  const sonicHeight=sonicBlock?section.body.reduce((sum,p)=>{const size=p===p.toUpperCase()&&p.length<100?7.2:8.7;return sum+wrap(p,fonts.regular,size,W-2*M-16).length*size*1.42+8;},0):0;
   if(rects.length>0&&y<TOP-targetFill)nextPage(section.title,accent);
-  if(y-titleH<BOTTOM+45)nextPage(section.title,accent);
+  if(y-titleH-firstHeight<BOTTOM+45||(sonicBlock&&y-titleH-sonicHeight<BOTTOM+45))nextPage(section.title,accent);
   const titleRect={x:M,y:y-titleH,width:W-2*M,height:titleH,id:"section-title-"+si};rects.push(titleRect);
   page.drawText(String(si+1).padStart(2,"0"),{x:M,y:y-2,size:8,font:fonts.bold,color:accent});
   let ty=y;for(const line of titleLines){page.drawText(line,{x:M+34,y:ty,size:15,font:fonts.bold,color:C.navy});ty-=20;}y=ty-10;
@@ -127,11 +150,19 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
     if(capacity<1){nextPage(section.title,accent);capacity=Math.floor((y-BOTTOM-8)/lineHeight);}
     const count=Math.min(capacity,lines.length-offset),height=count*lineHeight+8;
     const r={x:M,y:y-height,width:W-2*M,height,id:"section-"+si+"-paragraph-"+pi+"-part-"+chunk};rects.push(r);
-    page.drawRectangle({x:M,y:y-height+2,width:W-2*M,height:height-2,color:pi%2===0?C.paper:C.white});
+
     for(let li=0;li<count;li++){const line=lines[offset+li];if(fonts.regular.widthOfTextAtSize(line,size)>W-2*M-16+.01)throw new Error("Text width overflow in "+r.id);page.drawText(line,{x:M+8,y:y-li*lineHeight,size,font:fonts.regular,color:size<8?accent:C.ink});}
     y-=height;offset+=count;chunk++;
     if(offset<lines.length)nextPage(section.title,accent);
    }
+  }
+  for(const panel of chartsForSection(input,section.title)){
+   const panelHeight=chartPanelHeight(panel.kind);
+   if(y-panelHeight<BOTTOM+45)nextPage(section.title,accent);
+   const panelTop=y-8;
+   drawChartPanel(page,{...panel,y:panelTop},fonts.regular,fonts.bold);
+   rects.push({x:M,y:panelTop-panelHeight,width:W-2*M,height:panelHeight,id:"chart-"+si+"-"+panel.title.replace(/\s+/g,"-")});
+   y=panelTop-panelHeight-14;
   }
   y-=12;
  }

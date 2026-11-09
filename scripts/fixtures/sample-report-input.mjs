@@ -20,6 +20,7 @@ const assessment = {
  humanListeningChecklist:["Does the first section establish a clear musical or lyrical reason to continue listening?","Can the hook be recalled after one play, and which exact phrase or motif carries it?","Does the vocal delivery communicate a distinctive point of view across the full arrangement?","What feels genuinely original compared with verified listening references, and which similarities are intentional?","Does the arrangement create meaningful development and payoff without unnecessary repetition?","Would a listener replay or share the track, and what real listening evidence would support that judgement?","Can a first-time listener describe the lane without prompting, and which audible details support that description?"],
  evidenceLabels:[
   {label:"OBSERVED",claim:"Synthetic fixture generator supplies a tempo value solely for renderer testing and not as a real audio measurement.",source:"fixture.sonicDna.bpm"},
+  {label:"RECOGNIZED",claim:"Synthetic fixture identity fields exercise the recognized-source evidence display and are not a real identification.",source:"fixture.identity"}
   {label:"INFERRED",claim:"The fixture lane label is a synthetic positioning hypothesis used to test report text layout only.",source:"fixture.assessment.aAndRPositioning"},
   {label:"INDUSTRY PRACTICE",claim:"General release craft guidance is presented separately from the synthetic fixture's track fields and is not a finding about a recording.",source:"industry_practice"}
  ],
