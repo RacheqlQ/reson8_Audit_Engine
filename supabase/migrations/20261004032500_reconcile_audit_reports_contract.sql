@@ -1,9 +1,7 @@
 -- Reconcile the live audit_reports table with the versioned report storage contract.
--- The pre-contract table contained no rows in the Audit Engine project when this
--- migration was applied, so it is safe to replace the obsolete shape.
-drop table if exists public.audit_reports cascade;
-
-create table public.audit_reports (
+-- Keep this migration safe for projects where the compatible table already exists.
+-- Never drop audit_reports: report rows and their storage metadata are production data.
+create table if not exists public.audit_reports (
   id uuid primary key default gen_random_uuid(),
   audit_job_id uuid not null references public.audit_jobs(id) on delete cascade,
   tier text not null check (tier in ('sample','full')),
@@ -17,10 +15,12 @@ create table public.audit_reports (
   unique (audit_job_id, tier, version)
 );
 
-create index audit_reports_job_idx
+create index if not exists audit_reports_job_idx
   on public.audit_reports(audit_job_id, tier, version desc);
 
 alter table public.audit_reports enable row level security;
+
+drop policy if exists audit_reports_service_only on public.audit_reports;
 
 create policy audit_reports_service_only
   on public.audit_reports
