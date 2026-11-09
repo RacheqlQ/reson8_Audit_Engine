@@ -43,14 +43,13 @@ function addEditableField(
   content: string,
   y: number,
   height: number,
-): number {
+): void {
   const field = pdf.getForm().createTextField(name);
   field.enableMultiline();
   field.setText(content.slice(0, 8000));
-  field.addToPage(page, { x: 48, y: y - height, width: 516, height });
+  field.addToPage(page, { x: 48, y: 105, width: 516, height: 42 });
   field.setFontSize(9);
   field.updateAppearances(font);
-  return y - height - 18;
 }
 
 function drawPageHeader(page: PDFPage, title: string, pageNumber: number, font: PDFFont, bold: PDFFont): void {
@@ -129,80 +128,159 @@ function scoreLines(assessment: ArAssessment): string[] {
 
 function fullSections(input: AuditReportInput): Array<{ title: string; field: string; body: string[] }> {
   const a = input.assessment;
+  const evidence = input.evidence;
+  const sonic = sonicLines(input);
   return [
     {
       title: "01 | Executive assessment",
       field: "executive_summary",
-      body: [auditLabel(input), a.executiveSummary, "Assessment confidence: " + Math.round(a.confidence * 100) + "%", "Evidence status: " + value(input.evidence.status)],
+      body: [auditLabel(input), a.executiveSummary, "Assessment confidence: " + Math.round(a.confidence * 100) + "%", "Evidence status: " + value(evidence.status), "This assessment distinguishes supplied observations, recognized identity, reconciled metadata and interpretive A&R hypotheses."],
     },
     {
-      title: "02 | Track identity and reconciliation",
+      title: "02 | Track identity and source reconciliation",
       field: "track_identity",
       body: [
-        "Artist: " + value(input.evidence.artist),
-        "Title: " + value(input.evidence.title),
-        "ISRC: " + value(input.evidence.isrc),
-        "Album: " + value(input.evidence.album),
-        "Release date: " + value(input.evidence.releaseDate),
-        "Label: " + value(input.evidence.label),
-        "Identity object: " + value(input.evidence.identity),
-        "Reconciliation: " + value(input.evidence.reconciliation),
-        "Source providers: " + value(input.evidence.sources ?? input.evidence.sourceProviders),
+        "Artist: " + value(evidence.artist),
+        "Title: " + value(evidence.title),
+        "ISRC: " + value(evidence.isrc),
+        "Album: " + value(evidence.album),
+        "Release date: " + value(evidence.releaseDate),
+        "Label: " + value(evidence.label),
+        "Identity object: " + value(evidence.identity),
+        "Reconciliation record: " + value(evidence.reconciliation),
+        "Source providers: " + value(evidence.sources ?? evidence.sourceProviders),
+        "Identity fields should be checked against the distributor's release record before pitching or campaign setup.",
       ],
     },
     {
-      title: "03 | Evidence ledger",
+      title: "03 | Evidence ledger and provenance",
       field: "evidence_ledger",
       body: evidenceLabelLines(a).length ? evidenceLabelLines(a) : ["No individually labelled evidence claims were returned. Treat unlabelled statements as unverified until their sources are confirmed."],
     },
     {
       title: "04 | Sonic DNA and audio profile",
       field: "sonic_dna",
-      body: sonicLines(input),
+      body: [
+        ...sonic,
+        "Interpretation boundary: provider catalog fields are not equivalent to measurements extracted from an uploaded master.",
+        "A final production assessment requires listening to the complete approved master, including its vocal, arrangement and mix context.",
+      ],
     },
     {
-      title: "05 | Creative identity",
+      title: "05 | Creative identity and artistic proposition",
       field: "creative_identity",
-      body: [a.creativeIdentity, "Primary A&R lane: " + a.aAndRPositioning.primaryLane, "Adjacent lanes: " + value(a.aAndRPositioning.adjacentLanes)],
+      body: [
+        a.creativeIdentity,
+        "Primary A&R lane: " + a.aAndRPositioning.primaryLane,
+        "Adjacent lanes: " + value(a.aAndRPositioning.adjacentLanes),
+        "The lane is a working discovery hypothesis. It should be tested against the complete recording, artist catalogue and intended release context.",
+      ],
     },
     {
       title: "06 | Strengths and creative leverage",
       field: "strengths",
-      body: a.strengths,
+      body: [
+        ...a.strengths,
+        "A strength is actionable only when it can be tied to a source, a listening observation or a clearly stated creative interpretation.",
+        "Use these points to shape the artist narrative; do not convert them into unsupported claims about audience size or commercial traction.",
+      ],
     },
     {
-      title: "07 | Risks and constraints",
+      title: "07 | Risks, constraints and diligence",
       field: "risks",
-      body: a.risks,
+      body: [
+        ...a.risks,
+        "Confirm rights, contributor credits, release metadata and asset ownership through the relevant primary records.",
+        "Resolve missing evidence before making claims to a label, distributor, media contact or curator.",
+      ],
     },
     {
       title: "08 | A&R positioning rationale",
       field: "ar_positioning",
-      body: ["Primary lane: " + a.aAndRPositioning.primaryLane, "Adjacent lanes: " + value(a.aAndRPositioning.adjacentLanes), a.aAndRPositioning.rationale],
+      body: [
+        "Primary lane: " + a.aAndRPositioning.primaryLane,
+        "Adjacent lanes: " + value(a.aAndRPositioning.adjacentLanes),
+        a.aAndRPositioning.rationale,
+        "Positioning should remain specific to the recording rather than relying on broad genre labels alone.",
+        "The final pitch should explain the track's musical identity, artist context and reason for release now, with unsupported comparisons removed.",
+      ],
     },
     {
       title: "09 | Evidence-based scorecard",
       field: "scorecard",
-      body: scoreLines(a),
+      body: [
+        ...scoreLines(a),
+        "Scores describe the completeness and usefulness of the supplied evidence. They are not a prediction of streaming outcomes, signing decisions or listener response.",
+      ],
     },
     {
-      title: "10 | Commercial read",
+      title: "10 | Commercial evidence and marketability",
       field: "commercial_read",
       body: [
         "Marketability: " + a.commercialRead.marketability.toUpperCase(),
         a.commercialRead.rationale,
-        "Catalog popularity: " + value(input.evidence.catalogPopularity),
-        "Catalog popularity scale: " + value(input.evidence.catalogPopularityScale),
-        "A catalog popularity indicator is not streams, revenue, sales, listener retention, or audience conversion.",
+        "Catalog popularity: " + value(evidence.catalogPopularity),
+        "Catalog popularity scale: " + value(evidence.catalogPopularityScale),
+        "A catalog popularity indicator is not streams, revenue, sales, listener retention, playlist conversion or proof of demand.",
+        "No commercial conclusion should be upgraded until platform analytics and campaign outcomes are supplied with their reporting period and source.",
       ],
     },
     {
-      title: "11 | Release strategy and priorities",
-      field: "release_strategy",
-      body: [a.releaseStrategy.recommendation, ...a.releaseStrategy.priorities.map((item, index) => "Priority " + (index + 1) + ": " + item)],
+      title: "11 | Audience evidence and validation plan",
+      field: "audience_evidence",
+      body: [
+        "Verified audience telemetry supplied: " + value(evidence.audienceTelemetry),
+        "Audience segments or demographics supplied: " + value(evidence.audienceSegments),
+        "Listener retention or completion evidence supplied: " + value(evidence.listenerRetention),
+        "The current evidence does not establish audience demographics, geographic concentration, listener loyalty or conversion behaviour.",
+        "Validation plan: collect platform-native audience geography, returning-listener behaviour, saves, completion and follower conversion after the release has measurable exposure.",
+        "Keep the source platform, date range, sample size and definition attached to every metric before using it in an A&R decision.",
+      ],
     },
     {
-      title: "12 | Gaps, limitations and decision record",
+      title: "12 | DSP and curator discovery readiness",
+      field: "curator_readiness",
+      body: [
+        "No named curator, playlist placement or editorial relationship is asserted by this report unless an independently verified source is present in the evidence.",
+        "Build a target shortlist only after confirming the track's sound, clean metadata, release timing, rights status and fit with each outlet's published submission criteria.",
+        "Prioritize genuine stylistic fit and current activity over follower counts or unverified placement promises.",
+        "Record the source, contact route, submission requirements, last verification date and response outcome for every future target.",
+        "Do not treat a suggested target category as an existing relationship or a guaranteed placement.",
+      ],
+    },
+    {
+      title: "13 | Release strategy and priorities",
+      field: "release_strategy",
+      body: [
+        a.releaseStrategy.recommendation,
+        ...a.releaseStrategy.priorities.map((item, index) => "Priority " + (index + 1) + ": " + item),
+        "Sequence execution around confirmed assets and evidence. Do not commit campaign spend against unverified reach assumptions.",
+      ],
+    },
+    {
+      title: "14 | Campaign measurement framework",
+      field: "campaign_measurement",
+      body: [
+        "Before launch, record the baseline and the exact reporting window for each connected DSP and social platform.",
+        "Track qualified reach, listener conversion, saves, repeat listening, completion, follower change and attributable traffic where the platform exposes those measures.",
+        "Separate organic response from paid exposure and identify campaign actions that can reasonably explain a change.",
+        "Compare like-for-like periods and retain the raw source export so later A&R decisions can be audited.",
+        "No forecast or target value is inserted here because no verified baseline was supplied.",
+      ],
+    },
+    {
+      title: "15 | Operational readiness and asset checklist",
+      field: "operational_readiness",
+      body: [
+        "Confirm final master, clean and explicit versions where applicable, artwork, artist and contributor credits, ISRC, release date, label and distributor delivery status.",
+        "Confirm that all contributors, samples and visual assets have the permissions required for the intended release and promotional use.",
+        "Prepare a concise track description that matches the final recording and does not overstate the available audience evidence.",
+        "Keep the final metadata, approved assets and campaign links in one version-controlled release record.",
+        "Items not present in the supplied evidence remain open checks, not assumed approvals.",
+      ],
+    },
+    {
+      title: "16 | Evidence gaps, limitations and decision record",
       field: "limitations",
       body: [
         "Evidence gaps:",
@@ -210,11 +288,11 @@ function fullSections(input: AuditReportInput): Array<{ title: string; field: st
         "Limitations:",
         ...a.limitations,
         "Decision boundary: do not treat inferred positioning as observed fact or metadata popularity as audience performance.",
+        "Next decision gate: update this assessment only when the missing source material is supplied and independently reconciled.",
       ],
     },
   ];
 }
-
 function sampleSections(input: AuditReportInput): Array<{ title: string; field: string; body: string[] }> {
   const a = input.assessment;
   return [
@@ -222,6 +300,7 @@ function sampleSections(input: AuditReportInput): Array<{ title: string; field: 
       title: "Executive overview",
       field: "executive_summary",
       body: [
+        "SAMPLE / PREVIEW — NOT A FULL CAMPAIGN REPORT",
         "RESON8 | CONFIDENTIAL SAMPLE A&R AUDIT",
         auditLabel(input),
         value(input.evidence.artist) + " — " + value(input.evidence.title),
@@ -275,7 +354,7 @@ export async function generateAuditReport(input: AuditReportInput, tier: AuditRe
     if (pageNumber >= maxPages) break;
     pageNumber++;
     let page = pdf.addPage([612, 792]);
-    drawPageHeader(page, section.title, pageNumber, font, bold);
+    drawPageHeader(page, tier === "sample" ? "SAMPLE / PREVIEW | " + section.title : section.title, pageNumber, font, bold);
     const paragraphs = section.body.length ? section.body : ["No evidence was supplied for this section."];
     let position = drawBody(page, paragraphs, font);
 
@@ -287,21 +366,8 @@ export async function generateAuditReport(input: AuditReportInput, tier: AuditRe
     while (position.paragraph < paragraphs.length && pageNumber < maxPages - (sections.length - sectionIndex - 1)) {
       pageNumber++;
       page = pdf.addPage([612, 792]);
-      drawPageHeader(page, section.title + " | continued", pageNumber, font, bold);
+      drawPageHeader(page, (tier === "sample" ? "SAMPLE / PREVIEW | " : "") + section.title + " | continued", pageNumber, font, bold);
       position = drawBody(page, paragraphs, font, 680, position.paragraph, position.line);
-    }
-  }
-
-  if (tier === "full") {
-    while (pageNumber < 12) {
-      pageNumber++;
-      const page = pdf.addPage([612, 792]);
-      drawPageHeader(page, "Evidence appendix " + (pageNumber - 11), pageNumber, font, bold);
-      drawBody(page, [
-        "Additional source material was not present in the supplied audit payload.",
-        "No external audience, revenue, playlist, sales, or conversion data has been added to fill this gap.",
-        "This page records an evidence limitation rather than manufacturing a conclusion.",
-      ], font);
     }
   }
 
