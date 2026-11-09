@@ -270,7 +270,8 @@ export async function generateAuditReport(input: AuditReportInput, tier: AuditRe
   const maxPages = tier === "sample" ? 4 : 20;
   let pageNumber = 0;
 
-  for (const section of sections) {
+  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+    const section = sections[sectionIndex];
     if (pageNumber >= maxPages) break;
     pageNumber++;
     let page = pdf.addPage([612, 792]);
@@ -283,7 +284,7 @@ export async function generateAuditReport(input: AuditReportInput, tier: AuditRe
       addEditableField(pdf, page, font, section.field, fieldText, 350, 190);
     }
 
-    while (position.paragraph < paragraphs.length && pageNumber < maxPages) {
+    while (position.paragraph < paragraphs.length && pageNumber < maxPages - (sections.length - sectionIndex - 1)) {
       pageNumber++;
       page = pdf.addPage([612, 792]);
       drawPageHeader(page, section.title + " | continued", pageNumber, font, bold);
