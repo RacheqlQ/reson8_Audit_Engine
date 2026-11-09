@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "tsc -p tsconfig.json",
+    "sample-report": "npm run build && node scripts/sample-report.mjs",
     "start": "node dist/server.js",
     "worker": "node dist/worker.js"
   },
