@@ -360,16 +360,15 @@ function chartRows(input: AuditReportInput, field: string): ChartRow[] {
   const metadataOnly = auditLabel(input) === "METADATA-BASED AUDIT";
   if (field === "sonic") {
     if (metadataOnly) return [{ label: "Audio profile", value: "Requires audio upload" }];
-    const keyMode = [chartValue(sonic, "key"), chartValue(sonic, "mode")].filter((item) => item !== null && item !== undefined && item !== "").join(" ");
     const bpm = chartValue(sonic, "bpm");
     const alternate = chartValue(sonic, "alternateTempo");
     return [
       { label: "Measured BPM", value: bpm as string | number | null },
       { label: "Alternate tempo", value: alternate as string | number | null },
       { label: "Tempo confidence", value: chartValue(sonic, "tempoConfidence") as string | number | null },
-      { label: "Key and mode", value: keyMode || null },
+      { label: "Key", value: chartValue(sonic, "key") as string | number | null },
+      { label: "Mode", value: chartValue(sonic, "mode") as string | number | null },
       { label: "Key confidence", value: chartValue(sonic, "keyConfidence") as string | number | null },
-      { label: "Energy", value: (chartValue(sonic, "energy") ?? chartValue(sonic, "rmsEnergy")) as string | number | null },
     ];
   }
   if (field === "spectrum") {
