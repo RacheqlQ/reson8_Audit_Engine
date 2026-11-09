@@ -165,7 +165,9 @@ function drawTimeline(page: PDFPage, rows: ChartRow[], x: number, top: number, f
     const px = x + 48 + index * 210;
     page.drawCircle({ x: px, y, size: 7, borderColor: BLUE, borderWidth: 1, color: PAPER });
     page.drawText("SEQUENCE " + (index + 1), { x: px - 25, y: y + 17, size: 6, font: bold, color: MUTED });
-    page.drawText(shown(row.value).slice(0, 48), { x: px - 28, y: y - 22, size: 6.2, font, color: INK });
+    const priority = shown(row.value);
+    page.drawText(priority.slice(0, 24), { x: px - 28, y: y - 22, size: 6.2, font, color: INK });
+    if (priority.length > 24) page.drawText(priority.slice(24, 48), { x: px - 28, y: y - 31, size: 5.8, font, color: INK });
   });
   page.drawText("30 / 60 / 90-DAY DATES: NOT DETERMINED BY THE ASSESSMENT", { x: x + 105, y: top - 127, size: 5.8, font: bold, color: MUTED });
 }
@@ -176,7 +178,7 @@ function drawChain(page: PDFPage, rows: ChartRow[], x: number, top: number, font
   labels.forEach((label, index) => {
     const cx = xs[index], cy = top - 67;
     page.drawCircle({ x: cx, y: cy, size: 27, borderColor: LINE, borderWidth: 1, color: PAPER });
-    page.drawText(label, { x: cx - 34, y: cy - 3, size: 5.7, font: bold, color: INK });
+    page.drawText(label, { x: cx - 30, y: cy - 3, size: 4.8, font: bold, color: INK });
     if (index < 2) line(page, cx + 28, cy, xs[index + 1] - 29, cy, BLUE, 1);
     const value = shown(rows[index]?.value);
     page.drawText(value.slice(0, 32), { x: cx - 55, y: cy - 43, size: 6, font, color: MUTED });
