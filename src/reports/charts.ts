@@ -137,6 +137,7 @@ function drawLayers(page: PDFPage, rows: ChartRow[], x: number, top: number, fon
   const total = rows.reduce((sum, row) => sum + (typeof row.value === "number" && Number.isFinite(row.value) ? row.value : 0), 0);
   const barX = x + 14, barY = top - 58, barWidth = 470;
   if (total > 0) {
+    page.drawRectangle({ x: barX + 2, y: barY - 2, width: barWidth, height: 20, color: INK, opacity: 0.12 });
     let offset = 0;
     rows.forEach((row, index) => {
       const count = typeof row.value === "number" && Number.isFinite(row.value) ? row.value : 0;
@@ -144,6 +145,7 @@ function drawLayers(page: PDFPage, rows: ChartRow[], x: number, top: number, fon
       if (segment > 0) page.drawRectangle({ x: barX + offset, y: barY, width: segment, height: 18, color: colors[index] });
       offset += segment;
     });
+    page.drawRectangle({ x: barX, y: barY + 12, width: barWidth, height: 6, color: PAPER, opacity: 0.16 });
   } else dashed(page, barX, barY + 9, barWidth);
   rows.forEach((row, index) => {
     const y = top - 88 - index * 14;
@@ -154,17 +156,19 @@ function drawLayers(page: PDFPage, rows: ChartRow[], x: number, top: number, fon
 }
 
 function drawTension(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {
-  const mid = x + 258;
-  line(page, mid, top - 34, mid, top - 132, LINE, 1);
-  page.drawText("STRENGTHS", { x: x + 18, y: top - 37, size: 7, font: bold, color: SAGE });
-  page.drawText("RISKS", { x: mid + 16, y: top - 37, size: 7, font: bold, color: CLAY });
-  rows.slice(0, 6).forEach((row, index) => {
-    const left = index < 3;
-    const y = top - 56 - (index % 3) * 25;
-    const tx = left ? x + 18 : mid + 16;
-    page.drawCircle({ x: tx + 3, y: y + 2, size: 2.5, color: left ? SAGE : CLAY });
-    page.drawText(shown(row.value).slice(0, 52), { x: tx + 10, y, size: 6.2, font, color: INK });
-  });
+  const mid=x+249, strength=rows[0], risk=rows[1], base=top-96;
+  page.drawText("STRENGTHS", {x:x+20,y:top-38,size:7,font:bold,color:SAGE});
+  page.drawText("RISKS", {x:mid+18,y:top-38,size:7,font:bold,color:CLAY});
+  const strengthCount=typeof strength?.value==="number"?strength.value:0;
+  const riskCount=typeof risk?.value==="number"?risk.value:0;
+  const max=Math.max(1,strengthCount,riskCount);
+  page.drawRectangle({x:x+20,y:base,width:205,height:22,color:LINE,opacity:.22});
+  page.drawRectangle({x:mid+18,y:base,width:205,height:22,color:LINE,opacity:.22});
+  page.drawRectangle({x:x+20,y:base,width:205*strengthCount/max,height:22,color:SAGE,opacity:.72});
+  page.drawRectangle({x:mid+18,y:base,width:205*riskCount/max,height:22,color:CLAY,opacity:.72});
+  page.drawText(String(strengthCount)+" documented items",{x:x+20,y:base-18,size:7,font,color:INK});
+  page.drawText(String(riskCount)+" documented items",{x:mid+18,y:base-18,size:7,font,color:INK});
+  page.drawText("COUNTS ONLY · NOT WEIGHTED SEVERITY",{x:x+145,y:top-145,size:5.6,font:bold,color:MUTED});
 }
 
 function drawTimeline(page: PDFPage, rows: ChartRow[], x: number, top: number, font: PDFFont, bold: PDFFont): void {

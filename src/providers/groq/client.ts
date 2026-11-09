@@ -175,7 +175,9 @@ export class GroqClient implements GroqAssessmentClient {
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"timeline","Build actionable 30/60/90-day steps without inventing dates, budgets or targets.",TimelineSchema,this.sleepImpl)
     ];
     const groups:unknown[]=new Array(tasks.length);let cursor=0;
-    await Promise.all(Array.from({length:3},async()=>{while(cursor<tasks.length){const index=cursor++;groups[index]=await tasks[index]();}}));
+    const settled=await Promise.allSettled(Array.from({length:3},async()=>{while(cursor<tasks.length){const index=cursor++;groups[index]=await tasks[index]();}}));
+    const failed=settled.find(result=>result.status==="rejected");
+    if(failed&&failed.status==="rejected")throw failed.reason;
     const assembled=Object.assign({},...groups) as z.infer<typeof AssessmentSchema>;
     const dna=input.sonicDna;
     const audioMaster=Boolean(dna && dna.provenance==="uploaded_audio_master");

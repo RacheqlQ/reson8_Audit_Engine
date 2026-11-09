@@ -19,9 +19,17 @@ const p=(group:string):Record<string,unknown>=>{
 function fetchMock(invalid?:string){const counts=new Map<string,number>();const mock=vi.fn(async (_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const name=body.response_format.json_schema.name.replace(/^ar_/,"");const n=(counts.get(name)??0)+1;counts.set(name,n);const value=name===invalid&&n===1?{}:p(name);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});return {mock,counts};}
 describe("GroqClient section groups",()=>{
  it("requests and validates all nine Zod section groups with evidence guardrails",async()=>{
-  const {mock}=fetchMock();const client=new GroqClient("test-key",undefined,mock as typeof fetch);
+  let active=0,maxActive=0;
+  const {mock:baseMock}=fetchMock();
+  const mock=vi.fn(async(url:RequestInfo|URL,init?:RequestInit)=>{
+    active++;maxActive=Math.max(maxActive,active);
+    await Promise.resolve();
+    const result=await (baseMock as typeof fetch)(url,init);
+    active--;return result;
+  });
+  const client=new GroqClient("test-key",undefined,mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{artist:"Fixture Artist"},sonicDna:null});
-  expect(mock).toHaveBeenCalledTimes(9);expect(result.scorecard.tempoLaneFit.score).toBeNull();expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();expect(result.commercialRead.marketability).toBe("undetermined");expect(result.scorecard.metadataCompleteness.score).toBe(65);expect(result.scorecard.releaseReadiness.score).toBeNull();
+  expect(mock).toHaveBeenCalledTimes(9);expect(maxActive).toBeLessThanOrEqual(3);expect(maxActive).toBe(3);expect(result.scorecard.tempoLaneFit.score).toBeNull();expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();expect(result.commercialRead.marketability).toBe("undetermined");expect(result.scorecard.metadataCompleteness.score).toBe(65);expect(result.scorecard.releaseReadiness.score).toBeNull();
   expect(result.evidenceLabels[0].label).toBe("INDUSTRY PRACTICE");expect(result.humanListeningChecklist.length).toBeGreaterThanOrEqual(5);
   expect(result.productionArrangementGuidance).toBeTruthy();expect(result.promotionPlan.playlistCategories.length).toBeGreaterThanOrEqual(3);expect(result.promotionPlan.pitchingAngles.length).toBeGreaterThanOrEqual(3);
   for(const call of mock.mock.calls){const body=JSON.parse(String(call[1]?.body));expect(body.model).toBe(DEFAULT_GROQ_MODEL);expect(body.response_format.type).toBe("json_schema");expect(body.messages[0].content).toContain("Never invent streams");expect(body.messages[1].content).toContain(GROQ_PROMPT_VERSION);}
