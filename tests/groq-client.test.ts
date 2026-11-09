@@ -82,7 +82,7 @@ const groupPayloads = {
 function padToWords(input: string, minimum: number): string {
   const sentence = "This conclusion remains limited to the supplied evidence and requires independent listening and source validation before any commercial decision is made.";
   let output = input;
-  while (output.trim().split(/\\s+/).filter(Boolean).length < minimum) output += " " + sentence;
+  while (output.trim().split(/\s+/).filter(Boolean).length < minimum) output += " " + sentence;
   return output;
 }
 
