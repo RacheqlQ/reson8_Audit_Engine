@@ -86,6 +86,13 @@ describe("Sonic DNA",()=>{
   expect(result.spectralCentroidHz).toBeGreaterThan(0);
   expect(result.zeroCrossingRate).toBeGreaterThan(0);
  });
+
+ it("measures upper spectral bins instead of returning zero for high-frequency PCM",()=>{
+  const sampleRate=48000,samples=Float32Array.from({length:sampleRate*2},(_,i)=>Math.sin(2*Math.PI*5000*i/sampleRate));
+  const result=analyzePcm(samples,sampleRate);
+  expect(result.spectralCentroidHz).toBeGreaterThan(4800);
+  expect(result.spectralCentroidHz).toBeLessThan(5200);
+ });
  it("does not invent a tempo for a steady non-rhythmic signal",()=>{
   expect(estimateTempo(new Float32Array(8000*8).fill(0.25),8000).bpm).toBeNull();
  });
