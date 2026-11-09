@@ -59,17 +59,33 @@ function drawPageHeader(page: PDFPage, title: string, pageNumber: number, font: 
   page.drawText("PRIVATE AUDIT | " + pageNumber, { x: 490, y: 28, size: 7, font, color: rgb(0.35, 0.37, 0.4) });
 }
 
-function drawBody(page: PDFPage, paragraphs: string[], font: PDFFont, startY = 680): number {
+function drawBody(
+  page: PDFPage,
+  paragraphs: string[],
+  font: PDFFont,
+  startY = 680,
+  startParagraph = 0,
+  startLine = 0,
+): { paragraph: number; line: number; y: number } {
   let y = startY;
-  for (const paragraph of paragraphs) {
-    for (const line of wrap(paragraph)) {
-      if (y < 62) return y;
-      page.drawText(line, { x: 48, y, size: 9, font, color: rgb(0.12, 0.14, 0.17) });
+  for (let paragraphIndex = startParagraph; paragraphIndex < paragraphs.length; paragraphIndex++) {
+    const lines = wrap(paragraphs[paragraphIndex]);
+    const firstLine = paragraphIndex === startParagraph ? startLine : 0;
+    for (let lineIndex = firstLine; lineIndex < lines.length; lineIndex++) {
+      if (y < 62) return { paragraph: paragraphIndex, line: lineIndex, y };
+      page.drawText(lines[lineIndex], { x: 48, y, size: 9, font, color: rgb(0.12, 0.14, 0.17) });
       y -= 14;
     }
     y -= 10;
   }
-  return y;
+  return { paragraph: paragraphs.length, line: 0, y };
+}
+
+function auditLabel(input: AuditReportInput): string {
+  if (input.evidence.auditType === "METADATA-BASED AUDIT" || input.sonicDna?.provenance === "tidal_catalog_metadata") {
+    return "METADATA-BASED AUDIT";
+  }
+  return "MASTER-BASED AUDIT";
 }
 
 function evidenceLabelLines(assessment: ArAssessment): string[] {
@@ -117,7 +133,7 @@ function fullSections(input: AuditReportInput): Array<{ title: string; field: st
     {
       title: "01 | Executive assessment",
       field: "executive_summary",
-      body: [a.executiveSummary, "Assessment confidence: " + Math.round(a.confidence * 100) + "%", "Evidence status: " + value(input.evidence.status)],
+      body: [auditLabel(input), a.executiveSummary, "Assessment confidence: " + Math.round(a.confidence * 100) + "%", "Evidence status: " + value(input.evidence.status)],
     },
     {
       title: "02 | Track identity and reconciliation",
@@ -207,6 +223,7 @@ function sampleSections(input: AuditReportInput): Array<{ title: string; field: 
       field: "executive_summary",
       body: [
         "RESON8 | CONFIDENTIAL SAMPLE A&R AUDIT",
+        auditLabel(input),
         value(input.evidence.artist) + " — " + value(input.evidence.title),
         "Audit ID: " + input.auditId + " | Generated: " + input.generatedAt.slice(0, 10),
         a.executiveSummary,
@@ -259,20 +276,18 @@ export async function generateAuditReport(input: AuditReportInput, tier: AuditRe
     let page = pdf.addPage([612, 792]);
     drawPageHeader(page, section.title, pageNumber, font, bold);
     const paragraphs = section.body.length ? section.body : ["No evidence was supplied for this section."];
-    let y = drawBody(page, paragraphs, font);
+    let position = drawBody(page, paragraphs, font);
 
     if (section.field === "executive_summary" || section.field === "creative_identity" || section.field === "ar_positioning") {
       const fieldText = paragraphs.join("\n\n");
       addEditableField(pdf, page, font, section.field, fieldText, 350, 190);
     }
 
-    let remaining = paragraphs.slice();
-    while (y < 62 && remaining.length && pageNumber < maxPages) {
+    while (position.paragraph < paragraphs.length && pageNumber < maxPages) {
       pageNumber++;
       page = pdf.addPage([612, 792]);
       drawPageHeader(page, section.title + " | continued", pageNumber, font, bold);
-      remaining = remaining.slice(1);
-      y = drawBody(page, remaining, font);
+      position = drawBody(page, paragraphs, font, 680, position.paragraph, position.line);
     }
   }
 
