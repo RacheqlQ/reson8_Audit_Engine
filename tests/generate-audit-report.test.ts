@@ -50,8 +50,8 @@ const input: AuditReportInput = {
     scorecard: {
       sonicIdentity: { score: 70, rationale: "The supplied audio measurements provide a useful but incomplete sonic profile. This score reflects descriptive coverage and does not claim audience demand or artistic quality." },
       metadataIntegrity: { score: 65, rationale: "Some identity fields are present, but the payload does not independently corroborate every release and rights field. This score reflects supplied metadata completeness only." },
-      commercialEvidence: { score: null, rationale: "No verified audience, streaming, sales, revenue, or playlist-conversion evidence was supplied. A numeric score would imply unsupported certainty, so this dimension remains unscored." },
-      releaseReadiness: { score: 55, rationale: "Identity and sonic context support preliminary planning, but audience validation and metadata checks remain outstanding. This score reflects evidence readiness rather than predicted performance." },
+      commercialEvidence: { score: null, rationale: "No verified audience, streaming, sales, revenue, or playlist-conversion evidence was supplied. A numeric score would imply unsupported certainty, so this dimension remains unscored until verified performance evidence is available." },
+      releaseReadiness: { score: 55, rationale: "Identity and sonic context support preliminary planning, but audience validation and metadata checks remain outstanding. This score reflects evidence readiness rather than predicted performance or commercial outcomes." },
     },
     evidenceLabels: [
       { label: "OBSERVED", claim: "The supplied audio analysis reports a tempo measurement for the recording.", source: "sonicDna.bpm" },
