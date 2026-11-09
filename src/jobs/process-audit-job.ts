@@ -179,6 +179,7 @@ function catalogSonicDna(metadata: CatalogMetadata): Record<string, unknown> | n
 
 function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
   return {
+    provenance: "uploaded_audio_master",
     sampleRate: dna.sampleRate,
     channels: dna.channels,
     durationSeconds: dna.durationSeconds,

@@ -1,111 +1,58 @@
-export const sampleReportInput = {
-  auditId: "fixture-metadata-audit",
-  generatedAt: "2026-11-09T00:00:00.000Z",
-  evidence: {
-    auditType: "METADATA-BASED AUDIT",
-    status: "verified",
-    artist: "Fixture Artist",
-    title: "Fixture Track",
-    album: "Fixture EP",
-    releaseDate: "2026-10-01",
-    label: "Independent",
-    isrc: "NGABC2600001",
-    platform: "tidal",
-    catalogPopularity: null,
-    catalogPopularityScale: null,
-    sources: ["tidal_catalog_metadata"],
-    identity: {
-      artist: "Fixture Artist",
-      title: "Fixture Track",
-      sourceProviders: ["tidal"],
-    },
-    reconciliation: {
-      status: "partial",
-      reconciledFields: ["artist", "title"],
-      conflicts: [],
-    },
-  },
-  sonicDna: {
-    provenance: "tidal_catalog_metadata",
-    bpm: 96,
-    key: null,
-    mode: null,
-    loudnessLufs: null,
-    rmsEnergy: null,
-    dynamicRangeDb: null,
-    spectralCentroidHz: null,
-    spectralBandwidthHz: null,
-    spectralRolloffHz: null,
-    zeroCrossingRate: null,
-    moodTags: ["Energetic"],
-    genreContext: ["R&B"],
-  },
-  assessment: {
-    assessmentVersion: "2.0",
-    executiveSummary: "The fixture contains a reconciled catalog identity and provider-supplied sonic context suitable for preliminary A&R discovery. It does not contain an uploaded master, master-derived production measurements or verified audience-performance data. The report therefore separates recognized identity from inferred creative positioning and leaves commercial marketability undetermined until independent listener and campaign evidence is supplied.",
-    creativeIdentity: "The supplied catalog context suggests a groove-led R&B direction with a restrained rhythmic character. This is a provisional creative interpretation of provider metadata, not a measured genre classification or evidence of audience preference. Listening review of the complete approved master remains necessary before finalizing the artist proposition.",
-    strengths: [
-      "The reconciled artist and title provide a usable identity foundation for release documentation and subsequent source checks.",
-      "The provider-supplied tempo field can inform preliminary rhythmic positioning, subject to confirmation against the complete recording.",
-      "The catalog record identifies its provider source, allowing the supplied identity fields to be traced during later reconciliation.",
-    ],
-    risks: [
-      "The audit has no uploaded master, so master-derived audio measurements and detailed production analysis remain unavailable.",
-      "No verified listener, streaming, revenue or playlist-conversion evidence is present, so commercial demand cannot be established.",
-    ],
-    aAndRPositioning: {
-      primaryLane: "R&B",
-      adjacentLanes: ["Alternative R&B"],
-      rationale: "The provider-supplied genre context and tempo can inform an initial A&R discovery hypothesis. The available metadata is not sufficient to confirm the final genre lane or predict audience response. Validate this positioning through full-master listening, catalogue review and measurable audience response before using it in external pitches.",
-    },
-    commercialRead: {
-      marketability: "undetermined",
-      rationale: "The fixture contains no verified audience telemetry, streaming performance, sales, revenue or playlist-conversion evidence. No catalog popularity value is supplied, and marketability therefore remains undetermined. Any commercial assessment requires platform-native metrics with a defined source, reporting period and measurement method.",
-    },
-    releaseStrategy: {
-      recommendation: "Use the reconciled catalog identity to prepare a preliminary release brief, then validate the creative direction against the complete approved recording. Collect platform-native campaign and audience evidence before making commercial claims or committing additional promotional spend.",
-      priorities: [
-        "Confirm the final artist, title, release date, label and ISRC against authoritative distributor records before delivery.",
-        "Review the complete approved master before finalizing the creative lane, production commentary or external pitch.",
-        "Collect verified platform-native audience and campaign measurements before evaluating commercial traction or conversion.",
-      ],
-    },
-    evidenceGaps: [
-      "No uploaded audio master or master-derived Sonic DNA measurements are available.",
-      "No verified audience telemetry or commercial performance data was supplied.",
-    ],
-    confidence: 0.68,
-    limitations: [
-      "This fixture is metadata-based and does not contain direct audio analysis.",
-      "The assessment is constrained to the supplied catalog metadata and cannot establish listener demand.",
-    ],
-    scorecard: {
-      sonicIdentity: { score: null, rationale: "No master-derived measurements are available in this metadata-only fixture. A numeric sonic identity score would overstate the evidence, so this dimension remains unscored until the recording is analyzed." },
-      metadataIntegrity: { score: 70, rationale: "Artist and title are present and linked to a named catalog source, but the fixture does not independently verify every release field. The score reflects partial metadata coverage only." },
-      commercialEvidence: { score: null, rationale: "No verified streams, listeners, sales, revenue, or playlist conversion data is present. A commercial score cannot be responsibly calculated from catalog popularity alone, so this dimension remains unscored." },
-      releaseReadiness: { score: 45, rationale: "The catalog identity supports initial preparation, but master review, release-field confirmation, and audience evidence are still outstanding. The score reflects the current evidence readiness, not predicted release success." },
-      hook: { score: null, rationale: "No supported hook-specific listening annotation or structural evidence was supplied for this fixture. The dimension remains unscored until complete master review identifies a repeatable hook." },
-      originality: { score: null, rationale: "No comparative catalogue review or verified reference set is included, so originality cannot be judged without unsupported comparisons. This dimension remains unscored pending documented listening review." },
-      production: { score: null, rationale: "The available measurements do not isolate mix, arrangement, vocal capture, mastering, or production decisions sufficiently to support a production-quality score. A detailed master review is required." },
-      replayValue: { score: null, rationale: "No repeat-listening, completion, save, or retention telemetry is supplied. Replay value cannot be inferred from tempo or genre metadata, so this dimension remains unscored pending listener evidence." },
-      laneClarity: { score: null, rationale: "The current metadata provides a provisional lane hypothesis, but no validated comparative listening review confirms how clearly the recording occupies that lane. Leave this dimension unscored until reviewed." },
-    },
-    evidenceLabels: [
-      {
-        label: "RECOGNIZED",
-        claim: "The artist and title are represented in the supplied catalog metadata record.",
-        source: "tidal_catalog_metadata",
-      },
-      {
-        label: "OBSERVED",
-        claim: "The provider metadata reports a tempo value of 96 BPM for this track.",
-        source: "sonicDna.bpm",
-      },
-      {
-        label: "INFERRED",
-        claim: "The proposed R&B lane is a provisional creative interpretation of the supplied catalog context.",
-        source: "sonicDna.genreContext",
-      },
-    ],
-  },
+const assessment = {
+ assessmentVersion:"3.0",
+ executiveSummary:"This clearly labelled renderer fixture combines a supplied synthetic audio-analysis profile with placeholder track identity. Its values exist only to exercise the report layout, evidence labels and scorecard paths. They are not measurements from a real recording, a real artist, an audience, a campaign or a commercial catalogue. Do not treat any figure or conclusion in this document as an actual A&R finding.",
+ creativeIdentity:"The fixture profile is designed to exercise a mid-tempo, groove-led R&B positioning path with a measurable tempo and technical fields. This description is synthetic test content, not a creative judgement about an actual recording or a claim about a real artist's sound.",
+ strengths:["Fixture identity fields are populated so the PDF can test the source-reconciliation layout without representing a real release.","Synthetic audio measurements populate the renderer's tempo, rhythm and loudness score paths for deterministic visual testing.","The test assessment includes explicit provenance labels so the report can distinguish fixture measurements from general industry practice."],
+ risks:["The artist, title, metadata and audio profile are synthetic fixture values and must never be interpreted as real track evidence.","No audience telemetry, verified commercial performance, listener behaviour or partner interest is represented in this fixture."],
+ aAndRPositioning:{primaryLane:"Afro-R&B (fixture hypothesis)",adjacentLanes:["Alternative R&B (fixture)"],rationale:"This synthetic lane label is included to exercise the A&R positioning text and adjacent-lane layout. It is not an actual genre classification and must not be used to compare a real artist, track or market."},
+ commercialRead:{marketability:"undetermined",rationale:"The fixture contains no real streams, listeners, sales, revenue, playlist conversion or campaign reporting. Commercial marketability remains undetermined by design; synthetic Sonic DNA values do not establish audience demand or commercial performance."},
+ releaseStrategy:{recommendation:"Use this renderer fixture to verify page flow, evidence labels, scorecard null handling and the A&R notes field. Do not use it to make a release, signing, marketing, budget or distribution decision because the identity and analysis values are synthetic test data.",priorities:["Confirm that the fixture label remains visible on both PDF tiers and is not presented as a real assessment.","Verify that all five evidence-derived scorecard dimensions render their numeric or null states and rationales without truncation.","Confirm that the metadata-only variant suppresses master-derived values and retains the consolidated audio-missing state."]},
+ evidenceGaps:["No real audio master, artist identity, audience telemetry or commercial performance data is supplied; all fixture values are synthetic."],
+ confidence:0.92,
+ limitations:["Synthetic renderer fixture only; not an analysis of a real master or release.","The generated tempo, key and loudness fields are test values and have no real-world provenance."],
+ scorecard:{
+  tempoLaneFit:{score:78,rationale:"Synthetic fixture tempo is 96 BPM and is included only to exercise the numeric score layout. No actual recording or genre fit has been measured."},
+  rhythmicConsistency:{score:82,rationale:"A synthetic rhythmic consistency score is supplied to test the renderer's supported numeric state. It does not represent measured timing, groove stability or a real performance."},
+  dynamicRangeLoudness:{score:74,rationale:"Synthetic fixture LUFS and dynamic-range values exercise the audio-only score path. They are not derived from a real uploaded master and must not be treated as mastering advice."},
+  metadataCompleteness:{score:80,rationale:"Fixture identity fields are populated to test the completeness score display. They are not independently verified release metadata and do not establish real-world rights or delivery readiness."},
+  releaseReadiness:{score:68,rationale:"This synthetic score tests the report layout only. It does not establish that a real release has approved assets, cleared rights, complete delivery metadata or a validated campaign plan."}
+ },
+ humanListeningChecklist:["Does the first section establish a clear musical or lyrical reason to continue listening?","Can the hook be recalled after one play, and which exact phrase or motif carries it?","Does the vocal delivery communicate a distinctive point of view across the full arrangement?","What feels genuinely original compared with verified listening references, and which similarities are intentional?","Does the arrangement create meaningful development and payoff without unnecessary repetition?","Would a listener replay or share the track, and what real listening evidence would support that judgement?","Can a first-time listener describe the lane without prompting, and which audible details support that description?"],
+ evidenceLabels:[
+  {label:"OBSERVED",claim:"Synthetic fixture generator supplies a tempo value solely for renderer testing and not as a real audio measurement.",source:"fixture.sonicDna.bpm"},
+  {label:"INFERRED",claim:"The fixture lane label is a synthetic positioning hypothesis used to test report text layout only.",source:"fixture.assessment.aAndRPositioning"},
+  {label:"INDUSTRY PRACTICE",claim:"General release craft guidance is presented separately from the synthetic fixture's track fields and is not a finding about a recording.",source:"industry_practice"}
+ ],
+ productionArrangementGuidance:"Renderer fixture guidance: inspect whether the report can display multi-sentence production and arrangement guidance, including opening impact, section contrast, transition clarity, low-end translation and ending decisions. These phrases are illustrative test content and do not describe a real master.",
+ industryPractice:"INDUSTRY PRACTICE — fixture text only. In a typical lane review, teams may compare the opening, vocal entry, section contrast and transition design against recent independently verified releases. This general craft convention is separate from track-specific evidence and is not a claim about this fixture or any real recording.",
+ listeningChecks:["Check whether the opening establishes the musical proposition quickly enough for the intended format.","Review whether section changes create contrast and whether the final chorus or drop earns its return.","Check vocal and instrumental balance across quiet and dense passages, then verify translation on multiple playback systems.","Record any production or arrangement observation with a timestamp before including it in a real A&R assessment."],
+ laneHypothesis:"INFERRED fixture lane hypothesis: a groove-led R&B descriptor is included to exercise comparable-lane text flow. It is synthetic and must not be treated as a verified genre, artist comparison or audience signal.",
+ referencesToVerify:["Search for recent independently verified releases in the intended R&B lane and compare arrangement structure, not popularity claims.","Review reference tracks with a similar tempo feel and vocal approach after confirming their identity and release context.","Compare production texture and section transitions using full recordings and documented listening notes."],
+ verificationMethod:"Before using any reference in a real assessment, verify the recording identity, release date and source independently. Record the exact musical dimension being compared and keep the comparison explicitly interpretive rather than presenting it as market or audience data.",
+ promotionPlan:{
+  preRelease:"Fixture plan: test that pre-release copy can display a concrete sequence covering approved master, artwork, metadata, rights checks and a concise verified artist story. This is sample content, not a real campaign recommendation.",
+  releaseWindow:"Fixture plan: verify that release-window guidance can describe coordinating DSP delivery, artist-owned channels and short-form assets without promising playlist placement, reach or conversion.",
+  postRelease:"Fixture plan: verify that post-release guidance can describe reviewing platform-native saves, completion and attributable traffic over consistent reporting windows, without inserting fabricated metrics.",
+  contentIdeas:["A performance excerpt with the artist's approval and cleared composition rights.","A short lyric or story-context clip using verified artist-supplied details.","A production breakdown that accurately identifies the people and tools involved.","A visual motif or alternate edit that has been approved for the release."],
+  pitchingAngles:["Lead with the verified musical feature that distinguishes the approved recording.","Connect the artist story to a specific and source-checked release reason.","Frame the track for a relevant lane category without implying playlist acceptance."],
+  playlistCategories:["Lane-specific R&B discovery","Alternative and left-field R&B","Mood-led late-night listening","Regional independent new-music discovery"],
+  industryPractice:"INDUSTRY PRACTICE — fixture text only. Release teams commonly align pitching materials with a clear musical angle and the right category of programming. Categories are discovery directions, not named playlists, placements, curator relationships or evidence of acceptance."
+ },
+ labelPartnerFit:{
+  partnerProfile:"Fixture partner profile: independent labels, artist-development teams and distributors with a demonstrable current catalogue in the stated lane. This category description exists to test the PDF section and does not imply that any organisation has reviewed or expressed interest in a real artist.",
+  criteriaToDemonstrate:["A clear and supportable artist proposition backed by approved recordings.","Complete rights, credits and release-delivery information.","A consistent creative direction demonstrated by approved material.","A credible release plan with evidence sources and responsibilities identified."],
+  diligenceBeforeContact:"Verify each organisation's current roster, submission route, rights expectations and commercial terms from its own authoritative materials before contact. Do not infer interest from a genre match or imply a relationship that has not been confirmed.",
+  industryPractice:"INDUSTRY PRACTICE — fixture text only. Partners in many independent lanes assess identity clarity, recording quality, rights readiness, creative consistency and execution capacity. This is general industry craft guidance, not evidence that a label wants this recording."
+ },
+ executionPlan:{
+  days30:"Verify the master and rights, reconcile the identity fields, complete a human listening review and document the release proposition. This synthetic schedule tests the first execution-plan text area only.",
+  days60:"Prepare approved assets, coordinate delivery responsibilities and test a small number of artist-owned content concepts. Record source, date and observed response without inventing reach or conversion targets.",
+  days90:"Review consistent platform reporting windows, compare available saves and completion data, then decide whether the campaign should continue, change direction or pause. This fixture timeline is not a confirmed release calendar."
+ }
 };
+const audio={provenance:"uploaded_audio_master",sampleRate:44100,channels:2,durationSeconds:182.4,bpm:96,alternateTempo:192,tempoConfidence:0.94,key:"A",mode:"minor",keyConfidence:0.78,loudnessLufs:-9.8,rmsEnergy:0.17,dynamicRangeDb:8.4,spectralCentroidHz:2140,spectralBandwidthHz:1860,spectralRolloffHz:7400,zeroCrossingRate:0.071,moodTags:["Energetic","Warm"],genreContext:["R&B","Afro-R&B"]};
+const evidence={auditType:"AUDIO-BASED AUDIT",status:"fixture",artist:"Fixture Artist",title:"Fixture Track",album:"Fixture EP",releaseDate:"2026-10-01",label:"Fixture Label",isrc:"NGFIX2600001",platform:"fixture",sources:["synthetic_audio_fixture"],fixture:true};
+export const sampleReportInput={auditId:"fixture-full-audio",generatedAt:"2026-11-09T00:00:00.000Z",evidence,sonicDna:audio,assessment};
+export const fullAudioFixture=sampleReportInput;
+export const partialAudioFixture={...sampleReportInput,auditId:"fixture-partial-audio-low-confidence",evidence:{...evidence,title:"Fixture Track — Partial"},sonicDna:{...audio,key:null,mode:null,keyConfidence:0.12},assessment:{...assessment,confidence:0.28,scorecard:{...assessment.scorecard,dynamicRangeLoudness:{score:null,rationale:"Key confidence is low in this partial fixture; this null score exercises the unsupported-evidence state and is not a real master assessment."}}}};
+export const metadataOnlyFixture={...sampleReportInput,auditId:"fixture-metadata-only",evidence:{...evidence,auditType:"METADATA-ONLY AUDIT"},sonicDna:null,assessment:{...assessment,confidence:0.45,scorecard:{...assessment.scorecard,tempoLaneFit:{score:null,rationale:"No uploaded audio is present in the metadata-only fixture, so tempo and lane fit cannot be scored. This null state is renderer test data only."},rhythmicConsistency:{score:null,rationale:"No uploaded audio is present in the metadata-only fixture, so rhythmic consistency cannot be scored. This null state is renderer test data only."},dynamicRangeLoudness:{score:null,rationale:"No uploaded audio is present in the metadata-only fixture, so dynamic range and loudness readiness cannot be scored. This null state is renderer test data only."}}}};

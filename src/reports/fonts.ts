@@ -7,11 +7,12 @@ export interface ReportFonts {
   boldItalic: PDFFont;
 }
 
-export function loadReportFonts(pdf: PDFDocument): ReportFonts {
-  return {
-    regular: pdf.embedFont(StandardFonts.Helvetica),
-    bold: pdf.embedFont(StandardFonts.HelveticaBold),
-    italic: pdf.embedFont(StandardFonts.HelveticaOblique),
-    boldItalic: pdf.embedFont(StandardFonts.HelveticaBoldOblique),
-  };
+export async function loadReportFonts(pdf: PDFDocument): Promise<ReportFonts> {
+  const [regular,bold,italic,boldItalic]=await Promise.all([
+    pdf.embedFont(StandardFonts.Helvetica),
+    pdf.embedFont(StandardFonts.HelveticaBold),
+    pdf.embedFont(StandardFonts.HelveticaOblique),
+    pdf.embedFont(StandardFonts.HelveticaBoldOblique),
+  ]);
+  return {regular,bold,italic,boldItalic};
 }

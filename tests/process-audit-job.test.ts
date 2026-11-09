@@ -1,44 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { processAuditJob } from "../src/jobs/process-audit-job.js";
 
-const assessment = {
-  assessmentVersion: "1.0",
-  executiveSummary: "The supplied evidence supports a preliminary assessment of the recording's creative identity while leaving audience and market performance unverified. The report distinguishes measurable audio traits from interpretive positioning and records the limits of the available source material.",
-  creativeIdentity: "The recording presents a groove-led R&B identity with a restrained rhythmic character. This is an interpretation of the supplied sonic context rather than a claim about audience response, commercial performance or confirmed genre classification.",
-  strengths: ["The supplied tempo measurement gives the arrangement a concrete rhythmic reference for listening review.", "The audio profile provides measurable production characteristics that can support comparisons across approved masters.", "The reconciled identity fields provide a reliable starting point for track-level release documentation."],
-  risks: ["No verified audience telemetry is available to establish listener demand, retention or conversion behaviour.", "The available evidence does not confirm release readiness, rights status or commercial performance across relevant platforms."],
-  aAndRPositioning: {
-    primaryLane: "R&B",
-    adjacentLanes: ["Afro-R&B"],
-    rationale: "The proposed R&B lane is a working creative hypothesis based on the supplied identity and sonic context. It should be validated against the complete master and the artist's catalogue before being used in an external A&R pitch.",
-  },
-  commercialRead: {
-    marketability: "undetermined" as const,
-    rationale: "No verified streaming, listener, sales, revenue or playlist-conversion evidence was supplied. Marketability remains undetermined until platform-native analytics are available with a clear source, reporting period and measurement definition.",
-  },
-  releaseStrategy: {
-    recommendation: "Use the strongest verified creative and identity signals to frame the release, then validate the positioning through listening review and measurable audience response. Avoid commercial claims or increased campaign spend until source evidence is available.",
-    priorities: ["Confirm release identity and rights metadata against authoritative distributor records.", "Review the complete approved master before finalizing creative positioning and production commentary.", "Collect verified platform and campaign measurements before evaluating commercial traction."],
-  },
-  evidenceGaps: ["No verified audience telemetry, listener retention history or campaign conversion data was supplied."],
-  confidence: 0.8,
-  limitations: ["The assessment is limited to supplied identity and audio evidence and cannot establish listener demand or commercial performance."],
-  scorecard: {
-    sonicIdentity: { score: 70, rationale: "The supplied audio measurements provide a useful but incomplete sonic profile. This score reflects descriptive coverage and does not claim audience demand or artistic quality." },
-    metadataIntegrity: { score: 65, rationale: "The payload does not independently corroborate every release and rights field. This score reflects supplied metadata completeness only." },
-    commercialEvidence: { score: null, rationale: "No verified audience, streaming, sales, revenue, or playlist-conversion evidence was supplied. A numeric score would imply unsupported certainty, so this dimension remains unscored until verified performance evidence is available." },
-    releaseReadiness: { score: 55, rationale: "Identity and sonic context support preliminary planning, but audience validation and metadata checks remain outstanding. This score reflects evidence readiness rather than predicted performance or commercial outcomes." },
-    hook: { score: null, rationale: "No supported hook-specific listening annotation or structural evidence was supplied for this fixture. The dimension remains unscored until complete master review identifies a repeatable hook." },
-    originality: { score: null, rationale: "No comparative catalogue review or verified reference set is included, so originality cannot be judged without unsupported comparisons. This dimension remains unscored pending documented listening review." },
-    production: { score: null, rationale: "The available measurements do not isolate mix, arrangement, vocal capture, mastering, or production decisions sufficiently to support a production-quality score. A detailed master review is required." },
-    replayValue: { score: null, rationale: "No repeat-listening, completion, save, or retention telemetry is supplied. Replay value cannot be inferred from tempo or genre metadata, so this dimension remains unscored pending listener evidence." },
-    laneClarity: { score: null, rationale: "The current metadata provides a provisional lane hypothesis, but no validated comparative listening review confirms how clearly the recording occupies that lane. Leave this dimension unscored until reviewed." },
-  },
-  evidenceLabels: [
-    { label: "OBSERVED" as const, claim: "The supplied audio analysis reports a tempo measurement for the recording.", source: "sonicDna.bpm" },
-    { label: "INFERRED" as const, claim: "The proposed creative lane is an interpretation and not a measured genre fact.", source: "sonicDna.genreContext" },
-  ],
-};
+const assessment = {} as import("../src/providers/groq/client.js").ArAssessment;
 
 describe("processAuditJob", () => {
   it("moves a queued master through evidence, Sonic DNA, Groq assessment and completion", async () => {
@@ -79,7 +42,7 @@ describe("processAuditJob", () => {
       },
       generateAssessment: async (input) => {
         events.push("assessment");
-        expect(input.sonicDna).not.toBeNull();
+        expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
         expect(input.evidence).toMatchObject({
           auditType: "MASTER-BASED AUDIT",
           artist: "Artist",
