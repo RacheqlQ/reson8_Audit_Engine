@@ -50,6 +50,11 @@ const EvidenceScoreSchema = z.object({
     metadataIntegrity: ScoreSchema,
     commercialEvidence: ScoreSchema,
     releaseReadiness: ScoreSchema,
+    hook: ScoreSchema,
+    originality: ScoreSchema,
+    production: ScoreSchema,
+    replayValue: ScoreSchema,
+    laneClarity: ScoreSchema,
   }),
   evidenceLabels: z.array(EvidenceLabelSchema).min(1).max(24),
 });
@@ -80,6 +85,7 @@ const SYSTEM_PROMPT = [
   "When market-performance evidence is absent, marketability must be undetermined and commercialEvidence.score must be null.",
   "A null score means there is insufficient evidence to score the dimension. Explain the missing evidence in its rationale.",
   "Score rationales must explain the supplied evidence and the limits of the score. Do not use generic praise.",
+  "For hook, originality, production, replayValue and laneClarity, use only supported listening or source evidence. If the evidence does not support a score, return score null and explain why in the rationale.",
   "Return JSON only. Do not wrap it in markdown. Meet every minimum length and array threshold in the requested schema."
 ].join(" ");
 
@@ -132,6 +138,11 @@ function wordThresholdError(groupName: string, value: unknown): string | null {
       ?? checkText("scorecard.metadataIntegrity.rationale", scorecard?.metadataIntegrity?.rationale, 25)
       ?? checkText("scorecard.commercialEvidence.rationale", scorecard?.commercialEvidence?.rationale, 25)
       ?? checkText("scorecard.releaseReadiness.rationale", scorecard?.releaseReadiness?.rationale, 25)
+      ?? checkText("scorecard.hook.rationale", scorecard?.hook?.rationale, 25)
+      ?? checkText("scorecard.originality.rationale", scorecard?.originality?.rationale, 25)
+      ?? checkText("scorecard.production.rationale", scorecard?.production?.rationale, 25)
+      ?? checkText("scorecard.replayValue.rationale", scorecard?.replayValue?.rationale, 25)
+      ?? checkText("scorecard.laneClarity.rationale", scorecard?.laneClarity?.rationale, 25)
       ?? (labels ?? []).reduce<string | null>((error, label, index) =>
         error ?? checkText("evidenceLabels[" + index + "].claim", label.claim, 8), null);
   }
