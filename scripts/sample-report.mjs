@@ -13,7 +13,7 @@ for (const tier of ["sample", "full"]) {
   }
   const document = await PDFDocument.load(bytes);
   const pages = document.getPageCount();
-  const minimum = tier === "sample" ? 3 : 12;
+  const minimum = tier === "sample" ? 3 : 16;
   const maximum = tier === "sample" ? 4 : 20;
   if (pages < minimum || pages > maximum) {
     throw new Error(tier + " report page count outside expected range: " + pages);
