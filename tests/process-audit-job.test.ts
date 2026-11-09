@@ -71,7 +71,11 @@ describe("processAuditJob", () => {
       generateAssessment: async (input) => {
         events.push("assessment");
         expect(input.sonicDna).not.toBeNull();
-        expect(input.evidence).toMatchObject({ artist: "Artist", title: "Song" });
+        expect(input.evidence).toMatchObject({
+          auditType: "MASTER-BASED AUDIT",
+          artist: "Artist",
+          title: "Song",
+        });
         return assessment;
       },
       saveAssessment: async () => events.push("assessment-saved"),
@@ -192,6 +196,7 @@ describe("processAuditJob", () => {
       },
     });
     expect(reportInputs[0]).toMatchObject({
+      auditType: "METADATA-BASED AUDIT",
       artist: "TIDAL Artist",
       title: "TIDAL Title",
       album: "AudD Album",
