@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import type { ArAssessment } from "../providers/groq/client.js";
-import { countEvidenceLayers, drawChartPanel, type ChartRow } from "./charts.js";
+import { countEvidenceLayers, drawChartPanel, type ChartKind, type ChartRow } from "./charts.js";
 
 export type AuditReportTier = "sample" | "full";
 
@@ -347,45 +347,48 @@ function chartValue(source: Record<string, unknown> | null | undefined, key: str
 }
 
 function chartRows(input: AuditReportInput, field: string): ChartRow[] {
-  const assessment = input.assessment as unknown as Record<string, unknown>;
   const sonic = input.sonicDna;
   const metadataOnly = auditLabel(input) === "METADATA-BASED AUDIT";
-  const scorecard = (assessment.scorecard ?? {}) as Record<string, unknown>;
   if (field === "sonic") {
     if (metadataOnly) return [{ label: "Audio profile", value: "Requires audio upload" }];
+    const keyMode = [chartValue(sonic, "key"), chartValue(sonic, "mode")].filter((item) => item !== null && item !== undefined && item !== "").join(" ");
+    const bpm = chartValue(sonic, "bpm");
+    const alternate = chartValue(sonic, "alternateTempo");
     return [
-      { label: "BPM", value: chartValue(sonic, "bpm") as string | number | null },
-      { label: "Alternate tempo", value: chartValue(sonic, "alternateTempo") as string | number | null },
-      { label: "Key / mode", value: [chartValue(sonic, "key"), chartValue(sonic, "mode")].filter(Boolean).join(" ") || null },
+      { label: "BPM / alternate", value: bpm === null || bpm === undefined ? null : String(bpm) + " BPM; alternate: " + value(alternate) },
+      { label: "Key and mode", value: keyMode || null },
       { label: "Key confidence", value: chartValue(sonic, "keyConfidence") as string | number | null },
       { label: "Energy", value: (chartValue(sonic, "energy") ?? chartValue(sonic, "rmsEnergy")) as string | number | null },
       { label: "Duration (seconds)", value: chartValue(sonic, "durationSeconds") as string | number | null },
-      { label: "Loudness / range", value: (chartValue(sonic, "loudnessLufs") ?? chartValue(sonic, "dynamicRangeDb")) as string | number | null },
+      { label: "Loudness / dynamic range", value: (chartValue(sonic, "loudnessLufs") ?? chartValue(sonic, "dynamicRangeDb")) as string | number | null },
     ];
   }
   if (field === "spectrum") {
-    if (metadataOnly) return [{ label: "Energy / tempo spectrum", value: "Requires audio upload" }];
+    if (metadataOnly) return [{ label: "Audio spectrum", value: "Requires audio upload" }];
+    const mood = chartValue(sonic, "moodTags");
     return [
       { label: "Energy", value: (chartValue(sonic, "energy") ?? chartValue(sonic, "rmsEnergy")) as string | number | null },
       { label: "Tempo (BPM)", value: chartValue(sonic, "bpm") as string | number | null },
-      { label: "Mood spectrum", value: chartValue(sonic, "moodTags") as string | number | null },
+      { label: "Mood evidence", value: Array.isArray(mood) && mood.length ? mood.join(", ") : null },
     ];
   }
   if (field === "scorecard") {
-    const dimensions = ["hook", "originality", "production", "replayValue", "laneClarity"];
-    return dimensions.map((key) => ({
-      label: key === "replayValue" ? "Replay value" : key === "laneClarity" ? "Lane clarity" : key[0].toUpperCase() + key.slice(1),
-      value: chartValue(scorecard, key) as string | number | null,
-      rationale: typeof chartValue(scorecard, key + "Rationale") === "string" ? String(chartValue(scorecard, key + "Rationale")) : undefined,
+    // These five dimensions are not present in the current assessment schema.
+    // Preserve the gap rather than remapping unrelated scorecard fields.
+    return ["Hook", "Originality", "Production", "Replay value", "Lane clarity"].map((label) => ({
+      label,
+      value: null,
+      rationale: "Not determined — this dimension is not supplied by the current assessment schema.",
     }));
   }
   if (field === "evidence") {
     const counts = countEvidenceLayers(input.assessment.evidenceLabels);
-    const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
     return (Object.keys(counts) as Array<keyof typeof counts>).map((label) => ({
       label,
       value: counts[label],
-      proportion: total ? counts[label] / total : null,
+      proportion: Object.values(counts).reduce((sum, count) => sum + count, 0)
+        ? counts[label] / Object.values(counts).reduce((sum, count) => sum + count, 0)
+        : null,
     }));
   }
   if (field === "lane") {
@@ -402,7 +405,7 @@ function chartRows(input: AuditReportInput, field: string): ChartRow[] {
   }
   if (field === "timeline") {
     return input.assessment.releaseStrategy.priorities.slice(0, 3).map((item, index) => ({
-      label: "Priority " + (index + 1) + " — timing not determined",
+      label: "Sequence " + (index + 1),
       value: item,
     }));
   }
@@ -425,44 +428,49 @@ function drawSectionCharts(
   bold: PDFFont,
 ): boolean {
   const metadataOnly = auditLabel(input) === "METADATA-BASED AUDIT";
-  const draw = (title: string, key: string, y: number, shows: string, cantShow: string, inferred = false) => {
-    drawChartPanel(page, { title, rows: chartRows(input, key), y, inferred, shows, cantShow }, font, bold);
+  const draw = (title: string, key: string, kind: ChartKind, y: number, shows: string, cantShow: string, inferred = false) => {
+    drawChartPanel(page, { title, rows: chartRows(input, key), kind, y, inferred, shows, cantShow }, font, bold);
   };
   if (tier === "sample") {
     if (field === "evidence_snapshot") {
-      draw("Sonic DNA dashboard", "sonic", 255, "supplied sonic fields and their availability", "unmeasured master properties", false);
+      draw("Sonic DNA dashboard", "sonic", "sonic", 255, "available sonic fields and explicit gaps", metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties");
       return true;
     }
     if (field === "ar_positioning") {
-      draw("Scorecard preview", "scorecard", 255, "the five requested creative dimensions when assessed", "missing dimension scores and commercial outcomes", false);
+      if (metadataOnly) {
+        draw("Scorecard preview", "sonic", "bars", 255, "the master-derived scorecard is not available in a metadata-only audit", "creative scores until audio upload");
+      } else {
+        draw("Scorecard preview", "scorecard", "bars", 255, "the five requested dimensions when supplied by the assessment", "missing dimension scores and commercial outcomes", true);
+      }
       return true;
     }
     return false;
   }
   switch (field) {
     case "evidence_ledger":
-      draw("Evidence layers", "evidence", 250, "claim counts by actual provenance label", "truth or quality beyond the supplied labels");
+      draw("Evidence layers", "evidence", "layers", 250, "claim counts by actual provenance label", "truth or quality beyond the supplied labels");
       return true;
     case "sonic_dna":
-      draw("Sonic DNA dashboard", "sonic", 260, "measured audio fields where available", metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties");
+      draw("Sonic DNA dashboard", "sonic", "sonic", 260, "measured audio fields where available", metadataOnly ? "master-derived audio until upload" : "listener response or unmeasured properties");
       return true;
     case "creative_identity":
-      draw("Lane constellation — qualitative positioning", "lane", 250, "primary and adjacent A&R lanes", "measured genre distance or market share", true);
+      draw("Lane constellation — qualitative positioning", "lane", "constellation", 250, "primary and adjacent A&R lanes", "measured genre distance or market share", true);
       return true;
     case "strengths":
-      draw("Strengths versus risks", "tension", 250, "assessment-listed strengths and risks", "a numeric balance or probability");
+      draw("Strengths versus risks", "tension", "tension", 250, "assessment-listed strengths and risks", "a numeric balance or probability");
       return true;
     case "scorecard":
-      draw("Scorecard", "scorecard", 250, "available hook, originality, production, replay and lane scores", "unscored dimensions and commercial outcomes");
+      if (metadataOnly) draw("Scorecard", "sonic", "bars", 250, "master-derived creative scores are unavailable", "hook, originality, production, replay and lane scores until audio upload");
+      else draw("Scorecard", "scorecard", "bars", 250, "the five requested dimensions when supplied by the assessment", "unscored dimensions and commercial outcomes", true);
       return true;
     case "curator_readiness":
-      draw("Promotion causal chain", "promotion", 250, "only explicitly supplied content-to-action recommendations", "conversion rates, reach or causal proof", true);
+      draw("Promotion causal chain", "promotion", "chain", 250, "whether content-to-action recommendations are explicitly present", "conversion rates, reach or causal proof", true);
       return true;
     case "release_strategy":
-      draw("Release priorities timeline", "timeline", 250, "the first three assessment priorities in sequence", "30/60/90-day dates not supplied in the assessment", true);
+      draw("Release priorities timeline", "timeline", "timeline", 250, "the first three assessment priorities in sequence", "30/60/90-day dates not supplied in the assessment", true);
       return true;
     case "commercial_read":
-      draw("Energy and tempo spectrum", "spectrum", 250, "available audio energy and tempo evidence", "market size, audience demographics or unmeasured mood", true);
+      draw("Energy and tempo spectrum", "spectrum", "spectrum", 250, "available audio energy and tempo evidence", "market size, audience demographics or unmeasured mood", true);
       return true;
     default:
       return false;
