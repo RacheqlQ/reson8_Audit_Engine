@@ -84,7 +84,7 @@ const SYSTEM_PROMPT = [
 ].join(" ");
 
 function countWords(value: string): number {
-  return value.trim().split(/\\s+/).filter(Boolean).length;
+  return value.trim().split(/\s+/).filter(Boolean).length;
 }
 
 function wordThresholdError(groupName: string, value: unknown): string | null {
