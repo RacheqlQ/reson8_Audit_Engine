@@ -42,22 +42,10 @@ const groupPayloads = {
     confidence: 0.72,
     limitations: ["The assessment is limited to the supplied audio and metadata evidence."],
     scorecard: {
-      sonicIdentity: {
-        score: 70,
-        rationale: "The supplied audio measurements and mood tags provide a usable but incomplete sonic profile. The score reflects descriptive coverage, not artistic quality or predicted audience demand."
-      },
-      metadataIntegrity: {
-        score: 65,
-        rationale: "Some identity fields are present, but the evidence set does not independently corroborate every release and rights field. The score reflects the completeness of the supplied metadata only."
-      },
-      commercialEvidence: {
-        score: null,
-        rationale: "There is no verified audience, streaming, sales, revenue, or playlist-conversion evidence in the supplied payload. A numeric commercial score would imply unsupported certainty, so this dimension remains unscored."
-      },
-      releaseReadiness: {
-        score: 55,
-        rationale: "The supplied identity and sonic profile support preliminary planning, but audience validation and release metadata checks remain outstanding. The score reflects readiness of the evidence, not a guarantee of release performance."
-      }
+      sonicIdentity: { score: 70, rationale: "The supplied audio measurements and mood tags provide a usable but incomplete sonic profile. The score reflects descriptive coverage, not artistic quality or predicted audience demand." },
+      metadataIntegrity: { score: 65, rationale: "Some identity fields are present, but the evidence set does not independently corroborate every release and rights field. The score reflects the completeness of the supplied metadata only." },
+      commercialEvidence: { score: null, rationale: "There is no verified audience, streaming, sales, revenue, or playlist-conversion evidence in the supplied payload. A numeric commercial score would imply unsupported certainty, so this dimension remains unscored." },
+      releaseReadiness: { score: 55, rationale: "The supplied identity and sonic profile support preliminary planning, but audience validation and release metadata checks remain outstanding. The score reflects readiness of the evidence, not a guarantee of release performance." },
       hook: { score: null, rationale: "No supported hook-specific listening annotation or structural evidence was supplied for this fixture. The dimension remains unscored until complete master review identifies a repeatable hook." },
       originality: { score: null, rationale: "No comparative catalogue review or verified reference set is included, so originality cannot be judged without unsupported comparisons. This dimension remains unscored pending documented listening review." },
       production: { score: null, rationale: "The available measurements do not isolate mix, arrangement, vocal capture, mastering, or production decisions sufficiently to support a production-quality score. A detailed master review is required." },
