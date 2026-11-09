@@ -183,7 +183,7 @@ function drawChain(page: PDFPage, rows: ChartRow[], x: number, top: number, font
 
 export function drawChartPanel(page: PDFPage, input: ChartPanelInput, font: PDFFont, bold: PDFFont): void {
   const kind = input.kind ?? "bars";
-  const height = kind === "sonic" ? 165 : kind === "layers" ? 160 : kind === "constellation" || kind === "tension" || kind === "timeline" || kind === "chain" ? 155 : 145;
+  const height = kind === "sonic" ? 165 : kind === "layers" ? 160 : kind === "constellation" || kind === "tension" || kind === "timeline" || kind === "chain" ? 155 : kind === "bars" ? 190 : 145;
   const frame = panelFrame(page, input, font, bold, height);
   const contentTop = frame.top - 39;
   switch (kind) {
