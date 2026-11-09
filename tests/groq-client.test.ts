@@ -164,7 +164,7 @@ describe("GroqClient", () => {
       const group = body.response_format.json_schema.name.replace(/^ar_/, "");
       let value = groupPayloads[group as keyof typeof groupPayloads];
       if (group === "narrative" && narrativeAttempts++ === 0) {
-        value = { ...groupPayloads.narrative, executiveSummary: "A short but otherwise schema-valid summary." } as typeof groupPayloads.narrative;
+        value = { ...groupPayloads.narrative, executiveSummary: "The supplied recording has a consistent rhythmic profile and a recognizable creative direction, although available evidence does not establish audience response or commercial performance." } as typeof groupPayloads.narrative;
       }
       return new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify(value) } }]
