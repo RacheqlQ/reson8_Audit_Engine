@@ -7,6 +7,7 @@ const input: AuditReportInput = {
   generatedAt: "2026-10-04T03:00:00.000Z",
   evidence: {
     status: "verified",
+    auditType: "METADATA-BASED AUDIT",
     artist: "Artist",
     title: "Song",
     isrc: "NGABC2600001",
@@ -46,32 +47,40 @@ const input: AuditReportInput = {
     evidenceGaps: ["Audience telemetry"],
     confidence: 0.82,
     limitations: ["Evidence-limited assessment"],
+    scorecard: {
+      sonicIdentity: { score: 70, rationale: "The supplied audio measurements provide a useful but incomplete sonic profile. This score reflects descriptive coverage and does not claim audience demand or artistic quality." },
+      metadataIntegrity: { score: 65, rationale: "Some identity fields are present, but the payload does not independently corroborate every release and rights field. This score reflects supplied metadata completeness only." },
+      commercialEvidence: { score: null, rationale: "No verified audience, streaming, sales, revenue, or playlist-conversion evidence was supplied. A numeric score would imply unsupported certainty, so this dimension remains unscored." },
+      releaseReadiness: { score: 55, rationale: "Identity and sonic context support preliminary planning, but audience validation and metadata checks remain outstanding. This score reflects evidence readiness rather than predicted performance." },
+    },
+    evidenceLabels: [
+      { label: "OBSERVED", claim: "The supplied audio analysis reports a tempo measurement for the recording.", source: "sonicDna.bpm" },
+      { label: "INFERRED", claim: "The proposed creative lane is an interpretation and not a measured genre fact.", source: "sonicDna.genreContext" },
+    ],
   },
 };
 
 describe("generateAuditReport", () => {
-  it("creates an editable sample PDF that excludes paid-only assessment fields", async () => {
+  it("creates a three-page sample PDF with no full-report-only fields", async () => {
     const pdf = await generateAuditReport(input, "sample");
     expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe("%PDF-");
 
     const document = await PDFDocument.load(pdf);
+    expect(document.getPageCount()).toBe(3);
     const names = document.getForm().getFields().map((field) => field.getName());
     expect(names).toContain("executive_summary");
-    expect(names).toContain("creative_identity");
     expect(names).toContain("ar_positioning");
     expect(names).not.toContain("risks");
     expect(names).not.toContain("release_strategy");
+    expect(names).not.toContain("scorecard");
   });
 
-  it("creates a fuller editable PDF containing the paid assessment fields", async () => {
+  it("creates a content-structured full report of at least twelve pages", async () => {
     const pdf = await generateAuditReport(input, "full");
     expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe("%PDF-");
 
     const document = await PDFDocument.load(pdf);
-    const names = document.getForm().getFields().map((field) => field.getName());
-    expect(names).toContain("risks");
-    expect(names).toContain("commercial_read");
-    expect(names).toContain("release_strategy");
-    expect(names).toContain("sonic_dna");
+    expect(document.getPageCount()).toBeGreaterThanOrEqual(12);
+    expect(document.getPageCount()).toBeLessThanOrEqual(20);
   });
 });
