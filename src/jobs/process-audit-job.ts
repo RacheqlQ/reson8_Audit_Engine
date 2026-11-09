@@ -269,12 +269,12 @@ export async function processAuditJob(
     await deps.saveRecognition(jobId, recognition);
     await deps.saveEvidence(jobId, recognition);
     const decoded = await deps.decode(master, job.mimeType);
-    const dna = analyzePcm(decoded.samples, decoded.sampleRate);
+    const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
     const normalizedDna = {
       ...dna,
       sampleRate: decoded.sampleRate,
       channels: decoded.channels,
-      durationSeconds: decoded.samples.length / decoded.sampleRate,
+      durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
     };
     await deps.saveSonicDna(jobId, normalizedDna);
 
