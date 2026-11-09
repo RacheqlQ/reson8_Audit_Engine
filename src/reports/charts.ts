@@ -50,7 +50,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
   rows.slice(0,5).forEach((row,i)=>{const angle=-Math.PI/2+i*2*Math.PI/n,ax=cx+Math.cos(angle)*outer,ay=cy+Math.sin(angle)*outer,label=row.label.length>23?row.label.slice(0,21)+"…":row.label,w=Math.min(94,Math.max(22,label.length*3.3),100),left=Math.cos(angle)>.35?ax+5:Math.cos(angle)<-.35?ax-w-5:ax-w/2,base=ay+(Math.sin(angle)>.4?-4:Math.sin(angle)<-.4?1:-2);result.push({x:left,y:base-12,width:w,height:19,id:"label-radar-"+i});});
  }else if(kind==="layers"){
   result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"evidence-stack"});
-  rows.slice(0,4).forEach((row,i)=>result.push({x:x+28+(i%2)*248,y:bottom+48-Math.floor(i/2)*25,width:180,height:18,id:"label-layer-"+i}));
+  rows.slice(0,4).forEach((row,i)=>result.push({x:x+28+(i%2)*248,y:bottom+78-Math.floor(i/2)*25,width:180,height:7,id:"label-layer-"+i}));
  }else if(kind==="tension"){
   result.push({x:x+12,y:bodyBottom+8,width:CARD_W-24,height:bodyTop-bodyBottom-16,id:"strengths-risks-columns"});
   rows.slice(2,22).forEach((row,i)=>result.push({x:x+35+(i>=10?230:0),y:top-121-(i%10)*9.2,width:185,height:6,id:"label-tension-"+i}));
