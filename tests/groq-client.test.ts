@@ -157,6 +157,26 @@ describe("GroqClient", () => {
     expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
+  it("retries a schema-valid section when its minimum word count is not met", async () => {
+    let narrativeAttempts = 0;
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const group = body.response_format.json_schema.name.replace(/^ar_/, "");
+      let value = groupPayloads[group as keyof typeof groupPayloads];
+      if (group === "narrative" && narrativeAttempts++ === 0) {
+        value = { ...groupPayloads.narrative, executiveSummary: "A short but otherwise schema-valid summary." } as typeof groupPayloads.narrative;
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify(value) } }]
+      }), { status: 200 });
+    });
+    const client = new GroqClient("test-key", "test-model", fetchMock as typeof fetch);
+    const result = await client.assess({ evidence: { artist: "Artist" }, sonicDna: null });
+
+    expect(result.executiveSummary.split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(45);
+    expect(narrativeAttempts).toBe(2);
+  });
+
   it("stops after one retry when a section remains invalid", async () => {
     const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
