@@ -81,6 +81,11 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  if(sampleRate<=0||samples.length<sampleRate*4||rms(samples)<1e-5)return {bpm:null,alternateTempo:null,confidence:null};
  const hop=Math.max(1,Math.floor(sampleRate/100)),env:number[]=[];
  for(let s=0;s+hop<=samples.length;s+=hop){let sum=0;for(let i=s;i<s+hop;i++)sum+=Math.abs(samples[i]);env.push(sum/hop);}
+ const meanEnvelope=env.reduce((sum,value)=>sum+value,0)/Math.max(1,env.length);
+ const envelopeVariance=env.reduce((sum,value)=>sum+(value-meanEnvelope)**2,0)/Math.max(1,env.length);
+ // A steady sine can create tiny block-boundary fluctuations that correlate
+ // at arbitrary lags. Require meaningful amplitude-envelope movement first.
+ if(meanEnvelope<=EPSILON||Math.sqrt(envelopeVariance)/meanEnvelope<0.03)return {bpm:null,alternateTempo:null,confidence:null};
  const novelty=env.map((v,i)=>Math.max(0,v-(env[i-1]??v))),scores=new Map<number,number>();
  for(let bpm=60;bpm<=180;bpm++){
   const lag=Math.max(1,Math.round(60/bpm*sampleRate/hop));let c=0,l=0,r=0;
