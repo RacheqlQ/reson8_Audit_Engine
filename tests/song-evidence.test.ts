@@ -17,6 +17,13 @@ describe("Song Evidence Object", () => {
     expect(evidence.sources).toEqual(["audd"]);
   });
 
+  it("does not assign an evidence source to an empty matched payload", () => {
+    const evidence = buildSongEvidence({ matched: true });
+    expect(evidence.status).toBe("unresolved");
+    expect(evidence.sources).toEqual([]);
+    expect(evidence.confidence).toBeNull();
+  });
+
   it("keeps unmatched recordings explicitly unresolved", () => {
     const evidence = buildSongEvidence({ matched: false });
     expect(evidence.status).toBe("unresolved");
