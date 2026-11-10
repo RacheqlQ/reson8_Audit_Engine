@@ -37,7 +37,7 @@ describe("processAuditJob", () => {
         sampleRate: 44100,
         channels: 2,
       }),
-      saveSonicDna: async (_jobId, dna) => {
+      saveSonicDna: async (_jobId, _claimToken, dna) => {
         events.push("dna");
         expect(dna.sampleRate).toBe(44100);
         expect(dna.channels).toBe(2);
@@ -58,7 +58,7 @@ describe("processAuditJob", () => {
         events.push(`report-${tier}`);
         return new Uint8Array([37, 80, 68, 70, 45]);
       },
-      saveReport: async (_jobId, tier) => events.push(`report-saved-${tier}`),
+      saveReport: async (_jobId, _claimToken, tier) => events.push(`report-saved-${tier}`),
       markCompleted: async () => events.push("completed"),
       markFailed: async () => events.push("failed"),
     });
@@ -134,7 +134,7 @@ describe("processAuditJob", () => {
         isrc: "US-ABC-12-34567",
       }),
       saveRecognition: async () => {},
-      saveEvidence: async (_jobId, recognition, reconciliation, metadata) => {
+      saveEvidence: async (_jobId, _claimToken, recognition, reconciliation, metadata) => {
         expect(recognition.matched).toBe(true);
         expect(reconciliation.status).toBe("partial");
         expect(metadata?.platform).toBe("tidal");
@@ -225,7 +225,7 @@ describe("processAuditJob", () => {
       },
       saveReport: async () => { events.push("report-saved"); },
       markCompleted: async () => { events.push("completed"); },
-      markFailed: async (_jobId, message) => {
+      markFailed: async (_jobId, _claimToken, message) => {
         failureMessage = message;
         events.push("audit_failed");
       },
