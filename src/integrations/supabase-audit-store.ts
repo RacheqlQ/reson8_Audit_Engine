@@ -166,7 +166,7 @@ export function createSupabaseAuditStore(
           provider: metadata.platform,
           url: metadata.canonicalUrl,
           catalogId: metadata.catalogId,
-          evidenceClass: "RECOGNIZED",
+          evidenceClass: identity.sourceProviders.includes(metadata.platform) ? "RECOGNIZED" : null,
         });
       }
       for (const provider of identity.sourceProviders) {
