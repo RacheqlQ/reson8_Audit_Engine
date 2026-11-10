@@ -48,7 +48,7 @@ assert_sql "t" "select relrowsecurity from pg_class where oid='public.audit_jobs
 assert_sql "t" "select relrowsecurity from pg_class where oid='public.recognition_results'::regclass"
 assert_sql "t" "select relrowsecurity from pg_class where oid='public.audit_reports_legacy'::regclass"
 assert_sql "t" "select relrowsecurity from pg_class where oid='public.audit_assessments'::regclass"
-assert_sql "false:true" "select has_function_privilege('anon','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text || ':' || has_function_privilege('service_role','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text"
+assert_sql "f:t" "select has_function_privilege('anon','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text || ':' || has_function_privilege('service_role','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text"
 
 echo "Regression 1/8: concurrent claims grant the sole queued job exactly once"
 seed_job "$JOB_MAIN"
