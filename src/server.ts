@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createAuditJob } from "./jobs/create-audit-job.js";
 import { createCatalogAuditJob } from "./jobs/create-catalog-audit-job.js";
@@ -45,6 +46,18 @@ async function servePublicFile(filename: string) {
 
 export function paymentsEnabled(value: string | undefined = process.env.PAYMENTS_ENABLED): boolean {
   return typeof value === "string" && value.trim().toLowerCase() === "true";
+}
+
+/** Operator access fails closed unless a strong secret is configured. */
+export function operatorAuthorized(
+  suppliedKey: string | undefined,
+  expectedKey: string | undefined = process.env.RESON8_OPERATOR_KEY,
+): boolean {
+  if (typeof suppliedKey !== "string" || typeof expectedKey !== "string") return false;
+  const expected = Buffer.from(expectedKey, "utf8");
+  const supplied = Buffer.from(suppliedKey, "utf8");
+  if (expected.length < 32 || supplied.length !== expected.length) return false;
+  return timingSafeEqual(supplied, expected);
 }
 
 export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
@@ -135,10 +148,25 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
 
   app.get<{
     Params: { jobId: string; tier: "sample" | "full" };
+    Headers: { "x-reson8-operator-key"?: string };
   }>("/v1/audits/:jobId/reports/:tier", async (request, reply) => {
     const tier = request.params.tier;
     if (tier !== "sample" && tier !== "full") return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
-    if (tier === "full" && paymentsEnabled()) return reply.code(402).send({ error: "PAYMENT_REQUIRED", message: "Payment verification is not configured for full report access." });
+
+    const isOperator = operatorAuthorized(request.headers["x-reson8-operator-key"]);
+    if (!isOperator) {
+      if (tier === "full" && paymentsEnabled()) {
+        return reply.code(402).send({
+          error: "PAYMENT_REQUIRED",
+          message: "Verified payment is required; payment verification is not configured.",
+        });
+      }
+      return reply.code(403).send({
+        error: "OPERATOR_AUTH_REQUIRED",
+        message: "Report retrieval is restricted to an authorized Reson8 operator.",
+      });
+    }
+
     try {
       const report = await store.getAuditReport(request.params.jobId, tier);
       return reply.type(report.contentType).header("content-disposition", `attachment; filename="${report.filename}"`).send(Buffer.from(report.bytes));

@@ -22,6 +22,8 @@ services:
         sync: false
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b
+      - key: RESON8_OPERATOR_KEY
+        sync: false
 
   - type: web
     name: reson8-audit-worker
