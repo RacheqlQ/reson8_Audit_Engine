@@ -170,7 +170,7 @@ export function createSupabaseAuditStore(
       const sources: Array<Record<string, unknown>> = [];
       if (metadata) sources.push({
         provider: metadata.platform, url: metadata.canonicalUrl, catalogId: metadata.catalogId,
-        evidenceClass: identity.sourceProviders.includes(metadata.platform) ? "RECOGNIZED" : null,
+        evidenceClass: identity.sourceProviders.some((provider) => provider === metadata.platform) ? "RECOGNIZED" : null,
       });
       for (const provider of identity.sourceProviders) {
         if (provider !== metadata?.platform && !sources.some((source) => source.provider === provider)) {
