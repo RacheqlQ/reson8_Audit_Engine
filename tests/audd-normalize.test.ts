@@ -41,6 +41,7 @@ describe("normalizeAuddRecognition", () => {
     expect(normalizeAuddRecognition({})).toEqual({ matched: false });
     expect(normalizeAuddRecognition({ artist: " ", title: null })).toEqual({ matched: false });
   });
+  expect(result.matched && "confidence" in result).toBe(false);
 });
 
 
