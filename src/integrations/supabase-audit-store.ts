@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { CreateAuditJobDependencies } from "../jobs/create-audit-job.js";
 import type { AuditJobRecord } from "../jobs/process-audit-job.js";
@@ -13,16 +14,17 @@ export interface SupabaseAuditStore {
   admin: SupabaseClient;
   createJobDependencies(): CreateAuditJobDependencies;
   claimNextQueuedJob(): Promise<AuditJobRecord | null>;
-  markProcessing(jobId: string): Promise<void>;
+  renewLease(jobId: string, claimToken: string): Promise<void>;
+  markProcessing(jobId: string, claimToken: string): Promise<void>;
   downloadMaster(path: string): Promise<Uint8Array>;
-  saveRecognition(jobId: string, recognition: AuditRecognition): Promise<void>;
-  saveEvidence(jobId: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata): Promise<void>;
-  saveCatalogMetadata(jobId: string, metadata: CatalogMetadata): Promise<void>;
-  saveSonicDna(jobId: string, dna: SonicDnaFeatures): Promise<void>;
-  saveAssessment(jobId: string, assessment: ArAssessment): Promise<void>;
-  saveReport(jobId: string, tier: AuditReportTier, pdf: Uint8Array): Promise<void>;
-  markCompleted(jobId: string): Promise<void>;
-  markFailed(jobId: string, message: string): Promise<void>;
+  saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition): Promise<void>;
+  saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata): Promise<void>;
+  saveCatalogMetadata(jobId: string, claimToken: string, metadata: CatalogMetadata): Promise<void>;
+  saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures): Promise<void>;
+  saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment): Promise<void>;
+  saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array): Promise<void>;
+  markCompleted(jobId: string, claimToken: string): Promise<void>;
+  markFailed(jobId: string, claimToken: string, message: string): Promise<void>;
   getAuditStatus(jobId: string): Promise<{
     jobId: string;
     status: "queued" | "processing" | "completed" | "failed";
@@ -48,9 +50,18 @@ export function createSupabaseAuditStore(
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
 
-  const event = async (jobId: string, eventType: string, status: string, message?: string, payload: Record<string, unknown> = {}) => {
-    const { error } = await admin.from("audit_events").insert({ audit_job_id: jobId, event_type: eventType, status, message, payload });
-    if (error) throw new Error(`Unable to write audit event: ${error.message}`);
+
+  const fencedStep = async (jobId: string, claimToken: string, operation: string, payload: Record<string, unknown> = {}) => {
+    const { data, error } = await admin.rpc("persist_fenced_audit_step", {
+      p_job_id: jobId, p_claim_token: claimToken, p_operation: operation, p_payload: payload,
+    });
+    if (error) {
+      if (error.message.includes("AUDIT_LEASE_LOST") || error.code === "P0001") {
+        throw new Error("AUDIT_LEASE_LOST");
+      }
+      throw new Error(`Unable to persist fenced ${operation}: ${error.message}`);
+    }
+    return data as Record<string, unknown> | null;
   };
 
 
@@ -93,21 +104,16 @@ export function createSupabaseAuditStore(
       };
     },
     async claimNextQueuedJob() {
-      const { data: queued, error: selectError } = await admin
-        .from("audit_jobs").select("id,owner_id,source_audio_path,mime_type,source_type,catalog_url,status")
-        .eq("status", "queued")
-        .order("created_at", { ascending: true }).limit(1).maybeSingle();
-      if (selectError) throw new Error(`Unable to read queued audits: ${selectError.message}`);
-      if (!queued) return null;
-      if (queued.source_type === "master" && !queued.source_audio_path) return null;
-      if (queued.source_type === "dsp_link" && !queued.catalog_url) return null;
-      const { data: claimed, error: claimError } = await admin
-        .from("audit_jobs").update({ status: "processing", started_at: new Date().toISOString() })
-        .eq("id", queued.id).eq("status", "queued")
-        .select("id,owner_id,source_audio_path,mime_type,source_type,catalog_url,status").maybeSingle();
-      if (claimError) throw new Error(`Unable to claim audit job: ${claimError.message}`);
+      const workerId = `audit-worker:${process.env.RENDER_INSTANCE_ID ?? process.env.HOSTNAME ?? "local"}:${randomUUID()}`;
+      const { data, error } = await admin.rpc("claim_next_audit_job", {
+        p_worker_id: workerId, p_lease_seconds: 180,
+      });
+      if (error) throw new Error(`Unable to atomically claim audit job: ${error.message}`);
+      const claimed = Array.isArray(data) ? data[0] : data;
       if (!claimed) return null;
-      await event(claimed.id, "processing_claimed", "processing");
+      if (!claimed.claim_token || !claimed.lease_expires_at) {
+        throw new Error("Atomic claim RPC returned a job without a lease token");
+      }
       return {
         id: claimed.id as string,
         ownerId: claimed.owner_id as string | null,
@@ -115,170 +121,116 @@ export function createSupabaseAuditStore(
         mimeType: claimed.mime_type as string | null,
         sourceType: (claimed.source_type ?? "master") as "master" | "dsp_link",
         catalogUrl: claimed.catalog_url as string | null,
-        status: "queued",
+        status: "processing" as const,
+        claimToken: claimed.claim_token as string,
+        leaseExpiresAt: claimed.lease_expires_at as string,
+        workerId: claimed.worker_id as string,
       };
     },
-    async markProcessing(jobId) { await event(jobId, "processing_started", "processing"); },
+    async renewLease(jobId, claimToken) {
+      const { error } = await admin.rpc("renew_audit_job_lease", {
+        p_job_id: jobId, p_claim_token: claimToken, p_lease_seconds: 180,
+      });
+      if (error) throw new Error(error.message.includes("AUDIT_LEASE_LOST") ? "AUDIT_LEASE_LOST" : `Unable to renew audit lease: ${error.message}`);
+    },
+    async markProcessing(jobId, claimToken) {
+      await fencedStep(jobId, claimToken, "processing_started");
+    },
     async downloadMaster(path) {
       const { data, error } = await admin.storage.from("audit-audio").download(path);
       if (error || !data) throw new Error(`Unable to download audio master: ${error?.message ?? "not found"}`);
       return new Uint8Array(await data.arrayBuffer());
     },
-    async saveCatalogMetadata(jobId, metadata) {
-      const { error: jobError } = await admin.from("audit_jobs").update({
-        catalog_platform: metadata.platform, catalog_id: metadata.catalogId, catalog_metadata: metadata.raw,
-      }).eq("id", jobId);
-      if (jobError) throw new Error(`Unable to save catalog metadata: ${jobError.message}`);
-      await event(jobId, "catalog_ingestion", metadata.evidenceStatus, undefined, {
-        platform: metadata.platform, catalogId: metadata.catalogId, hasPreview: Boolean(metadata.previewUrl),
-        evidenceClass: "RECOGNIZED",
+    async saveCatalogMetadata(jobId, claimToken, metadata) {
+      await fencedStep(jobId, claimToken, "catalog_metadata", {
+        platform: metadata.platform, catalogId: metadata.catalogId, raw: metadata.raw,
+        evidenceStatus: metadata.evidenceStatus,
+        eventPayload: { platform: metadata.platform, catalogId: metadata.catalogId, hasPreview: Boolean(metadata.previewUrl), evidenceClass: "RECOGNIZED" },
       });
     },
-    async saveRecognition(jobId, recognition) {
-      const row = {
-        audit_job_id: jobId, provider: "audd", matched: recognition.matched,
+    async saveRecognition(jobId, claimToken, recognition) {
+      await fencedStep(jobId, claimToken, "recognition", {
+        matched: recognition.matched,
         artist: recognition.matched ? recognition.artist ?? null : null,
         title: recognition.matched ? recognition.title ?? null : null,
         album: recognition.matched ? recognition.album ?? null : null,
-        release_date: recognition.matched ? recognition.releaseDate ?? null : null,
+        releaseDate: recognition.matched ? recognition.releaseDate ?? null : null,
         label: recognition.matched ? recognition.label ?? null : null,
         isrc: recognition.matched ? recognition.isrc ?? null : null,
         timecode: recognition.matched ? recognition.timecode ?? null : null,
-        song_link: recognition.matched ? recognition.songLink ?? recognition.spotifyUrl ?? null : null,
-        raw_response: recognition.rawResponse ?? recognition,
-      };
-      const { error } = await admin.from("recognition_results").upsert(row, { onConflict: "audit_job_id,provider" });
-      if (error) throw new Error(`Unable to save recognition: ${error.message}`);
-      await event(jobId, "recognition", recognition.matched ? "matched" : "unmatched", undefined, {
-        evidenceClass: recognition.matched ? "RECOGNIZED" : null,
-        rawResponsePreserved: Boolean(recognition.rawResponse),
+        songLink: recognition.matched ? recognition.songLink ?? recognition.spotifyUrl ?? null : null,
+        rawResponse: recognition.rawResponse ?? recognition,
+        eventPayload: { evidenceClass: recognition.matched ? "RECOGNIZED" : null, rawResponsePreserved: Boolean(recognition.rawResponse) },
       });
     },
-    async saveEvidence(jobId, recognition, reconciliation, metadata) {
+    async saveEvidence(jobId, claimToken, recognition, reconciliation, metadata) {
       const identity = reconciliation.identity;
       const hasIdentity = Boolean(identity.artist || identity.title || identity.album || identity.isrc || identity.label || identity.releaseDate);
-      const evidenceStatus = reconciliation.status === "reconciled"
-        ? "verified"
-        : hasIdentity ? "partial" : "unresolved";
+      const evidenceStatus = reconciliation.status === "reconciled" ? "verified" : hasIdentity ? "partial" : "unresolved";
       const sources: Array<Record<string, unknown>> = [];
-      if (metadata) {
-        sources.push({
-          provider: metadata.platform,
-          url: metadata.canonicalUrl,
-          catalogId: metadata.catalogId,
-          evidenceClass: identity.sourceProviders.some((provider) => provider === metadata.platform) ? "RECOGNIZED" : null,
-        });
-      }
+      if (metadata) sources.push({
+        provider: metadata.platform, url: metadata.canonicalUrl, catalogId: metadata.catalogId,
+        evidenceClass: identity.sourceProviders.some((provider) => provider === metadata.platform) ? "RECOGNIZED" : null,
+      });
       for (const provider of identity.sourceProviders) {
-        if (provider === metadata?.platform) continue;
-        if (!sources.some((source) => source.provider === provider)) {
+        if (provider !== metadata?.platform && !sources.some((source) => source.provider === provider)) {
           sources.push({ provider, evidenceClass: "RECOGNIZED" });
         }
       }
-      if (recognition.matched && !sources.some((source) => source.provider === "audd")) {
-        sources.push({ provider: "audd", evidenceClass: "RECOGNIZED" });
-      }
-      const { error } = await admin.from("reconciled_tracks").upsert({
-        audit_job_id: jobId,
-        canonical_artist: identity.artist,
-        canonical_title: identity.title,
-        album: identity.album,
-        release_date: identity.releaseDate,
-        label: identity.label,
-        isrc: identity.isrc,
+      if (recognition.matched && !sources.some((source) => source.provider === "audd")) sources.push({ provider: "audd", evidenceClass: "RECOGNIZED" });
+      await fencedStep(jobId, claimToken, "evidence", {
+        canonicalArtist: identity.artist, canonicalTitle: identity.title, album: identity.album,
+        releaseDate: identity.releaseDate, label: identity.label, isrc: identity.isrc,
         upc: metadata?.upc ?? null,
-        spotify_id: metadata?.externalIds.spotify ?? (recognition.matched ? recognition.spotifyId ?? null : null),
-        apple_music_id: metadata?.externalIds.apple_music ?? (recognition.matched ? recognition.appleMusicId ?? null : null),
-        musicbrainz_id: recognition.matched ? recognition.musicbrainzId ?? null : null,
-        evidence_status: evidenceStatus,
-        confidence: null,
-        sources,
-      }, { onConflict: "audit_job_id" });
-      if (error) throw new Error(`Unable to save reconciled evidence: ${error.message}`);
-      await event(jobId, "evidence_reconciliation", reconciliation.status, undefined, {
-        evidenceClass: reconciliation.status === "reconciled" ? "RECONCILED" : hasIdentity ? "RECOGNIZED" : null,
-        evidenceStatus,
-        sources,
-        reconciledFields: reconciliation.reconciledFields,
-        conflicts: reconciliation.conflicts,
-        identity,
+        spotifyId: metadata?.externalIds.spotify ?? (recognition.matched ? recognition.spotifyId ?? null : null),
+        appleMusicId: metadata?.externalIds.apple_music ?? (recognition.matched ? recognition.appleMusicId ?? null : null),
+        musicbrainzId: recognition.matched ? recognition.musicbrainzId ?? null : null,
+        evidenceStatus, reconciliationStatus: reconciliation.status, sources,
+        eventPayload: {
+          evidenceClass: reconciliation.status === "reconciled" ? "RECONCILED" : hasIdentity ? "RECOGNIZED" : null,
+          evidenceStatus, sources, reconciledFields: reconciliation.reconciledFields,
+          conflicts: reconciliation.conflicts, identity,
+        },
       });
     },
-    async saveSonicDna(jobId, dna) {
-      const { error } = await admin.from("sonic_dna").upsert({
-        audit_job_id: jobId, analysis_version: "audit-engine-0.1.0", duration_seconds: dna.durationSeconds,
-        sample_rate: dna.sampleRate, channels: dna.channels, bpm: dna.bpm, key: dna.key, mode: dna.mode,
-        loudness_lufs: dna.loudnessLufs, rms_energy: dna.rmsEnergy, dynamic_range_db: dna.dynamicRangeDb,
-        spectral_centroid_hz: dna.spectralCentroidHz, spectral_bandwidth_hz: dna.spectralBandwidthHz,
-        spectral_rolloff_hz: dna.spectralRolloffHz, zero_crossing_rate: dna.zeroCrossingRate,
-        mood_tags: dna.moodTags, genre_context: dna.genreContext,
-        raw_features: { ...dna, provenance: "uploaded_audio_master", evidenceClass: "OBSERVED" },
-      }, { onConflict: "audit_job_id" });
-      if (error) throw new Error(`Unable to save Sonic DNA: ${error.message}`);
-      await admin.from("audit_jobs").update({ duration_seconds: dna.durationSeconds }).eq("id", jobId);
-      await event(jobId, "sonic_dna", "completed", undefined, { analysisVersion: "audit-engine-0.1.0", evidenceClass: "OBSERVED" });
-    },
-    async saveAssessment(jobId, assessment) {
-      const { error } = await admin.from("audit_assessments").upsert({
-        audit_job_id: jobId,
-        provider: "groq",
-        model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
-        prompt_version: GROQ_PROMPT_VERSION,
-        status: "completed",
-        assessment,
-      }, { onConflict: "audit_job_id" });
-      if (error) throw new Error(`Unable to save A&R assessment: ${error.message}`);
-      await event(jobId, "ar_assessment", "completed", undefined, {
-        provider: "groq",
-        model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
-        promptVersion: GROQ_PROMPT_VERSION,
-        confidence: assessment.confidence,
+    async saveSonicDna(jobId, claimToken, dna) {
+      await fencedStep(jobId, claimToken, "sonic_dna", {
+        durationSeconds: dna.durationSeconds, sampleRate: dna.sampleRate, channels: dna.channels,
+        bpm: dna.bpm, key: dna.key, mode: dna.mode, loudnessLufs: dna.loudnessLufs,
+        rmsEnergy: dna.rmsEnergy, dynamicRangeDb: dna.dynamicRangeDb,
+        spectralCentroidHz: dna.spectralCentroidHz, spectralBandwidthHz: dna.spectralBandwidthHz,
+        spectralRolloffHz: dna.spectralRolloffHz, zeroCrossingRate: dna.zeroCrossingRate,
+        moodTags: dna.moodTags, genreContext: dna.genreContext,
+        rawFeatures: { ...dna, provenance: "uploaded_audio_master", evidenceClass: "OBSERVED" },
+        eventPayload: { analysisVersion: "audit-engine-0.1.0", evidenceClass: "OBSERVED" },
       });
     },
-    async saveReport(jobId, tier, pdf) {
+    async saveAssessment(jobId, claimToken, assessment) {
+      await fencedStep(jobId, claimToken, "assessment", {
+        model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
+        promptVersion: GROQ_PROMPT_VERSION, assessment,
+        eventPayload: { provider: "groq", model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, promptVersion: GROQ_PROMPT_VERSION, confidence: assessment.confidence },
+      });
+    },
+    async saveReport(jobId, claimToken, tier, pdf) {
       const digest = await sha256(pdf);
-      const { data: latest, error: latestError } = await admin
-        .from("audit_reports")
-        .select("version")
-        .eq("audit_job_id", jobId)
-        .eq("tier", tier)
-        .order("version", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (latestError) throw new Error(`Unable to read report version: ${latestError.message}`);
-
-      const version = Number(latest?.version ?? 0) + 1;
-      const storagePath = `${jobId}/v${version}/${tier}.pdf`;
-      const { error: uploadError } = await admin.storage
-        .from("audit-reports")
-        .upload(storagePath, pdf, { contentType: "application/pdf", upsert: false });
+      const storagePath = `${jobId}/${claimToken}/${tier}.pdf`;
+      const { error: uploadError } = await admin.storage.from("audit-reports").upload(storagePath, pdf, {
+        contentType: "application/pdf", upsert: false,
+      });
       if (uploadError) throw new Error(`Unable to store ${tier} report: ${uploadError.message}`);
-
-      const { error } = await admin.from("audit_reports").insert({
-        audit_job_id: jobId,
-        tier,
-        version,
-        access_status: "available",
-        storage_path: storagePath,
-        sha256: digest,
-        content_type: "application/pdf",
-      });
-      if (error) {
+      try {
+        await fencedStep(jobId, claimToken, "report", {
+          tier, storagePath, sha256: digest,
+          eventPayload: { tier, accessStatus: "available", sha256: digest },
+        });
+      } catch (error) {
         await admin.storage.from("audit-reports").remove([storagePath]);
-        throw new Error(`Unable to persist ${tier} report metadata: ${error.message}`);
+        throw error;
       }
-
-      await event(jobId, "report_generated", "completed", undefined, {
-        tier,
-        version,
-        accessStatus: "available",
-        sha256: digest,
-      });
     },
-    async markCompleted(jobId) {
-      const { error } = await admin.from("audit_jobs").update({ status: "completed", completed_at: new Date().toISOString(), error_code: null, error_message: null }).eq("id", jobId);
-      if (error) throw new Error(`Unable to complete audit job: ${error.message}`);
-      await event(jobId, "audit_completed", "completed");
+    async markCompleted(jobId, claimToken) {
+      await fencedStep(jobId, claimToken, "complete");
     },
     async getAuditStatus(jobId) {
       const { data: job, error: jobError } = await admin
@@ -369,10 +321,8 @@ export function createSupabaseAuditStore(
         filename: `reson8-audit-${jobId}-${tier}-v${report.version}.pdf`,
       };
     },
-    async markFailed(jobId, message) {
-      const { error } = await admin.from("audit_jobs").update({ status: "failed", completed_at: new Date().toISOString(), error_code: "AUDIT_PROCESSING_FAILED", error_message: message }).eq("id", jobId);
-      if (error) throw new Error(`Unable to mark audit job failed: ${error.message}`);
-      await event(jobId, "audit_failed", "failed", message);
+    async markFailed(jobId, claimToken, message) {
+      await fencedStep(jobId, claimToken, "fail", { message });
     },
   };
 }

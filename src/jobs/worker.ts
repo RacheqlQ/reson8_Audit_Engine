@@ -27,29 +27,64 @@ export async function processNextQueuedAudit(): Promise<{ jobId: string; status:
       mimeType: job.mimeType,
       sourceType: job.sourceType,
       catalogUrl: job.catalogUrl,
-      status: "queued",
+      status: "processing",
+      claimToken: job.claimToken,
+      leaseExpiresAt: job.leaseExpiresAt,
+      workerId: job.workerId,
     }),
-    markProcessing: async (jobId) => store.markProcessing(jobId),
+    markProcessing: async (jobId, claimToken) => store.markProcessing(jobId, claimToken),
     downloadMaster: async (path) => store.downloadMaster(path),
     createRecognitionSample: audd ? createRecognitionSample : async () => new Uint8Array(),
     recognize: (sample) => audd ? audd.recognize(sample) : Promise.resolve({ matched: false }),
     recognizeUrl: (url) => audd ? audd.recognizeUrl(url) : Promise.resolve({ matched: false }),
     collectCatalogMetadata,
-    saveRecognition: async (jobId, recognition) => store.saveRecognition(jobId, recognition),
-    saveSonicDna: async (jobId, dna) => store.saveSonicDna(jobId, dna),
-    saveEvidence: async (jobId, recognition, reconciliation, metadata) =>
-      store.saveEvidence(jobId, recognition, reconciliation, metadata),
-    saveCatalogMetadata: async (jobId, metadata) => store.saveCatalogMetadata(jobId, metadata),
+    saveRecognition: async (jobId, _claimToken, recognition) => store.saveRecognition(jobId, _claimToken, recognition),
+    saveSonicDna: async (jobId, _claimToken, dna) => store.saveSonicDna(jobId, _claimToken, dna),
+    saveEvidence: async (jobId, _claimToken, recognition, reconciliation, metadata) =>
+      store.saveEvidence(jobId, _claimToken, recognition, reconciliation, metadata),
+    saveCatalogMetadata: async (jobId, _claimToken, metadata) => store.saveCatalogMetadata(jobId, _claimToken, metadata),
     decode: async (bytes) => decoder.decode(bytes),
     generateAssessment: (input) => groq.assess(input),
-    saveAssessment: async (jobId, assessment) => store.saveAssessment(jobId, assessment),
+    saveAssessment: async (jobId, _claimToken, assessment) => store.saveAssessment(jobId, _claimToken, assessment),
     generateReport: generateAuditReport,
-    saveReport: async (jobId, tier, pdf) => store.saveReport(jobId, tier, pdf),
-    markCompleted: async (jobId) => store.markCompleted(jobId),
-    markFailed: async (jobId, message) => store.markFailed(jobId, message),
+    saveReport: async (jobId, _claimToken, tier, pdf) => store.saveReport(jobId, _claimToken, tier, pdf),
+    markCompleted: async (jobId, _claimToken) => store.markCompleted(jobId, _claimToken),
+    markFailed: async (jobId, _claimToken, message) => store.markFailed(jobId, _claimToken, message),
   };
 
-  return { jobId: job.id, ...(await processAuditJob(job.id, deps)) };
+  let heartbeatPromise: Promise<void> | null = null;
+  let heartbeatStopped = false;
+  let leaseLost: Error | null = null;
+  const heartbeatTick = () => {
+    if (heartbeatStopped || heartbeatPromise || leaseLost) return;
+    heartbeatPromise = (async () => {
+      try {
+        await store.renewLease(job.id, job.claimToken);
+      } catch (error) {
+        leaseLost = error instanceof Error ? error : new Error(String(error));
+        console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "lease_lost" }));
+      }
+    })().finally(() => { heartbeatPromise = null; });
+  };
+  const heartbeat = setInterval(heartbeatTick, 45_000);
+  heartbeat.unref();
+
+  const stopHeartbeat = async () => {
+    heartbeatStopped = true;
+    clearInterval(heartbeat);
+    if (heartbeatPromise) await heartbeatPromise;
+    if (leaseLost) throw new Error("AUDIT_LEASE_LOST");
+  };
+  deps.stopHeartbeat = stopHeartbeat;
+
+  try {
+    const result = await processAuditJob(job.id, deps);
+    return { jobId: job.id, ...result };
+  } finally {
+    heartbeatStopped = true;
+    clearInterval(heartbeat);
+    if (heartbeatPromise) await heartbeatPromise;
+  }
 }
 
 function startHealthServer(): void {

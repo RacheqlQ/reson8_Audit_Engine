@@ -14,31 +14,35 @@ export interface AuditJobRecord {
   sourceType: "master" | "dsp_link";
   catalogUrl: string | null;
   status: "queued" | "processing" | "completed" | "failed";
+  claimToken: string;
+  leaseExpiresAt: string;
+  workerId: string;
 }
 
 export interface AuditProcessorDependencies {
   getJob(jobId: string): Promise<AuditJobRecord | null>;
-  markProcessing(jobId: string): Promise<void>;
+  markProcessing(jobId: string, claimToken: string): Promise<void>;
   collectCatalogMetadata(url: string): Promise<CatalogMetadata>;
   recognizeUrl(url: string): Promise<AuditRecognition>;
   downloadMaster(path: string): Promise<Uint8Array>;
   createRecognitionSample(master: Uint8Array, mimeType: string): Promise<Uint8Array>;
   recognize(sample: Uint8Array): Promise<AuditRecognition>;
-  saveRecognition(jobId: string, recognition: AuditRecognition): Promise<void>;
-  saveEvidence(jobId: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata): Promise<void>;
-  saveCatalogMetadata(jobId: string, metadata: CatalogMetadata): Promise<void>;
+  saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition): Promise<void>;
+  saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata): Promise<void>;
+  saveCatalogMetadata(jobId: string, claimToken: string, metadata: CatalogMetadata): Promise<void>;
   decode(bytes: Uint8Array, mimeType?: string): Promise<{ samples: Float32Array; sampleRate: number; channels: number }>;
-  saveSonicDna(jobId: string, dna: SonicDnaFeatures): Promise<void>;
+  saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures): Promise<void>;
   generateAssessment(input: {
     evidence: Record<string, unknown>;
     sonicDna: Record<string, unknown> | null;
     catalogMetadata?: Record<string, unknown> | null;
   }): Promise<ArAssessment>;
-  saveAssessment(jobId: string, assessment: ArAssessment): Promise<void>;
+  saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment): Promise<void>;
   generateReport(input: AuditReportInput, tier: AuditReportTier): Promise<Uint8Array>;
-  saveReport(jobId: string, tier: AuditReportTier, pdf: Uint8Array): Promise<void>;
-  markCompleted(jobId: string): Promise<void>;
-  markFailed(jobId: string, message: string): Promise<void>;
+  saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array): Promise<void>;
+  markCompleted(jobId: string, claimToken: string): Promise<void>;
+  markFailed(jobId: string, claimToken: string, message: string): Promise<void>;
+  stopHeartbeat?(): Promise<void>;
 }
 
 function recognitionEvidence(recognition: AuditRecognition): Record<string, unknown> {
@@ -203,15 +207,15 @@ export async function processAuditJob(
 ): Promise<{ status: "completed" | "failed" }> {
   const job = await deps.getJob(jobId);
   if (!job) throw new Error("Audit job not found");
-  if (job.status !== "queued") throw new Error(`Audit job is not queued: ${job.status}`);
+  if (job.status !== "processing") throw new Error(`Audit job is not actively claimed: ${job.status}`);
 
   try {
-    await deps.markProcessing(jobId);
+    await deps.markProcessing(jobId, job.claimToken);
 
     if (job.sourceType === "dsp_link") {
       if (!job.catalogUrl) throw new Error("Catalog URL is missing");
       const metadata = await deps.collectCatalogMetadata(job.catalogUrl);
-      await deps.saveCatalogMetadata(jobId, metadata);
+      await deps.saveCatalogMetadata(jobId, job.claimToken, metadata);
 
       let recognition: AuditRecognition | null = null;
       if (metadata.previewUrl) {
@@ -220,7 +224,7 @@ export async function processAuditJob(
         } catch {
           // Preview recognition is enrichment; catalog metadata remains authoritative evidence.
         }
-        if (recognition) await deps.saveRecognition(jobId, recognition);
+        if (recognition) await deps.saveRecognition(jobId, job.claimToken, recognition);
       }
 
       const effectiveRecognition: AuditRecognition = recognition ?? { matched: false };
@@ -229,7 +233,7 @@ export async function processAuditJob(
         audd: recognitionMetadataInput(effectiveRecognition),
       };
       const reconciliation = reconcileMetadata(metadataInput);
-      await deps.saveEvidence(jobId, effectiveRecognition, reconciliation, metadata);
+      await deps.saveEvidence(jobId, job.claimToken, effectiveRecognition, reconciliation, metadata);
       const identity = reconciliation.identity;
       const evidence = {
         ...catalogEvidence(metadata, identity),
@@ -247,16 +251,17 @@ export async function processAuditJob(
         sonicDna,
         catalogMetadata: catalogEvidence(metadata, identity),
       });
-      await deps.saveAssessment(jobId, assessment);
+      await deps.saveAssessment(jobId, job.claimToken, assessment);
 
       const generatedAt = new Date().toISOString();
       const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
       const samplePdf = await deps.generateReport(reportInput, "sample");
-      await deps.saveReport(jobId, "sample", samplePdf);
+      await deps.saveReport(jobId, job.claimToken, "sample", samplePdf);
       const pdf = await deps.generateReport(reportInput, "full");
-      await deps.saveReport(jobId, "full", pdf);
+      await deps.saveReport(jobId, job.claimToken, "full", pdf);
 
-      await deps.markCompleted(jobId);
+      await deps.stopHeartbeat?.();
+      await deps.markCompleted(jobId, job.claimToken);
       return { status: "completed" };
     }
 
@@ -264,11 +269,11 @@ export async function processAuditJob(
     const master = await deps.downloadMaster(job.sourceAudioPath);
     const sample = await deps.createRecognitionSample(master, job.mimeType);
     const recognition = await deps.recognize(sample);
-    await deps.saveRecognition(jobId, recognition);
+    await deps.saveRecognition(jobId, job.claimToken, recognition);
     const reconciliation = reconcileMetadata({
       audd: recognitionMetadataInput(recognition),
     });
-    await deps.saveEvidence(jobId, recognition, reconciliation);
+    await deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation);
     const decoded = await deps.decode(master, job.mimeType);
     const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
     const normalizedDna = {
@@ -277,7 +282,7 @@ export async function processAuditJob(
       channels: decoded.channels,
       durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
     };
-    await deps.saveSonicDna(jobId, normalizedDna);
+    await deps.saveSonicDna(jobId, job.claimToken, normalizedDna);
 
     const identity = reconciliation.identity;
     const evidence = {
@@ -293,19 +298,21 @@ export async function processAuditJob(
       sonicDna,
       catalogMetadata: null,
     });
-    await deps.saveAssessment(jobId, assessment);
+    await deps.saveAssessment(jobId, job.claimToken, assessment);
     const generatedAt = new Date().toISOString();
     const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
     const samplePdf = await deps.generateReport(reportInput, "sample");
-    await deps.saveReport(jobId, "sample", samplePdf);
+    await deps.saveReport(jobId, job.claimToken, "sample", samplePdf);
     const pdf = await deps.generateReport(reportInput, "full");
-    await deps.saveReport(jobId, "full", pdf);
+    await deps.saveReport(jobId, job.claimToken, "full", pdf);
 
-    await deps.markCompleted(jobId);
+    await deps.stopHeartbeat?.();
+    await deps.markCompleted(jobId, job.claimToken);
     return { status: "completed" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown processing error";
-    await deps.markFailed(jobId, message);
+    await deps.stopHeartbeat?.();
+    await deps.markFailed(jobId, job.claimToken, message);
     return { status: "failed" };
   }
 }

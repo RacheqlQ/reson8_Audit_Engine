@@ -14,7 +14,10 @@ describe("processAuditJob", () => {
         mimeType: "audio/wav",
         sourceType: "master",
         catalogUrl: null,
-        status: "queued" as const,
+        status: "processing" as const,
+        claimToken: "11111111-1111-4111-8111-111111111111",
+        leaseExpiresAt: "2099-01-01T00:00:00.000Z",
+        workerId: "test-worker",
       }),
       markProcessing: async () => events.push("processing"),
       collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
@@ -34,7 +37,7 @@ describe("processAuditJob", () => {
         sampleRate: 44100,
         channels: 2,
       }),
-      saveSonicDna: async (_jobId, dna) => {
+      saveSonicDna: async (_jobId, _claimToken, dna) => {
         events.push("dna");
         expect(dna.sampleRate).toBe(44100);
         expect(dna.channels).toBe(2);
@@ -55,7 +58,7 @@ describe("processAuditJob", () => {
         events.push(`report-${tier}`);
         return new Uint8Array([37, 80, 68, 70, 45]);
       },
-      saveReport: async (_jobId, tier) => events.push(`report-saved-${tier}`),
+      saveReport: async (_jobId, _claimToken, tier) => events.push(`report-saved-${tier}`),
       markCompleted: async () => events.push("completed"),
       markFailed: async () => events.push("failed"),
     });
@@ -88,7 +91,10 @@ describe("processAuditJob", () => {
         mimeType: null,
         sourceType: "dsp_link" as const,
         catalogUrl: "https://tidal.com/browse/track/tidal-123",
-        status: "queued" as const,
+        status: "processing" as const,
+        claimToken: "11111111-1111-4111-8111-111111111111",
+        leaseExpiresAt: "2099-01-01T00:00:00.000Z",
+        workerId: "test-worker",
       }),
       markProcessing: async () => {},
       collectCatalogMetadata: async () => ({
@@ -128,7 +134,7 @@ describe("processAuditJob", () => {
         isrc: "US-ABC-12-34567",
       }),
       saveRecognition: async () => {},
-      saveEvidence: async (_jobId, recognition, reconciliation, metadata) => {
+      saveEvidence: async (_jobId, _claimToken, recognition, reconciliation, metadata) => {
         expect(recognition.matched).toBe(true);
         expect(reconciliation.status).toBe("partial");
         expect(metadata?.platform).toBe("tidal");
@@ -194,7 +200,10 @@ describe("processAuditJob", () => {
         mimeType: "audio/wav",
         sourceType: "master",
         catalogUrl: null,
-        status: "queued" as const,
+        status: "processing" as const,
+        claimToken: "11111111-1111-4111-8111-111111111111",
+        leaseExpiresAt: "2099-01-01T00:00:00.000Z",
+        workerId: "test-worker",
       }),
       markProcessing: async () => { events.push("processing"); },
       collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
@@ -216,7 +225,7 @@ describe("processAuditJob", () => {
       },
       saveReport: async () => { events.push("report-saved"); },
       markCompleted: async () => { events.push("completed"); },
-      markFailed: async (_jobId, message) => {
+      markFailed: async (_jobId, _claimToken, message) => {
         failureMessage = message;
         events.push("audit_failed");
       },
@@ -241,7 +250,10 @@ describe("processAuditJob", () => {
         mimeType: "audio/wav",
         sourceType: "master",
         catalogUrl: null,
-        status: "queued" as const,
+        status: "processing" as const,
+        claimToken: "11111111-1111-4111-8111-111111111111",
+        leaseExpiresAt: "2099-01-01T00:00:00.000Z",
+        workerId: "test-worker",
       }),
       markProcessing: async () => {},
       collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
@@ -262,7 +274,7 @@ describe("processAuditJob", () => {
       generateReport: async () => new Uint8Array(),
       saveReport: async () => {},
       markCompleted: async () => {},
-      markFailed: async (_jobId, message) => {
+      markFailed: async (_jobId, _claimToken, message) => {
         failure = message;
       },
     });

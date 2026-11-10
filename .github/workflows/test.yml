@@ -8,11 +8,32 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: reson8_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d reson8_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22.12.0"
-      - run: npm install
-      - run: npm test
-      - run: npm run build
+      - name: Install dependencies
+        run: npm install
+      - name: Run isolated PostgreSQL worker-fencing regressions
+        env:
+          WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
+        run: bash .github/scripts/worker-fencing-postgres.sh
+      - name: Run unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
