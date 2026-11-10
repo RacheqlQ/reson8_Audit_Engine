@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { CreateAuditJobDependencies } from "../jobs/create-audit-job.js";
 import type { AuditJobRecord } from "../jobs/process-audit-job.js";
@@ -103,7 +104,7 @@ export function createSupabaseAuditStore(
       };
     },
     async claimNextQueuedJob() {
-      const workerId = `audit-worker:${process.env.RENDER_INSTANCE_ID ?? process.env.HOSTNAME ?? "local"}:${crypto.randomUUID()}`;
+      const workerId = `audit-worker:${process.env.RENDER_INSTANCE_ID ?? process.env.HOSTNAME ?? "local"}:${randomUUID()}`;
       const { data, error } = await admin.rpc("claim_next_audit_job", {
         p_worker_id: workerId, p_lease_seconds: 180,
       });
