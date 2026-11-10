@@ -19,7 +19,7 @@ export interface CatalogMetadata {
   artist: string | null; title: string | null; album: string | null; releaseDate: string | null;
   isrc: string | null; upc: string | null; catalogPopularity: number | null; catalogPopularityScale: "0_1" | "0_100" | null; label: string | null; genre: string | null;
   artworkUrl: string | null; previewUrl: string | null; externalIds: Record<string,string>; sonicProfile: CatalogSonicProfile | null;
-  raw: Record<string,unknown>; evidenceStatus: "verified" | "partial";
+  raw: Record<string,unknown>; evidenceStatus: "recognized" | "partial";
 }
 
 const HOSTS: Record<string,DspPlatform> = {
