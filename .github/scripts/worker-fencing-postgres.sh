@@ -75,7 +75,7 @@ assert_sql "1:Fixture Artist Updated" "select count(*)::text || ':' || max(artis
 rpc "$JOB_MAIN" "$TOKEN_MAIN" evidence '{"canonicalArtist":"Fixture Artist","canonicalTitle":"Fixture Track","releaseDate":"2025-01-02","isrc":"NGABC2500001","evidenceStatus":"verified","reconciliationStatus":"reconciled","sources":[{"provider":"audd"}]}'
 assert_sql "verified" "select evidence_status from public.reconciled_tracks where audit_job_id='$JOB_MAIN'"
 rpc "$JOB_MAIN" "$TOKEN_MAIN" sonic_dna '{"durationSeconds":"182.4","sampleRate":"44100","channels":"2","bpm":"126","key":"C","mode":"major","loudnessLufs":"-9.2","rmsEnergy":"0.2","dynamicRangeDb":"7.1","spectralCentroidHz":"2400","spectralBandwidthHz":"1800","spectralRolloffHz":"9000","zeroCrossingRate":"0.04","moodTags":["energetic"],"genreContext":["afrobeats"],"rawFeatures":{"fixture":true}}'
-assert_sql "1:126:182.4" "select count(*)::text || ':' || max(bpm)::text || ':' || (select duration_seconds::text from public.audit_jobs where id='$JOB_MAIN') from public.sonic_dna where audit_job_id='$JOB_MAIN'"
+assert_sql "1:126.000:182.400" "select count(*)::text || ':' || max(bpm)::text || ':' || (select duration_seconds::text from public.audit_jobs where id='$JOB_MAIN') from public.sonic_dna where audit_job_id='$JOB_MAIN'"
 echo "PASS: all three persistence paths and their upsert/constraint contracts"
 
 echo "Regression 4/8: assessment and versioned report persistence"
