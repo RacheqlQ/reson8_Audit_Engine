@@ -1,5 +1,5 @@
 -- Worker lease fencing for Reson8 Audit Engine.
--- Apply only after review; this migration is intentionally not executed by CI or this change.
+-- Applied by the isolated PostgreSQL regression workflow; never apply from CI to hosted projects.
 
 alter table public.audit_jobs
   add column if not exists claim_token uuid,

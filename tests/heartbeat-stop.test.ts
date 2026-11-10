@@ -5,7 +5,9 @@ describe("worker heartbeat shutdown ordering", () => {
   it("awaits an in-flight heartbeat shutdown before writing terminal completion", async () => {
     const events: string[] = [];
     let releaseStop!: () => void;
+    let signalStopStarted!: () => void;
     const stopGate = new Promise<void>((resolve) => { releaseStop = resolve; });
+    const stopStarted = new Promise<void>((resolve) => { signalStopStarted = resolve; });
 
     const deps = {
       getJob: async () => ({
@@ -36,6 +38,7 @@ describe("worker heartbeat shutdown ordering", () => {
       saveReport: async () => {},
       stopHeartbeat: async () => {
         events.push("heartbeat-stop-started");
+        signalStopStarted();
         await stopGate;
         events.push("heartbeat-stopped");
       },
@@ -44,8 +47,7 @@ describe("worker heartbeat shutdown ordering", () => {
     } as unknown as AuditProcessorDependencies;
 
     const processing = processAuditJob("heartbeat-race-job", deps);
-    await Promise.resolve();
-    await Promise.resolve();
+    await stopStarted;
     expect(events).toContain("heartbeat-stop-started");
     expect(events).not.toContain("terminal-completion");
 
