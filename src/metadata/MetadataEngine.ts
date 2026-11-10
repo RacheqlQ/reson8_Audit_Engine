@@ -104,7 +104,7 @@ function cleanGenres(value: unknown): string[] {
 }
 
 function auddMetadata(input: AuddMetadata | null | undefined): StructuredMetadata | null {
-  if (!input) return null;
+  if (!input || input.matched === false) return null;
   if (input.result && typeof input.result === "object") return input.result;
   return input;
 }
