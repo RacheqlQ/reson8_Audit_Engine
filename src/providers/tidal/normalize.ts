@@ -152,7 +152,7 @@ export function normalizeTidalTrack(
     previewUrl: null,
     externalIds: tidalId ? { tidal: tidalId } : {},
     raw: documentInput,
-    evidenceStatus: title && artistName ? "verified" : "partial",
+    evidenceStatus: title && artistName ? "recognized" : "partial",
     sonicProfile: sonicProfile(attributes, genres),
   };
 }
