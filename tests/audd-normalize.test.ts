@@ -41,7 +41,6 @@ describe("normalizeAuddRecognition", () => {
     expect(normalizeAuddRecognition({})).toEqual({ matched: false });
     expect(normalizeAuddRecognition({ artist: " ", title: null })).toEqual({ matched: false });
   });
-  expect(result.matched && "confidence" in result).toBe(false);
 });
 
 
@@ -60,4 +59,5 @@ it("preserves provider identifiers needed for reconciliation", () => {
     appleMusicUrl: "https://music.apple.com/us/song/123",
     rawResponse: expect.objectContaining({ score: 0.18, provider_extension: "preserved" }),
   });
+  expect(result.matched && "confidence" in result).toBe(false);
 });
