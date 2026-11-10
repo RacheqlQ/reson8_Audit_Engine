@@ -52,6 +52,6 @@ export function buildSongEvidence(recognition: AuditRecognition): SongEvidenceOb
     spotifyId: recognition.spotifyId ?? null,
     appleMusicId: recognition.appleMusicId ?? null,
     musicbrainzId: recognition.musicbrainzId ?? null,
-    sources: ["audd"],
+    sources: hasIdentity ? ["audd"] : [],
   };
 }
