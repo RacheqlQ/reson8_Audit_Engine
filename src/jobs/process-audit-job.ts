@@ -265,6 +265,10 @@ export async function processAuditJob(
     const sample = await deps.createRecognitionSample(master, job.mimeType);
     const recognition = await deps.recognize(sample);
     await deps.saveRecognition(jobId, recognition);
+    const reconciliation = reconcileMetadata({
+      audd: recognitionMetadataInput(recognition),
+    });
+    await deps.saveEvidence(jobId, recognition, reconciliation);
     const decoded = await deps.decode(master, job.mimeType);
     const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
     const normalizedDna = {
@@ -275,10 +279,6 @@ export async function processAuditJob(
     };
     await deps.saveSonicDna(jobId, normalizedDna);
 
-    const reconciliation = reconcileMetadata({
-      audd: recognitionMetadataInput(recognition),
-    });
-    await deps.saveEvidence(jobId, recognition, reconciliation);
     const identity = reconciliation.identity;
     const evidence = {
       auditType: "MASTER-BASED AUDIT",
