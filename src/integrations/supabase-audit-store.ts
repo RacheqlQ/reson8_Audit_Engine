@@ -131,7 +131,7 @@ export function createSupabaseAuditStore(
         isrc: metadata.isrc, upc: metadata.upc, spotify_id: metadata.externalIds.spotify ?? null,
         apple_music_id: metadata.externalIds.apple_music ?? null, evidence_status: metadata.evidenceStatus,
         sources: [{ provider: metadata.platform, url: metadata.canonicalUrl, catalogId: metadata.catalogId }],
-        confidence: metadata.evidenceStatus === "verified" ? 1 : 0.6,
+        confidence: null,
       }, { onConflict: "audit_job_id" });
       if (error) throw new Error(`Unable to save catalog evidence: ${error.message}`);
       const { error: jobError } = await admin.from("audit_jobs").update({
@@ -153,7 +153,7 @@ export function createSupabaseAuditStore(
         isrc: recognition.matched ? recognition.isrc ?? null : null,
         timecode: recognition.matched ? recognition.timecode ?? null : null,
         song_link: recognition.matched ? recognition.songLink ?? recognition.spotifyUrl ?? null : null,
-        raw_response: recognition as unknown as Record<string, unknown>,
+        raw_response: recognition.matched ? recognition.rawResponse ?? recognition : recognition,
       };
       const { error } = await admin.from("recognition_results").upsert(row, { onConflict: "audit_job_id,provider" });
       if (error) throw new Error(`Unable to save recognition: ${error.message}`);
