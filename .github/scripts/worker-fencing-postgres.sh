@@ -44,10 +44,10 @@ assert_sql() {
 
 echo "Baseline: production-derived application tables, constraints, indexes, and RLS policies"
 assert_sql "10" "select count(*) from pg_tables where schemaname='public'"
-assert_sql "true" "select relrowsecurity from pg_class where oid='public.audit_jobs'::regclass"
-assert_sql "true" "select relrowsecurity from pg_class where oid='public.recognition_results'::regclass"
-assert_sql "true" "select relrowsecurity from pg_class where oid='public.audit_reports_legacy'::regclass"
-assert_sql "true" "select relrowsecurity from pg_class where oid='public.audit_assessments'::regclass"
+assert_sql "t" "select relrowsecurity from pg_class where oid='public.audit_jobs'::regclass"
+assert_sql "t" "select relrowsecurity from pg_class where oid='public.recognition_results'::regclass"
+assert_sql "t" "select relrowsecurity from pg_class where oid='public.audit_reports_legacy'::regclass"
+assert_sql "t" "select relrowsecurity from pg_class where oid='public.audit_assessments'::regclass"
 assert_sql "false:true" "select has_function_privilege('anon','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text || ':' || has_function_privilege('service_role','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text"
 
 echo "Regression 1/8: concurrent claims grant the sole queued job exactly once"
