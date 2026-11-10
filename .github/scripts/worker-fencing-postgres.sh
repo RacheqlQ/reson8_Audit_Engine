@@ -5,10 +5,13 @@ set -euo pipefail
 DB="$WORKER_FENCING_DATABASE_URL"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCHEMA="$ROOT/.github/scripts/worker-fencing-schema.sql"
-MIGRATION="$ROOT/supabase/migrations/20261110000000_worker_lease_fencing.sql"
 
 psql "$DB" -v ON_ERROR_STOP=1 -f "$SCHEMA"
-psql "$DB" -v ON_ERROR_STOP=1 -f "$MIGRATION"
+echo "Replaying exact historical migrations and the current repository migration chain"
+for MIGRATION in "$ROOT"/supabase/migrations/*.sql; do
+  echo "Applying $(basename "$MIGRATION")"
+  psql "$DB" -v ON_ERROR_STOP=1 -f "$MIGRATION"
+done
 
 JOB_MAIN="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 JOB_FAIL="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
@@ -40,9 +43,11 @@ assert_sql() {
 }
 
 echo "Baseline: production-derived application tables, constraints, indexes, and RLS policies"
-assert_sql "9" "select count(*) from pg_tables where schemaname='public'"
+assert_sql "10" "select count(*) from pg_tables where schemaname='public'"
 assert_sql "true" "select relrowsecurity from pg_class where oid='public.audit_jobs'::regclass"
 assert_sql "true" "select relrowsecurity from pg_class where oid='public.recognition_results'::regclass"
+assert_sql "true" "select relrowsecurity from pg_class where oid='public.audit_reports_legacy'::regclass"
+assert_sql "true" "select relrowsecurity from pg_class where oid='public.audit_assessments'::regclass"
 assert_sql "false:true" "select has_function_privilege('anon','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text || ':' || has_function_privilege('service_role','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text"
 
 echo "Regression 1/8: concurrent claims grant the sole queued job exactly once"
