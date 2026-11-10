@@ -215,10 +215,10 @@ export async function processAuditJob(
       if (metadata.previewUrl) {
         try {
           recognition = await deps.recognizeUrl(metadata.previewUrl);
-          await deps.saveRecognition(jobId, recognition);
         } catch {
           // Preview recognition is enrichment; catalog metadata remains authoritative evidence.
         }
+        if (recognition) await deps.saveRecognition(jobId, recognition);
       }
 
       const effectiveRecognition: AuditRecognition = recognition ?? { matched: false };
