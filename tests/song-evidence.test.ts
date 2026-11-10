@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildSongEvidence } from "../src/jobs/song-evidence.js";
 
 describe("Song Evidence Object", () => {
-  it("marks a multi-source identity as verified", () => {
+  it("does not treat identifiers nested in one AudD response as independent corroboration", () => {
     const evidence = buildSongEvidence({
       matched: true,
       artist: "Artist",
@@ -12,9 +12,9 @@ describe("Song Evidence Object", () => {
       musicbrainzId: "recording123",
     });
 
-    expect(evidence.status).toBe("verified");
-    expect(evidence.confidence).toBe(1);
-    expect(evidence.sources).toEqual(["audd", "spotify", "musicbrainz"]);
+    expect(evidence.status).toBe("partial");
+    expect(evidence.confidence).toBeNull();
+    expect(evidence.sources).toEqual(["audd"]);
   });
 
   it("keeps unmatched recordings explicitly unresolved", () => {
