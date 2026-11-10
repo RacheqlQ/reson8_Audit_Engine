@@ -10,8 +10,11 @@ const fixtureJobId = process.env.WORKER_FENCING_TEST_JOB_ID;
 const enabled = Boolean(databaseUrl && serviceRoleKey && fixtureJobId);
 
 describe.skipIf(!enabled)("worker lease fencing (Supabase integration)", () => {
-  let admin: SupabaseClient;
-  let originalStatus: string;
+  let admin: SupabaseClient | null = null;
+  const db = () => {
+    if (!admin) throw new Error("Supabase integration client was not initialized");
+    return admin;
+  };
   let claimToken: string;
 
   beforeAll(async () => {
@@ -25,12 +28,12 @@ describe.skipIf(!enabled)("worker lease fencing (Supabase integration)", () => {
     });
     const { data, error } = await admin.from("audit_jobs").select("id,status").eq("id", fixtureJobId).single();
     if (error || !data) throw new Error(`WORKER_FENCING_TEST_JOB_ID must identify a pre-seeded disposable job: ${error?.message ?? "not found"}`);
-    originalStatus = data.status;
+    if (data.status !== "queued") throw new Error("Disposable worker fixture must be queued before the test suite starts");
   });
 
   beforeEach(async () => {
     claimToken = randomUUID();
-    const { error } = await admin.from("audit_jobs").update({
+    const { error } = await db().from("audit_jobs").update({
       status: "processing",
       claim_token: claimToken,
       worker_id: "worker-concurrency-test",
@@ -41,8 +44,8 @@ describe.skipIf(!enabled)("worker lease fencing (Supabase integration)", () => {
 
   afterAll(async () => {
     if (!admin || !fixtureJobId) return;
-    await admin.from("audit_jobs").update({
-      status: originalStatus ?? "queued",
+    await db().from("audit_jobs").update({
+      status: "queued",
       claim_token: null,
       worker_id: null,
       lease_expires_at: null,
@@ -50,7 +53,7 @@ describe.skipIf(!enabled)("worker lease fencing (Supabase integration)", () => {
   });
 
   it("rejects a zombie worker with a mismatched claim token at the database boundary", async () => {
-    const { error } = await admin.rpc("persist_fenced_audit_step", {
+    const { error } = await db().rpc("persist_fenced_audit_step", {
       p_job_id: fixtureJobId,
       p_claim_token: randomUUID(),
       p_operation: "processing_started",
