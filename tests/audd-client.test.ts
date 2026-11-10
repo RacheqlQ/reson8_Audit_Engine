@@ -24,6 +24,7 @@ describe("AuddClient", () => {
       matched: true,
       artist: "Tems",
       title: "Free Mind",
+      rawResponse: { artist: "Tems", title: "Free Mind" },
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
