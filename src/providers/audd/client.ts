@@ -11,7 +11,7 @@ export class AuddClient implements AuddRecognitionClient {
     if (!apiToken) throw new Error("AUDD_API is required");
     this.apiToken = apiToken;
   }
-  private async request(fields: Record<string, string | Blob>) {
+  private async request(fields: Record<string, string | Blob>): Promise<AuditRecognition> {
     const form = new FormData();
     form.set("api_token", this.apiToken);
     form.set("return", "apple_music,spotify,deezer,musicbrainz");
