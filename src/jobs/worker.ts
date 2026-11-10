@@ -52,28 +52,38 @@ export async function processNextQueuedAudit(): Promise<{ jobId: string; status:
     markFailed: async (jobId, _claimToken, message) => store.markFailed(jobId, _claimToken, message),
   };
 
-  let heartbeatInFlight = false;
+  let heartbeatPromise: Promise<void> | null = null;
+  let heartbeatStopped = false;
   let leaseLost: Error | null = null;
-  const heartbeat = setInterval(async () => {
-    if (heartbeatInFlight || leaseLost) return;
-    heartbeatInFlight = true;
-    try {
-      await store.renewLease(job.id, job.claimToken);
-    } catch (error) {
-      leaseLost = error instanceof Error ? error : new Error(String(error));
-      console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "lease_lost" }));
-    } finally {
-      heartbeatInFlight = false;
-    }
-  }, 45_000);
+  const heartbeatTick = () => {
+    if (heartbeatStopped || heartbeatPromise || leaseLost) return;
+    heartbeatPromise = (async () => {
+      try {
+        await store.renewLease(job.id, job.claimToken);
+      } catch (error) {
+        leaseLost = error instanceof Error ? error : new Error(String(error));
+        console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "lease_lost" }));
+      }
+    })().finally(() => { heartbeatPromise = null; });
+  };
+  const heartbeat = setInterval(heartbeatTick, 45_000);
   heartbeat.unref();
+
+  const stopHeartbeat = async () => {
+    heartbeatStopped = true;
+    clearInterval(heartbeat);
+    if (heartbeatPromise) await heartbeatPromise;
+    if (leaseLost) throw new Error("AUDIT_LEASE_LOST");
+  };
+  deps.stopHeartbeat = stopHeartbeat;
 
   try {
     const result = await processAuditJob(job.id, deps);
-    if (leaseLost) throw new Error("AUDIT_LEASE_LOST");
     return { jobId: job.id, ...result };
   } finally {
+    heartbeatStopped = true;
     clearInterval(heartbeat);
+    if (heartbeatPromise) await heartbeatPromise;
   }
 }
 
