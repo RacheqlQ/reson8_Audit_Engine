@@ -26,6 +26,10 @@ end $$;
 create index if not exists audit_jobs_claimable_lease_idx
   on public.audit_jobs (status, lease_expires_at, created_at);
 
+create unique index if not exists audit_jobs_claim_token_unique_idx
+  on public.audit_jobs (claim_token)
+  where claim_token is not null;
+
 create or replace function public.claim_next_audit_job(
   p_worker_id text,
   p_lease_seconds integer default 180
