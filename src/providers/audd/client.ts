@@ -20,7 +20,16 @@ export class AuddClient implements AuddRecognitionClient {
     if (!response.ok) throw new Error(`AudD request failed with HTTP ${response.status}`);
     const payload = (await response.json()) as { status?: string; error?: { error_message?: string }; result?: unknown };
     if (payload.status === "error" || payload.error) throw new Error(payload.error?.error_message ?? "AudD recognition failed");
-    return normalizeAuddRecognition(payload.result ?? null);
+    const normalized = normalizeAuddRecognition(
+      (payload.result ?? null) as Parameters<typeof normalizeAuddRecognition>[0],
+    );
+    if (!normalized.matched) {
+      return {
+        matched: false,
+        rawResponse: { status: payload.status ?? null, result: payload.result ?? null },
+      };
+    }
+    return normalized;
   }
   async recognize(source: Uint8Array): Promise<AuditRecognition> {
     const bytes = new Uint8Array(source.byteLength); bytes.set(source);
