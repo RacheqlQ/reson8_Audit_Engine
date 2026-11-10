@@ -63,11 +63,6 @@ export function createSupabaseAuditStore(
     return data as Record<string, unknown> | null;
   };
 
-  const event = async (jobId: string, eventType: string, status: string, message?: string, payload: Record<string, unknown> = {}) => {
-    const { error } = await admin.from("audit_events").insert({ audit_job_id: jobId, event_type: eventType, status, message, payload });
-    if (error) throw new Error(`Unable to write audit event: ${error.message}`);
-  };
-
 
   return {
     admin,
