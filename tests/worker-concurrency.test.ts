@@ -31,6 +31,9 @@ describe.skipIf(!enabled)("worker lease fencing (Supabase integration)", () => {
     if (data.status !== "queued") throw new Error("Disposable worker fixture must be queued before the test suite starts");
     if (data.source_type === "master" && !data.source_audio_path) throw new Error("Master test fixture needs source_audio_path");
     if (data.source_type === "dsp_link" && !data.catalog_url) throw new Error("DSP test fixture needs catalog_url");
+    const { count, error: queueError } = await admin.from("audit_jobs").select("id", { count: "exact", head: true }).eq("status", "queued");
+    if (queueError) throw new Error(`Unable to inspect disposable queue: ${queueError.message}`);
+    if (count !== 1) throw new Error("Disposable worker test project must contain exactly one queued job");
   });
 
   beforeEach(async () => {
