@@ -110,7 +110,7 @@ describe("processAuditJob", () => {
         previewUrl: "https://example.com/preview.mp3",
         externalIds: { tidal: "tidal-123" },
         raw: {},
-        evidenceStatus: "verified" as const,
+        evidenceStatus: "recognized" as const,
         sonicProfile: {
           provenance: "tidal_catalog_metadata" as const,
           bpm: 96,
