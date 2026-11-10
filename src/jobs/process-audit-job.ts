@@ -61,19 +61,15 @@ function recognitionEvidence(recognition: AuditRecognition): Record<string, unkn
     spotifyId: recognition.spotifyId ?? null,
     appleMusicId: recognition.appleMusicId ?? null,
     musicbrainzId: recognition.musicbrainzId ?? null,
-    confidence: 1,
+    confidence: null,
     source: "audd",
+    evidenceClass: "RECOGNIZED",
+    providerResponse: recognition.rawResponse ?? null,
   };
 }
 
 function catalogMetadataInput(metadata: CatalogMetadata) {
-  const provider = metadata.platform === "spotify" || metadata.platform === "tidal"
-    ? metadata.platform
-    : null;
-
-  return {
-    spotify: provider === "spotify"
-      ? {
+  const fields = {
           title: metadata.title,
           artist: metadata.artist,
           album: metadata.album,
@@ -82,19 +78,13 @@ function catalogMetadataInput(metadata: CatalogMetadata) {
           releaseDate: metadata.releaseDate,
           genres: metadata.genre ? [metadata.genre] : [],
         }
-      : null,
-    tidal: provider === "tidal"
-      ? {
-          title: metadata.title,
-          artist: metadata.artist,
-          album: metadata.album,
-          isrc: metadata.isrc,
-          label: metadata.label,
-          releaseDate: metadata.releaseDate,
-          genres: metadata.genre ? [metadata.genre] : [],
-        }
-      : null,
-  };
+      };
+  if (metadata.platform === "spotify") return { spotify: fields };
+  if (metadata.platform === "tidal") return { tidal: fields };
+  if (metadata.platform === "apple_music") return { apple_music: fields };
+  if (metadata.platform === "deezer") return { deezer: fields };
+  if (metadata.platform === "youtube_music") return { youtube_music: fields };
+  return {};
 }
 
 function recognitionMetadataInput(recognition: AuditRecognition) {
@@ -126,6 +116,7 @@ function identityEvidence(identity: TrackIdentity): Record<string, unknown> {
 function reconciliationEvidence(reconciliation: MetadataReconciliation): Record<string, unknown> {
   return {
     status: reconciliation.status,
+    evidenceClass: reconciliation.status === "reconciled" ? "RECONCILED" : "RECOGNIZED",
     reconciledFields: reconciliation.reconciledFields,
     conflicts: reconciliation.conflicts,
     identity: identityEvidence(reconciliation.identity),
@@ -148,6 +139,7 @@ function catalogEvidence(metadata: CatalogMetadata, identity: TrackIdentity): Re
     externalIds: metadata.externalIds,
     canonicalUrl: metadata.canonicalUrl,
     source: metadata.platform,
+    evidenceClass: "RECOGNIZED",
     identity: identityEvidence(identity),
     catalogPopularity: metadata.catalogPopularity,
     catalogPopularityScale: metadata.catalogPopularityScale,
@@ -180,6 +172,7 @@ function catalogSonicDna(metadata: CatalogMetadata): Record<string, unknown> | n
 function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
   return {
     provenance: "uploaded_audio_master",
+    evidenceClass: "OBSERVED",
     sampleRate: dna.sampleRate,
     channels: dna.channels,
     durationSeconds: dna.durationSeconds,
@@ -223,7 +216,6 @@ export async function processAuditJob(
         try {
           recognition = await deps.recognizeUrl(metadata.previewUrl);
           await deps.saveRecognition(jobId, recognition);
-          await deps.saveEvidence(jobId, recognition);
         } catch {
           // Preview recognition is enrichment; catalog metadata remains authoritative evidence.
         }
