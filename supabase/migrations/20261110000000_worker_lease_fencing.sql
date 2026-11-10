@@ -32,7 +32,7 @@ create or replace function public.claim_next_audit_job(
 )
 returns setof public.audit_jobs
 language plpgsql
-security definer
+security invoker
 set search_path = public, pg_temp
 as $$
 declare
@@ -87,7 +87,7 @@ create or replace function public.renew_audit_job_lease(
 )
 returns timestamptz
 language plpgsql
-security definer
+security invoker
 set search_path = public, pg_temp
 as $$
 declare
@@ -122,7 +122,7 @@ create or replace function public.persist_fenced_audit_step(
 )
 returns jsonb
 language plpgsql
-security definer
+security invoker
 set search_path = public, pg_temp
 as $$
 declare
