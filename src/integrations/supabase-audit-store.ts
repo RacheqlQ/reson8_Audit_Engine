@@ -145,11 +145,14 @@ export function createSupabaseAuditStore(
         isrc: recognition.matched ? recognition.isrc ?? null : null,
         timecode: recognition.matched ? recognition.timecode ?? null : null,
         song_link: recognition.matched ? recognition.songLink ?? recognition.spotifyUrl ?? null : null,
-        raw_response: recognition.matched ? recognition.rawResponse ?? recognition : recognition,
+        raw_response: recognition.rawResponse ?? recognition,
       };
       const { error } = await admin.from("recognition_results").upsert(row, { onConflict: "audit_job_id,provider" });
       if (error) throw new Error(`Unable to save recognition: ${error.message}`);
-      await event(jobId, "recognition", recognition.matched ? "matched" : "unmatched");
+      await event(jobId, "recognition", recognition.matched ? "matched" : "unmatched", undefined, {
+        evidenceClass: recognition.matched ? "RECOGNIZED" : null,
+        rawResponsePreserved: Boolean(recognition.rawResponse),
+      });
     },
     async saveEvidence(jobId, recognition, reconciliation, metadata) {
       const identity = reconciliation.identity;
@@ -158,19 +161,22 @@ export function createSupabaseAuditStore(
         ? "verified"
         : hasIdentity ? "partial" : "unresolved";
       const sources: Array<Record<string, unknown>> = [];
-      for (const provider of identity.sourceProviders) {
-        sources.push({ provider, evidenceClass: "RECOGNIZED" });
-      }
-      if (recognition.matched && !sources.some((source) => source.provider === "audd")) {
-        sources.push({ provider: "audd", evidenceClass: "RECOGNIZED" });
-      }
-      if (metadata && !sources.some((source) => source.provider === metadata.platform)) {
+      if (metadata) {
         sources.push({
           provider: metadata.platform,
           url: metadata.canonicalUrl,
           catalogId: metadata.catalogId,
           evidenceClass: "RECOGNIZED",
         });
+      }
+      for (const provider of identity.sourceProviders) {
+        if (provider === metadata?.platform) continue;
+        if (!sources.some((source) => source.provider === provider)) {
+          sources.push({ provider, evidenceClass: "RECOGNIZED" });
+        }
+      }
+      if (recognition.matched && !sources.some((source) => source.provider === "audd")) {
+        sources.push({ provider: "audd", evidenceClass: "RECOGNIZED" });
       }
       const { error } = await admin.from("reconciled_tracks").upsert({
         audit_job_id: jobId,
@@ -205,11 +211,12 @@ export function createSupabaseAuditStore(
         loudness_lufs: dna.loudnessLufs, rms_energy: dna.rmsEnergy, dynamic_range_db: dna.dynamicRangeDb,
         spectral_centroid_hz: dna.spectralCentroidHz, spectral_bandwidth_hz: dna.spectralBandwidthHz,
         spectral_rolloff_hz: dna.spectralRolloffHz, zero_crossing_rate: dna.zeroCrossingRate,
-        mood_tags: dna.moodTags, genre_context: dna.genreContext, raw_features: dna,
+        mood_tags: dna.moodTags, genre_context: dna.genreContext,
+        raw_features: { ...dna, provenance: "uploaded_audio_master", evidenceClass: "OBSERVED" },
       }, { onConflict: "audit_job_id" });
       if (error) throw new Error(`Unable to save Sonic DNA: ${error.message}`);
       await admin.from("audit_jobs").update({ duration_seconds: dna.durationSeconds }).eq("id", jobId);
-      await event(jobId, "sonic_dna", "completed", undefined, { analysisVersion: "audit-engine-0.1.0" });
+      await event(jobId, "sonic_dna", "completed", undefined, { analysisVersion: "audit-engine-0.1.0", evidenceClass: "OBSERVED" });
     },
     async saveAssessment(jobId, assessment) {
       const { error } = await admin.from("audit_assessments").upsert({
