@@ -31,6 +31,8 @@ describe("normalizeAuddRecognition", () => {
 
   it("returns an explicit unmatched result instead of inventing metadata", () => {
     expect(normalizeAuddRecognition(null)).toEqual({ matched: false });
+    expect(normalizeAuddRecognition({})).toEqual({ matched: false });
+    expect(normalizeAuddRecognition({ artist: " ", title: null })).toEqual({ matched: false });
   });
 });
 
