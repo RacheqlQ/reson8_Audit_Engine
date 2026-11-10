@@ -36,11 +36,11 @@ Run [`supabase/ops/legacy_processing_job_recovery_draft.sql`](supabase/ops/legac
 
 ## 5. Merge PR #19 into `main`
 
-After required reviews and checks pass, mark PR #19 ready for review and merge it according to repository policy.
+After steps 1–4 and required reviews and checks pass, mark PR #19 ready for review and merge it according to repository policy. The current `reson8-audit-worker` service auto-deploys commits to `main`, so this merge will start its Render deployment.
 
 ## 6. Deploy the worker on Render and verify health
 
-Deploy `reson8-audit-worker` from `main` in Render. Verify the worker service responds successfully:
+Monitor the merge-triggered `reson8-audit-worker` deployment in Render. Trigger a manual deploy only if no auto-deploy was created. Verify the deployment is live, then check the worker endpoint:
 
 ```sh
 curl --fail --show-error --silent --write-out '\nHTTP %{http_code}\n' https://<worker-service-url>/health
