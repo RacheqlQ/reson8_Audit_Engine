@@ -229,16 +229,14 @@ export async function processAuditJob(
       const reconciliation = reconcileMetadata(metadataInput);
       await deps.saveEvidence(jobId, effectiveRecognition, reconciliation, metadata);
       const identity = reconciliation.identity;
-      const evidence = recognition
-        ? {
-            auditType: "METADATA-BASED AUDIT",
-            evidenceClass: reconciliation.status === "reconciled" ? "RECONCILED" : "RECOGNIZED",
-            ...recognitionEvidence(recognition),
-            ...identityEvidence(identity),
-            identity: identityEvidence(identity),
-            reconciliation: reconciliationEvidence(reconciliation),
-          }
-        : catalogEvidence(metadata, identity);
+      const evidence = {
+        ...catalogEvidence(metadata, identity),
+        ...recognitionEvidence(effectiveRecognition),
+        ...identityEvidence(identity),
+        evidenceClass: reconciliation.status === "reconciled" ? "RECONCILED" : "RECOGNIZED",
+        identity: identityEvidence(identity),
+        reconciliation: reconciliationEvidence(reconciliation),
+      };
       const sonicDna = catalogSonicDna(metadata);
       const assessment = await deps.generateAssessment({
         evidence,
