@@ -52,6 +52,26 @@ describe.skipIf(!enabled)("worker lease fencing (Supabase integration)", () => {
     }).eq("id", fixtureJobId);
   });
 
+  it("atomically grants a queued fixture to at most one of two simultaneous workers", async () => {
+    const { error: resetError } = await db().from("audit_jobs").update({
+      status: "queued", claim_token: null, worker_id: null, lease_expires_at: null,
+    }).eq("id", fixtureJobId);
+    if (resetError) throw new Error(`Unable to queue disposable fixture: ${resetError.message}`);
+
+    const claims = await Promise.all([
+      db().rpc("claim_next_audit_job", { p_worker_id: `concurrency-a:${randomUUID()}`, p_lease_seconds: 180 }),
+      db().rpc("claim_next_audit_job", { p_worker_id: `concurrency-b:${randomUUID()}`, p_lease_seconds: 180 }),
+    ]);
+    for (const claim of claims) {
+      if (claim.error) throw new Error(`Atomic claim RPC failed: ${claim.error.message}`);
+    }
+    const claimedIds = claims.flatMap((claim) => {
+      const rows = Array.isArray(claim.data) ? claim.data : claim.data ? [claim.data] : [];
+      return rows.map((row) => row.id);
+    }).filter((id) => id === fixtureJobId);
+    expect(claimedIds).toHaveLength(1);
+  });
+
   it("rejects a zombie worker with a mismatched claim token at the database boundary", async () => {
     const { error } = await db().rpc("persist_fenced_audit_step", {
       p_job_id: fixtureJobId,
