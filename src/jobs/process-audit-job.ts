@@ -206,7 +206,7 @@ export async function processAuditJob(
 ): Promise<{ status: "completed" | "failed" }> {
   const job = await deps.getJob(jobId);
   if (!job) throw new Error("Audit job not found");
-  if (job.status !== "queued") throw new Error(`Audit job is not queued: ${job.status}`);
+  if (job.status !== "processing") throw new Error(`Audit job is not actively claimed: ${job.status}`);
 
   try {
     await deps.markProcessing(jobId, job.claimToken);
