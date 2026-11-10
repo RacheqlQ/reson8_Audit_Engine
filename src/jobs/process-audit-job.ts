@@ -77,8 +77,7 @@ function catalogMetadataInput(metadata: CatalogMetadata) {
           label: metadata.label,
           releaseDate: metadata.releaseDate,
           genres: metadata.genre ? [metadata.genre] : [],
-        }
-      };
+  };
   if (metadata.platform === "spotify") return { spotify: fields };
   if (metadata.platform === "tidal") return { tidal: fields };
   if (metadata.platform === "apple_music") return { apple_music: fields };
