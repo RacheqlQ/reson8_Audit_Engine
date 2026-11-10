@@ -112,6 +112,7 @@ if rpc "$JOB_EXPIRED" "$TOKEN_EXPIRED" processing_started '{}' >/tmp/worker-expi
   echo "FAIL: expired lease unexpectedly succeeded"; exit 1
 fi
 grep -q "AUDIT_LEASE_LOST" /tmp/worker-expired-lease.txt
+psql "$DB" -v ON_ERROR_STOP=1 -c "update public.audit_jobs set status='failed',claim_token=null,lease_expires_at=null,worker_id=null where id='$JOB_EXPIRED'"
 seed_job "$JOB_ROLLBACK"
 TOKEN_ROLLBACK="$(claim_job "$JOB_ROLLBACK" ci-rollback-worker)"
 BEFORE_EVENTS="$(psql "$DB" -At -c "select count(*) from public.audit_events where audit_job_id='$JOB_ROLLBACK'")"
