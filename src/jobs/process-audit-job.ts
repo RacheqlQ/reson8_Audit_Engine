@@ -261,8 +261,7 @@ export async function processAuditJob(
       await deps.saveReport(jobId, job.claimToken, "full", pdf);
 
       await deps.stopHeartbeat?.();
-      await deps.stopHeartbeat?.();
-    await deps.markCompleted(jobId, job.claimToken);
+      await deps.markCompleted(jobId, job.claimToken);
       return { status: "completed" };
     }
 
@@ -307,6 +306,7 @@ export async function processAuditJob(
     const pdf = await deps.generateReport(reportInput, "full");
     await deps.saveReport(jobId, job.claimToken, "full", pdf);
 
+    await deps.stopHeartbeat?.();
     await deps.markCompleted(jobId, job.claimToken);
     return { status: "completed" };
   } catch (error) {
