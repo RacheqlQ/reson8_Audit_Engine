@@ -3,7 +3,7 @@ import type { CreateAuditJobDependencies } from "../jobs/create-audit-job.js";
 import type { AuditJobRecord } from "../jobs/process-audit-job.js";
 import type { AuditRecognition } from "../providers/audd/normalize.js";
 import { type CatalogMetadata } from "../providers/dsp/catalog.js";
-import { buildSongEvidence } from "../jobs/song-evidence.js";
+import type { MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
 import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportTier } from "../reports/generate-audit-report.js";
@@ -16,7 +16,7 @@ export interface SupabaseAuditStore {
   markProcessing(jobId: string): Promise<void>;
   downloadMaster(path: string): Promise<Uint8Array>;
   saveRecognition(jobId: string, recognition: AuditRecognition): Promise<void>;
-  saveEvidence(jobId: string, recognition: AuditRecognition): Promise<void>;
+  saveEvidence(jobId: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata): Promise<void>;
   saveCatalogMetadata(jobId: string, metadata: CatalogMetadata): Promise<void>;
   saveSonicDna(jobId: string, dna: SonicDnaFeatures): Promise<void>;
   saveAssessment(jobId: string, assessment: ArAssessment): Promise<void>;
@@ -125,21 +125,13 @@ export function createSupabaseAuditStore(
       return new Uint8Array(await data.arrayBuffer());
     },
     async saveCatalogMetadata(jobId, metadata) {
-      const { error } = await admin.from("reconciled_tracks").upsert({
-        audit_job_id: jobId, canonical_artist: metadata.artist, canonical_title: metadata.title,
-        album: metadata.album, release_date: metadata.releaseDate, label: metadata.label,
-        isrc: metadata.isrc, upc: metadata.upc, spotify_id: metadata.externalIds.spotify ?? null,
-        apple_music_id: metadata.externalIds.apple_music ?? null, evidence_status: metadata.evidenceStatus,
-        sources: [{ provider: metadata.platform, url: metadata.canonicalUrl, catalogId: metadata.catalogId, evidenceClass: "RECOGNIZED" }],
-        confidence: null,
-      }, { onConflict: "audit_job_id" });
-      if (error) throw new Error(`Unable to save catalog evidence: ${error.message}`);
       const { error: jobError } = await admin.from("audit_jobs").update({
         catalog_platform: metadata.platform, catalog_id: metadata.catalogId, catalog_metadata: metadata.raw,
       }).eq("id", jobId);
       if (jobError) throw new Error(`Unable to save catalog metadata: ${jobError.message}`);
       await event(jobId, "catalog_ingestion", metadata.evidenceStatus, undefined, {
         platform: metadata.platform, catalogId: metadata.catalogId, hasPreview: Boolean(metadata.previewUrl),
+        evidenceClass: "RECOGNIZED",
       });
     },
     async saveRecognition(jobId, recognition) {
@@ -159,16 +151,52 @@ export function createSupabaseAuditStore(
       if (error) throw new Error(`Unable to save recognition: ${error.message}`);
       await event(jobId, "recognition", recognition.matched ? "matched" : "unmatched");
     },
-    async saveEvidence(jobId, recognition) {
-      const evidence = buildSongEvidence(recognition);
+    async saveEvidence(jobId, recognition, reconciliation, metadata) {
+      const identity = reconciliation.identity;
+      const hasIdentity = Boolean(identity.artist || identity.title || identity.album || identity.isrc || identity.label || identity.releaseDate);
+      const evidenceStatus = reconciliation.status === "reconciled"
+        ? "verified"
+        : hasIdentity ? "partial" : "unresolved";
+      const sources: Array<Record<string, unknown>> = [];
+      for (const provider of identity.sourceProviders) {
+        sources.push({ provider, evidenceClass: "RECOGNIZED" });
+      }
+      if (recognition.matched && !sources.some((source) => source.provider === "audd")) {
+        sources.push({ provider: "audd", evidenceClass: "RECOGNIZED" });
+      }
+      if (metadata && !sources.some((source) => source.provider === metadata.platform)) {
+        sources.push({
+          provider: metadata.platform,
+          url: metadata.canonicalUrl,
+          catalogId: metadata.catalogId,
+          evidenceClass: "RECOGNIZED",
+        });
+      }
       const { error } = await admin.from("reconciled_tracks").upsert({
-        audit_job_id: jobId, canonical_artist: evidence.canonicalArtist, canonical_title: evidence.canonicalTitle,
-        album: evidence.album, release_date: evidence.releaseDate, label: evidence.label, isrc: evidence.isrc,
-        spotify_id: evidence.spotifyId, apple_music_id: evidence.appleMusicId, musicbrainz_id: evidence.musicbrainzId,
-        evidence_status: evidence.status, confidence: evidence.confidence, sources: evidence.sources,
+        audit_job_id: jobId,
+        canonical_artist: identity.artist,
+        canonical_title: identity.title,
+        album: identity.album,
+        release_date: identity.releaseDate,
+        label: identity.label,
+        isrc: identity.isrc,
+        upc: metadata?.upc ?? null,
+        spotify_id: metadata?.externalIds.spotify ?? recognition.matched && recognition.spotifyId || null,
+        apple_music_id: metadata?.externalIds.apple_music ?? recognition.matched && recognition.appleMusicId || null,
+        musicbrainz_id: recognition.matched ? recognition.musicbrainzId ?? null : null,
+        evidence_status: evidenceStatus,
+        confidence: null,
+        sources,
       }, { onConflict: "audit_job_id" });
-      if (error) throw new Error(`Unable to save song evidence: ${error.message}`);
-      await event(jobId, "evidence_reconciliation", evidence.status, undefined, { ...evidence });
+      if (error) throw new Error(`Unable to save reconciled evidence: ${error.message}`);
+      await event(jobId, "evidence_reconciliation", reconciliation.status, undefined, {
+        evidenceClass: reconciliation.status === "reconciled" ? "RECONCILED" : hasIdentity ? "RECOGNIZED" : null,
+        evidenceStatus,
+        sources,
+        reconciledFields: reconciliation.reconciledFields,
+        conflicts: reconciliation.conflicts,
+        identity,
+      });
     },
     async saveSonicDna(jobId, dna) {
       const { error } = await admin.from("sonic_dna").upsert({
