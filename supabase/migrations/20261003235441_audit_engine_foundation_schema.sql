@@ -181,6 +181,7 @@ create policy "Reports owner delete" on public.audit_reports for delete to authe
 create policy "Events owner select" on public.audit_events for select to authenticated using (exists (select 1 from public.audit_jobs j where j.id = audit_job_id and j.owner_id = (select auth.uid())));
 create policy "Events owner insert" on public.audit_events for insert to authenticated with check (exists (select 1 from public.audit_jobs j where j.id = audit_job_id and j.owner_id = (select auth.uid())));
 create policy "Events owner update" on public.audit_events for update to authenticated using (exists (select 1 from public.audit_jobs j where j.id = audit_job_id and j.owner_id = (select auth.uid()))) with check (exists (select 1 from public.audit_jobs j where j.id = audit_job_id and j.owner_id = (select auth.uid())));
+create policy "Events owner delete" on public.audit_events for delete to authenticated using (exists (select 1 from public.audit_jobs j where j.id = audit_job_id and j.owner_id = (select auth.uid())));
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values
