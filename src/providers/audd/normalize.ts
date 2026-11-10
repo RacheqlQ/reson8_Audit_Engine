@@ -13,6 +13,7 @@ export interface NormalizedAuddRecognition {
   appleMusicUrl?: string;
   appleMusicId?: string;
   musicbrainzId?: string;
+  rawResponse?: Record<string, unknown>;
 }
 
 export interface UnmatchedAuddRecognition {
@@ -23,6 +24,7 @@ export interface UnmatchedAuddRecognition {
   releaseDate?: undefined;
   label?: undefined;
   isrc?: undefined;
+  rawResponse?: Record<string, unknown>;
 }
 
 export type AuditRecognition = NormalizedAuddRecognition | UnmatchedAuddRecognition;
@@ -35,10 +37,11 @@ type AuddLikeResult = {
   apple_music?: { url?: unknown; id?: unknown } | null;
   musicbrainz?: { id?: unknown; recording_id?: unknown } | null;
   musicbrainz_id?: unknown;
+  [key: string]: unknown;
 };
 
 const stringOrUndefined = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim().length > 0 ? value : undefined;
+  typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 
 function idFromUri(value: unknown): string | undefined {
   const uri = stringOrUndefined(value);
@@ -48,6 +51,9 @@ function idFromUri(value: unknown): string | undefined {
 
 export function normalizeAuddRecognition(input: AuddLikeResult | null | undefined): AuditRecognition {
   if (!input) return { matched: false };
+  const artist = stringOrUndefined(input.artist);
+  const title = stringOrUndefined(input.title);
+  const isrc = stringOrUndefined(input.isrc);
   const spotifyId = stringOrUndefined(input.spotify?.id) ?? idFromUri(input.spotify?.uri);
   const appleMusicId = stringOrUndefined(input.apple_music?.id);
   const musicbrainzId =
@@ -55,14 +61,17 @@ export function normalizeAuddRecognition(input: AuddLikeResult | null | undefine
     stringOrUndefined(input.musicbrainz?.id) ??
     stringOrUndefined(input.musicbrainz?.recording_id);
 
+  const hasIdentifyingEvidence = Boolean(artist || title || isrc || spotifyId || appleMusicId || musicbrainzId);
+  if (!hasIdentifyingEvidence) return { matched: false };
+
   return {
     matched: true,
-    artist: stringOrUndefined(input.artist),
-    title: stringOrUndefined(input.title),
+    artist,
+    title,
     album: stringOrUndefined(input.album),
     releaseDate: stringOrUndefined(input.release_date ?? input.releaseDate),
     label: stringOrUndefined(input.label),
-    isrc: stringOrUndefined(input.isrc),
+    isrc,
     songLink: stringOrUndefined(input.song_link ?? input.songLink),
     timecode: stringOrUndefined(input.timecode),
     spotifyUrl: stringOrUndefined(input.spotify?.external_urls?.spotify),
@@ -70,5 +79,6 @@ export function normalizeAuddRecognition(input: AuddLikeResult | null | undefine
     appleMusicUrl: stringOrUndefined(input.apple_music?.url),
     appleMusicId,
     musicbrainzId,
+    rawResponse: { ...input },
   };
 }
