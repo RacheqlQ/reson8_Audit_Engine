@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { createAudioDecoder } from "../audio/decoder.js";
 import { createRecognitionSample } from "../audio/recognition-sample.js";
