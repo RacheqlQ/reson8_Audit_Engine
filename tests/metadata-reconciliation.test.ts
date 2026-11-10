@@ -64,6 +64,18 @@ describe("Metadata reconciliation", () => {
     expect(result.identity.isrc).toBe("USAT26600001");
   });
 
+  it("reconciles Apple Music, Deezer and YouTube Music as named independent DSP sources", () => {
+    const result = reconcileMetadata({
+      apple_music: { title: "Free Mind", artist: "Tems", isrc: "NGABC2000001" },
+      deezer: { title: "Free Mind", artist: "Tems", isrc: "NGABC2000001" },
+      youtube_music: { title: "Free Mind", artist: "Tems", isrc: "NGABC2000001" },
+    });
+
+    expect(result.status).toBe("reconciled");
+    expect(result.reconciledFields).toEqual(["title", "artist", "isrc"]);
+    expect(result.identity.sourceProviders).toEqual(["apple_music", "deezer", "youtube_music"]);
+  });
+
   it("treats a single provider as observed metadata, not reconciliation", () => {
     const result = reconcileMetadata({
       tidal: {
