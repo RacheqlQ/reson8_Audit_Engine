@@ -274,7 +274,7 @@ describe("processAuditJob", () => {
       generateReport: async () => new Uint8Array(),
       saveReport: async () => {},
       markCompleted: async () => {},
-      markFailed: async (_jobId, message) => {
+      markFailed: async (_jobId, _claimToken, message) => {
         failure = message;
       },
     });
