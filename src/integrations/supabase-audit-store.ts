@@ -22,7 +22,7 @@ export interface SupabaseAuditStore {
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures): Promise<void>;
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment): Promise<void>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array): Promise<void>;
-  markCompleted(jobId: string): Promise<void>;
+  markCompleted(jobId: string, claimToken: string): Promise<void>;
   markFailed(jobId: string, claimToken: string, message: string): Promise<void>;
   getAuditStatus(jobId: string): Promise<{
     jobId: string;
