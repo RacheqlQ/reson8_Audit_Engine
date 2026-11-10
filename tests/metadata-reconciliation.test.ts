@@ -76,6 +76,18 @@ describe("Metadata reconciliation", () => {
     expect(result.identity.sourceProviders).toEqual(["apple_music", "deezer", "youtube_music"]);
   });
 
+  it("ignores metadata attached to an explicitly unmatched AudD response", () => {
+    const result = reconcileMetadata({
+      spotify: { title: "Verified Catalog Title", artist: "Catalog Artist" },
+      audd: { matched: false, result: { title: "False Match", artist: "Wrong Artist" } },
+    });
+
+    expect(result.status).toBe("partial");
+    expect(result.conflicts).toEqual([]);
+    expect(result.identity.title).toBe("Verified Catalog Title");
+    expect(result.identity.sourceProviders).toEqual(["spotify"]);
+  });
+
   it("treats a single provider as observed metadata, not reconciliation", () => {
     const result = reconcileMetadata({
       tidal: {
