@@ -88,7 +88,7 @@ describe("Metadata reconciliation", () => {
     expect(result.identity.sourceProviders).toEqual(["spotify"]);
   });
 
-  it("treats a single provider as observed metadata, not reconciliation", () => {
+  it("treats a single provider as recognized metadata, not reconciliation", () => {
     const result = reconcileMetadata({
       tidal: {
         title: "Dock of the Bay",
