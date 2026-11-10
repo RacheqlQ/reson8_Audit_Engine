@@ -64,7 +64,6 @@ function recognitionEvidence(recognition: AuditRecognition): Record<string, unkn
     confidence: null,
     source: "audd",
     evidenceClass: "RECOGNIZED",
-    providerResponse: recognition.rawResponse ?? null,
   };
 }
 
