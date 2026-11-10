@@ -26,9 +26,11 @@ describe.skipIf(!enabled)("worker lease fencing (Supabase integration)", () => {
     admin = createClient(databaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { data, error } = await admin.from("audit_jobs").select("id,status").eq("id", fixtureJobId).single();
+    const { data, error } = await admin.from("audit_jobs").select("id,status,source_type,source_audio_path,catalog_url").eq("id", fixtureJobId).single();
     if (error || !data) throw new Error(`WORKER_FENCING_TEST_JOB_ID must identify a pre-seeded disposable job: ${error?.message ?? "not found"}`);
     if (data.status !== "queued") throw new Error("Disposable worker fixture must be queued before the test suite starts");
+    if (data.source_type === "master" && !data.source_audio_path) throw new Error("Master test fixture needs source_audio_path");
+    if (data.source_type === "dsp_link" && !data.catalog_url) throw new Error("DSP test fixture needs catalog_url");
   });
 
   beforeEach(async () => {
