@@ -66,7 +66,7 @@ echo "Regression 2/8: processing_started and catalog_metadata persist with event
 rpc "$JOB_MAIN" "$TOKEN_MAIN" processing_started '{}'
 rpc "$JOB_MAIN" "$TOKEN_MAIN" catalog_metadata '{"platform":"spotify","catalogId":"track-test","raw":{"title":"Fixture Track"},"evidenceStatus":"recognized"}'
 assert_sql "spotify:track-test" "select catalog_platform || ':' || catalog_id from public.audit_jobs where id='$JOB_MAIN'"
-assert_sql "2" "select count(*) from public.audit_events where audit_job_id='$JOB_MAIN'"
+assert_sql "3" "select count(*) from public.audit_events where audit_job_id='$JOB_MAIN'"
 
 echo "Regression 3/8: recognition upsert, evidence reconciliation, and Sonic DNA persistence"
 rpc "$JOB_MAIN" "$TOKEN_MAIN" recognition '{"matched":true,"artist":"Fixture Artist","title":"Fixture Track","releaseDate":"2025-01-02","isrc":"NGABC2500001","rawResponse":{"provider":"audd"}}'
