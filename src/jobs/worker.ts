@@ -38,18 +38,18 @@ export async function processNextQueuedAudit(): Promise<{ jobId: string; status:
     recognize: (sample) => audd ? audd.recognize(sample) : Promise.resolve({ matched: false }),
     recognizeUrl: (url) => audd ? audd.recognizeUrl(url) : Promise.resolve({ matched: false }),
     collectCatalogMetadata,
-    saveRecognition: async (jobId, recognition) => store.saveRecognition(jobId, job.claimToken, recognition),
-    saveSonicDna: async (jobId, dna) => store.saveSonicDna(jobId, job.claimToken, dna),
-    saveEvidence: async (jobId, recognition, reconciliation, metadata) =>
-      store.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata),
-    saveCatalogMetadata: async (jobId, metadata) => store.saveCatalogMetadata(jobId, job.claimToken, metadata),
+    saveRecognition: async (jobId, _claimToken, recognition) => store.saveRecognition(jobId, _claimToken, recognition),
+    saveSonicDna: async (jobId, _claimToken, dna) => store.saveSonicDna(jobId, _claimToken, dna),
+    saveEvidence: async (jobId, _claimToken, recognition, reconciliation, metadata) =>
+      store.saveEvidence(jobId, _claimToken, recognition, reconciliation, metadata),
+    saveCatalogMetadata: async (jobId, _claimToken, metadata) => store.saveCatalogMetadata(jobId, _claimToken, metadata),
     decode: async (bytes) => decoder.decode(bytes),
     generateAssessment: (input) => groq.assess(input),
-    saveAssessment: async (jobId, assessment) => store.saveAssessment(jobId, job.claimToken, assessment),
+    saveAssessment: async (jobId, _claimToken, assessment) => store.saveAssessment(jobId, _claimToken, assessment),
     generateReport: generateAuditReport,
-    saveReport: async (jobId, tier, pdf) => store.saveReport(jobId, job.claimToken, tier, pdf),
-    markCompleted: async (jobId) => store.markCompleted(jobId, job.claimToken),
-    markFailed: async (jobId, message) => store.markFailed(jobId, job.claimToken, message),
+    saveReport: async (jobId, _claimToken, tier, pdf) => store.saveReport(jobId, _claimToken, tier, pdf),
+    markCompleted: async (jobId, _claimToken) => store.markCompleted(jobId, _claimToken),
+    markFailed: async (jobId, _claimToken, message) => store.markFailed(jobId, _claimToken, message),
   };
 
   let heartbeatInFlight = false;
