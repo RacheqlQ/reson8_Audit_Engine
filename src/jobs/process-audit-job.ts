@@ -115,7 +115,9 @@ function identityEvidence(identity: TrackIdentity): Record<string, unknown> {
 function reconciliationEvidence(reconciliation: MetadataReconciliation): Record<string, unknown> {
   return {
     status: reconciliation.status,
-    evidenceClass: reconciliation.status === "reconciled" ? "RECONCILED" : "RECOGNIZED",
+    evidenceClass: reconciliation.status === "reconciled"
+      ? "RECONCILED"
+      : reconciliation.identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
     reconciledFields: reconciliation.reconciledFields,
     conflicts: reconciliation.conflicts,
     identity: identityEvidence(reconciliation.identity),
@@ -138,7 +140,7 @@ function catalogEvidence(metadata: CatalogMetadata, identity: TrackIdentity): Re
     externalIds: metadata.externalIds,
     canonicalUrl: metadata.canonicalUrl,
     source: metadata.platform,
-    evidenceClass: "RECOGNIZED",
+    evidenceClass: identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
     identity: identityEvidence(identity),
     catalogPopularity: metadata.catalogPopularity,
     catalogPopularityScale: metadata.catalogPopularityScale,
@@ -233,7 +235,9 @@ export async function processAuditJob(
         ...catalogEvidence(metadata, identity),
         ...recognitionEvidence(effectiveRecognition),
         ...identityEvidence(identity),
-        evidenceClass: reconciliation.status === "reconciled" ? "RECONCILED" : "RECOGNIZED",
+        evidenceClass: reconciliation.status === "reconciled"
+          ? "RECONCILED"
+          : identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
         identity: identityEvidence(identity),
         reconciliation: reconciliationEvidence(reconciliation),
       };
