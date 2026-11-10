@@ -46,7 +46,7 @@ describe("Spotify deep catalog ingestion", () => {
       title: "Dock of the Bay", album: "The Dock of the Bay", releaseDate: "1968-07-01",
       isrc: "USAT26600001", upc: "123456789012",
       canonicalUrl: "https://open.spotify.com/track/spotify-track-123",
-      externalIds: { spotify: "spotify-track-123" }, evidenceStatus: "verified",
+      externalIds: { spotify: "spotify-track-123" }, evidenceStatus: "recognized",
     });
     expect(result.raw).toMatchObject({ id: "spotify-track-123", duration_ms: 167000, is_playable: true, popularity: 61 });
   });
