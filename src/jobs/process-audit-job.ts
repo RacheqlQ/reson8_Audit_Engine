@@ -149,6 +149,7 @@ function catalogSonicDna(metadata: CatalogMetadata): Record<string, unknown> | n
   if (!metadata.sonicProfile) return null;
   return {
     provenance: metadata.sonicProfile.provenance,
+    evidenceClass: "RECOGNIZED",
     sampleRate: null,
     channels: null,
     durationSeconds: null,
@@ -228,6 +229,7 @@ export async function processAuditJob(
       const evidence = recognition
         ? {
             auditType: "METADATA-BASED AUDIT",
+            evidenceClass: reconciliation.status === "reconciled" ? "RECONCILED" : "RECOGNIZED",
             ...recognitionEvidence(recognition),
             ...identityEvidence(identity),
             identity: identityEvidence(identity),
