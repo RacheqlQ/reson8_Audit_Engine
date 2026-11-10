@@ -40,7 +40,7 @@ export interface AuditProcessorDependencies {
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment): Promise<void>;
   generateReport(input: AuditReportInput, tier: AuditReportTier): Promise<Uint8Array>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array): Promise<void>;
-  markCompleted(jobId: string): Promise<void>;
+  markCompleted(jobId: string, claimToken: string): Promise<void>;
   markFailed(jobId: string, claimToken: string, message: string): Promise<void>;
 }
 
@@ -259,7 +259,7 @@ export async function processAuditJob(
       const pdf = await deps.generateReport(reportInput, "full");
       await deps.saveReport(jobId, job.claimToken, "full", pdf);
 
-      await deps.markCompleted(jobId);
+      await deps.markCompleted(jobId, job.claimToken);
       return { status: "completed" };
     }
 
@@ -304,7 +304,7 @@ export async function processAuditJob(
     const pdf = await deps.generateReport(reportInput, "full");
     await deps.saveReport(jobId, job.claimToken, "full", pdf);
 
-    await deps.markCompleted(jobId);
+    await deps.markCompleted(jobId, job.claimToken);
     return { status: "completed" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown processing error";
