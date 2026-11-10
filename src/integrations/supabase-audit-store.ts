@@ -130,7 +130,7 @@ export function createSupabaseAuditStore(
         album: metadata.album, release_date: metadata.releaseDate, label: metadata.label,
         isrc: metadata.isrc, upc: metadata.upc, spotify_id: metadata.externalIds.spotify ?? null,
         apple_music_id: metadata.externalIds.apple_music ?? null, evidence_status: metadata.evidenceStatus,
-        sources: [{ provider: metadata.platform, url: metadata.canonicalUrl, catalogId: metadata.catalogId }],
+        sources: [{ provider: metadata.platform, url: metadata.canonicalUrl, catalogId: metadata.catalogId, evidenceClass: "RECOGNIZED" }],
         confidence: null,
       }, { onConflict: "audit_job_id" });
       if (error) throw new Error(`Unable to save catalog evidence: ${error.message}`);
