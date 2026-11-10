@@ -25,7 +25,7 @@ export interface AuditProcessorDependencies {
   createRecognitionSample(master: Uint8Array, mimeType: string): Promise<Uint8Array>;
   recognize(sample: Uint8Array): Promise<AuditRecognition>;
   saveRecognition(jobId: string, recognition: AuditRecognition): Promise<void>;
-  saveEvidence(jobId: string, recognition: AuditRecognition): Promise<void>;
+  saveEvidence(jobId: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata): Promise<void>;
   saveCatalogMetadata(jobId: string, metadata: CatalogMetadata): Promise<void>;
   decode(bytes: Uint8Array, mimeType?: string): Promise<{ samples: Float32Array; sampleRate: number; channels: number }>;
   saveSonicDna(jobId: string, dna: SonicDnaFeatures): Promise<void>;
@@ -61,19 +61,14 @@ function recognitionEvidence(recognition: AuditRecognition): Record<string, unkn
     spotifyId: recognition.spotifyId ?? null,
     appleMusicId: recognition.appleMusicId ?? null,
     musicbrainzId: recognition.musicbrainzId ?? null,
-    confidence: 1,
+    confidence: null,
     source: "audd",
+    evidenceClass: "RECOGNIZED",
   };
 }
 
 function catalogMetadataInput(metadata: CatalogMetadata) {
-  const provider = metadata.platform === "spotify" || metadata.platform === "tidal"
-    ? metadata.platform
-    : null;
-
-  return {
-    spotify: provider === "spotify"
-      ? {
+  const fields = {
           title: metadata.title,
           artist: metadata.artist,
           album: metadata.album,
@@ -81,24 +76,18 @@ function catalogMetadataInput(metadata: CatalogMetadata) {
           label: metadata.label,
           releaseDate: metadata.releaseDate,
           genres: metadata.genre ? [metadata.genre] : [],
-        }
-      : null,
-    tidal: provider === "tidal"
-      ? {
-          title: metadata.title,
-          artist: metadata.artist,
-          album: metadata.album,
-          isrc: metadata.isrc,
-          label: metadata.label,
-          releaseDate: metadata.releaseDate,
-          genres: metadata.genre ? [metadata.genre] : [],
-        }
-      : null,
   };
+  if (metadata.platform === "spotify") return { spotify: fields };
+  if (metadata.platform === "tidal") return { tidal: fields };
+  if (metadata.platform === "apple_music") return { apple_music: fields };
+  if (metadata.platform === "deezer") return { deezer: fields };
+  if (metadata.platform === "youtube_music") return { youtube_music: fields };
+  return {};
 }
 
 function recognitionMetadataInput(recognition: AuditRecognition) {
   return {
+    matched: recognition.matched,
     result: {
       title: recognition.title,
       artist: recognition.artist,
@@ -126,6 +115,9 @@ function identityEvidence(identity: TrackIdentity): Record<string, unknown> {
 function reconciliationEvidence(reconciliation: MetadataReconciliation): Record<string, unknown> {
   return {
     status: reconciliation.status,
+    evidenceClass: reconciliation.status === "reconciled"
+      ? "RECONCILED"
+      : reconciliation.identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
     reconciledFields: reconciliation.reconciledFields,
     conflicts: reconciliation.conflicts,
     identity: identityEvidence(reconciliation.identity),
@@ -148,6 +140,7 @@ function catalogEvidence(metadata: CatalogMetadata, identity: TrackIdentity): Re
     externalIds: metadata.externalIds,
     canonicalUrl: metadata.canonicalUrl,
     source: metadata.platform,
+    evidenceClass: identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
     identity: identityEvidence(identity),
     catalogPopularity: metadata.catalogPopularity,
     catalogPopularityScale: metadata.catalogPopularityScale,
@@ -159,6 +152,7 @@ function catalogSonicDna(metadata: CatalogMetadata): Record<string, unknown> | n
   if (!metadata.sonicProfile) return null;
   return {
     provenance: metadata.sonicProfile.provenance,
+    evidenceClass: "RECOGNIZED",
     sampleRate: null,
     channels: null,
     durationSeconds: null,
@@ -180,6 +174,7 @@ function catalogSonicDna(metadata: CatalogMetadata): Record<string, unknown> | n
 function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
   return {
     provenance: "uploaded_audio_master",
+    evidenceClass: "OBSERVED",
     sampleRate: dna.sampleRate,
     channels: dna.channels,
     durationSeconds: dna.durationSeconds,
@@ -222,28 +217,30 @@ export async function processAuditJob(
       if (metadata.previewUrl) {
         try {
           recognition = await deps.recognizeUrl(metadata.previewUrl);
-          await deps.saveRecognition(jobId, recognition);
-          await deps.saveEvidence(jobId, recognition);
         } catch {
           // Preview recognition is enrichment; catalog metadata remains authoritative evidence.
         }
+        if (recognition) await deps.saveRecognition(jobId, recognition);
       }
 
+      const effectiveRecognition: AuditRecognition = recognition ?? { matched: false };
       const metadataInput = {
         ...catalogMetadataInput(metadata),
-        audd: recognition ? recognitionMetadataInput(recognition) : null,
+        audd: recognitionMetadataInput(effectiveRecognition),
       };
       const reconciliation = reconcileMetadata(metadataInput);
+      await deps.saveEvidence(jobId, effectiveRecognition, reconciliation, metadata);
       const identity = reconciliation.identity;
-      const evidence = recognition
-        ? {
-            auditType: "METADATA-BASED AUDIT",
-            ...recognitionEvidence(recognition),
-            ...identityEvidence(identity),
-            identity: identityEvidence(identity),
-            reconciliation: reconciliationEvidence(reconciliation),
-          }
-        : catalogEvidence(metadata, identity);
+      const evidence = {
+        ...catalogEvidence(metadata, identity),
+        ...recognitionEvidence(effectiveRecognition),
+        ...identityEvidence(identity),
+        evidenceClass: reconciliation.status === "reconciled"
+          ? "RECONCILED"
+          : identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
+        identity: identityEvidence(identity),
+        reconciliation: reconciliationEvidence(reconciliation),
+      };
       const sonicDna = catalogSonicDna(metadata);
       const assessment = await deps.generateAssessment({
         evidence,
@@ -268,7 +265,10 @@ export async function processAuditJob(
     const sample = await deps.createRecognitionSample(master, job.mimeType);
     const recognition = await deps.recognize(sample);
     await deps.saveRecognition(jobId, recognition);
-    await deps.saveEvidence(jobId, recognition);
+    const reconciliation = reconcileMetadata({
+      audd: recognitionMetadataInput(recognition),
+    });
+    await deps.saveEvidence(jobId, recognition, reconciliation);
     const decoded = await deps.decode(master, job.mimeType);
     const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
     const normalizedDna = {
@@ -279,10 +279,6 @@ export async function processAuditJob(
     };
     await deps.saveSonicDna(jobId, normalizedDna);
 
-    const reconciliation = reconcileMetadata({
-      audd: recognitionMetadataInput(recognition),
-      filename: job.sourceAudioPath,
-    });
     const identity = reconciliation.identity;
     const evidence = {
       auditType: "MASTER-BASED AUDIT",

@@ -37,7 +37,8 @@ export async function processNextQueuedAudit(): Promise<{ jobId: string; status:
     collectCatalogMetadata,
     saveRecognition: async (jobId, recognition) => store.saveRecognition(jobId, recognition),
     saveSonicDna: async (jobId, dna) => store.saveSonicDna(jobId, dna),
-    saveEvidence: async (jobId, recognition) => store.saveEvidence(jobId, recognition),
+    saveEvidence: async (jobId, recognition, reconciliation, metadata) =>
+      store.saveEvidence(jobId, recognition, reconciliation, metadata),
     saveCatalogMetadata: async (jobId, metadata) => store.saveCatalogMetadata(jobId, metadata),
     decode: async (bytes) => decoder.decode(bytes),
     generateAssessment: (input) => groq.assess(input),

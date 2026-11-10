@@ -18,7 +18,7 @@ export interface MetadataReconciliation {
   conflicts: readonly MetadataConflict[];
 }
 
-const PROVIDERS = ["spotify", "tidal", "audd", "id3"] as const;
+const PROVIDERS = ["spotify", "tidal", "apple_music", "deezer", "youtube_music", "audd", "id3"] as const;
 const FIELDS = [
   "title",
   "artist",
@@ -54,6 +54,7 @@ function providerMetadata(
 ): Record<string, unknown> | null {
   const value = input[provider];
   if (!value) return null;
+  if (provider === "audd" && "matched" in value && value.matched === false) return null;
   if (provider === "audd" && "result" in value && value.result) {
     return value.result as Record<string, unknown>;
   }

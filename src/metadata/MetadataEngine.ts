@@ -1,4 +1,4 @@
-export type MetadataProvider = "spotify" | "tidal" | "audd" | "id3";
+export type MetadataProvider = "spotify" | "tidal" | "apple_music" | "deezer" | "youtube_music" | "audd" | "id3";
 
 export interface TrackIdentity {
   readonly title: string | null;
@@ -38,6 +38,9 @@ export interface Id3Metadata extends StructuredMetadata {}
 export interface MetadataEngineInput {
   spotify?: StructuredMetadata | null;
   tidal?: StructuredMetadata | null;
+  apple_music?: StructuredMetadata | null;
+  deezer?: StructuredMetadata | null;
+  youtube_music?: StructuredMetadata | null;
   audd?: AuddMetadata | null;
   id3?: Id3Metadata | null;
   filename?: string | null;
@@ -46,6 +49,9 @@ export interface MetadataEngineInput {
 const PROVIDER_PRIORITY: readonly MetadataProvider[] = [
   "spotify",
   "tidal",
+  "apple_music",
+  "deezer",
+  "youtube_music",
   "audd",
   "id3",
 ];
@@ -98,7 +104,7 @@ function cleanGenres(value: unknown): string[] {
 }
 
 function auddMetadata(input: AuddMetadata | null | undefined): StructuredMetadata | null {
-  if (!input) return null;
+  if (!input || input.matched === false) return null;
   if (input.result && typeof input.result === "object") return input.result;
   return input;
 }
@@ -134,6 +140,9 @@ export class MetadataEngine {
     const providers: Readonly<Record<MetadataProvider, StructuredMetadata | null>> = {
       spotify: input.spotify ?? null,
       tidal: input.tidal ?? null,
+      apple_music: input.apple_music ?? null,
+      deezer: input.deezer ?? null,
+      youtube_music: input.youtube_music ?? null,
       audd: auddMetadata(input.audd),
       id3: input.id3 ?? null,
     };

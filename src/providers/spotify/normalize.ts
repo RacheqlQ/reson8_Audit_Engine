@@ -46,6 +46,6 @@ export function normalizeSpotifyTrack(sourceUrl: string, track: SpotifyTrack): C
     externalIds: spotifyId ? { spotify: spotifyId } : {},
     sonicProfile: null,
     raw: track as Record<string, unknown>,
-    evidenceStatus: title && artist ? "verified" : "partial",
+    evidenceStatus: title && artist ? "recognized" : "partial",
   };
 }
