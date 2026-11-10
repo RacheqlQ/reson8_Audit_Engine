@@ -53,6 +53,7 @@ describe("AuddClient", () => {
 
     await expect(new AuddClient("token-123").recognize(new Uint8Array([1]))).resolves.toEqual({
       matched: false,
+      rawResponse: { status: "success", result: null },
     });
 
     vi.unstubAllGlobals();
