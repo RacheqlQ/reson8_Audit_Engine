@@ -128,7 +128,7 @@ describe("processAuditJob", () => {
         isrc: "US-ABC-12-34567",
       }),
       saveRecognition: async () => {},
-      saveEvidence: async () => {},
+      saveEvidence: async () => { throw new Error("DSP preview must not overwrite the catalog reconciliation row"); },
       saveCatalogMetadata: async () => {},
       downloadMaster: async () => new Uint8Array(),
       createRecognitionSample: async () => new Uint8Array(),
@@ -139,6 +139,7 @@ describe("processAuditJob", () => {
         assessmentInputs.push(input.evidence);
         expect(input.sonicDna).toMatchObject({
           provenance: "tidal_catalog_metadata",
+          evidenceClass: "RECOGNIZED",
           bpm: 96,
           key: "A",
           mode: "minor",
@@ -158,6 +159,7 @@ describe("processAuditJob", () => {
 
     expect(result.status).toBe("completed");
     expect(assessmentInputs[0]).toMatchObject({
+      evidenceClass: "RECONCILED",
       artist: "TIDAL Artist",
       title: "TIDAL Title",
       album: "AudD Album",
