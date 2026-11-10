@@ -106,7 +106,7 @@ describe("TIDAL deep catalog ingestion", () => {
       isrc: "USAT26600001",
       canonicalUrl: "https://tidal.com/browse/track/12345",
       externalIds: { tidal: "12345" },
-      evidenceStatus: "verified",
+      evidenceStatus: "recognized",
       genre: "R&B",
       label: "Atlantic Records",
       sonicProfile: {

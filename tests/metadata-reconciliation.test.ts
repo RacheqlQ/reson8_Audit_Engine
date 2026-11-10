@@ -64,7 +64,31 @@ describe("Metadata reconciliation", () => {
     expect(result.identity.isrc).toBe("USAT26600001");
   });
 
-  it("treats a single provider as observed metadata, not reconciliation", () => {
+  it("reconciles Apple Music, Deezer and YouTube Music as named independent DSP sources", () => {
+    const result = reconcileMetadata({
+      apple_music: { title: "Free Mind", artist: "Tems", isrc: "NGABC2000001" },
+      deezer: { title: "Free Mind", artist: "Tems", isrc: "NGABC2000001" },
+      youtube_music: { title: "Free Mind", artist: "Tems", isrc: "NGABC2000001" },
+    });
+
+    expect(result.status).toBe("reconciled");
+    expect(result.reconciledFields).toEqual(["title", "artist", "isrc"]);
+    expect(result.identity.sourceProviders).toEqual(["apple_music", "deezer", "youtube_music"]);
+  });
+
+  it("ignores metadata attached to an explicitly unmatched AudD response", () => {
+    const result = reconcileMetadata({
+      spotify: { title: "Verified Catalog Title", artist: "Catalog Artist" },
+      audd: { matched: false, result: { title: "False Match", artist: "Wrong Artist" } },
+    });
+
+    expect(result.status).toBe("partial");
+    expect(result.conflicts).toEqual([]);
+    expect(result.identity.title).toBe("Verified Catalog Title");
+    expect(result.identity.sourceProviders).toEqual(["spotify"]);
+  });
+
+  it("treats a single provider as recognized metadata, not reconciliation", () => {
     const result = reconcileMetadata({
       tidal: {
         title: "Dock of the Bay",

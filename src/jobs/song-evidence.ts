@@ -1,6 +1,6 @@
 import type { AuditRecognition } from "../providers/audd/normalize.js";
 
-export type EvidenceStatus = "unresolved" | "partial" | "verified";
+export type EvidenceStatus = "unresolved" | "partial";
 
 export interface SongEvidenceObject {
   status: EvidenceStatus;
@@ -35,14 +35,14 @@ export function buildSongEvidence(recognition: AuditRecognition): SongEvidenceOb
     };
   }
 
-  const ids = [recognition.isrc, recognition.spotifyId, recognition.appleMusicId, recognition.musicbrainzId]
-    .filter(Boolean);
-  const hasIdentity = Boolean(recognition.artist && recognition.title);
-  const status: EvidenceStatus = hasIdentity && ids.length >= 2 ? "verified" : hasIdentity || ids.length > 0 ? "partial" : "unresolved";
+  const hasIdentity = Boolean(recognition.artist || recognition.title || recognition.isrc || recognition.spotifyId || recognition.appleMusicId || recognition.musicbrainzId);
+  // All fields and embedded catalog IDs in this object originate from one AudD
+  // response. They are recognized evidence, not independent corroboration.
+  const status: EvidenceStatus = hasIdentity ? "partial" : "unresolved";
 
   return {
     status,
-    confidence: status === "verified" ? 1 : status === "partial" ? 0.6 : null,
+    confidence: null,
     canonicalArtist: recognition.artist ?? null,
     canonicalTitle: recognition.title ?? null,
     album: recognition.album ?? null,
@@ -52,11 +52,6 @@ export function buildSongEvidence(recognition: AuditRecognition): SongEvidenceOb
     spotifyId: recognition.spotifyId ?? null,
     appleMusicId: recognition.appleMusicId ?? null,
     musicbrainzId: recognition.musicbrainzId ?? null,
-    sources: [
-      "audd",
-      recognition.spotifyId ? "spotify" : null,
-      recognition.appleMusicId ? "apple_music" : null,
-      recognition.musicbrainzId ? "musicbrainz" : null,
-    ].filter((v): v is string => Boolean(v)),
+    sources: hasIdentity ? ["audd"] : [],
   };
 }

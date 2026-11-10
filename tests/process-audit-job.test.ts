@@ -110,7 +110,7 @@ describe("processAuditJob", () => {
         previewUrl: "https://example.com/preview.mp3",
         externalIds: { tidal: "tidal-123" },
         raw: {},
-        evidenceStatus: "verified" as const,
+        evidenceStatus: "recognized" as const,
         sonicProfile: {
           provenance: "tidal_catalog_metadata" as const,
           bpm: 96,
@@ -128,7 +128,11 @@ describe("processAuditJob", () => {
         isrc: "US-ABC-12-34567",
       }),
       saveRecognition: async () => {},
-      saveEvidence: async () => {},
+      saveEvidence: async (_jobId, recognition, reconciliation, metadata) => {
+        expect(recognition.matched).toBe(true);
+        expect(reconciliation.status).toBe("partial");
+        expect(metadata?.platform).toBe("tidal");
+      },
       saveCatalogMetadata: async () => {},
       downloadMaster: async () => new Uint8Array(),
       createRecognitionSample: async () => new Uint8Array(),
@@ -139,6 +143,7 @@ describe("processAuditJob", () => {
         assessmentInputs.push(input.evidence);
         expect(input.sonicDna).toMatchObject({
           provenance: "tidal_catalog_metadata",
+          evidenceClass: "RECOGNIZED",
           bpm: 96,
           key: "A",
           mode: "minor",
@@ -158,6 +163,7 @@ describe("processAuditJob", () => {
 
     expect(result.status).toBe("completed");
     expect(assessmentInputs[0]).toMatchObject({
+      evidenceClass: "RECOGNIZED",
       artist: "TIDAL Artist",
       title: "TIDAL Title",
       album: "AudD Album",

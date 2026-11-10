@@ -81,6 +81,16 @@ describe("MetadataEngine", () => {
     expect(identity.sourceProviders).toEqual(["id3"]);
   });
 
+  it("ignores AudD metadata explicitly marked unmatched", () => {
+    const identity = MetadataEngine.normalize({
+      audd: { matched: false, title: "Fabricated Title", artist: "Fabricated Artist" },
+    });
+
+    expect(identity.title).toBeNull();
+    expect(identity.artist).toBeNull();
+    expect(identity.sourceProviders).toEqual([]);
+  });
+
   it("ignores placeholders and produces an immutable identity", () => {
     const identity = MetadataEngine.normalize({
       spotify: { title: "Not available", artist: "N/A" },
