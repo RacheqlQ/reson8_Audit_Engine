@@ -64,12 +64,12 @@ describe.skipIf(!enabled)("worker lease fencing (Supabase integration)", () => {
   });
 
   it("rejects a worker whose matching token has an expired lease", async () => {
-    const { error: expireError } = await admin.from("audit_jobs").update({
+    const { error: expireError } = await db().from("audit_jobs").update({
       lease_expires_at: new Date(Date.now() - 5_000).toISOString(),
     }).eq("id", fixtureJobId);
     if (expireError) throw new Error(`Unable to expire disposable fixture lease: ${expireError.message}`);
 
-    const { error } = await admin.rpc("persist_fenced_audit_step", {
+    const { error } = await db().rpc("persist_fenced_audit_step", {
       p_job_id: fixtureJobId,
       p_claim_token: claimToken,
       p_operation: "processing_started",
