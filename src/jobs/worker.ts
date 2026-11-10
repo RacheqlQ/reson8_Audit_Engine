@@ -27,29 +27,54 @@ export async function processNextQueuedAudit(): Promise<{ jobId: string; status:
       mimeType: job.mimeType,
       sourceType: job.sourceType,
       catalogUrl: job.catalogUrl,
-      status: "queued",
+      status: "processing",
+      claimToken: job.claimToken,
+      leaseExpiresAt: job.leaseExpiresAt,
+      workerId: job.workerId,
     }),
-    markProcessing: async (jobId) => store.markProcessing(jobId),
+    markProcessing: async (jobId, claimToken) => store.markProcessing(jobId, claimToken),
     downloadMaster: async (path) => store.downloadMaster(path),
     createRecognitionSample: audd ? createRecognitionSample : async () => new Uint8Array(),
     recognize: (sample) => audd ? audd.recognize(sample) : Promise.resolve({ matched: false }),
     recognizeUrl: (url) => audd ? audd.recognizeUrl(url) : Promise.resolve({ matched: false }),
     collectCatalogMetadata,
-    saveRecognition: async (jobId, recognition) => store.saveRecognition(jobId, recognition),
-    saveSonicDna: async (jobId, dna) => store.saveSonicDna(jobId, dna),
+    saveRecognition: async (jobId, recognition) => store.saveRecognition(jobId, job.claimToken, recognition),
+    saveSonicDna: async (jobId, dna) => store.saveSonicDna(jobId, job.claimToken, dna),
     saveEvidence: async (jobId, recognition, reconciliation, metadata) =>
-      store.saveEvidence(jobId, recognition, reconciliation, metadata),
-    saveCatalogMetadata: async (jobId, metadata) => store.saveCatalogMetadata(jobId, metadata),
+      store.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata),
+    saveCatalogMetadata: async (jobId, metadata) => store.saveCatalogMetadata(jobId, job.claimToken, metadata),
     decode: async (bytes) => decoder.decode(bytes),
     generateAssessment: (input) => groq.assess(input),
-    saveAssessment: async (jobId, assessment) => store.saveAssessment(jobId, assessment),
+    saveAssessment: async (jobId, assessment) => store.saveAssessment(jobId, job.claimToken, assessment),
     generateReport: generateAuditReport,
-    saveReport: async (jobId, tier, pdf) => store.saveReport(jobId, tier, pdf),
-    markCompleted: async (jobId) => store.markCompleted(jobId),
-    markFailed: async (jobId, message) => store.markFailed(jobId, message),
+    saveReport: async (jobId, tier, pdf) => store.saveReport(jobId, job.claimToken, tier, pdf),
+    markCompleted: async (jobId) => store.markCompleted(jobId, job.claimToken),
+    markFailed: async (jobId, message) => store.markFailed(jobId, job.claimToken, message),
   };
 
-  return { jobId: job.id, ...(await processAuditJob(job.id, deps)) };
+  let heartbeatInFlight = false;
+  let leaseLost: Error | null = null;
+  const heartbeat = setInterval(async () => {
+    if (heartbeatInFlight || leaseLost) return;
+    heartbeatInFlight = true;
+    try {
+      await store.renewLease(job.id, job.claimToken);
+    } catch (error) {
+      leaseLost = error instanceof Error ? error : new Error(String(error));
+      console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "lease_lost" }));
+    } finally {
+      heartbeatInFlight = false;
+    }
+  }, 45_000);
+  heartbeat.unref();
+
+  try {
+    const result = await processAuditJob(job.id, deps);
+    if (leaseLost) throw new Error("AUDIT_LEASE_LOST");
+    return { jobId: job.id, ...result };
+  } finally {
+    clearInterval(heartbeat);
+  }
 }
 
 function startHealthServer(): void {
