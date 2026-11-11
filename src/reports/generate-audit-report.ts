@@ -31,8 +31,8 @@ export function checkLayout(rects:ReportRect[]):{ok:boolean;errors:string[]}{
   for(let j=i+1;j<rects.length;j++){const b=rects[j];if(a.x<b.x+b.width-.5&&a.x+a.width>b.x+.5&&a.y<b.y+b.height-.5&&a.y+a.height>b.y+.5)errors.push("Intersecting elements: "+a.id+" / "+b.id);}}
  return {ok:errors.length===0,errors};
 }
-export function checkPageDensity(rects:ReportRect[],exempt=false):{ok:boolean;emptyRatio:number}{
- if(exempt||rects.length===0)return {ok:true,emptyRatio:0};
+export function checkPageDensity(rects:ReportRect[]):{ok:boolean;emptyRatio:number}{
+ if(rects.length===0)return {ok:false,emptyRatio:1};
  const top=Math.max(...rects.map(r=>r.y+r.height)),bottom=Math.min(...rects.map(r=>r.y));
  const occupied=Math.max(0,Math.min(AVAILABLE,top-bottom));
  const ratio=Math.max(0,Math.min(1,1-occupied/AVAILABLE));
@@ -131,7 +131,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  let pageNo=1,page=pdf.addPage([W,H]),y=TOP,rects:ReportRect[]=[];
  header(page,"Audit findings",pageNo,fonts);
  const chromeRects=():ReportRect[]=>[{x:M,y:H-44,width:220,height:10,id:"header-brand"},{x:M,y:H-64,width:W-2*M,height:8,id:"header-title"},{x:M,y:H-68,width:W-2*M,height:0.7,id:"header-rule"},{x:M,y:43,width:W-2*M,height:0.7,id:"footer-rule"},{x:M,y:25,width:250,height:10,id:"footer-text"},{x:W-M-18,y:25,width:18,height:10,id:"footer-page-number"}];
- const validate=(densityExempt=false)=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));const density=checkPageDensity(rects,densityExempt);if(!density.ok)console.warn("[report-layout] Page "+pageNo+" density below 65% content occupancy ("+Math.round((1-density.emptyRatio)*100)+"%); warning only.");};
+ const validate=()=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));const density=checkPageDensity(rects);if(!density.ok)console.warn("[report-layout] Page "+pageNo+" density below 65% content occupancy ("+Math.round((1-density.emptyRatio)*100)+"%); warning only.");};
  const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent);y=TOP;rects=[];};
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
