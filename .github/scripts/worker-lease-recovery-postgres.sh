@@ -12,14 +12,14 @@ NEW_WORKER="ci-recovery-after"
 
 psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_jobs(id,source_type,source_audio_path,mime_type,status) values ('$JOB_ID','master','ci/recovery-fixture.wav','audio/wav','queued')"
 
-OLD_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('$OLD_WORKER',180) where id='$JOB_ID')"
+OLD_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('$OLD_WORKER',180) where id='$JOB_ID'")"
 test -n "$OLD_TOKEN"
 
 # Simulate a worker disappearing after claim. This mutation is confined to the
 # ephemeral CI Postgres database; the production database is never contacted.
 psql "$DB" -v ON_ERROR_STOP=1 -c "update public.audit_jobs set lease_expires_at=clock_timestamp()-interval '5 seconds' where id='$JOB_ID'"
 
-NEW_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('$NEW_WORKER',180) where id='$JOB_ID')"
+NEW_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('$NEW_WORKER',180) where id='$JOB_ID'")"
 test -n "$NEW_TOKEN"
 test "$NEW_TOKEN" != "$OLD_TOKEN"
 
