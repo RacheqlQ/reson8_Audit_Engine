@@ -45,8 +45,8 @@ function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
 function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink){p.drawText(s,{x,y,font,size,color:c});}
 function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
 export function chartPanelHeight(kind:ChartKind="bars",rows:ChartRow[]=[]):number{
- if(kind==="radar")return 410;
- if(kind==="layers")return 224;if(kind==="tension"){const maxItems=Math.max(rows.filter(row=>row.group==="strength").length,rows.filter(row=>row.group==="risk").length);return Math.max(230,86+75+Math.min(10,maxItems)*21);}
+ if(kind==="radar")return 345;
+ if(kind==="layers")return 180;if(kind==="tension"){const maxItems=Math.max(rows.filter(row=>row.group==="strength").length,rows.filter(row=>row.group==="risk").length);return Math.max(230,86+75+Math.min(10,maxItems)*21);}
  if(kind==="sonic")return 230;
  if(kind==="spectrum")return 270;
  if(kind==="constellation"||kind==="timeline"||kind==="chain")return 202;
@@ -102,7 +102,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
    result.push({x:trackX+trackW+7,y:trackY-2,width:70,height:11,id:"label-spectrum-value-"+index});
   });
  }else if(kind==="radar"){
-  const cx=x+CARD_W/2,cy=top-200,radius=130,outer=150,n=Math.max(3,rows.slice(0,5).length);
+  const cx=x+CARD_W/2,cy=top-170,radius=110,outer=130,n=Math.max(3,rows.slice(0,5).length);
   result.push({x:cx-radius,y:cy-radius,width:radius*2,height:radius*2,id:"shape-radar-grid-and-polygon"});
   rows.slice(0,5).forEach((row,i)=>{
    const angle=-Math.PI/2+i*2*Math.PI/n,ax=cx+Math.cos(angle)*outer,ay=cy+Math.sin(angle)*outer;
@@ -272,7 +272,7 @@ function drawLayers(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<t
 }
 function drawRadar(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const data=rows.slice(0,5),cx=g.x+g.width/2,cy=(g.contentTop+g.contentBottom)/2-1;
- const radius=130,n=Math.max(3,data.length),outer=150;
+ const radius=110,n=Math.max(3,data.length),outer=130;
  // The full plot/label footprint is 60%+ of the card width.
  for(let ringIndex=1;ringIndex<=4;ringIndex++){const r=radius*ringIndex/4;const pts=data.map((_,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;return{x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r};});for(let i=0;i<pts.length;i++)line(p,pts[i].x,pts[i].y,pts[(i+1)%pts.length].x,pts[(i+1)%pts.length].y,C.line,.65);}
  const pts=data.map((row,i)=>{const angle=-Math.PI/2+i*2*Math.PI/n,score=validNumber(row.value),r=score===null?0:radius*Math.max(0,Math.min(100,score))/100;return{row,angle,score,x:cx+Math.cos(angle)*r,y:cy+Math.sin(angle)*r};});
