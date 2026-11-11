@@ -146,7 +146,7 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
   try {
     const payload = JSON.parse(detail) as { error?: { message?: unknown } };
     if (typeof payload.error?.message === "string") {
-      const match = payload.error.message.match(/try again in\\s+(?:(\\d+(?:\\.\\d+)?)m)?\\s*(\\d+(?:\\.\\d+)?)s/i);
+      const match = payload.error.message.match(/try again in\s+(?:(\d+(?:\.\d+)?)m)?\s*(\d+(?:\.\d+)?)s/i);
       if (match) {
         const minutes = Number(match[1] ?? 0);
         const seconds = Number(match[2]);
