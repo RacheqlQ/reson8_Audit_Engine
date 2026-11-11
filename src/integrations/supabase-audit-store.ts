@@ -221,9 +221,10 @@ export function createSupabaseAuditStore(
         rmsEnergy: dna.rmsEnergy, dynamicRangeDb: dna.dynamicRangeDb,
         spectralCentroidHz: dna.spectralCentroidHz, spectralBandwidthHz: dna.spectralBandwidthHz,
         spectralRolloffHz: dna.spectralRolloffHz, zeroCrossingRate: dna.zeroCrossingRate,
+        rhythmFeatures: dna.rhythmFeatures, harmonicFeatures: dna.harmonicFeatures, vocalFeatures: dna.vocalFeatures,
         moodTags: dna.moodTags, genreContext: dna.genreContext,
         rawFeatures: { ...dna, provenance: "uploaded_audio_master", evidenceClass: "OBSERVED" },
-        eventPayload: { analysisVersion: "audit-engine-0.1.0", evidenceClass: "OBSERVED" },
+        eventPayload: { analysisVersion: "audit-engine-0.2.0", evidenceClass: "OBSERVED" },
       });
     },
     async saveAssessment(jobId, claimToken, assessment) {
