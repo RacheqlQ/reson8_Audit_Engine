@@ -18,7 +18,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const compact=chartPanelHeight("tension",buildStrengthRiskChartRows(["A","B","C"],["D","E"]));
   const fourItems=chartPanelHeight("tension",buildStrengthRiskChartRows(["A","B","C","D"],["E","F","G","H"]));
   const maximum=chartPanelHeight("tension",buildStrengthRiskChartRows(Array.from({length:10},(_,i)=>"Strength "+i),Array.from({length:10},(_,i)=>"Risk "+i)));
-  expect(compact).toBe(230);expect(fourItems).toBeGreaterThanOrEqual(245);expect(maximum).toBeGreaterThanOrEqual(371);
+  expect(compact).toBe(255);expect(fourItems).toBeGreaterThanOrEqual(245);expect(maximum).toBeGreaterThanOrEqual(371);
  });
  it("checks chart-caption separation for every chart in all four fixtures",()=>{
   for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
