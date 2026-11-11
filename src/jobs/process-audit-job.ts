@@ -2,6 +2,7 @@ import type { AuditRecognition } from "../providers/audd/normalize.js";
 import type { CatalogMetadata } from "../providers/dsp/catalog.js";
 import type { ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
+import { isPdf } from "../reports/pdf-output.js";
 import { analyzePcm, type SonicDnaFeatures } from "../audio/sonic-dna.js";
 import type { TrackIdentity } from "../metadata/MetadataEngine.js";
 import { reconcileMetadata, type MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
@@ -39,7 +40,7 @@ export interface AuditProcessorDependencies {
   }): Promise<ArAssessment>;
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment): Promise<void>;
   generateReport(input: AuditReportInput, tier: AuditReportTier): Promise<Uint8Array>;
-  saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array): Promise<void>;
+  saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput): Promise<void>;
   markCompleted(jobId: string, claimToken: string): Promise<void>;
   markFailed(jobId: string, claimToken: string, message: string): Promise<void>;
   stopHeartbeat?(): Promise<void>;
@@ -201,6 +202,18 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
   };
 }
 
+async function generateAndSaveReport(
+  jobId: string,
+  claimToken: string,
+  reportInput: AuditReportInput,
+  tier: AuditReportTier,
+  deps: AuditProcessorDependencies,
+): Promise<void> {
+  const pdf = await deps.generateReport(reportInput, tier);
+  if (!isPdf(pdf)) throw new Error(`${tier} report generator did not return a PDF`);
+  await deps.saveReport(jobId, claimToken, tier, pdf, tier === "full" ? reportInput : undefined);
+}
+
 export async function processAuditJob(
   jobId: string,
   deps: AuditProcessorDependencies,
@@ -255,10 +268,8 @@ export async function processAuditJob(
 
       const generatedAt = new Date().toISOString();
       const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
-      const samplePdf = await deps.generateReport(reportInput, "sample");
-      await deps.saveReport(jobId, job.claimToken, "sample", samplePdf);
-      const pdf = await deps.generateReport(reportInput, "full");
-      await deps.saveReport(jobId, job.claimToken, "full", pdf);
+      await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
+      await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
       await deps.stopHeartbeat?.();
       await deps.markCompleted(jobId, job.claimToken);
@@ -301,10 +312,8 @@ export async function processAuditJob(
     await deps.saveAssessment(jobId, job.claimToken, assessment);
     const generatedAt = new Date().toISOString();
     const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
-    const samplePdf = await deps.generateReport(reportInput, "sample");
-    await deps.saveReport(jobId, job.claimToken, "sample", samplePdf);
-    const pdf = await deps.generateReport(reportInput, "full");
-    await deps.saveReport(jobId, job.claimToken, "full", pdf);
+    await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
+    await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
     await deps.stopHeartbeat?.();
     await deps.markCompleted(jobId, job.claimToken);

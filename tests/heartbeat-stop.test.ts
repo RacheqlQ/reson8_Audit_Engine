@@ -34,7 +34,7 @@ describe("worker heartbeat shutdown ordering", () => {
       saveSonicDna: async () => {},
       generateAssessment: async () => ({}),
       saveAssessment: async () => {},
-      generateReport: async () => new Uint8Array([37, 80, 68, 70]),
+      generateReport: async () => new Uint8Array([37, 80, 68, 70, 45]),
       saveReport: async () => {},
       stopHeartbeat: async () => {
         events.push("heartbeat-stop-started");
