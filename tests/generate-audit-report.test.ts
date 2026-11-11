@@ -2,6 +2,7 @@ import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
 import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,generateAuditReport,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
+import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
 describe("A4 report layout and fixture coverage",()=>{
  it("detects element intersections and page overflow",()=>{
@@ -12,6 +13,11 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(checkPageDensity([{x:48,y:76,width:499,height:659,id:"dense"}]).ok).toBe(true);
   expect(checkPageDensity([{x:48,y:600,width:499,height:100,id:"sparse"}]).ok).toBe(false);
   expect(checkPageDensity([],true).ok).toBe(true);
+ });
+ it("sizes the strength-risk chart to its actual row count without clipping the maximum fixture",()=>{
+  const compact=chartPanelHeight("tension",buildStrengthRiskChartRows(["A","B","C"],["D","E"]));
+  const maximum=chartPanelHeight("tension",buildStrengthRiskChartRows(Array.from({length:10},(_,i)=>"Strength "+i),Array.from({length:10},(_,i)=>"Risk "+i)));
+  expect(compact).toBe(230);expect(maximum).toBeGreaterThanOrEqual(364);
  });
  it("checks chart-caption separation for every chart in all four fixtures",()=>{
   for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
