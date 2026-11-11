@@ -197,6 +197,9 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
     spectralBandwidthHz: dna.spectralBandwidthHz,
     spectralRolloffHz: dna.spectralRolloffHz,
     zeroCrossingRate: dna.zeroCrossingRate,
+    rhythmFeatures: dna.rhythmFeatures,
+    harmonicFeatures: dna.harmonicFeatures,
+    vocalFeatures: dna.vocalFeatures,
     moodTags: dna.moodTags,
     genreContext: dna.genreContext,
   };
