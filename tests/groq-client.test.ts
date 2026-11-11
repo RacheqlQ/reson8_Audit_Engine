@@ -124,4 +124,28 @@ describe("GroqClient section groups",()=>{
   expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);expect(sleeps).toContain(13973);
  });
  it("stops after one retry when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=body.response_format.json_schema.name.replace(/^ar_/,"");const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed Zod validation after one retry");expect(mock.mock.calls.filter(c=>JSON.parse(String(c[1]?.body)).response_format.json_schema.name==="ar_narrative")).toHaveLength(2);});
+
+ it("keeps playlist category JSON-schema constraints permissive and retries short category text locally",async()=>{
+  let promotionCalls=0;
+  const prompts:string[]=[];
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="promotion"){
+    promotionCalls++;
+    const itemSchema=body.response_format.json_schema.schema.properties.promotionPlan.properties.playlistCategories.items;
+    expect(itemSchema.minLength??0).toBeLessThanOrEqual(1);
+    prompts.push(body.messages[1].content);
+    const value=p(group) as any;
+    if(promotionCalls===1)value.promotionPlan.playlistCategories=["R&B","Alternative R&B programming","Mood-led independent discovery"];
+    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch);
+  const result=await client.assess({evidence:{},sonicDna:null});
+  expect(promotionCalls).toBe(2);
+  expect(prompts[1]).toContain("playlistCategories[0]");
+  expect(result.promotionPlan.playlistCategories[0].trim().split(/\s+/).length).toBeGreaterThanOrEqual(3);
+ });
+
 });
