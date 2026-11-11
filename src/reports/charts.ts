@@ -46,7 +46,7 @@ function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.
 function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
 export function chartPanelHeight(kind:ChartKind="bars",rows:ChartRow[]=[]):number{
  if(kind==="radar")return 410;
- if(kind==="layers")return 224;if(kind==="tension"){const maxItems=Math.max(rows.filter(row=>row.group==="strength").length,rows.filter(row=>row.group==="risk").length);return Math.max(230,79+75+Math.min(10,maxItems)*21);}
+ if(kind==="layers")return 224;if(kind==="tension"){const maxItems=Math.max(rows.filter(row=>row.group==="strength").length,rows.filter(row=>row.group==="risk").length);return Math.max(230,86+75+Math.min(10,maxItems)*21);}
  if(kind==="sonic")return 230;
  if(kind==="spectrum")return 270;
  if(kind==="constellation"||kind==="timeline"||kind==="chain")return 202;
