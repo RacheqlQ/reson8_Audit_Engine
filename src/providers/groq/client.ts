@@ -127,6 +127,7 @@ function thresholdError(name: string, value: unknown): string | null {
 
 const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
+const MAX_COMPLETION_TOKENS = 8192;
 
 async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
   const retryAfter = response.headers.get("retry-after");
@@ -164,7 +165,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     for(let networkAttempt=0;networkAttempt<MAX_NETWORK_ATTEMPTS;networkAttempt++){
       response=await fetchImpl("https://api.groq.com/openai/v1/chat/completions",{
         method:"POST",headers:{authorization:"Bearer "+apiKey,"content-type":"application/json"},
-        body:JSON.stringify({model,temperature:0.1,response_format:{type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
+        body:JSON.stringify({model,temperature:0.1,max_completion_tokens:MAX_COMPLETION_TOKENS,response_format:{type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
           messages:[{role:"system",content:SYSTEM_PROMPT+" "+instructions},
             {role:"user",content:JSON.stringify({promptVersion:GROQ_PROMPT_VERSION,sectionGroup:groupName,evidence:input.evidence,
               sonicDna:input.sonicDna,catalogMetadata:input.catalogMetadata??null,correction:attempt===0?null:lastError})}]})
