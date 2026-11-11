@@ -87,6 +87,31 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   expect(counts.get("production")).toBe(2);
  });
+ it("repairs rhythmicConsistency rationale at the 25-word minimum",async()=>{
+  const minimum=["Rhythmic","consistency","requires","uploaded-master","timing","measurements","before","a","reliable","assessment","can","be","made","about","this","recording's","groove","stability","and","temporal","regularity","across","its","musical","sections"].join(" ");
+  expect(minimum.trim().split(/\s+/)).toHaveLength(25);
+  let evidenceScoreCalls=0;
+  const prompts:string[]=[];
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/, "");
+   let value=p(group);
+   if(group==="evidence-score"){
+    evidenceScoreCalls++;
+    prompts.push(body.messages[0].content+"\n"+body.messages[1].content);
+    const rationale=evidenceScoreCalls===1?"Timing is unclear.":minimum;
+    const base=p(group) as any;
+    value={...base,scorecard:{...base.scorecard,rhythmicConsistency:{...base.scorecard.rhythmicConsistency,rationale}}};
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch);
+  const result=await client.assess({evidence:{},sonicDna:{provenance:"uploaded_audio_master"}});
+  expect(evidenceScoreCalls).toBe(2);
+  expect(prompts[0]).toContain("scorecard.rhythmicConsistency.rationale");
+  expect(prompts[0]).toContain("at least 25 words");
+  expect(prompts[1]).toContain("scorecard.rhythmicConsistency.rationale must contain at least 25 words");
+  expect(result.scorecard.rhythmicConsistency.rationale).toBe(minimum);
+ });
  it("honours the provider retry delay in a 429 body and succeeds without losing the request",async()=>{
   let narrativeCalls=0;const sleeps:number[]=[];
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
