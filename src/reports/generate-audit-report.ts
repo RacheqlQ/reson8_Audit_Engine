@@ -141,6 +141,10 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
    return sum+wrap(para,fonts.regular,size,W-2*M-16).length*size*1.4+8;
   },0);
   const sonicHeight=sonicBlock?section.body.reduce((sum,p)=>{const size=p===p.toUpperCase()&&p.length<100?8:9.7;return sum+wrap(p,fonts.regular,size,W-2*M-16).length*size*1.4+8;},0):0;
+  const chartHeight=chartsForSection(input,section.title).reduce((sum,p)=>sum+chartPanelHeight(p.kind,p.rows)+14,0);
+  const completeBodyHeight=section.body.reduce((sum,para)=>{const size=para===para.toUpperCase()&&para.length<100?8:9.7;return sum+wrap(para,fonts.regular,size,W-2*M-16).length*size*1.4+8;},0);
+  const completeSectionHeight=titleH+completeBodyHeight+chartHeight+24;
+  if(completeSectionHeight<=AVAILABLE&&y-completeSectionHeight<BOTTOM+35)nextPage(section.title,accent);
   // Keep the section heading with its opening two paragraphs when possible, preventing
   // a heading/first-paragraph orphan while still allowing genuinely long sections to flow.
   if(y-titleH-openingHeight<BOTTOM+30||(sonicBlock&&y-titleH-sonicHeight<BOTTOM+45))nextPage(section.title,accent);
