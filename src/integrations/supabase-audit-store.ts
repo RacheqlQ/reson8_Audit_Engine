@@ -123,9 +123,9 @@ export function createSupabaseAuditStore(
     async claimNextQueuedJob() {
       const workerId = `audit-worker:${process.env.RENDER_INSTANCE_ID ?? process.env.HOSTNAME ?? "local"}:${randomUUID()}`;
       const { data, error } = await withAbortTimeout(
-        (signal) => admin.rpc("claim_next_audit_job", {
+        (signal) => Promise.resolve(admin.rpc("claim_next_audit_job", {
           p_worker_id: workerId, p_lease_seconds: 180,
-        }).abortSignal(signal),
+        }).abortSignal(signal)),
         12_000,
         "AUDIT_QUEUE_CLAIM_TIMEOUT",
       );
