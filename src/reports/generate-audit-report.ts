@@ -182,10 +182,28 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   }
   y-=12;
  }
- // The final content page is intentionally exempt from density diagnostics.
- validate(true);
- const notes=pdf.addPage([W,H]);pageNo++;header(notes,"A&R notes",pageNo,fonts,C.violet);notes.drawText("A&R NOTES",{x:M,y:TOP,size:20,font:fonts.bold,color:C.navy});notes.drawText("Private working notes — editable field",{x:M,y:TOP-27,size:9,font:fonts.regular,color:C.muted});
- const form=pdf.getForm(),field=form.createTextField("ar_notes");field.enableMultiline();field.addToPage(notes,{x:M,y:145,width:W-2*M,height:470,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});field.setFontSize(10);field.updateAppearances(fonts.regular);
- const noteRects=[{x:M,y:TOP-4,width:220,height:24,id:"notes-title"},{x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},{x:M,y:145,width:W-2*M,height:470,id:"A&R notes field"}];const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; ")); // A&R notes pages are form pages and are exempt from content-density diagnostics.
+ // Place the editable A&R notes field in genuine remaining page space when possible.
+ // Otherwise give it a dedicated form page. Both paths run the normal density gate.
+ const form=pdf.getForm(),field=form.createTextField("ar_notes");field.enableMultiline();
+ const notesFieldBottom=BOTTOM+12,notesTitleY=y-18,notesSubtitleY=notesTitleY-25,notesFieldTop=notesSubtitleY-16;
+ const inlineNotesHeight=Math.min(470,notesFieldTop-notesFieldBottom);
+ if(inlineNotesHeight>=120){
+  page.drawText("A&R NOTES",{x:M,y:notesTitleY,size:16,font:fonts.bold,color:C.violet});
+  page.drawText("Private working notes — editable field",{x:M,y:notesSubtitleY,size:8.5,font:fonts.regular,color:C.muted});
+  field.addToPage(page,{x:M,y:notesFieldBottom,width:W-2*M,height:inlineNotesHeight,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
+  field.setFontSize(9);field.updateAppearances(fonts.regular);
+  rects.push({x:M,y:notesTitleY-4,width:220,height:20,id:"notes-title"},{x:M,y:notesSubtitleY-3,width:300,height:12,id:"notes-subtitle"},{x:M,y:notesFieldBottom,width:W-2*M,height:inlineNotesHeight,id:"A&R notes field"});
+  validate();
+ }else{
+  validate();
+  const notes=pdf.addPage([W,H]);pageNo++;header(notes,"A&R notes",pageNo,fonts,C.violet);
+  notes.drawText("A&R NOTES",{x:M,y:TOP,size:20,font:fonts.bold,color:C.navy});
+  notes.drawText("Private working notes — editable field",{x:M,y:TOP-27,size:9,font:fonts.regular,color:C.muted});
+  field.addToPage(notes,{x:M,y:145,width:W-2*M,height:470,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
+  field.setFontSize(10);field.updateAppearances(fonts.regular);
+  const noteRects=[{x:M,y:TOP-4,width:220,height:24,id:"notes-title"},{x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},{x:M,y:145,width:W-2*M,height:470,id:"A&R notes field"}];
+  const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; "));
+  const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes page falls below the 65% content-occupancy threshold");
+ }
  if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");return pdf.save();
 }
