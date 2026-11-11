@@ -126,7 +126,7 @@ function thresholdError(name: string, value: unknown): string | null {
   return null;
 }
 
-const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
+const MAX_PROVIDER_RETRY_DELAY_MS = 5 * 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
 const MAX_COMPLETION_TOKENS = 8192;
 
@@ -146,9 +146,12 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
   try {
     const payload = JSON.parse(detail) as { error?: { message?: unknown } };
     if (typeof payload.error?.message === "string") {
-      const match = payload.error.message.match(/try again in\s+(\d+(?:\.\d+)?)\s*s/i);
+      const match = payload.error.message.match(/try again in\\s+(?:(\\d+(?:\\.\\d+)?)m)?\\s*(\\d+(?:\\.\\d+)?)s/i);
       if (match) {
-        return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(Number(match[1]) * 1000));
+        const minutes = Number(match[1] ?? 0);
+        const seconds = Number(match[2]);
+        const delayMs = (minutes * 60 + seconds) * 1000;
+        return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(delayMs));
       }
     }
   } catch {
