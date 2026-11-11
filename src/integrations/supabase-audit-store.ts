@@ -10,6 +10,7 @@ import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment } from "../p
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { ensurePdfReport, isPdf } from "../reports/pdf-output.js";
 import { sha256 } from "../jobs/content-hash.js";
+import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
 
 export interface SupabaseAuditStore {
   admin: SupabaseClient;
@@ -121,9 +122,13 @@ export function createSupabaseAuditStore(
     },
     async claimNextQueuedJob() {
       const workerId = `audit-worker:${process.env.RENDER_INSTANCE_ID ?? process.env.HOSTNAME ?? "local"}:${randomUUID()}`;
-      const { data, error } = await admin.rpc("claim_next_audit_job", {
-        p_worker_id: workerId, p_lease_seconds: 180,
-      });
+      const { data, error } = await withAbortTimeout(
+        (signal) => Promise.resolve(admin.rpc("claim_next_audit_job", {
+          p_worker_id: workerId, p_lease_seconds: 180,
+        }).abortSignal(signal)),
+        12_000,
+        "AUDIT_QUEUE_CLAIM_TIMEOUT",
+      );
       if (error) throw new Error(`Unable to atomically claim audit job: ${error.message}`);
       const claimed = Array.isArray(data) ? data[0] : data;
       if (!claimed) return null;
