@@ -12,7 +12,18 @@ const POLL_INTERVAL_MS = 15_000;
 
 export async function processNextQueuedAudit(): Promise<{ jobId: string; status: "completed" | "failed" } | null> {
   const store = createSupabaseAuditStore();
-  const job = await store.claimNextQueuedJob();
+  let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
+  try {
+    job = await store.claimNextQueuedJob();
+  } catch (error) {
+    console.error(JSON.stringify({
+      worker: "audit",
+      event: "queue_claim_failed",
+      retryInMs: POLL_INTERVAL_MS,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    throw error;
+  }
   if (!job) return null;
 
   const audd = process.env.AUDD_API || process.env.AUDD_API_TOKEN ? new AuddClient() : null;
@@ -125,6 +136,8 @@ async function runWorkerLoop(): Promise<void> {
     } catch (error) {
       console.error(JSON.stringify({
         worker: "audit",
+        event: "worker_cycle_failed",
+        retryInMs: POLL_INTERVAL_MS,
         error: error instanceof Error ? error.message : String(error),
       }));
     }
