@@ -76,7 +76,7 @@ rpc "$JOB_MAIN" "$TOKEN_MAIN" evidence '{"canonicalArtist":"Fixture Artist","can
 assert_sql "verified" "select evidence_status from public.reconciled_tracks where audit_job_id='$JOB_MAIN'"
 rpc "$JOB_MAIN" "$TOKEN_MAIN" sonic_dna '{"durationSeconds":"182.4","sampleRate":"44100","channels":"2","bpm":"126","key":"C","mode":"major","loudnessLufs":"-9.2","rmsEnergy":"0.2","dynamicRangeDb":"7.1","spectralCentroidHz":"2400","spectralBandwidthHz":"1800","spectralRolloffHz":"9000","zeroCrossingRate":"0.04","rhythmFeatures":{"status":"measured","bpm":126},"harmonicFeatures":{"status":"measured","key":"C","mode":"major"},"vocalFeatures":{"status":"not_analyzed","reason":"No vocal model configured"},"moodTags":["energetic"],"genreContext":["afrobeats"],"rawFeatures":{"fixture":true}}'
 assert_sql "1:126.000:182.400" "select count(*)::text || ':' || max(bpm)::text || ':' || (select duration_seconds::text from public.audit_jobs where id='$JOB_MAIN') from public.sonic_dna where audit_job_id='$JOB_MAIN'"
-assert_sql "measured:measured:not_analyzed" "select rhythm_features->>'status' || ':' || harmonic_features->>'status' || ':' || vocal_features->>'status' from public.sonic_dna where audit_job_id='$JOB_MAIN'"
+assert_sql "measured:measured:not_analyzed" "select (rhythm_features->>'status') || ':' || (harmonic_features->>'status') || ':' || (vocal_features->>'status') from public.sonic_dna where audit_job_id='$JOB_MAIN'"
 echo "PASS: all three persistence paths and their upsert/constraint contracts"
 
 echo "Regression 4/8: assessment and versioned report persistence"
