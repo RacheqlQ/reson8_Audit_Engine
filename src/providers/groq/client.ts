@@ -125,12 +125,43 @@ function thresholdError(name: string, value: unknown): string | null {
   return null;
 }
 
+const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
+const MAX_NETWORK_ATTEMPTS = 5;
+
+async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    const headerDelay = Number.isFinite(seconds)
+      ? seconds * 1000
+      : Date.parse(retryAfter) - Date.now();
+    if (Number.isFinite(headerDelay) && headerDelay >= 0) {
+      return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(headerDelay));
+    }
+  }
+
+  const detail = await response.clone().text().catch(() => "");
+  try {
+    const payload = JSON.parse(detail) as { error?: { message?: unknown } };
+    if (typeof payload.error?.message === "string") {
+      const match = payload.error.message.match(/try again in\s+(\d+(?:\.\d+)?)\s*s/i);
+      if (match) {
+        return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(Number(match[1]) * 1000));
+      }
+    }
+  } catch {
+    // Non-JSON provider errors use bounded exponential backoff below.
+  }
+
+  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, 1000 * (2 ** fallbackAttempt));
+}
+
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
   groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number)=>Promise<void>): Promise<T> {
   let lastError = "No valid response was returned";
   for(let attempt=0;attempt<2;attempt++){
     let response:Response|null=null;
-    for(let networkAttempt=0;networkAttempt<3;networkAttempt++){
+    for(let networkAttempt=0;networkAttempt<MAX_NETWORK_ATTEMPTS;networkAttempt++){
       response=await fetchImpl("https://api.groq.com/openai/v1/chat/completions",{
         method:"POST",headers:{authorization:"Bearer "+apiKey,"content-type":"application/json"},
         body:JSON.stringify({model,temperature:0.1,response_format:{type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
@@ -140,10 +171,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       });
       if(response.ok)break;
       const transient=response.status===429||response.status>=500;
-      if(!transient||networkAttempt===2)break;
-      const retryHeader=response.headers.get("retry-after");
-      const retryMs=retryHeader&&Number.isFinite(Number(retryHeader))?Math.min(2000,Math.max(0,Number(retryHeader)*1000)):Math.min(2000,250*Math.pow(2,networkAttempt));
-      await sleepImpl(retryMs);
+      if(!transient||networkAttempt===MAX_NETWORK_ATTEMPTS-1)break;
+      await sleepImpl(await providerRetryDelayMs(response,networkAttempt));
     }
     if(!response||!response.ok){const detail=await response?.text().catch(()=>"")??"";throw new Error("Groq "+groupName+" assessment failed with HTTP "+(response?.status??"unknown")+(detail?": "+detail.slice(0,300):""));}
     const payload=await response.json() as {choices?:Array<{message?:{content?:string|null}}>};
@@ -175,7 +204,7 @@ export class GroqClient implements GroqAssessmentClient {
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"timeline","Build actionable 30/60/90-day steps without inventing dates, budgets or targets.",TimelineSchema,this.sleepImpl)
     ];
     const groups:unknown[]=new Array(tasks.length);let cursor=0;
-    const settled=await Promise.allSettled(Array.from({length:3},async()=>{while(cursor<tasks.length){const index=cursor++;groups[index]=await tasks[index]();}}));
+    const settled=await Promise.allSettled(Array.from({length:1},async()=>{while(cursor<tasks.length){const index=cursor++;groups[index]=await tasks[index]();}}));
     const failed=settled.find(result=>result.status==="rejected");
     if(failed&&failed.status==="rejected")throw failed.reason;
     const assembled=Object.assign({},...groups) as z.infer<typeof AssessmentSchema>;

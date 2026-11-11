@@ -29,7 +29,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key",undefined,mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{artist:"Fixture Artist"},sonicDna:null});
-  expect(mock).toHaveBeenCalledTimes(9);expect(maxActive).toBeLessThanOrEqual(3);expect(maxActive).toBe(3);expect(result.scorecard.tempoLaneFit.score).toBeNull();expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();expect(result.commercialRead.marketability).toBe("undetermined");expect(result.scorecard.metadataCompleteness.score).toBe(65);expect(result.scorecard.releaseReadiness.score).toBeNull();
+  expect(mock).toHaveBeenCalledTimes(9);expect(maxActive).toBe(1);expect(result.scorecard.tempoLaneFit.score).toBeNull();expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();expect(result.commercialRead.marketability).toBe("undetermined");expect(result.scorecard.metadataCompleteness.score).toBe(65);expect(result.scorecard.releaseReadiness.score).toBeNull();
   expect(result.evidenceLabels[0].label).toBe("INDUSTRY PRACTICE");expect(result.humanListeningChecklist.length).toBeGreaterThanOrEqual(5);
   expect(result.productionArrangementGuidance).toBeTruthy();expect(result.promotionPlan.playlistCategories.length).toBeGreaterThanOrEqual(3);expect(result.promotionPlan.pitchingAngles.length).toBeGreaterThanOrEqual(3);
   for(const call of mock.mock.calls){const body=JSON.parse(String(call[1]?.body));expect(body.model).toBe(DEFAULT_GROQ_MODEL);expect(body.response_format.type).toBe("json_schema");expect(body.messages[0].content).toContain("Never invent streams");expect(body.messages[1].content).toContain(GROQ_PROMPT_VERSION);}
@@ -57,16 +57,16 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   expect(counts.get("production")).toBe(2);
  });
- it("retries a mocked rate-limit response and succeeds",async()=>{
-  let narrativeCalls=0;
+ it("honours the provider retry delay in a 429 body and succeeds without losing the request",async()=>{
+  let narrativeCalls=0;const sleeps:number[]=[];
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
-   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
-   if(group==="narrative"&&narrativeCalls++===0)return new Response("rate limited",{status:429,headers:{"retry-after":"0"}});
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/, "");
+   if(group==="narrative"&&narrativeCalls++===0)return new Response(JSON.stringify({error:{message:"Rate limit reached. Please try again in 13.9725s."}}),{status:429});
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
   });
-  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async(ms)=>{sleeps.push(ms);});
   const result=await client.assess({evidence:{},sonicDna:null});
-  expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);
+  expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);expect(sleeps).toContain(13973);
  });
  it("stops after one retry when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=body.response_format.json_schema.name.replace(/^ar_/,"");const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed Zod validation after one retry");expect(mock.mock.calls.filter(c=>JSON.parse(String(c[1]?.body)).response_format.json_schema.name==="ar_narrative")).toHaveLength(2);});
 });
