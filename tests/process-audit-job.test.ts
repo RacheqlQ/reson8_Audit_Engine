@@ -58,7 +58,11 @@ describe("processAuditJob", () => {
         events.push(`report-${tier}`);
         return new Uint8Array([37, 80, 68, 70, 45]);
       },
-      saveReport: async (_jobId, _claimToken, tier) => events.push(`report-saved-${tier}`),
+      saveReport: async (_jobId, _claimToken, tier, pdf, reportInput) => {
+        expect(Buffer.from(pdf.subarray(0, 5)).toString("ascii")).toBe("%PDF-");
+        if (tier === "full") expect(reportInput).toMatchObject({ auditId: "job-123" });
+        events.push(`report-saved-${tier}`);
+      },
       markCompleted: async () => events.push("completed"),
       markFailed: async () => events.push("failed"),
     });

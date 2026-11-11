@@ -47,7 +47,7 @@ export async function processNextQueuedAudit(): Promise<{ jobId: string; status:
     generateAssessment: (input) => groq.assess(input),
     saveAssessment: async (jobId, _claimToken, assessment) => store.saveAssessment(jobId, _claimToken, assessment),
     generateReport: generateAuditReport,
-    saveReport: async (jobId, _claimToken, tier, pdf) => store.saveReport(jobId, _claimToken, tier, pdf),
+    saveReport: async (jobId, _claimToken, tier, pdf, reportInput) => store.saveReport(jobId, _claimToken, tier, pdf, reportInput),
     markCompleted: async (jobId, _claimToken) => store.markCompleted(jobId, _claimToken),
     markFailed: async (jobId, _claimToken, message) => store.markFailed(jobId, _claimToken, message),
   };

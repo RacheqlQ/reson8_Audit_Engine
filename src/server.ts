@@ -6,6 +6,7 @@ import { createCatalogAuditJob } from "./jobs/create-catalog-audit-job.js";
 import { MAX_AUDIO_FILE_BYTES } from "./jobs/audio-intake.js";
 import { createSupabaseAuditStore } from "./integrations/supabase-audit-store.js";
 import type { CreateAuditJobDependencies } from "./jobs/create-audit-job.js";
+import { ensurePdfReport } from "./reports/pdf-output.js";
 
 export interface AuditStore {
   createJobDependencies(): CreateAuditJobDependencies;
@@ -21,6 +22,7 @@ export interface AuditStore {
     contentType: string;
     filename: string;
   }>;
+  getAuditReportPayload?(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<unknown | null>;
 }
 
 const PUBLIC_RATE_LIMIT = Number(process.env.PUBLIC_AUDIT_RATE_LIMIT_PER_HOUR ?? 30);
@@ -168,8 +170,27 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
     }
 
     try {
-      const report = await store.getAuditReport(request.params.jobId, tier);
-      return reply.type(report.contentType).header("content-disposition", `attachment; filename="${report.filename}"`).send(Buffer.from(report.bytes));
+      const sendPdf = async (source: unknown, sampleFilename?: string) => {
+        const pdf = await ensurePdfReport(source, tier);
+        const safeSampleFilename = sampleFilename && /^[A-Za-z0-9._-]+\.pdf$/i.test(sampleFilename)
+          ? sampleFilename
+          : "audit-report-sample.pdf";
+        const disposition = tier === "full"
+          ? 'inline; filename="audit-report.pdf"'
+          : `attachment; filename="${safeSampleFilename}"`;
+        return reply.type("application/pdf").header("content-disposition", disposition).send(Buffer.from(pdf));
+      };
+
+      let report: { bytes: Uint8Array; contentType: string; filename: string };
+      try {
+        report = await store.getAuditReport(request.params.jobId, tier);
+      } catch (error) {
+        if (!store.getAuditReportPayload) throw error;
+        const payload = await store.getAuditReportPayload(request.params.jobId, tier);
+        if (payload === null || payload === undefined) throw error;
+        return await sendPdf(payload);
+      }
+      return await sendPdf(report.bytes, report.filename);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to retrieve report";
       if (message === "Audit job not found" || message === "Report not found") return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
