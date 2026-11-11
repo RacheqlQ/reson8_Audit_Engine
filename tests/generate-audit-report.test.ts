@@ -9,10 +9,10 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(checkLayout([{x:0,y:0,width:20,height:20,id:"a"},{x:10,y:10,width:20,height:20,id:"b"}]).ok).toBe(false);
   expect(checkLayout([{x:590,y:0,width:20,height:20,id:"overflow"}]).ok).toBe(false);
  });
- it("enforces the 35 percent maximum empty-area threshold",()=>{
+ it("enforces the 35 percent maximum empty-area threshold and rejects empty pages",()=>{
   expect(checkPageDensity([{x:48,y:76,width:499,height:659,id:"dense"}]).ok).toBe(true);
   expect(checkPageDensity([{x:48,y:600,width:499,height:100,id:"sparse"}]).ok).toBe(false);
-  expect(checkPageDensity([],true).ok).toBe(true);
+  expect(checkPageDensity([]).ok).toBe(false);
  });
  it("sizes the strength-risk chart to its actual row count without clipping the maximum fixture",()=>{
   const compact=chartPanelHeight("tension",buildStrengthRiskChartRows(["A","B","C"],["D","E"]));
