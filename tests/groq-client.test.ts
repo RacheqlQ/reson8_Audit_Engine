@@ -153,7 +153,7 @@ describe("GroqClient section groups",()=>{
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
    const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/, "");
    if(group==="narrative"&&narrativeCalls++===0){
-    return new Response(JSON.stringify({error:{message:"Rate limit reached. Please try again in 2m35.088s."}}),{status:429});
+    return new Response(JSON.stringify({error:{message:"Rate limit reached. Please try again in 10m26.4s."}}),{status:429});
    }
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
   });
@@ -161,7 +161,7 @@ describe("GroqClient section groups",()=>{
   const result=await client.assess({evidence:{},sonicDna:null});
   expect(result.assessmentVersion).toBe("3.0");
   expect(narrativeCalls).toBe(2);
-  expect(sleeps).toContain(155088);
+  expect(sleeps).toContain(626400);
  });
 
 });
