@@ -25,6 +25,8 @@ services:
       - key: RESON8_OPERATOR_KEY
         sync: false
 
+  # Legacy web-service consumer retained temporarily for a controlled cutover.
+  # Do not remove or suspend it until the dedicated background worker is verified.
   - type: web
     name: reson8-audit-worker
     runtime: node
@@ -34,6 +36,33 @@ services:
     buildCommand: npm install && npm run build
     startCommand: npm run worker
     healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://gznwamoxuxzaayjaxvlo.supabase.co
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: AUDD_API
+        sync: false
+      - key: GROQ_API
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+
+  # New always-on queue consumer. This is a new Render resource because Render
+  # does not allow changing an existing service from web_service to worker.
+  # Initial creation/deployment requires a separately reviewed Blueprint sync.
+  - type: worker
+    name: reson8-audit-queue-worker
+    runtime: node
+    plan: 0.5c-512mb
+    region: oregon
+    branch: main
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 300
+    buildCommand: npm install && npm run build
+    startCommand: npm run worker
     envVars:
       - key: NODE_ENV
         value: production
