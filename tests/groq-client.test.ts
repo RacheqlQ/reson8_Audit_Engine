@@ -45,6 +45,27 @@ describe("GroqClient section groups",()=>{
   expect(result.scorecard.dynamicRangeLoudness.score).toBe(76);
  });
  it("retries a section once after schema validation fails",async()=>{const {mock,counts}=fetchMock("production");const client=new GroqClient("test-key","test-model",mock as typeof fetch);await client.assess({evidence:{},sonicDna:null});expect(counts.get("production")).toBe(2);expect(mock).toHaveBeenCalledTimes(10);});
+ it("gives evidence-score word-count failures an explicit repair instruction",async()=>{
+  let evidenceScoreCalls=0;
+  const evidenceScorePrompts:string[]=[];
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/, "");
+   if(group==="evidence-score"){
+    evidenceScorePrompts.push(body.messages[0].content+"\\n"+body.messages[1].content);
+    evidenceScoreCalls++;
+    if(evidenceScoreCalls===1){
+     const invalid={...p(group),evidenceGaps:["Missing audience data"]};
+     return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(invalid)}}]}),{status:200});
+    }
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch);
+  await client.assess({evidence:{},sonicDna:null});
+  expect(evidenceScoreCalls).toBe(2);
+  expect(evidenceScorePrompts[0]).toContain("at least 8 words");
+  expect(evidenceScorePrompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
+ });
  it("retries schema-valid output that misses a section word threshold",async()=>{
   const counts=new Map<string,number>();
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
