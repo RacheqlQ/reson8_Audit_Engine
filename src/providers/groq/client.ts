@@ -126,7 +126,7 @@ function thresholdError(name: string, value: unknown): string | null {
   return null;
 }
 
-const MAX_PROVIDER_RETRY_DELAY_MS = 5 * 60_000;
+const MAX_PROVIDER_RETRY_DELAY_MS = 15 * 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
 const MAX_COMPLETION_TOKENS = 8192;
 
