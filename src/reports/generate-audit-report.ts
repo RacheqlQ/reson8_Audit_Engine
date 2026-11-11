@@ -149,13 +149,13 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   page.drawText(String(si+1).padStart(2,"0"),{x:M,y:y-2,size:8,font:fonts.bold,color:accent});
   let ty=y;for(const line of titleLines){page.drawText(line,{x:M+34,y:ty,size:19.5,font:fonts.bold,color:C.navy});ty-=25;}y=ty-10;
   for(let pi=0;pi<section.body.length;pi++){
-   const para=section.body[pi],size=para===para.toUpperCase()&&para.length<100?8:(section.title==="Decision record and evidence gates"?9.2:9.7);
-   const lines=wrap(para,fonts.regular,size,W-2*M-16),lineHeight=size*(section.title==="Decision record and evidence gates"?1.3:1.4);
+   const para=section.body[pi],size=para===para.toUpperCase()&&para.length<100?8:(section.title==="Decision record and evidence gates"?9.0:9.7);
+   const lines=wrap(para,fonts.regular,size,W-2*M-16),lineHeight=size*(section.title==="Decision record and evidence gates"?1.2:1.4);
    let offset=0,chunk=0;
    while(offset<lines.length){
     let capacity=Math.floor((y-BOTTOM-8)/lineHeight);
     if(capacity<1){nextPage(section.title,accent);capacity=Math.floor((y-BOTTOM-8)/lineHeight);}
-    const paragraphGap=section.title==="Decision record and evidence gates"?5:8;
+    const paragraphGap=section.title==="Decision record and evidence gates"?3:8;
     const fullParagraphHeight=lines.length*lineHeight+paragraphGap;
     if(offset===0&&fullParagraphHeight<=AVAILABLE&&fullParagraphHeight>y-BOTTOM-8){nextPage(section.title,accent);capacity=Math.floor((y-BOTTOM-8)/lineHeight);}
     const count=Math.min(capacity,lines.length-offset),height=count*lineHeight+paragraphGap;
