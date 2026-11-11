@@ -183,7 +183,7 @@ export function chartPanelLayoutErrors(kind:ChartKind,rows:ChartRow[],x=CARD_X,t
  }
  return errors;
 }
-export function chartCaptionCollisionErrors(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind)):string[]{
+export function chartCaptionCollisionErrors(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind,rows)):string[]{
  return chartPanelLayoutErrors(kind,rows,x,top,height);
 }
 export function wrapChartSummary(value:string,font:PDFFont,size:number,width:number,maxLines=2):string[]{
