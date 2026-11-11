@@ -1,5 +1,5 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
-import { describe,expect,it } from "vitest";
+import { describe,expect,it,vi } from "vitest";
 import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,generateAuditReport,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
@@ -15,6 +15,13 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("checks chart-caption separation for every chart in all four fixtures",()=>{
   for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
+ });
+ it("does not emit low-density warnings across the eight report variants",async()=>{
+  const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+  try{
+   for(const input of fixtures)for(const tier of ["sample","full"] as const)await generateAuditReport(input,tier);
+   expect(warning.mock.calls.filter(([message])=>String(message).includes("[report-layout]"))).toEqual([]);
+  }finally{warning.mockRestore();}
  });
  it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
   for(const input of fixtures)for(const tier of ["sample","full"] as const){
