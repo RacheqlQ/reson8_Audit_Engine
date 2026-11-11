@@ -72,8 +72,8 @@ describe("native PDF chart helpers", () => {
       ];
       for (const kind of kinds) {
         const rows = kind==="tension" ? tensionRows : standardRows;
-        expect(chartPanelLayoutErrors(kind,rows,48,700,chartPanelHeight(kind))).toEqual([]);
-        const rects=chartPanelLayoutRects(kind,rows,48,700,chartPanelHeight(kind));
+        expect(chartPanelLayoutErrors(kind,rows,48,700,chartPanelHeight(kind,rows))).toEqual([]);
+        const rects=chartPanelLayoutRects(kind,rows,48,700,chartPanelHeight(kind,rows));
         const card=rects.find(rect=>rect.id==="card-bounds");
         expect(card).toBeDefined();
         if(card)expect(chartShapeBoundsErrors(card,rects.filter(rect=>rect.id.startsWith("shape-")||rect.id.startsWith("label-")))).toEqual([]);
