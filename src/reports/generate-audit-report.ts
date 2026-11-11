@@ -156,6 +156,8 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
     let capacity=Math.floor((y-BOTTOM-8)/lineHeight);
     if(capacity<1){nextPage(section.title,accent);capacity=Math.floor((y-BOTTOM-8)/lineHeight);}
     const paragraphGap=section.title==="Decision record and evidence gates"?5:8;
+    const fullParagraphHeight=lines.length*lineHeight+paragraphGap;
+    if(offset===0&&fullParagraphHeight<=AVAILABLE&&fullParagraphHeight>y-BOTTOM-8){nextPage(section.title,accent);capacity=Math.floor((y-BOTTOM-8)/lineHeight);}
     const count=Math.min(capacity,lines.length-offset),height=count*lineHeight+paragraphGap;
     const r={x:M,y:y-height,width:W-2*M,height,id:"section-"+si+"-paragraph-"+pi+"-part-"+chunk};rects.push(r);
 
