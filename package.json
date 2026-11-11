@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "build": "tsc -p tsconfig.json",
     "sample-report": "npm run build && node scripts/sample-report.mjs",
-    "start": "node dist/server.js",
+    "start": "node dist/main.js",
     "worker": "node dist/worker.js"
   },
   "dependencies": {
