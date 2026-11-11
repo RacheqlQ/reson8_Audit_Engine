@@ -144,7 +144,7 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
   try {
     const payload = JSON.parse(detail) as { error?: { message?: unknown } };
     if (typeof payload.error?.message === "string") {
-      const match = payload.error.message.match(/try again in\\s+(\\d+(?:\\.\\d+)?)\\s*s/i);
+      const match = payload.error.message.match(/try again in\s+(\d+(?:\.\d+)?)\s*s/i);
       if (match) {
         return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(Number(match[1]) * 1000));
       }
