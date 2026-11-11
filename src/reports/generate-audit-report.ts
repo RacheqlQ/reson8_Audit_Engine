@@ -128,7 +128,6 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  const totalEstimatedHeight=estimatedHeight+chartAllowance;
  const plannedPages=Math.max(1,Math.ceil(totalEstimatedHeight/(AVAILABLE*.9)));
  if(plannedPages>18)throw new Error("Estimated report body exceeds the 20-page cap");
- const targetFill=totalEstimatedHeight/plannedPages;
  let pageNo=1,page=pdf.addPage([W,H]),y=TOP,rects:ReportRect[]=[];
  header(page,"Audit findings",pageNo,fonts);
  const chromeRects=():ReportRect[]=>[{x:M,y:H-44,width:220,height:10,id:"header-brand"},{x:M,y:H-64,width:W-2*M,height:8,id:"header-title"},{x:M,y:H-68,width:W-2*M,height:0.7,id:"header-rule"},{x:M,y:43,width:W-2*M,height:0.7,id:"footer-rule"},{x:M,y:25,width:250,height:10,id:"footer-text"},{x:W-M-18,y:25,width:18,height:10,id:"footer-page-number"}];
@@ -142,7 +141,6 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
    return sum+wrap(para,fonts.regular,size,W-2*M-16).length*size*1.4+8;
   },0);
   const sonicHeight=sonicBlock?section.body.reduce((sum,p)=>{const size=p===p.toUpperCase()&&p.length<100?8:9.7;return sum+wrap(p,fonts.regular,size,W-2*M-16).length*size*1.4+8;},0):0;
-  if(rects.length>0&&y<TOP-targetFill)nextPage(section.title,accent);
   // Keep the section heading with its opening two paragraphs when possible, preventing
   // a heading/first-paragraph orphan while still allowing genuinely long sections to flow.
   if(y-titleH-openingHeight<BOTTOM+30||(sonicBlock&&y-titleH-sonicHeight<BOTTOM+45))nextPage(section.title,accent);
