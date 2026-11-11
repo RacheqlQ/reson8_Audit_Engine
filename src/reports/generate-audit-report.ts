@@ -136,16 +136,20 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent);y=TOP;rects=[];};
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
-  const first=section.body[0]??"",firstSize=first===first.toUpperCase()&&first.length<100?8:9.7,firstHeight=wrap(first,fonts.regular,firstSize,W-2*M-16).length*firstSize*1.4+8;
   const sonicBlock=section.title==="Sonic DNA and technical profile";
+  const openingHeight=section.body.slice(0,Math.min(2,section.body.length)).reduce((sum,para)=>{
+   const size=para===para.toUpperCase()&&para.length<100?8:9.7;
+   return sum+wrap(para,fonts.regular,size,W-2*M-16).length*size*1.4+8;
+  },0);
   const sonicHeight=sonicBlock?section.body.reduce((sum,p)=>{const size=p===p.toUpperCase()&&p.length<100?8:9.7;return sum+wrap(p,fonts.regular,size,W-2*M-16).length*size*1.4+8;},0):0;
   if(rects.length>0&&y<TOP-targetFill)nextPage(section.title,accent);
-  if(y-titleH-firstHeight<BOTTOM+45||(sonicBlock&&y-titleH-sonicHeight<BOTTOM+45))nextPage(section.title,accent);
+  // Keep the section heading with its opening two paragraphs when possible, preventing
+  // a heading/first-paragraph orphan while still allowing genuinely long sections to flow.
+  if(y-titleH-openingHeight<BOTTOM+45||(sonicBlock&&y-titleH-sonicHeight<BOTTOM+45))nextPage(section.title,accent);
   const titleRect={x:M,y:y-titleH,width:W-2*M,height:titleH,id:"section-title-"+si};rects.push(titleRect);
   page.drawText(String(si+1).padStart(2,"0"),{x:M,y:y-2,size:8,font:fonts.bold,color:accent});
   let ty=y;for(const line of titleLines){page.drawText(line,{x:M+34,y:ty,size:19.5,font:fonts.bold,color:C.navy});ty-=25;}y=ty-10;
   for(let pi=0;pi<section.body.length;pi++){
-   if(pi>0&&rects.length>0&&y<TOP-targetFill)nextPage(section.title,accent);
    const para=section.body[pi],size=para===para.toUpperCase()&&para.length<100?8:9.7;
    const lines=wrap(para,fonts.regular,size,W-2*M-16),lineHeight=size*1.4;
    let offset=0,chunk=0;
