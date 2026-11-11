@@ -148,4 +148,20 @@ describe("GroqClient section groups",()=>{
   expect(result.promotionPlan.playlistCategories[0].trim().split(/\s+/).length).toBeGreaterThanOrEqual(3);
  });
 
+ it("parses Groq retry delays containing minutes and fractional seconds",async()=>{
+  let narrativeCalls=0;const sleeps:number[]=[];
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/, "");
+   if(group==="narrative"&&narrativeCalls++===0){
+    return new Response(JSON.stringify({error:{message:"Rate limit reached. Please try again in 2m35.088s."}}),{status:429});
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async(ms)=>{sleeps.push(ms);});
+  const result=await client.assess({evidence:{},sonicDna:null});
+  expect(result.assessmentVersion).toBe("3.0");
+  expect(narrativeCalls).toBe(2);
+  expect(sleeps).toContain(155088);
+ });
+
 });
