@@ -108,7 +108,7 @@ function sections(i:AuditReportInput):Section[]{
  ];
 }
 export function chartLayoutIssuesForReport(input:AuditReportInput):string[]{
- const issues:string[]=[];for(const section of sections(input)){for(const panel of chartsForSection(input,section.title)){issues.push(...chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,TOP,chartPanelHeight(panel.kind)));}}return issues;
+ const issues:string[]=[];for(const section of sections(input)){for(const panel of chartsForSection(input,section.title)){issues.push(...chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,TOP,chartPanelHeight(panel.kind,panel.rows)));}}return issues;
 }
 export function planAuditReportPages(input:AuditReportInput,tier:AuditReportTier):ReportPagePlan[]{const all=sections(input);return (tier==="sample"?all.slice(0,8):all).map(s=>({title:s.title,text:s.body}));}
 export async function generateAuditReport(input:AuditReportInput,tier:AuditReportTier):Promise<Uint8Array>{
@@ -124,7 +124,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   },0);
   return total+titleHeight+bodyHeight+12;
  },0);
- const chartAllowance=selected.reduce((n,section)=>n+chartsForSection(input,section.title).reduce((sum,p)=>sum+chartPanelHeight(p.kind)+14,0),0);
+ const chartAllowance=selected.reduce((n,section)=>n+chartsForSection(input,section.title).reduce((sum,p)=>sum+chartPanelHeight(p.kind,p.rows)+14,0),0);
  const totalEstimatedHeight=estimatedHeight+chartAllowance;
  const plannedPages=Math.max(1,Math.ceil(totalEstimatedHeight/(AVAILABLE*.9)));
  if(plannedPages>18)throw new Error("Estimated report body exceeds the 20-page cap");
@@ -145,7 +145,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   if(rects.length>0&&y<TOP-targetFill)nextPage(section.title,accent);
   // Keep the section heading with its opening two paragraphs when possible, preventing
   // a heading/first-paragraph orphan while still allowing genuinely long sections to flow.
-  if(y-titleH-openingHeight<BOTTOM+45||(sonicBlock&&y-titleH-sonicHeight<BOTTOM+45))nextPage(section.title,accent);
+  if(y-titleH-openingHeight<BOTTOM+30||(sonicBlock&&y-titleH-sonicHeight<BOTTOM+45))nextPage(section.title,accent);
   const titleRect={x:M,y:y-titleH,width:W-2*M,height:titleH,id:"section-title-"+si};rects.push(titleRect);
   page.drawText(String(si+1).padStart(2,"0"),{x:M,y:y-2,size:8,font:fonts.bold,color:accent});
   let ty=y;for(const line of titleLines){page.drawText(line,{x:M+34,y:ty,size:19.5,font:fonts.bold,color:C.navy});ty-=25;}y=ty-10;
@@ -165,7 +165,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
    }
   }
   for(const panel of chartsForSection(input,section.title)){
-   const panelHeight=chartPanelHeight(panel.kind);
+   const panelHeight=chartPanelHeight(panel.kind,panel.rows);
    const layoutIssues=chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,y-8,panelHeight);if(layoutIssues.length)throw new Error(layoutIssues.join("; "));
    // Keep the chart on this page whenever its complete card clears the footer; low page fill alone is not a reason to orphan it.
    if(y-8-panelHeight<BOTTOM+45){
