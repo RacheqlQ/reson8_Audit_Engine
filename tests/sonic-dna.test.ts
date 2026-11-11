@@ -113,4 +113,17 @@ describe("Sonic DNA",()=>{
   expect(classifyGenreFromBpm(128)).toContain("Pop");
   expect(classifyGenreFromBpm(999)).toEqual([]);
  });
+
+ it("returns explicit rhythm and harmonic measurements while marking vocal analysis unavailable",()=>{
+  const sampleRate=8000;
+  const rhythm=analyzePcm(pulse(120,12,sampleRate),sampleRate);
+  const harmonic=analyzePcm(chord([261.6256,329.6276,391.9954],12,sampleRate),sampleRate);
+  expect(rhythm.rhythmFeatures).toMatchObject({status:"measured",method:"amplitude_envelope_autocorrelation"});
+  expect(rhythm.rhythmFeatures.bpm).toBeGreaterThanOrEqual(115);
+  expect(rhythm.rhythmFeatures.bpm).toBeLessThanOrEqual(125);
+  expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:"C",mode:"major",method:"sampled_spectral_chroma"});
+  expect(rhythm.vocalFeatures).toMatchObject({status:"not_analyzed"});
+  expect(rhythm.vocalFeatures.reason).toContain("No vocal");
+ });
+
 });
