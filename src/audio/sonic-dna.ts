@@ -1,6 +1,6 @@
 export interface TempoEstimate { bpm: number | null; alternateTempo: number | null; confidence: number | null; }
 export interface SonicDnaFeatures {
- sampleRate:number; channels:number; durationSeconds:number; bpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
+ sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
  key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; limitations:string[];
  loudnessLufs:number; rmsEnergy:number; dynamicRangeDb:number; spectralCentroidHz:number; spectralBandwidthHz:number;
  spectralRolloffHz:number; zeroCrossingRate:number; moodTags:string[]; genreContext:string[];
@@ -147,6 +147,9 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  if(tempo.bpm===null)limitations.push("Tempo could not be determined reliably from the supplied audio.");
  return {
   sampleRate,channels:Number.isInteger(channels)&&channels>0?channels:1,durationSeconds:prepared.durationSeconds,
+  rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:"amplitude_envelope_autocorrelation"},
+  harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:"sampled_spectral_chroma"},
+  vocalFeatures:{status:"not_analyzed",reason:"No vocal separation or vocal-activity model is configured; vocal attributes are not inferred."},
   bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
   key:key.key,mode:key.mode,keyConfidence:key.confidence,limitations,
   loudnessLufs:20*Math.log10(Math.max(EPSILON,energy))-0.691,rmsEnergy:energy,
