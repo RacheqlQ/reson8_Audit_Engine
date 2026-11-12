@@ -25,29 +25,3 @@ services:
       - key: RESON8_OPERATOR_KEY
         sync: false
 
-  # Free-tier queue consumer. Render free web services may sleep when idle;
-  # expired-lease recovery lets a later worker restart safely resume queued work.
-  # Keep this service on the free plan; do not provision a paid worker.
-  - type: web
-    name: reson8-audit-worker
-    runtime: node
-    plan: free
-    region: oregon
-    branch: main
-    buildCommand: npm install && npm run build
-    startCommand: npm run worker
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: SUPABASE_URL
-        value: https://gznwamoxuxzaayjaxvlo.supabase.co
-      - key: SUPABASE_SECRET_KEY
-        sync: false
-      - key: AUDD_API
-        sync: false
-      - key: GROQ_API
-        sync: false
-      - key: GROQ_MODEL
-        value: openai/gpt-oss-120b
-
