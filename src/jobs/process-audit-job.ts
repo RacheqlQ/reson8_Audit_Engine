@@ -252,7 +252,7 @@ export async function processAuditJob(
   jobId: string,
   deps: AuditProcessorDependencies,
 ): Promise<{ status: "completed" | "failed" }> {
-  const job = await deps.getJob(jobId);
+  const job = await awaitWithLease(deps, () => deps.getJob(jobId));
   if (!job) throw new Error("Audit job not found");
   if (job.status !== "processing") throw new Error(`Audit job is not actively claimed: ${job.status}`);
 
@@ -339,19 +339,19 @@ export async function processAuditJob(
       reconciliation: reconciliationEvidence(reconciliation),
     };
     const sonicDna = dnaEvidence(normalizedDna);
-    const assessment = await deps.generateAssessment({
+    const assessment = await awaitWithLease(deps, () => deps.generateAssessment({
       evidence,
       sonicDna,
       catalogMetadata: null,
     }));
-    await deps.saveAssessment(jobId, job.claimToken, assessment);
+    await awaitWithLease(deps, () => deps.saveAssessment(jobId, job.claimToken, assessment));
     const generatedAt = new Date().toISOString();
     const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
     await deps.stopHeartbeat?.();
-    await deps.markCompleted(jobId, job.claimToken);
+    await awaitWithLease(deps, () => deps.markCompleted(jobId, job.claimToken));
     return { status: "completed" };
   } catch (error) {
     if (deps.signal?.aborted) throw leaseLostError(deps.signal);
