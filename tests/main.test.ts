@@ -68,13 +68,17 @@ describe("startAuditEngine", () => {
     const responsePromise = fetch(`http://127.0.0.1:${address.port}/slow`);
     await requestStarted;
     const shutdownPromise = engine.shutdown();
-    expect(app.server.listening).toBe(false);
+    let shutdownResolved = false;
+    void shutdownPromise.then(() => { shutdownResolved = true; });
+    await Promise.resolve();
+    expect(shutdownResolved).toBe(false);
 
     releaseRequest();
     const [response] = await Promise.all([responsePromise, shutdownPromise]);
 
     expect(response.ok).toBe(true);
     expect(await response.json()).toEqual({ completed: true });
+    expect(app.server.listening).toBe(false);
   });
 
   it("does not start the worker when the HTTP listener cannot start", async () => {
