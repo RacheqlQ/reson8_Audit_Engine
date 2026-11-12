@@ -52,17 +52,13 @@ describe("worker heartbeat lease-loss handling", () => {
 
   it("times out a stuck lease renewal, aborts active processing, and settles the worker", async () => {
     const processing = processNextQueuedAudit();
+    const processingAssertion = expect(processing).rejects.toThrow("AUDIT_LEASE_LOST");
     await vi.advanceTimersByTimeAsync(45_000);
     await vi.advanceTimersByTimeAsync(10_000);
+    await processingAssertion;
 
     expect(renewLease).toHaveBeenCalledTimes(1);
     expect(observedSignal.current).toBeInstanceOf(AbortSignal);
     expect(observedSignal.current?.aborted).toBe(true);
-
-    const outcome = await Promise.race([
-      processing.then(() => "settled", () => "rejected"),
-      Promise.resolve("pending"),
-    ]);
-    expect(outcome).not.toBe("pending");
   });
 });
