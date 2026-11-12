@@ -33,6 +33,10 @@ jobs:
         env:
           WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
         run: bash .github/scripts/worker-fencing-postgres.sh
+      - name: Verify expired worker lease reclamation
+        env:
+          WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
+        run: bash .github/scripts/worker-lease-recovery-postgres.sh
       - name: Run unit tests
         run: npm test
       - name: Build
