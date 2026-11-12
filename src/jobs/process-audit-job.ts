@@ -44,6 +44,37 @@ export interface AuditProcessorDependencies {
   markCompleted(jobId: string, claimToken: string): Promise<void>;
   markFailed(jobId: string, claimToken: string, message: string): Promise<void>;
   stopHeartbeat?(): Promise<void>;
+  signal?: AbortSignal;
+}
+
+
+function leaseLostError(signal?: AbortSignal): Error {
+  return signal?.reason instanceof Error ? signal.reason : new Error("AUDIT_LEASE_LOST");
+}
+
+function assertLeaseActive(deps: AuditProcessorDependencies): void {
+  if (deps.signal?.aborted) throw leaseLostError(deps.signal);
+}
+
+async function awaitWithLease<T>(
+  deps: AuditProcessorDependencies,
+  operation: () => Promise<T>,
+): Promise<T> {
+  assertLeaseActive(deps);
+  const signal = deps.signal;
+  if (!signal) return operation();
+
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(leaseLostError(signal));
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+  try {
+    return await Promise.race([Promise.resolve().then(operation), aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  }
 }
 
 function recognitionEvidence(recognition: AuditRecognition): Record<string, unknown> {
@@ -212,9 +243,9 @@ async function generateAndSaveReport(
   tier: AuditReportTier,
   deps: AuditProcessorDependencies,
 ): Promise<void> {
-  const pdf = await deps.generateReport(reportInput, tier);
+  const pdf = await awaitWithLease(deps, () => deps.generateReport(reportInput, tier));
   if (!isPdf(pdf)) throw new Error(`${tier} report generator did not return a PDF`);
-  await deps.saveReport(jobId, claimToken, tier, pdf, tier === "full" ? reportInput : undefined);
+  await awaitWithLease(deps, () => deps.saveReport(jobId, claimToken, tier, pdf, tier === "full" ? reportInput : undefined));
 }
 
 export async function processAuditJob(
@@ -226,21 +257,22 @@ export async function processAuditJob(
   if (job.status !== "processing") throw new Error(`Audit job is not actively claimed: ${job.status}`);
 
   try {
-    await deps.markProcessing(jobId, job.claimToken);
+    await awaitWithLease(deps, () => deps.markProcessing(jobId, job.claimToken));
 
     if (job.sourceType === "dsp_link") {
       if (!job.catalogUrl) throw new Error("Catalog URL is missing");
-      const metadata = await deps.collectCatalogMetadata(job.catalogUrl);
-      await deps.saveCatalogMetadata(jobId, job.claimToken, metadata);
+      const metadata = await awaitWithLease(deps, () => deps.collectCatalogMetadata(job.catalogUrl!));
+      await awaitWithLease(deps, () => deps.saveCatalogMetadata(jobId, job.claimToken, metadata));
 
       let recognition: AuditRecognition | null = null;
       if (metadata.previewUrl) {
         try {
-          recognition = await deps.recognizeUrl(metadata.previewUrl);
-        } catch {
+          recognition = await awaitWithLease(deps, () => deps.recognizeUrl(metadata.previewUrl!));
+        } catch (error) {
+          if (deps.signal?.aborted) throw leaseLostError(deps.signal);
           // Preview recognition is enrichment; catalog metadata remains authoritative evidence.
         }
-        if (recognition) await deps.saveRecognition(jobId, job.claimToken, recognition);
+        if (recognition) await awaitWithLease(deps, () => deps.saveRecognition(jobId, job.claimToken, recognition!));
       }
 
       const effectiveRecognition: AuditRecognition = recognition ?? { matched: false };
@@ -249,7 +281,7 @@ export async function processAuditJob(
         audd: recognitionMetadataInput(effectiveRecognition),
       };
       const reconciliation = reconcileMetadata(metadataInput);
-      await deps.saveEvidence(jobId, job.claimToken, effectiveRecognition, reconciliation, metadata);
+      await awaitWithLease(deps, () => deps.saveEvidence(jobId, job.claimToken, effectiveRecognition, reconciliation, metadata));
       const identity = reconciliation.identity;
       const evidence = {
         ...catalogEvidence(metadata, identity),
@@ -262,12 +294,12 @@ export async function processAuditJob(
         reconciliation: reconciliationEvidence(reconciliation),
       };
       const sonicDna = catalogSonicDna(metadata);
-      const assessment = await deps.generateAssessment({
+      const assessment = await awaitWithLease(deps, () => deps.generateAssessment({
         evidence,
         sonicDna,
         catalogMetadata: catalogEvidence(metadata, identity),
-      });
-      await deps.saveAssessment(jobId, job.claimToken, assessment);
+      }));
+      await awaitWithLease(deps, () => deps.saveAssessment(jobId, job.claimToken, assessment));
 
       const generatedAt = new Date().toISOString();
       const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
@@ -275,20 +307,20 @@ export async function processAuditJob(
       await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
       await deps.stopHeartbeat?.();
-      await deps.markCompleted(jobId, job.claimToken);
+      await awaitWithLease(deps, () => deps.markCompleted(jobId, job.claimToken));
       return { status: "completed" };
     }
 
     if (!job.sourceAudioPath || !job.mimeType) throw new Error("Master source is missing");
-    const master = await deps.downloadMaster(job.sourceAudioPath);
-    const sample = await deps.createRecognitionSample(master, job.mimeType);
-    const recognition = await deps.recognize(sample);
-    await deps.saveRecognition(jobId, job.claimToken, recognition);
+    const master = await awaitWithLease(deps, () => deps.downloadMaster(job.sourceAudioPath!));
+    const sample = await awaitWithLease(deps, () => deps.createRecognitionSample(master, job.mimeType!));
+    const recognition = await awaitWithLease(deps, () => deps.recognize(sample));
+    await awaitWithLease(deps, () => deps.saveRecognition(jobId, job.claimToken, recognition));
     const reconciliation = reconcileMetadata({
       audd: recognitionMetadataInput(recognition),
     });
-    await deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation);
-    const decoded = await deps.decode(master, job.mimeType);
+    await awaitWithLease(deps, () => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation));
+    const decoded = await awaitWithLease(deps, () => deps.decode(master, job.mimeType!));
     const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
     const normalizedDna = {
       ...dna,
@@ -296,7 +328,7 @@ export async function processAuditJob(
       channels: decoded.channels,
       durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
     };
-    await deps.saveSonicDna(jobId, job.claimToken, normalizedDna);
+    await awaitWithLease(deps, () => deps.saveSonicDna(jobId, job.claimToken, normalizedDna));
 
     const identity = reconciliation.identity;
     const evidence = {
@@ -311,7 +343,7 @@ export async function processAuditJob(
       evidence,
       sonicDna,
       catalogMetadata: null,
-    });
+    }));
     await deps.saveAssessment(jobId, job.claimToken, assessment);
     const generatedAt = new Date().toISOString();
     const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
@@ -322,9 +354,15 @@ export async function processAuditJob(
     await deps.markCompleted(jobId, job.claimToken);
     return { status: "completed" };
   } catch (error) {
+    if (deps.signal?.aborted) throw leaseLostError(deps.signal);
     const message = error instanceof Error ? error.message : "Unknown processing error";
-    await deps.stopHeartbeat?.();
-    await deps.markFailed(jobId, job.claimToken, message);
+    try {
+      await deps.stopHeartbeat?.();
+    } catch (stopError) {
+      if (deps.signal?.aborted) throw leaseLostError(deps.signal);
+      throw stopError;
+    }
+    await awaitWithLease(deps, () => deps.markFailed(jobId, job.claimToken, message));
     return { status: "failed" };
   }
 }
