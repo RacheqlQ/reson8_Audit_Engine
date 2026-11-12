@@ -3,8 +3,11 @@ import { resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { buildServer } from "./server.js";
 import { runAuditQueueWorker } from "./jobs/worker.js";
+import { withAbortTimeout } from "./jobs/with-abort-timeout.js";
 
 type ShutdownSignal = "SIGTERM" | "SIGINT";
+
+const WORKER_DRAIN_TIMEOUT_MS = 240_000;
 
 interface SignalSource {
   on(event: ShutdownSignal, listener: () => void): unknown;
@@ -69,10 +72,15 @@ export async function startAuditEngine(
     controller.abort();
     shutdownTask = (async () => {
       const closeHttp = app.server.listening ? app.close() : Promise.resolve();
-      const drainWorker = workerTask.then(
-        () => undefined,
-        () => undefined,
-      );
+      const drainWorker = withAbortTimeout(
+        async () => {
+          await workerTask;
+        },
+        WORKER_DRAIN_TIMEOUT_MS,
+        "AUDIT_WORKER_DRAIN_TIMEOUT",
+      ).catch((error) => {
+        reportError(error);
+      });
       const outcomes = await Promise.allSettled([closeHttp, drainWorker]);
       signals.off("SIGTERM", onSigterm);
       signals.off("SIGINT", onSigint);
