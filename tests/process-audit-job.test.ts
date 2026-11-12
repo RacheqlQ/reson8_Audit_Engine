@@ -193,7 +193,7 @@ describe("processAuditJob", () => {
     });
   });
 
-  it("records a failed assessment event and never saves a report after Groq validation fails", async () => {
+  it("preserves recognition and Sonic DNA when the second evidence-score validation fails", async () => {
     const events: string[] = [];
     let failureMessage = "";
     const result = await processAuditJob("job-groq-failure", {
@@ -215,12 +215,12 @@ describe("processAuditJob", () => {
       downloadMaster: async () => new Uint8Array([1, 2, 3]),
       createRecognitionSample: async () => new Uint8Array([4, 5]),
       recognize: async () => ({ matched: false as const }),
-      saveRecognition: async () => {},
-      saveEvidence: async () => {},
+      saveRecognition: async () => { events.push("recognition-saved"); },
+      saveEvidence: async () => { events.push("evidence-saved"); },
       decode: async () => ({ samples: new Float32Array([0, 0.1, -0.1]), sampleRate: 44100, channels: 1 }),
-      saveSonicDna: async () => {},
+      saveSonicDna: async () => { events.push("sonic-dna-saved"); },
       generateAssessment: async () => {
-        throw new Error("Groq narrative response failed Zod validation after one retry: executiveSummary must contain at least 45 words.");
+        throw new Error("Groq evidence-score response failed Zod validation after one retry: evidenceGaps[0] must contain at least 8 words.");
       },
       saveAssessment: async () => { events.push("assessment-saved"); },
       generateReport: async () => {
@@ -236,7 +236,12 @@ describe("processAuditJob", () => {
     });
 
     expect(result.status).toBe("failed");
-    expect(failureMessage).toContain("failed Zod validation after one retry");
+    expect(failureMessage).toContain("evidenceGaps[0] must contain at least 8 words");
+    expect(events).toContain("recognition-saved");
+    expect(events).toContain("evidence-saved");
+    expect(events).toContain("sonic-dna-saved");
+    expect(events.indexOf("recognition-saved")).toBeLessThan(events.indexOf("sonic-dna-saved"));
+    expect(events.indexOf("sonic-dna-saved")).toBeLessThan(events.indexOf("audit_failed"));
     expect(events).toContain("audit_failed");
     expect(events).not.toContain("assessment-saved");
     expect(events).not.toContain("report-generated");
