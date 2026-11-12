@@ -145,12 +145,9 @@ describe("startAuditEngine", () => {
     vi.useFakeTimers();
     try {
       const shutdown = engine.shutdown();
+      const shutdownAssertion = expect(shutdown).resolves.toBeUndefined();
       await vi.advanceTimersByTimeAsync(240_000);
-      const settled = await Promise.race([
-        shutdown.then(() => true, () => true),
-        Promise.resolve(false),
-      ]);
-      expect(settled).toBe(true);
+      await shutdownAssertion;
       expect(app.server.listening).toBe(false);
       expect(signals.listenerCount("SIGTERM")).toBe(0);
       expect(signals.listenerCount("SIGINT")).toBe(0);
