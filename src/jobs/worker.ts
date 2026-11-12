@@ -14,6 +14,9 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   if (signal?.aborted) return null;
   const store = createSupabaseAuditStore();
   if (signal?.aborted) return null;
+  // Validate required provider configuration before claiming work so a
+  // misconfigured worker cannot strand a queued job in processing.
+  const groq = new GroqClient();
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
     job = await store.claimNextQueuedJob();
@@ -30,7 +33,6 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
 
   const audd = process.env.AUDD_API || process.env.AUDD_API_TOKEN ? new AuddClient() : null;
   const decoder = createAudioDecoder();
-  const groq = new GroqClient();
 
   const deps: AuditProcessorDependencies = {
     getJob: async () => ({
