@@ -40,6 +40,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run focused worker-hardening regressions
+        run: >-
+          npx vitest run
+          tests/worker-provider-preflight.test.ts
+          tests/worker-heartbeat-timeout.test.ts
+          tests/process-audit-job.test.ts
+          tests/main.test.ts
+          tests/groq-client.test.ts
+
       - name: Run test suite
         if: always()
         run: npm test
