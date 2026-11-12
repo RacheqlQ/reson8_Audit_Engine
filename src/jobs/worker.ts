@@ -12,6 +12,7 @@ import { withAbortTimeout } from "./with-abort-timeout.js";
 const POLL_INTERVAL_MS = 15_000;
 const HEARTBEAT_INTERVAL_MS = 45_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
+const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 235_000;
 
 export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jobId: string; status: "completed" | "failed" } | null> {
   if (signal?.aborted) return null;
@@ -71,6 +72,17 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   };
 
   const leaseController = new AbortController();
+  let shutdownAbortTimer: ReturnType<typeof setTimeout> | undefined;
+  const abortActiveJobAfterDrain = () => {
+    if (shutdownAbortTimer) return;
+    shutdownAbortTimer = setTimeout(() => {
+      leaseController.abort(new Error("AUDIT_SHUTDOWN_DRAIN_TIMEOUT"));
+    }, SHUTDOWN_JOB_ABORT_TIMEOUT_MS);
+    shutdownAbortTimer.unref?.();
+  };
+  const onShutdown = () => abortActiveJobAfterDrain();
+  if (signal?.aborted) onShutdown();
+  else signal?.addEventListener("abort", onShutdown, { once: true });
   let heartbeatPromise: Promise<void> | null = null;
   let heartbeatStopped = false;
   let leaseLost: Error | null = null;
@@ -109,11 +121,16 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
 
   try {
     const result = await processAuditJob(job.id, deps);
-    if (leaseController.signal.aborted) throw leaseLost ?? new Error("AUDIT_LEASE_LOST");
+    if (leaseController.signal.aborted) {
+      const reason = leaseController.signal.reason;
+      throw leaseLost ?? (reason instanceof Error ? reason : new Error("AUDIT_LEASE_LOST"));
+    }
     return { jobId: job.id, ...result };
   } finally {
     heartbeatStopped = true;
     clearInterval(heartbeat);
+    if (shutdownAbortTimer) clearTimeout(shutdownAbortTimer);
+    signal?.removeEventListener("abort", onShutdown);
     if (heartbeatPromise) await heartbeatPromise;
   }
 }
