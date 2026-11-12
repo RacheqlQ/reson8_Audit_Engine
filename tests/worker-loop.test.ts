@@ -39,8 +39,6 @@ describe("runQueueWorkerLoop", () => {
     expect(attempts).toBe(2);
     expect(errors).toEqual(["temporary database error"]);
   });
-});
-
 
   it("finishes an active job after abort and does not claim another job", async () => {
     const controller = new AbortController();
