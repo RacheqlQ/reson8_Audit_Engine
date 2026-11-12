@@ -39,6 +39,44 @@ describe("startAuditEngine", () => {
     expect(signals.listenerCount("SIGINT")).toBe(0);
   });
 
+
+  it("drains an in-flight HTTP request before shutdown resolves", async () => {
+    const app = Fastify();
+    let releaseRequest!: () => void;
+    let markRequestStarted!: () => void;
+    const requestStarted = new Promise<void>((resolve) => { markRequestStarted = resolve; });
+    const blockedResponse = new Promise<void>((resolve) => { releaseRequest = resolve; });
+
+    app.get("/slow", async () => {
+      markRequestStarted();
+      await blockedResponse;
+      return { completed: true };
+    });
+
+    const engine = await startAuditEngine({
+      app,
+      host: "127.0.0.1",
+      port: 0,
+      signals: new EventEmitter(),
+      runWorker: waitForAbort,
+      onError: (error) => { throw error; },
+    });
+    runningEngines.push(engine);
+    const address = app.server.address();
+    if (!address || typeof address === "string") throw new Error("Expected a TCP address");
+
+    const responsePromise = fetch(`http://127.0.0.1:${address.port}/slow`);
+    await requestStarted;
+    const shutdownPromise = engine.shutdown();
+    expect(app.server.listening).toBe(false);
+
+    releaseRequest();
+    const [response] = await Promise.all([responsePromise, shutdownPromise]);
+
+    expect(response.ok).toBe(true);
+    expect(await response.json()).toEqual({ completed: true });
+  });
+
   it("does not start the worker when the HTTP listener cannot start", async () => {
     const blocker = createServer();
     await new Promise<void>((resolve) => blocker.listen(0, "127.0.0.1", resolve));
