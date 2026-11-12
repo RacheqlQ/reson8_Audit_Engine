@@ -130,4 +130,34 @@ describe("startAuditEngine", () => {
       await new Promise<void>((resolve, reject) => blocker.close((error) => error ? reject(error) : resolve()));
     }
   });
+  it("bounds graceful worker drain to the 240-second shutdown deadline", async () => {
+    const app = Fastify();
+    const signals = new EventEmitter();
+    const engine = await startAuditEngine({
+      app,
+      host: "127.0.0.1",
+      port: 0,
+      signals,
+      runWorker: async () => new Promise<void>(() => undefined),
+      onError: () => undefined,
+    });
+
+    vi.useFakeTimers();
+    try {
+      const shutdown = engine.shutdown();
+      await vi.advanceTimersByTimeAsync(240_000);
+      const settled = await Promise.race([
+        shutdown.then(() => true, () => true),
+        Promise.resolve(false),
+      ]);
+      expect(settled).toBe(true);
+      expect(app.server.listening).toBe(false);
+      expect(signals.listenerCount("SIGTERM")).toBe(0);
+      expect(signals.listenerCount("SIGINT")).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      signals.removeAllListeners();
+    }
+  });
+
 });
