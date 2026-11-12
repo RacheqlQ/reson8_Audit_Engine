@@ -31,8 +31,8 @@ export function checkLayout(rects:ReportRect[]):{ok:boolean;errors:string[]}{
   for(let j=i+1;j<rects.length;j++){const b=rects[j];if(a.x<b.x+b.width-.5&&a.x+a.width>b.x+.5&&a.y<b.y+b.height-.5&&a.y+a.height>b.y+.5)errors.push("Intersecting elements: "+a.id+" / "+b.id);}}
  return {ok:errors.length===0,errors};
 }
-export function checkPageDensity(rects:ReportRect[],exempt=false):{ok:boolean;emptyRatio:number}{
- if(exempt||rects.length===0)return {ok:true,emptyRatio:0};
+export function checkPageDensity(rects:ReportRect[]):{ok:boolean;emptyRatio:number}{
+ if(rects.length===0)return {ok:false,emptyRatio:1};
  const top=Math.max(...rects.map(r=>r.y+r.height)),bottom=Math.min(...rects.map(r=>r.y));
  const occupied=Math.max(0,Math.min(AVAILABLE,top-bottom));
  const ratio=Math.max(0,Math.min(1,1-occupied/AVAILABLE));
@@ -108,7 +108,7 @@ function sections(i:AuditReportInput):Section[]{
  ];
 }
 export function chartLayoutIssuesForReport(input:AuditReportInput):string[]{
- const issues:string[]=[];for(const section of sections(input)){for(const panel of chartsForSection(input,section.title)){issues.push(...chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,TOP,chartPanelHeight(panel.kind)));}}return issues;
+ const issues:string[]=[];for(const section of sections(input)){for(const panel of chartsForSection(input,section.title)){issues.push(...chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,TOP,chartPanelHeight(panel.kind,panel.rows)));}}return issues;
 }
 export function planAuditReportPages(input:AuditReportInput,tier:AuditReportTier):ReportPagePlan[]{const all=sections(input);return (tier==="sample"?all.slice(0,8):all).map(s=>({title:s.title,text:s.body}));}
 export async function generateAuditReport(input:AuditReportInput,tier:AuditReportTier):Promise<Uint8Array>{
@@ -124,35 +124,41 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   },0);
   return total+titleHeight+bodyHeight+12;
  },0);
- const chartAllowance=selected.reduce((n,section)=>n+chartsForSection(input,section.title).reduce((sum,p)=>sum+chartPanelHeight(p.kind)+14,0),0);
+ const chartAllowance=selected.reduce((n,section)=>n+chartsForSection(input,section.title).reduce((sum,p)=>sum+chartPanelHeight(p.kind,p.rows)+14,0),0);
  const totalEstimatedHeight=estimatedHeight+chartAllowance;
  const plannedPages=Math.max(1,Math.ceil(totalEstimatedHeight/(AVAILABLE*.9)));
  if(plannedPages>18)throw new Error("Estimated report body exceeds the 20-page cap");
- const targetFill=totalEstimatedHeight/plannedPages;
  let pageNo=1,page=pdf.addPage([W,H]),y=TOP,rects:ReportRect[]=[];
  header(page,"Audit findings",pageNo,fonts);
  const chromeRects=():ReportRect[]=>[{x:M,y:H-44,width:220,height:10,id:"header-brand"},{x:M,y:H-64,width:W-2*M,height:8,id:"header-title"},{x:M,y:H-68,width:W-2*M,height:0.7,id:"header-rule"},{x:M,y:43,width:W-2*M,height:0.7,id:"footer-rule"},{x:M,y:25,width:250,height:10,id:"footer-text"},{x:W-M-18,y:25,width:18,height:10,id:"footer-page-number"}];
- const validate=(densityExempt=false)=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));const density=checkPageDensity(rects,densityExempt);if(!density.ok)console.warn("[report-layout] Page "+pageNo+" density below 65% content occupancy ("+Math.round((1-density.emptyRatio)*100)+"%); warning only.");};
+ const validate=()=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));const density=checkPageDensity(rects);if(!density.ok)console.warn("[report-layout] Page "+pageNo+" density below 65% content occupancy ("+Math.round((1-density.emptyRatio)*100)+"%); warning only.");};
  const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent);y=TOP;rects=[];};
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
-  const first=section.body[0]??"",firstSize=first===first.toUpperCase()&&first.length<100?8:9.7,firstHeight=wrap(first,fonts.regular,firstSize,W-2*M-16).length*firstSize*1.4+8;
   const sonicBlock=section.title==="Sonic DNA and technical profile";
+  const keepTogetherCount=chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
+  const openingHeight=section.body.slice(0,keepTogetherCount).reduce((sum,para)=>{
+   const size=para===para.toUpperCase()&&para.length<100?8:9.7;
+   return sum+wrap(para,fonts.regular,size,W-2*M-16).length*size*1.4+8;
+  },0);
   const sonicHeight=sonicBlock?section.body.reduce((sum,p)=>{const size=p===p.toUpperCase()&&p.length<100?8:9.7;return sum+wrap(p,fonts.regular,size,W-2*M-16).length*size*1.4+8;},0):0;
-  if(rects.length>0&&y<TOP-targetFill)nextPage(section.title,accent);
-  if(y-titleH-firstHeight<BOTTOM+45||(sonicBlock&&y-titleH-sonicHeight<BOTTOM+45))nextPage(section.title,accent);
+  // Keep the section heading with its opening two paragraphs when possible, preventing
+  // a heading/first-paragraph orphan while still allowing genuinely long sections to flow.
+  if(y-titleH-openingHeight<BOTTOM+30||(sonicBlock&&y-titleH-sonicHeight<BOTTOM+45))nextPage(section.title,accent);
   const titleRect={x:M,y:y-titleH,width:W-2*M,height:titleH,id:"section-title-"+si};rects.push(titleRect);
   page.drawText(String(si+1).padStart(2,"0"),{x:M,y:y-2,size:8,font:fonts.bold,color:accent});
   let ty=y;for(const line of titleLines){page.drawText(line,{x:M+34,y:ty,size:19.5,font:fonts.bold,color:C.navy});ty-=25;}y=ty-10;
   for(let pi=0;pi<section.body.length;pi++){
-   if(pi>0&&rects.length>0&&y<TOP-targetFill)nextPage(section.title,accent);
-   const para=section.body[pi],size=para===para.toUpperCase()&&para.length<100?8:9.7;
-   const lines=wrap(para,fonts.regular,size,W-2*M-16),lineHeight=size*1.4;
+   const para=section.body[pi],size=para===para.toUpperCase()&&para.length<100?8:(section.title==="Decision record and evidence gates"?9.0:9.7);
+   const lines=wrap(para,fonts.regular,size,W-2*M-16),lineHeight=size*(section.title==="Decision record and evidence gates"?1.2:1.4);
    let offset=0,chunk=0;
    while(offset<lines.length){
     let capacity=Math.floor((y-BOTTOM-8)/lineHeight);
     if(capacity<1){nextPage(section.title,accent);capacity=Math.floor((y-BOTTOM-8)/lineHeight);}
-    const count=Math.min(capacity,lines.length-offset),height=count*lineHeight+8;
+    const paragraphGap=section.title==="Decision record and evidence gates"?3:8;
+    const fullParagraphHeight=lines.length*lineHeight+paragraphGap;
+    if(offset===0&&fullParagraphHeight<=AVAILABLE&&fullParagraphHeight>y-BOTTOM-8){nextPage(section.title,accent);capacity=Math.floor((y-BOTTOM-8)/lineHeight);}
+    const count=Math.min(capacity,lines.length-offset),height=count*lineHeight+paragraphGap;
     const r={x:M,y:y-height,width:W-2*M,height,id:"section-"+si+"-paragraph-"+pi+"-part-"+chunk};rects.push(r);
 
     for(let li=0;li<count;li++){const line=lines[offset+li];if(fonts.regular.widthOfTextAtSize(line,size)>W-2*M-16+.01)throw new Error("Text width overflow in "+r.id);page.drawText(line,{x:M+8,y:y-li*lineHeight,size,font:fonts.regular,color:size<9?accent:C.ink});}
@@ -161,7 +167,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
    }
   }
   for(const panel of chartsForSection(input,section.title)){
-   const panelHeight=chartPanelHeight(panel.kind);
+   const panelHeight=chartPanelHeight(panel.kind,panel.rows);
    const layoutIssues=chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,y-8,panelHeight);if(layoutIssues.length)throw new Error(layoutIssues.join("; "));
    // Keep the chart on this page whenever its complete card clears the footer; low page fill alone is not a reason to orphan it.
    if(y-8-panelHeight<BOTTOM+45){
@@ -179,10 +185,28 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   }
   y-=12;
  }
- // The final content page is intentionally exempt from density diagnostics.
- validate(true);
- const notes=pdf.addPage([W,H]);pageNo++;header(notes,"A&R notes",pageNo,fonts,C.violet);notes.drawText("A&R NOTES",{x:M,y:TOP,size:20,font:fonts.bold,color:C.navy});notes.drawText("Private working notes — editable field",{x:M,y:TOP-27,size:9,font:fonts.regular,color:C.muted});
- const form=pdf.getForm(),field=form.createTextField("ar_notes");field.enableMultiline();field.addToPage(notes,{x:M,y:145,width:W-2*M,height:470,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});field.setFontSize(10);field.updateAppearances(fonts.regular);
- const noteRects=[{x:M,y:TOP-4,width:220,height:24,id:"notes-title"},{x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},{x:M,y:145,width:W-2*M,height:470,id:"A&R notes field"}];const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; ")); // A&R notes pages are form pages and are exempt from content-density diagnostics.
+ // Place the editable A&R notes field in genuine remaining page space when possible.
+ // Otherwise give it a dedicated form page. Both paths run the normal density gate.
+ const form=pdf.getForm(),field=form.createTextField("ar_notes");field.enableMultiline();
+ const notesFieldBottom=BOTTOM+12,notesTitleY=y-18,notesSubtitleY=notesTitleY-25,notesFieldTop=notesSubtitleY-16;
+ const inlineNotesHeight=Math.min(470,notesFieldTop-notesFieldBottom);
+ if(inlineNotesHeight>=120){
+  page.drawText("A&R NOTES",{x:M,y:notesTitleY,size:16,font:fonts.bold,color:C.violet});
+  page.drawText("Private working notes — editable field",{x:M,y:notesSubtitleY,size:8.5,font:fonts.regular,color:C.muted});
+  field.addToPage(page,{x:M,y:notesFieldBottom,width:W-2*M,height:inlineNotesHeight,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
+  field.setFontSize(9);field.updateAppearances(fonts.regular);
+  rects.push({x:M,y:notesTitleY-4,width:220,height:20,id:"notes-title"},{x:M,y:notesSubtitleY-3,width:300,height:12,id:"notes-subtitle"},{x:M,y:notesFieldBottom,width:W-2*M,height:inlineNotesHeight,id:"A&R notes field"});
+  validate();
+ }else{
+  validate();
+  const notes=pdf.addPage([W,H]);pageNo++;header(notes,"A&R notes",pageNo,fonts,C.violet);
+  notes.drawText("A&R NOTES",{x:M,y:TOP,size:20,font:fonts.bold,color:C.navy});
+  notes.drawText("Private working notes — editable field",{x:M,y:TOP-27,size:9,font:fonts.regular,color:C.muted});
+  field.addToPage(notes,{x:M,y:145,width:W-2*M,height:470,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
+  field.setFontSize(10);field.updateAppearances(fonts.regular);
+  const noteRects=[{x:M,y:TOP-4,width:220,height:24,id:"notes-title"},{x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},{x:M,y:145,width:W-2*M,height:470,id:"A&R notes field"}];
+  const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; "));
+  const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes page falls below the 65% content-occupancy threshold");
+ }
  if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");return pdf.save();
 }
