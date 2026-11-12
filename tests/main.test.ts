@@ -81,6 +81,30 @@ describe("startAuditEngine", () => {
     expect(app.server.listening).toBe(false);
   });
 
+  it("closes the API listener when the embedded worker fails during startup", async () => {
+    const app = Fastify();
+    const signals = new EventEmitter();
+    let reportWorkerFailure!: () => void;
+    const workerFailureReported = new Promise<void>((resolve) => { reportWorkerFailure = resolve; });
+
+    const engine = await startAuditEngine({
+      app,
+      host: "127.0.0.1",
+      port: 0,
+      signals,
+      runWorker: async () => { throw new Error("worker startup failed"); },
+      onError: () => reportWorkerFailure(),
+    });
+    runningEngines.push(engine);
+
+    await workerFailureReported;
+    await engine.shutdown();
+
+    expect(app.server.listening).toBe(false);
+    expect(signals.listenerCount("SIGTERM")).toBe(0);
+    expect(signals.listenerCount("SIGINT")).toBe(0);
+  });
+
   it("does not start the worker when the HTTP listener cannot start", async () => {
     const blocker = createServer();
     await new Promise<void>((resolve) => blocker.listen(0, "127.0.0.1", resolve));
