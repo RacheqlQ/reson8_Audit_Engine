@@ -7,8 +7,11 @@ import { generateAuditReport } from "../reports/generate-audit-report.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
 import { runQueueWorkerLoop } from "./worker-loop.js";
+import { withAbortTimeout } from "./with-abort-timeout.js";
 
 const POLL_INTERVAL_MS = 15_000;
+const HEARTBEAT_INTERVAL_MS = 45_000;
+const HEARTBEAT_TIMEOUT_MS = 10_000;
 
 export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jobId: string; status: "completed" | "failed" } | null> {
   if (signal?.aborted) return null;
@@ -67,6 +70,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     markFailed: async (jobId, _claimToken, message) => store.markFailed(jobId, _claimToken, message),
   };
 
+  const leaseController = new AbortController();
   let heartbeatPromise: Promise<void> | null = null;
   let heartbeatStopped = false;
   let leaseLost: Error | null = null;
@@ -74,26 +78,38 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     if (heartbeatStopped || heartbeatPromise || leaseLost) return;
     heartbeatPromise = (async () => {
       try {
-        await store.renewLease(job.id, job.claimToken);
+        await withAbortTimeout(
+          () => store.renewLease(job.id, job.claimToken),
+          HEARTBEAT_TIMEOUT_MS,
+          "AUDIT_HEARTBEAT_TIMEOUT",
+        );
       } catch (error) {
-        leaseLost = error instanceof Error ? error : new Error(String(error));
-        console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "lease_lost" }));
+        leaseLost = new Error("AUDIT_LEASE_LOST", { cause: error });
+        leaseController.abort(leaseLost);
+        console.error(JSON.stringify({
+          worker: "audit",
+          jobId: job.id,
+          event: "lease_lost",
+          reason: error instanceof Error ? error.message : String(error),
+        }));
       }
     })().finally(() => { heartbeatPromise = null; });
   };
-  const heartbeat = setInterval(heartbeatTick, 45_000);
+  const heartbeat = setInterval(heartbeatTick, HEARTBEAT_INTERVAL_MS);
   heartbeat.unref();
 
   const stopHeartbeat = async () => {
     heartbeatStopped = true;
     clearInterval(heartbeat);
     if (heartbeatPromise) await heartbeatPromise;
-    if (leaseLost) throw new Error("AUDIT_LEASE_LOST");
+    if (leaseLost) throw leaseLost;
   };
   deps.stopHeartbeat = stopHeartbeat;
+  deps.signal = leaseController.signal;
 
   try {
     const result = await processAuditJob(job.id, deps);
+    if (leaseController.signal.aborted) throw leaseLost ?? new Error("AUDIT_LEASE_LOST");
     return { jobId: job.id, ...result };
   } finally {
     heartbeatStopped = true;
