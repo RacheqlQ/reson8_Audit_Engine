@@ -286,4 +286,58 @@ describe("processAuditJob", () => {
     expect(result.status).toBe("failed");
     expect(failure).toBe("master unavailable");
   });
+  it("aborts after lease loss and prevents assessment, report, and terminal persistence", async () => {
+    const controller = new AbortController();
+    let releaseAssessment!: () => void;
+    let assessmentStarted!: () => void;
+    const started = new Promise<void>((resolve) => { assessmentStarted = resolve; });
+    const assessmentGate = new Promise<void>((resolve) => { releaseAssessment = resolve; });
+    const writes: string[] = [];
+
+    const deps = {
+      signal: controller.signal,
+      getJob: async () => ({
+        id: "lease-loss-job", ownerId: null, sourceAudioPath: "fixture/master.wav",
+        mimeType: "audio/wav", sourceType: "master" as const, catalogUrl: null,
+        status: "processing" as const, claimToken: "11111111-1111-4111-8111-111111111111",
+        leaseExpiresAt: "2099-01-01T00:00:00.000Z", workerId: "lease-loss-test",
+      }),
+      markProcessing: async () => { writes.push("processing"); },
+      collectCatalogMetadata: async () => { throw new Error("not used"); },
+      recognizeUrl: async () => ({ matched: false as const }),
+      downloadMaster: async () => new Uint8Array([1, 2, 3]),
+      createRecognitionSample: async () => new Uint8Array([1, 2]),
+      recognize: async () => ({ matched: false as const }),
+      saveRecognition: async () => { writes.push("recognition"); },
+      saveEvidence: async () => { writes.push("evidence"); },
+      decode: async () => ({ samples: new Float32Array([0, 0.1, -0.1]), sampleRate: 44100, channels: 1 }),
+      saveSonicDna: async () => { writes.push("sonic-dna"); },
+      generateAssessment: async () => {
+        assessmentStarted();
+        await assessmentGate;
+        return assessment;
+      },
+      saveAssessment: async () => { writes.push("assessment"); },
+      generateReport: async () => { writes.push("report-generated"); return new Uint8Array([37, 80, 68, 70, 45]); },
+      saveReport: async () => { writes.push("report-saved"); },
+      markCompleted: async () => { writes.push("completed"); },
+      markFailed: async () => { writes.push("failed"); },
+    } as unknown as import("../src/jobs/process-audit-job.js").AuditProcessorDependencies;
+
+    const processing = processAuditJob("lease-loss-job", deps);
+    await started;
+    controller.abort(new Error("AUDIT_LEASE_LOST"));
+    releaseAssessment();
+
+    await expect(processing).rejects.toThrow("AUDIT_LEASE_LOST");
+    expect(writes).toContain("recognition");
+    expect(writes).toContain("evidence");
+    expect(writes).toContain("sonic-dna");
+    expect(writes).not.toContain("assessment");
+    expect(writes).not.toContain("report-generated");
+    expect(writes).not.toContain("report-saved");
+    expect(writes).not.toContain("completed");
+    expect(writes).not.toContain("failed");
+  });
+
 });
