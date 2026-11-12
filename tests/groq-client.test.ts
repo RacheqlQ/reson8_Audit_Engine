@@ -164,4 +164,24 @@ describe("GroqClient section groups",()=>{
   expect(sleeps).toContain(626400);
  });
 
+ it("stops after the corrective retry when evidenceGaps remains below eight words",async()=>{
+  let evidenceScoreCalls=0;
+  const prompts:string[]=[];
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="evidence-score"){
+    evidenceScoreCalls++;
+    prompts.push(body.messages[1].content);
+    const invalid={...p(group),evidenceGaps:["Missing audience data"]};
+    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(invalid)}}]}),{status:200});
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  await expect(client.assess({evidence:{},sonicDna:null}))
+   .rejects.toThrow("Groq evidence-score response failed Zod validation after one retry");
+  expect(evidenceScoreCalls).toBe(2);
+  expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
+ });
+
 });
