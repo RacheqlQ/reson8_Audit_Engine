@@ -10,8 +10,10 @@ import { runQueueWorkerLoop } from "./worker-loop.js";
 
 const POLL_INTERVAL_MS = 15_000;
 
-export async function processNextQueuedAudit(): Promise<{ jobId: string; status: "completed" | "failed" } | null> {
+export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jobId: string; status: "completed" | "failed" } | null> {
+  if (signal?.aborted) return null;
   const store = createSupabaseAuditStore();
+  if (signal?.aborted) return null;
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
     job = await store.claimNextQueuedJob();
@@ -102,7 +104,7 @@ export async function runAuditQueueWorker(signal: AbortSignal): Promise<void> {
   console.log(JSON.stringify({ worker: "audit", status: "started", pollIntervalMs: POLL_INTERVAL_MS }));
   await runQueueWorkerLoop({
     processNext: async () => {
-      const result = await processNextQueuedAudit();
+      const result = await processNextQueuedAudit(signal);
       if (result) {
         console.log(JSON.stringify({ worker: "audit", result }));
       }
