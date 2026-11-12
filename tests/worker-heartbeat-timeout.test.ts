@@ -61,4 +61,20 @@ describe("worker heartbeat lease-loss handling", () => {
     expect(observedSignal.current).toBeInstanceOf(AbortSignal);
     expect(observedSignal.current?.aborted).toBe(true);
   });
+  it("aborts the active job before the application drain deadline after shutdown begins", async () => {
+    const shutdown = new AbortController();
+    const processing = processNextQueuedAudit(shutdown.signal);
+    const outcome = processing.then(() => "settled", () => "rejected");
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(observedSignal.current).toBeInstanceOf(AbortSignal);
+
+    shutdown.abort();
+    await vi.advanceTimersByTimeAsync(235_000);
+
+    expect(observedSignal.current?.aborted).toBe(true);
+    expect(await Promise.race([outcome, Promise.resolve("pending")])).not.toBe("pending");
+  });
+
 });
