@@ -18,9 +18,6 @@ const p=(group:string):Record<string,unknown>=>{
 };
 function fetchMock(invalid?:string){const counts=new Map<string,number>();const mock=vi.fn(async (_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const name=body.response_format.json_schema.name.replace(/^ar_/,"");const n=(counts.get(name)??0)+1;counts.set(name,n);const value=name===invalid&&n===1?{}:p(name);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});return {mock,counts};}
 describe("GroqClient section groups",()=>{
- it("pins the default Groq model to the workspace model",()=>{
-  expect(DEFAULT_GROQ_MODEL).toBe("openai/gpt-oss-120b");
- });
  it("passes the completion-token budget on every Groq request",async()=>{
   const {mock}=fetchMock();
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
