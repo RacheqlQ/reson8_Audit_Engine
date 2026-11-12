@@ -28,7 +28,7 @@ describe("worker heartbeat lease-loss handling", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubEnv("GROQ_API", "test-groq-key");
-    vi.stubEnv("GROQ_API_KEY", "");
+    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
     observedSignal.current = null;
     claimNextQueuedJob.mockReset().mockResolvedValue({
       id: "heartbeat-timeout-job",
