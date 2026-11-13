@@ -255,10 +255,23 @@ export function createSupabaseAuditStore(
         await persistUploadedReport({
           signal,
           upload: async () => {
-            const { error } = await admin.storage.from("audit-reports").upload(storagePath, pdf, {
-              contentType: "application/pdf", upsert: false,
+            const objectPath = storagePath.split("/").map(encodeURIComponent).join("/");
+            const uploadUrl = new URL(`/storage/v1/object/audit-reports/${objectPath}`, url);
+            const response = await fetch(uploadUrl, {
+              method: "POST",
+              headers: {
+                apikey: secretKey,
+                Authorization: `Bearer ${secretKey}`,
+                "Content-Type": "application/pdf",
+                "x-upsert": "false",
+              },
+              body: pdf,
+              signal,
             });
-            if (error) throw new Error(`Unable to store ${tier} report: ${error.message}`);
+            const detail = await response.text();
+            if (!response.ok) {
+              throw new Error(`Unable to store ${tier} report: HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ""}`);
+            }
           },
           // Once this fenced RPC starts, await its definitive result. Aborting
           // its HTTP transport could make commit status ambiguous and cause us
