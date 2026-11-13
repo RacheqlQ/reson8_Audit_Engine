@@ -12,6 +12,7 @@ describe("persistUploadedReport", () => {
       signal: controller.signal,
       upload: () => uploadGate,
       persist,
+      reconcile: async () => false,
       cleanup,
     });
 
@@ -30,6 +31,7 @@ describe("persistUploadedReport", () => {
       signal: controller.signal,
       upload: async () => {},
       persist: async () => {},
+      reconcile: async () => false,
       cleanup: async () => { throw cleanupError; },
     });
     controller.abort(new Error("AUDIT_SHUTDOWN_DRAIN_TIMEOUT"));
@@ -51,6 +53,7 @@ describe("persistUploadedReport", () => {
       signal: controller.signal,
       upload: async () => {},
       persist: async () => { persistStarted(); await persistGate; },
+      reconcile: async () => false,
       cleanup,
     });
 
@@ -70,6 +73,7 @@ describe("persistUploadedReport", () => {
       signal: controller.signal,
       upload,
       persist: async () => {},
+      reconcile: async () => false,
       cleanup: async () => {},
     })).rejects.toThrow("AUDIT_LEASE_LOST");
     expect(upload).not.toHaveBeenCalled();
@@ -80,6 +84,7 @@ describe("persistUploadedReport", () => {
     await expect(persistUploadedReport({
       upload: async () => {},
       persist: async () => { throw persistError; },
+      reconcile: async () => false,
       cleanup,
     })).rejects.toBe(persistError);
     expect(cleanup).toHaveBeenCalledTimes(1);
@@ -95,6 +100,7 @@ describe("persistUploadedReport", () => {
       signal: controller.signal,
       upload,
       persist: async () => {},
+      reconcile: async () => false,
       cleanup,
     });
 
