@@ -10,7 +10,7 @@ interface CachedToken {
 }
 
 export interface TidalApiClient {
-  getTrack(trackId: string): Promise<Record<string, unknown>>;
+  getTrack(trackId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
 }
 
 export class TidalClient implements TidalApiClient {
@@ -26,7 +26,8 @@ export class TidalClient implements TidalApiClient {
     }
   }
 
-  private async accessToken(): Promise<string> {
+  private async accessToken(signal?: AbortSignal): Promise<string> {
+    signal?.throwIfAborted();
     const now = Date.now();
 
     if (this.cachedToken && this.cachedToken.expiresAt > now + 30_000) {
@@ -44,6 +45,7 @@ export class TidalClient implements TidalApiClient {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: "grant_type=client_credentials",
+      signal,
     });
 
     if (!response.ok) {
@@ -69,8 +71,9 @@ export class TidalClient implements TidalApiClient {
     return payload.access_token;
   }
 
-  async getTrack(trackId: string): Promise<Record<string, unknown>> {
-    const accessToken = await this.accessToken();
+  async getTrack(trackId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    signal?.throwIfAborted();
+    const accessToken = await this.accessToken(signal);
     const params = new URLSearchParams({
       countryCode: this.countryCode,
       include: "artists,albums,genres,providers",
@@ -83,6 +86,7 @@ export class TidalClient implements TidalApiClient {
           Accept: "application/vnd.api+json",
           Authorization: `Bearer ${accessToken}`,
         },
+        signal,
       },
     );
 
