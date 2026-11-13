@@ -59,6 +59,7 @@ function assertLeaseActive(deps: AuditProcessorDependencies): void {
 async function awaitWithLease<T>(
   deps: AuditProcessorDependencies,
   operation: (signal?: AbortSignal) => Promise<T>,
+  options: { settleAfterAbort?: boolean } = {},
 ): Promise<T> {
   assertLeaseActive(deps);
   const signal = deps.signal;
@@ -70,8 +71,18 @@ async function awaitWithLease<T>(
     signal.addEventListener("abort", onAbort, { once: true });
     if (signal.aborted) onAbort();
   });
+  const operationPromise = Promise.resolve().then(() => operation(signal));
   try {
-    return await Promise.race([Promise.resolve().then(() => operation(signal)), aborted]);
+    return await Promise.race([operationPromise, aborted]);
+  } catch (error) {
+    if (options.settleAfterAbort && signal.aborted) {
+      try {
+        await operationPromise;
+      } catch (settlementError) {
+        if (settlementError instanceof AggregateError || !signal.aborted) throw settlementError;
+      }
+    }
+    throw error;
   } finally {
     if (onAbort) signal.removeEventListener("abort", onAbort);
   }
@@ -245,7 +256,11 @@ async function generateAndSaveReport(
 ): Promise<void> {
   const pdf = await awaitWithLease(deps, (signal) => deps.generateReport(reportInput, tier, signal));
   if (!isPdf(pdf)) throw new Error(`${tier} report generator did not return a PDF`);
-  await awaitWithLease(deps, (signal) => deps.saveReport(jobId, claimToken, tier, pdf, tier === "full" ? reportInput : undefined, signal));
+  await awaitWithLease(
+    deps,
+    (signal) => deps.saveReport(jobId, claimToken, tier, pdf, tier === "full" ? reportInput : undefined, signal),
+    { settleAfterAbort: true },
+  );
 }
 
 export async function processAuditJob(
