@@ -393,4 +393,65 @@ describe("processAuditJob", () => {
     expect(writes).toEqual(["processing"]);
   });
 
+  it("waits for late report-upload cleanup before the aborted processor settles", async () => {
+    const controller = new AbortController();
+    let finishUpload!: () => void;
+    let finishCleanup!: () => void;
+    let reportStarted!: () => void;
+    let cleanupStarted!: () => void;
+    const uploadGate = new Promise<void>((resolve) => { finishUpload = resolve; });
+    const cleanupGate = new Promise<void>((resolve) => { finishCleanup = resolve; });
+    const started = new Promise<void>((resolve) => { reportStarted = resolve; });
+    const cleaning = new Promise<void>((resolve) => { cleanupStarted = resolve; });
+    const writes: string[] = [];
+    const deps = {
+      signal: controller.signal,
+      getJob: async () => ({
+        id: "late-report-job", ownerId: null, sourceAudioPath: "fixture/master.wav",
+        mimeType: "audio/wav", sourceType: "master" as const, catalogUrl: null,
+        status: "processing" as const, claimToken: "11111111-1111-4111-8111-111111111111",
+        leaseExpiresAt: "2099-01-01T00:00:00.000Z", workerId: "late-report-test",
+      }),
+      markProcessing: async () => { writes.push("processing"); },
+      collectCatalogMetadata: async () => { throw new Error("not used"); },
+      recognizeUrl: async () => ({ matched: false as const }),
+      downloadMaster: async () => new Uint8Array([1, 2, 3]),
+      createRecognitionSample: async () => new Uint8Array([1, 2]),
+      recognize: async () => ({ matched: false as const }),
+      saveRecognition: async () => { writes.push("recognition"); },
+      saveEvidence: async () => { writes.push("evidence"); },
+      decode: async () => ({ samples: new Float32Array([0, 0.1, -0.1]), sampleRate: 44100, channels: 1 }),
+      saveSonicDna: async () => { writes.push("sonic-dna"); },
+      generateAssessment: async () => assessment,
+      saveAssessment: async () => { writes.push("assessment"); },
+      generateReport: async () => new Uint8Array([37, 80, 68, 70, 45]),
+      saveReport: async (_jobId: string, _claimToken: string, _tier: string, _pdf: Uint8Array, _input?: unknown, signal?: AbortSignal) => {
+        reportStarted();
+        await uploadGate;
+        if (signal?.aborted) {
+          cleanupStarted();
+          await cleanupGate;
+          throw signal.reason;
+        }
+      },
+      markCompleted: async () => { writes.push("completed"); },
+      markFailed: async () => { writes.push("failed"); },
+    } as unknown as import("../src/jobs/process-audit-job.js").AuditProcessorDependencies;
+
+    const processing = processAuditJob("late-report-job", deps);
+    await started;
+    controller.abort(new Error("AUDIT_SHUTDOWN_DRAIN_TIMEOUT"));
+    let settled = false;
+    void processing.finally(() => { settled = true; }).catch(() => {});
+    finishUpload();
+    await cleaning;
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    finishCleanup();
+    await expect(processing).rejects.toThrow("AUDIT_SHUTDOWN_DRAIN_TIMEOUT");
+    expect(writes).not.toContain("completed");
+    expect(writes).not.toContain("failed");
+  });
+
 });
