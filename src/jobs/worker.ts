@@ -61,7 +61,9 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     }),
     markProcessing: async (jobId, claimToken, signal) => store.markProcessing(jobId, claimToken, signal),
     downloadMaster: async (path, signal) => store.downloadMaster(path, signal),
-    createRecognitionSample: audd ? createRecognitionSample : async () => new Uint8Array(),
+    createRecognitionSample: audd
+      ? (master, mimeType, signal) => createRecognitionSample(master, mimeType, undefined, signal)
+      : async () => new Uint8Array(),
     recognize: (sample, signal) => audd ? audd.recognize(sample, signal) : Promise.resolve({ matched: false }),
     recognizeUrl: (url, signal) => audd ? audd.recognizeUrl(url, signal) : Promise.resolve({ matched: false }),
     collectCatalogMetadata: (url, signal) => collectCatalogMetadata(url, signal),
@@ -70,7 +72,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     saveEvidence: async (jobId, _claimToken, recognition, reconciliation, metadata, signal) =>
       store.saveEvidence(jobId, _claimToken, recognition, reconciliation, metadata, signal),
     saveCatalogMetadata: async (jobId, _claimToken, metadata, signal) => store.saveCatalogMetadata(jobId, _claimToken, metadata, signal),
-    decode: async (bytes) => decoder.decode(bytes),
+    decode: async (bytes, _mimeType, signal) => decoder.decode(bytes, signal),
     generateAssessment: (input, signal) => groq.assess(input, signal),
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
     generateReport: generateAuditReport,
