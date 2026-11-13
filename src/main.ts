@@ -77,7 +77,7 @@ export async function startAuditEngine(
           async () => { await app.close(); },
           HTTP_CLOSE_TIMEOUT_MS,
           "AUDIT_HTTP_CLOSE_TIMEOUT",
-        ).catch(reportError)
+        )
         : Promise.resolve();
       const drainWorker = withAbortTimeout(
         async () => {
@@ -85,9 +85,7 @@ export async function startAuditEngine(
         },
         WORKER_DRAIN_TIMEOUT_MS,
         "AUDIT_WORKER_DRAIN_TIMEOUT",
-      ).catch((error) => {
-        reportError(error);
-      });
+      );
       const outcomes = await Promise.allSettled([closeHttp, drainWorker]);
       signals.off("SIGTERM", onSigterm);
       signals.off("SIGINT", onSigint);
@@ -113,8 +111,9 @@ export async function startAuditEngine(
   signals.on("SIGINT", onSigint);
 
   workerTask = Promise.resolve().then(() => runWorker(controller.signal));
-  workerTask.catch((error) => {
-    reportError(error);
+  workerTask.catch(() => {
+    // Shutdown observes and reports the worker rejection together with any
+    // HTTP-close failure; do not report the same worker error twice.
     void shutdown().catch(reportError);
   });
 
