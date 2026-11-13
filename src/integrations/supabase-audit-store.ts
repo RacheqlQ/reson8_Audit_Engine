@@ -251,31 +251,44 @@ export function createSupabaseAuditStore(
       const digest = await sha256(pdf);
       signal?.throwIfAborted();
       const storagePath = `${jobId}/${claimToken}/${tier}.pdf`;
-      await persistUploadedReport({
-        signal,
-        upload: async () => {
-          const { error } = await admin.storage.from("audit-reports").upload(storagePath, pdf, {
-            contentType: "application/pdf", upsert: false,
-          });
-          if (error) throw new Error(`Unable to store ${tier} report: ${error.message}`);
-        },
-        // Once this fenced RPC starts, await its definitive result. Aborting
-        // its HTTP transport could make commit status ambiguous and cause us
-        // to delete a PDF that the database successfully references.
-        persist: async () => {
-          await fencedStep(jobId, claimToken, "report", {
-            tier, storagePath, sha256: digest,
-            eventPayload: {
-              tier, accessStatus: "available", sha256: digest,
-              ...(tier === "full" && reportInput ? { reportInput } : {}),
-            },
-          });
-        },
-        cleanup: async () => {
-          const { error } = await admin.storage.from("audit-reports").remove([storagePath]);
-          if (error) throw new Error(`Unable to clean up interrupted ${tier} report upload: ${error.message}`);
-        },
-      });
+      try {
+        await persistUploadedReport({
+          signal,
+          upload: async () => {
+            const { error } = await admin.storage.from("audit-reports").upload(storagePath, pdf, {
+              contentType: "application/pdf", upsert: false,
+            });
+            if (error) throw new Error(`Unable to store ${tier} report: ${error.message}`);
+          },
+          // Once this fenced RPC starts, await its definitive result. Aborting
+          // its HTTP transport could make commit status ambiguous and cause us
+          // to delete a PDF that the database successfully references.
+          persist: async () => {
+            await fencedStep(jobId, claimToken, "report", {
+              tier, storagePath, sha256: digest,
+              eventPayload: {
+                tier, accessStatus: "available", sha256: digest,
+                ...(tier === "full" && reportInput ? { reportInput } : {}),
+              },
+            });
+          },
+          cleanup: async () => {
+            const { error } = await admin.storage.from("audit-reports").remove([storagePath]);
+            if (error) throw new Error(`Unable to clean up interrupted ${tier} report upload: ${error.message}`);
+          },
+        });
+      } catch (error) {
+        if (error instanceof AggregateError) {
+          console.error(JSON.stringify({
+            worker: "audit",
+            jobId,
+            event: "report_artifact_cleanup_failed",
+            tier,
+            errors: error.errors.map((entry) => entry instanceof Error ? entry.message : String(entry)),
+          }));
+        }
+        throw error;
+      }
     },
     async markCompleted(jobId, claimToken, signal) {
       await fencedStep(jobId, claimToken, "complete", {}, signal);
