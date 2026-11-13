@@ -18,7 +18,7 @@ export interface SupabaseAuditStore {
   createJobDependencies(): CreateAuditJobDependencies;
   claimNextQueuedJob(): Promise<AuditJobRecord | null>;
   renewLease(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
-  markProcessing(jobId: string, claimToken: string): Promise<void>;
+  markProcessing(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   downloadMaster(path: string, signal?: AbortSignal): Promise<Uint8Array>;
   saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition, signal?: AbortSignal): Promise<void>;
   saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata, signal?: AbortSignal): Promise<void>;
@@ -163,7 +163,7 @@ export function createSupabaseAuditStore(
         throw new Error(error.message.includes("AUDIT_LEASE_LOST") ? "AUDIT_LEASE_LOST" : `Unable to renew audit lease: ${error.message}`);
       }
     },
-    async markProcessing(jobId, claimToken) {
+    async markProcessing(jobId, claimToken, signal) {
       await fencedStep(jobId, claimToken, "processing_started", {}, signal);
     },
     async downloadMaster(path, signal) {
@@ -386,7 +386,7 @@ export function createSupabaseAuditStore(
       return readAuditReportPayload(jobId);
     },
     async markFailed(jobId, claimToken, message, signal) {
-      await fencedStep(jobId, claimToken, "fail", { message });
+      await fencedStep(jobId, claimToken, "fail", { message }, signal);
     },
   };
 }
