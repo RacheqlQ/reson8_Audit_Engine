@@ -2,6 +2,7 @@ export interface UploadedReportPersistence {
   signal?: AbortSignal;
   upload(): Promise<void>;
   persist(): Promise<void>;
+  reconcile(): Promise<boolean>;
   cleanup(): Promise<void>;
 }
 
@@ -46,6 +47,22 @@ export async function persistUploadedReport(input: UploadedReportPersistence): P
     input.signal?.throwIfAborted();
     await input.persist();
   } catch (persistError) {
+    let committed: boolean;
+    try {
+      // The reconciliation RPC takes the same audit_jobs row lock as the
+      // fenced persistence RPC. It therefore waits for an in-flight commit
+      // before deciding whether this exact artifact is referenced.
+      committed = await input.reconcile();
+    } catch (reconciliationError) {
+      // Unknown means preserve the artifact. Deleting it could break a
+      // transaction that committed despite losing its HTTP response.
+      throw new AggregateError(
+        [persistError, reconciliationError],
+        "Report persistence outcome is unknown; uploaded artifact was preserved",
+      );
+    }
+    if (committed) return;
+
     try {
       await input.cleanup();
     } catch (cleanupError) {
