@@ -140,6 +140,8 @@ assert_sql "completed:true:true:true" "select status || ':' || (claim_token is n
 echo "Regression 9/9: report reconciliation waits for in-flight commit or rollback"
 JOB_REPORT_COMMIT="77777777-7777-4777-8777-777777777777"
 seed_job "$JOB_REPORT_COMMIT"
+TOKEN_REPORT_COMMIT="$(claim_job "$JOB_REPORT_COMMIT" ci-report-commit-worker)"
+test -n "$TOKEN_REPORT_COMMIT"
 (
   psql "$DB" -v ON_ERROR_STOP=1 <<SQL >/tmp/report-persist-commit.txt
 begin;
@@ -158,6 +160,8 @@ test "$COMMIT_RECONCILED" = "t"
 
 JOB_REPORT_ROLLBACK="88888888-8888-4888-8888-888888888888"
 seed_job "$JOB_REPORT_ROLLBACK"
+TOKEN_REPORT_ROLLBACK="$(claim_job "$JOB_REPORT_ROLLBACK" ci-report-rollback-worker)"
+test -n "$TOKEN_REPORT_ROLLBACK"
 (
   psql "$DB" -v ON_ERROR_STOP=1 <<SQL >/tmp/report-persist-rollback.txt
 begin;
