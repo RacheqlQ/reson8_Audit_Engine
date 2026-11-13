@@ -265,7 +265,7 @@ export function createSupabaseAuditStore(
                 "Content-Type": "application/pdf",
                 "x-upsert": "false",
               },
-              body: pdf,
+              body: new Blob([new Uint8Array(pdf)], { type: "application/pdf" }),
               signal,
             });
             const detail = await response.text();
