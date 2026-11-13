@@ -14,21 +14,22 @@ function abortReason(signal?: AbortSignal): Error {
  * Keeps the uploaded object and its fenced database reference consistent.
  * The Storage REST upload accepts an AbortSignal, but an aborted response can
  * still leave the server-side result uncertain. Cleanup is therefore awaited
- * whenever upload completion is ambiguous or shutdown wins. Once the fenced
- * database write has started, it is awaited to avoid deleting an object whose
- * database reference may have committed despite a transport abort.
+ * after every upload failure, including non-abort network failures, and when
+ * shutdown wins after a successful upload. Once persistence starts, uncertain
+ * database outcomes are reconciled under the job-row lock before cleanup.
  */
 export async function persistUploadedReport(input: UploadedReportPersistence): Promise<void> {
   input.signal?.throwIfAborted();
   try {
     await input.upload();
   } catch (uploadError) {
-    if (input.signal?.aborted) {
-      try {
-        await input.cleanup();
-      } catch (cleanupError) {
-        throw new AggregateError([uploadError, cleanupError], "Aborted report upload failed and artifact cleanup failed");
-      }
+    // The Storage server may have accepted the object even when the response
+    // was lost. Persistence has not started yet, so no database reference for
+    // this claim-token-specific path can exist; attempt bounded cleanup always.
+    try {
+      await input.cleanup();
+    } catch (cleanupError) {
+      throw new AggregateError([uploadError, cleanupError], "Report upload failed and artifact cleanup failed");
     }
     throw uploadError;
   }
