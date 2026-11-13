@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { claimNextQueuedJob, renewLease, observedSignal, processAuditJob } = vi.hoisted(() => ({
+const { claimNextQueuedJob, renewLease, observedSignal, observedHeartbeatSignal, processAuditJob } = vi.hoisted(() => ({
   claimNextQueuedJob: vi.fn(),
   renewLease: vi.fn(),
   observedSignal: { current: null as AbortSignal | null },
+  observedHeartbeatSignal: { current: null as AbortSignal | null },
   processAuditJob: vi.fn(async (_jobId: string, deps: unknown) => {
     const signal = (deps as { signal?: AbortSignal }).signal;
     observedSignal.current = signal ?? null;
@@ -29,6 +30,7 @@ describe("worker heartbeat lease-loss handling", () => {
     vi.stubEnv("GROQ_API", "test-groq-key");
     vi.stubEnv("GROQ_API_KEY", "test-groq-key");
     observedSignal.current = null;
+    observedHeartbeatSignal.current = null;
     processAuditJob.mockClear();
     claimNextQueuedJob.mockReset().mockResolvedValue({
       id: "heartbeat-timeout-job",
@@ -78,6 +80,33 @@ describe("worker heartbeat lease-loss handling", () => {
     expect(await Promise.race([outcome, Promise.resolve("pending")])).toBe("rejected");
     expect(renewLease).not.toHaveBeenCalled();
     expect(observedSignal.current?.aborted).toBe(true);
+  });
+
+  it("cancels an in-flight heartbeat on shutdown without reporting lease loss", async () => {
+    renewLease.mockImplementation((_jobId, _claimToken, signal?: AbortSignal) => new Promise<void>((_resolve, reject) => {
+      observedHeartbeatSignal.current = signal ?? null;
+      signal?.addEventListener("abort", () => reject(new Error("heartbeat aborted")), { once: true });
+    }));
+
+    const shutdown = new AbortController();
+    const processing = processNextQueuedAudit(shutdown.signal);
+    const outcome = processing.then(
+      () => "resolved",
+      (error: unknown) => error instanceof Error ? error.message : "rejected",
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(renewLease).toHaveBeenCalledTimes(1);
+    expect(observedHeartbeatSignal.current).toBeInstanceOf(AbortSignal);
+    expect(observedHeartbeatSignal.current?.aborted).toBe(false);
+
+    shutdown.abort();
+    expect(observedHeartbeatSignal.current?.aborted).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(18_000);
+    expect(await Promise.race([outcome, Promise.resolve("pending")])).toBe("AUDIT_SHUTDOWN_DRAIN_TIMEOUT");
   });
 
   it("does not start a job claimed after shutdown begins during the claim request", async () => {
