@@ -59,33 +59,14 @@ function assertLeaseActive(deps: AuditProcessorDependencies): void {
 async function awaitWithLease<T>(
   deps: AuditProcessorDependencies,
   operation: (signal?: AbortSignal) => Promise<T>,
-  options: { settleAfterAbort?: boolean } = {},
 ): Promise<T> {
   assertLeaseActive(deps);
-  const signal = deps.signal;
-  if (!signal) return operation();
-
-  let onAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_resolve, reject) => {
-    onAbort = () => reject(leaseLostError(signal));
-    signal.addEventListener("abort", onAbort, { once: true });
-    if (signal.aborted) onAbort();
-  });
-  const operationPromise = Promise.resolve().then(() => operation(signal));
-  try {
-    return await Promise.race([operationPromise, aborted]);
-  } catch (error) {
-    if (options.settleAfterAbort && signal.aborted) {
-      try {
-        await operationPromise;
-      } catch (settlementError) {
-        if (settlementError instanceof AggregateError || !signal.aborted) throw settlementError;
-      }
-    }
-    throw error;
-  } finally {
-    if (onAbort) signal.removeEventListener("abort", onAbort);
-  }
+  // Do not race the operation against the signal. A race can report the
+  // processor as settled while provider, decoder, or storage work continues.
+  // Every long-running dependency must receive and honor this signal.
+  const result = await operation(deps.signal);
+  assertLeaseActive(deps);
+  return result;
 }
 
 function recognitionEvidence(recognition: AuditRecognition): Record<string, unknown> {
@@ -259,7 +240,6 @@ async function generateAndSaveReport(
   await awaitWithLease(
     deps,
     (signal) => deps.saveReport(jobId, claimToken, tier, pdf, tier === "full" ? reportInput : undefined, signal),
-    { settleAfterAbort: true },
   );
 }
 
