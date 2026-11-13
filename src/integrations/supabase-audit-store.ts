@@ -293,6 +293,19 @@ export function createSupabaseAuditStore(
               },
             });
           },
+          reconcile: async () => {
+            const { data, error } = await admin.rpc("reconcile_audit_report_reference", {
+              p_job_id: jobId,
+              p_tier: tier,
+              p_storage_path: storagePath,
+              p_sha256: digest,
+            });
+            if (error) throw new Error(`Unable to reconcile ${tier} report persistence: ${error.message}`);
+            if (typeof data !== "boolean") {
+              throw new Error("Report persistence reconciliation returned an invalid result");
+            }
+            return data;
+          },
           cleanup: async () => {
             const { error } = await admin.storage.from("audit-reports").remove([storagePath]);
             if (error) throw new Error(`Unable to clean up interrupted ${tier} report upload: ${error.message}`);
