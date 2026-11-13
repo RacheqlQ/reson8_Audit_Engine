@@ -316,7 +316,9 @@ export function createSupabaseAuditStore(
           console.error(JSON.stringify({
             worker: "audit",
             jobId,
-            event: "report_artifact_cleanup_failed",
+            event: error.message.includes("outcome is unknown")
+              ? "report_artifact_persistence_outcome_unknown"
+              : "report_artifact_cleanup_failed",
             tier,
             errors: error.errors.map((entry) => entry instanceof Error ? entry.message : String(entry)),
           }));
