@@ -16,7 +16,7 @@ export interface SupabaseAuditStore {
   admin: SupabaseClient;
   createJobDependencies(): CreateAuditJobDependencies;
   claimNextQueuedJob(): Promise<AuditJobRecord | null>;
-  renewLease(jobId: string, claimToken: string): Promise<void>;
+  renewLease(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   markProcessing(jobId: string, claimToken: string): Promise<void>;
   downloadMaster(path: string): Promise<Uint8Array>;
   saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition): Promise<void>;
@@ -148,11 +148,16 @@ export function createSupabaseAuditStore(
         workerId: claimed.worker_id as string,
       };
     },
-    async renewLease(jobId, claimToken) {
-      const { error } = await admin.rpc("renew_audit_job_lease", {
+    async renewLease(jobId, claimToken, signal) {
+      let request = admin.rpc("renew_audit_job_lease", {
         p_job_id: jobId, p_claim_token: claimToken, p_lease_seconds: 180,
       });
-      if (error) throw new Error(error.message.includes("AUDIT_LEASE_LOST") ? "AUDIT_LEASE_LOST" : `Unable to renew audit lease: ${error.message}`);
+      if (signal) request = request.abortSignal(signal);
+      const { error } = await request;
+      if (error) {
+        if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error("AUDIT_HEARTBEAT_ABORTED");
+        throw new Error(error.message.includes("AUDIT_LEASE_LOST") ? "AUDIT_LEASE_LOST" : `Unable to renew audit lease: ${error.message}`);
+      }
     },
     async markProcessing(jobId, claimToken) {
       await fencedStep(jobId, claimToken, "processing_started");
