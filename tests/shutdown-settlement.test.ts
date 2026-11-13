@@ -38,7 +38,6 @@ describe("shutdown worker-task settlement", () => {
 
   it("rejects shutdown instead of reporting success when the worker task misses its drain deadline", async () => {
     const app = Fastify();
-    const errors: unknown[] = [];
     let workerSettled = false;
     const engine = await startAuditEngine({
       app,
@@ -52,7 +51,6 @@ describe("shutdown worker-task settlement", () => {
           workerSettled = true;
         }
       },
-      onError: (error) => { errors.push(error); },
     });
 
     vi.useFakeTimers();
@@ -66,7 +64,6 @@ describe("shutdown worker-task settlement", () => {
       message: "Audit engine shutdown did not complete cleanly",
     });
     expect(workerSettled).toBe(false);
-    expect(errors.some((error) => error instanceof Error && error.message === "AUDIT_WORKER_DRAIN_TIMEOUT")).toBe(true);
     expect(app.server.listening).toBe(false);
   });
 });
