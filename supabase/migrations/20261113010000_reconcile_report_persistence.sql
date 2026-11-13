@@ -15,7 +15,7 @@ as $$
 declare
   v_job_id uuid;
 begin
-  if p_tier not in ('sample', 'full') then
+  if p_tier is null or p_tier not in ('sample', 'full') then
     raise exception 'Invalid audit report tier' using errcode = '22023';
   end if;
 
