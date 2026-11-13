@@ -190,6 +190,9 @@ describe("startAuditEngine", () => {
       const withinBudget = await Promise.race([outcome, Promise.resolve("pending")]);
 
       releaseClose();
+      if (withinBudget === "pending") {
+        await vi.advanceTimersByTimeAsync(216_000);
+      }
       await shutdown;
       expect(withinBudget).toBe("settled");
     } finally {
