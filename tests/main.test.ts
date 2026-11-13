@@ -7,7 +7,7 @@ import { startAuditEngine } from "../src/main.js";
 const runningEngines: Array<{ shutdown(): Promise<void> }> = [];
 
 afterEach(async () => {
-  await Promise.all(runningEngines.splice(0).map((engine) => engine.shutdown()));
+  await Promise.all(runningEngines.splice(0).map((engine) => engine.shutdown().catch(() => undefined)));
 });
 
 function waitForAbort(signal: AbortSignal): Promise<void> {
@@ -98,7 +98,10 @@ describe("startAuditEngine", () => {
     runningEngines.push(engine);
 
     await workerFailureReported;
-    await engine.shutdown();
+    await expect(engine.shutdown()).rejects.toMatchObject({
+      name: "AggregateError",
+      message: "Audit engine shutdown did not complete cleanly",
+    });
 
     expect(app.server.listening).toBe(false);
     expect(signals.listenerCount("SIGTERM")).toBe(0);
@@ -130,38 +133,28 @@ describe("startAuditEngine", () => {
       await new Promise<void>((resolve, reject) => blocker.close((error) => error ? reject(error) : resolve()));
     }
   });
-  it("bounds graceful worker drain to the 24-second Free-tier shutdown deadline", async () => {
+  it("waits for actual worker-task settlement during graceful shutdown", async () => {
     const app = Fastify();
     const signals = new EventEmitter();
+    let workerSettled = false;
     const engine = await startAuditEngine({
       app,
       host: "127.0.0.1",
       port: 0,
       signals,
-      runWorker: async () => new Promise<void>(() => undefined),
-      onError: () => undefined,
+      runWorker: async (signal) => {
+        await waitForAbort(signal);
+        workerSettled = true;
+      },
+      onError: (error) => { throw error; },
     });
 
-    vi.useFakeTimers();
-    try {
-      const shutdown = engine.shutdown();
-      const outcome = shutdown.then(() => "settled", () => "rejected");
-      await vi.advanceTimersByTimeAsync(24_000);
-      const withinBudget = await Promise.race([outcome, Promise.resolve("pending")]);
-      if (withinBudget === "pending") {
-        await vi.advanceTimersByTimeAsync(216_000);
-        await shutdown;
-      } else {
-        await shutdown;
-      }
-      expect(withinBudget).toBe("settled");
-      expect(app.server.listening).toBe(false);
-      expect(signals.listenerCount("SIGTERM")).toBe(0);
-      expect(signals.listenerCount("SIGINT")).toBe(0);
-    } finally {
-      vi.useRealTimers();
-      signals.removeAllListeners();
-    }
+    await engine.shutdown();
+
+    expect(workerSettled).toBe(true);
+    expect(app.server.listening).toBe(false);
+    expect(signals.listenerCount("SIGTERM")).toBe(0);
+    expect(signals.listenerCount("SIGINT")).toBe(0);
   });
 
   it("bounds an unresponsive HTTP close to the 24-second shutdown deadline", async () => {
@@ -189,12 +182,12 @@ describe("startAuditEngine", () => {
       await vi.advanceTimersByTimeAsync(24_000);
       const withinBudget = await Promise.race([outcome, Promise.resolve("pending")]);
 
+      expect(withinBudget).toBe("rejected");
       releaseClose();
-      if (withinBudget === "pending") {
-        await vi.advanceTimersByTimeAsync(216_000);
-      }
-      await shutdown;
-      expect(withinBudget).toBe("settled");
+      await expect(shutdown).rejects.toMatchObject({
+        name: "AggregateError",
+        message: "Audit engine shutdown did not complete cleanly",
+      });
     } finally {
       closeSpy.mockRestore();
       await app.close();
