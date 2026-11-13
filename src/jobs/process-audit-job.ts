@@ -26,7 +26,7 @@ export interface AuditProcessorDependencies {
   collectCatalogMetadata(url: string, signal?: AbortSignal): Promise<CatalogMetadata>;
   recognizeUrl(url: string, signal?: AbortSignal): Promise<AuditRecognition>;
   downloadMaster(path: string, signal?: AbortSignal): Promise<Uint8Array>;
-  createRecognitionSample(master: Uint8Array, mimeType: string, signal?: AbortSignal): Promise<Uint8Array>;
+  createRecognitionSample(master: Uint8Array, mimeType: string): Promise<Uint8Array>;
   recognize(sample: Uint8Array, signal?: AbortSignal): Promise<AuditRecognition>;
   saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition, signal?: AbortSignal): Promise<void>;
   saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata, signal?: AbortSignal): Promise<void>;
@@ -313,7 +313,7 @@ export async function processAuditJob(
 
     if (!job.sourceAudioPath || !job.mimeType) throw new Error("Master source is missing");
     const master = await awaitWithLease(deps, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
-    const sample = await awaitWithLease(deps, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
+    const sample = await awaitWithLease(deps, () => deps.createRecognitionSample(master, job.mimeType!));
     const recognition = await awaitWithLease(deps, (signal) => deps.recognize(sample, signal));
     await awaitWithLease(deps, (signal) => deps.saveRecognition(jobId, job.claimToken, recognition, signal));
     const reconciliation = reconcileMetadata({
