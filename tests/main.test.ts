@@ -130,7 +130,7 @@ describe("startAuditEngine", () => {
       await new Promise<void>((resolve, reject) => blocker.close((error) => error ? reject(error) : resolve()));
     }
   });
-  it("bounds graceful worker drain to the 240-second shutdown deadline", async () => {
+  it("bounds graceful worker drain to the 24-second Free-tier shutdown deadline", async () => {
     const app = Fastify();
     const signals = new EventEmitter();
     const engine = await startAuditEngine({
@@ -145,13 +145,56 @@ describe("startAuditEngine", () => {
     vi.useFakeTimers();
     try {
       const shutdown = engine.shutdown();
-      const shutdownAssertion = expect(shutdown).resolves.toBeUndefined();
-      await vi.advanceTimersByTimeAsync(240_000);
-      await shutdownAssertion;
+      const outcome = shutdown.then(() => "settled", () => "rejected");
+      await vi.advanceTimersByTimeAsync(24_000);
+      const withinBudget = await Promise.race([outcome, Promise.resolve("pending")]);
+      if (withinBudget === "pending") {
+        await vi.advanceTimersByTimeAsync(216_000);
+        await shutdown;
+      } else {
+        await shutdown;
+      }
+      expect(withinBudget).toBe("settled");
       expect(app.server.listening).toBe(false);
       expect(signals.listenerCount("SIGTERM")).toBe(0);
       expect(signals.listenerCount("SIGINT")).toBe(0);
     } finally {
+      vi.useRealTimers();
+      signals.removeAllListeners();
+    }
+  });
+
+  it("bounds an unresponsive HTTP close to the 24-second shutdown deadline", async () => {
+    const app = Fastify();
+    const signals = new EventEmitter();
+    const engine = await startAuditEngine({
+      app,
+      host: "127.0.0.1",
+      port: 0,
+      signals,
+      runWorker: waitForAbort,
+      onError: () => undefined,
+    });
+    runningEngines.push(engine);
+
+    let releaseClose!: () => void;
+    const closeSpy = vi.spyOn(app, "close").mockImplementation(() => new Promise<void>((resolve) => {
+      releaseClose = resolve;
+    }));
+
+    vi.useFakeTimers();
+    try {
+      const shutdown = engine.shutdown();
+      const outcome = shutdown.then(() => "settled", () => "rejected");
+      await vi.advanceTimersByTimeAsync(24_000);
+      const withinBudget = await Promise.race([outcome, Promise.resolve("pending")]);
+
+      releaseClose();
+      await shutdown;
+      expect(withinBudget).toBe("settled");
+    } finally {
+      closeSpy.mockRestore();
+      await app.close();
       vi.useRealTimers();
       signals.removeAllListeners();
     }
