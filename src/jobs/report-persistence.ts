@@ -11,11 +11,11 @@ function abortReason(signal?: AbortSignal): Error {
 
 /**
  * Keeps the uploaded object and its fenced database reference consistent.
- * Uploads are awaited because Supabase Storage upload does not expose an
- * AbortSignal parameter. If shutdown wins while upload is in flight, the
- * object is removed before this operation settles. Once the fenced database
- * write has started, it is awaited to avoid deleting an object whose database
- * reference may have committed despite a transport abort.
+ * The Storage REST upload accepts an AbortSignal, but an aborted response can
+ * still leave the server-side result uncertain. Cleanup is therefore awaited
+ * whenever upload completion is ambiguous or shutdown wins. Once the fenced
+ * database write has started, it is awaited to avoid deleting an object whose
+ * database reference may have committed despite a transport abort.
  */
 export async function persistUploadedReport(input: UploadedReportPersistence): Promise<void> {
   input.signal?.throwIfAborted();
