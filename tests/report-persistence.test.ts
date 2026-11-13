@@ -85,4 +85,23 @@ describe("persistUploadedReport", () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
+  it("removes a possibly accepted storage object when an upload request is aborted", async () => {
+    const controller = new AbortController();
+    const cleanup = vi.fn(async () => {});
+    const upload = vi.fn(() => new Promise<void>((_resolve, reject) => {
+      controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true });
+    }));
+    const pending = persistUploadedReport({
+      signal: controller.signal,
+      upload,
+      persist: async () => {},
+      cleanup,
+    });
+
+    controller.abort(new Error("AUDIT_SHUTDOWN_DRAIN_TIMEOUT"));
+    await expect(pending).rejects.toThrow("AUDIT_SHUTDOWN_DRAIN_TIMEOUT");
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
 });
