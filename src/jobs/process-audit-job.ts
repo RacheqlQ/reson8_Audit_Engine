@@ -339,7 +339,7 @@ export async function processAuditJob(
       reconciliation: reconciliationEvidence(reconciliation),
     };
     const sonicDna = dnaEvidence(normalizedDna);
-    const assessment = await awaitWithLease(deps, () => deps.generateAssessment({
+    const assessment = await awaitWithLease(deps, (signal) => deps.generateAssessment({
       evidence,
       sonicDna,
       catalogMetadata: null,
