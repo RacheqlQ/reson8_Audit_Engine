@@ -7,7 +7,8 @@ import { withAbortTimeout } from "./jobs/with-abort-timeout.js";
 
 type ShutdownSignal = "SIGTERM" | "SIGINT";
 
-const WORKER_DRAIN_TIMEOUT_MS = 240_000;
+const WORKER_DRAIN_TIMEOUT_MS = 24_000;
+const HTTP_CLOSE_TIMEOUT_MS = 24_000;
 
 interface SignalSource {
   on(event: ShutdownSignal, listener: () => void): unknown;
@@ -68,10 +69,16 @@ export async function startAuditEngine(
   const shutdown = (): Promise<void> => {
     if (shutdownTask) return shutdownTask;
 
-    // Stop the next poll immediately; an already-claimed job is allowed to finish.
+    // Stop new claims immediately; active work has a separate 18-second abort deadline.
     controller.abort();
     shutdownTask = (async () => {
-      const closeHttp = app.server.listening ? app.close() : Promise.resolve();
+      const closeHttp = app.server.listening
+        ? withAbortTimeout(
+          async () => { await app.close(); },
+          HTTP_CLOSE_TIMEOUT_MS,
+          "AUDIT_HTTP_CLOSE_TIMEOUT",
+        ).catch(reportError)
+        : Promise.resolve();
       const drainWorker = withAbortTimeout(
         async () => {
           await workerTask;
