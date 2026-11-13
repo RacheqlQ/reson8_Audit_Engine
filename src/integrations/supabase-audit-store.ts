@@ -284,9 +284,9 @@ export function createSupabaseAuditStore(
               throw new Error(`Unable to store ${tier} report: HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ""}`);
             }
           },
-          // Once this fenced RPC starts, await its definitive result. Aborting
-          // its HTTP transport could make commit status ambiguous and cause us
-          // to delete a PDF that the database successfully references.
+          // The fenced RPC receives the worker signal. If transport abort makes
+          // the commit outcome uncertain, reconcile() takes the same job-row lock
+          // before cleanup so a committed report object is never deleted.
           persist: async () => {
             await fencedStep(jobId, claimToken, "report", {
               tier, storagePath, sha256: digest,
