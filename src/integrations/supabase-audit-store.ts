@@ -168,10 +168,18 @@ export function createSupabaseAuditStore(
     },
     async downloadMaster(path, signal) {
       signal?.throwIfAborted();
-      const { data, error } = await admin.storage.from("audit-audio").download(path);
-      signal?.throwIfAborted();
-      if (error || !data) throw new Error(`Unable to download audio master: ${error?.message ?? "not found"}`);
-      return new Uint8Array(await data.arrayBuffer());
+      const objectPath = path.split("/").map(encodeURIComponent).join("/");
+      const downloadUrl = new URL(`/storage/v1/object/authenticated/audit-audio/${objectPath}`, url);
+      const response = await fetch(downloadUrl, {
+        method: "GET",
+        headers: { apikey: secretKey, Authorization: `Bearer ${secretKey}` },
+        signal,
+      });
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Unable to download audio master: HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ""}`);
+      }
+      return new Uint8Array(await response.arrayBuffer());
     },
     async saveCatalogMetadata(jobId, claimToken, metadata, signal) {
       await fencedStep(jobId, claimToken, "catalog_metadata", {
