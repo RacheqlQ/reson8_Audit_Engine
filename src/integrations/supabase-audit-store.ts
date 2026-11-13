@@ -13,6 +13,9 @@ import { sha256 } from "../jobs/content-hash.js";
 import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
 import { persistUploadedReport } from "../jobs/report-persistence.js";
 
+const REPORT_RECONCILIATION_TIMEOUT_MS = 2_000;
+const REPORT_CLEANUP_TIMEOUT_MS = 2_000;
+
 export interface SupabaseAuditStore {
   admin: SupabaseClient;
   createJobDependencies(): CreateAuditJobDependencies;
@@ -291,15 +294,19 @@ export function createSupabaseAuditStore(
                 tier, accessStatus: "available", sha256: digest,
                 ...(tier === "full" && reportInput ? { reportInput } : {}),
               },
-            });
+            }, signal);
           },
           reconcile: async () => {
-            const { data, error } = await admin.rpc("reconcile_audit_report_reference", {
-              p_job_id: jobId,
-              p_tier: tier,
-              p_storage_path: storagePath,
-              p_sha256: digest,
-            });
+            const { data, error } = await withAbortTimeout(
+              (timeoutSignal) => Promise.resolve(admin.rpc("reconcile_audit_report_reference", {
+                p_job_id: jobId,
+                p_tier: tier,
+                p_storage_path: storagePath,
+                p_sha256: digest,
+              }).abortSignal(timeoutSignal)),
+              REPORT_RECONCILIATION_TIMEOUT_MS,
+              "AUDIT_REPORT_RECONCILIATION_TIMEOUT",
+            );
             if (error) throw new Error(`Unable to reconcile ${tier} report persistence: ${error.message}`);
             if (typeof data !== "boolean") {
               throw new Error("Report persistence reconciliation returned an invalid result");
@@ -307,8 +314,23 @@ export function createSupabaseAuditStore(
             return data;
           },
           cleanup: async () => {
-            const { error } = await admin.storage.from("audit-reports").remove([storagePath]);
-            if (error) throw new Error(`Unable to clean up interrupted ${tier} report upload: ${error.message}`);
+            await withAbortTimeout(async (timeoutSignal) => {
+              const deleteUrl = new URL("/storage/v1/object/audit-reports", url);
+              const response = await fetch(deleteUrl, {
+                method: "DELETE",
+                headers: {
+                  apikey: secretKey,
+                  Authorization: `Bearer ${secretKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ prefixes: [storagePath] }),
+                signal: timeoutSignal,
+              });
+              const detail = await response.text();
+              if (!response.ok) {
+                throw new Error(`Unable to clean up interrupted ${tier} report upload: HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ""}`);
+              }
+            }, REPORT_CLEANUP_TIMEOUT_MS, "AUDIT_REPORT_CLEANUP_TIMEOUT");
           },
         });
       } catch (error) {
