@@ -143,7 +143,7 @@ seed_job "$JOB_REPORT_COMMIT"
 TOKEN_REPORT_COMMIT="$(claim_job "$JOB_REPORT_COMMIT" ci-report-commit-worker)"
 test -n "$TOKEN_REPORT_COMMIT"
 (
-  psql "$DB" -v ON_ERROR_STOP=1 <<SQL >/tmp/report-persist-commit.txt
+  PGAPPNAME=report-persist-commit-writer psql "$DB" -v ON_ERROR_STOP=1 <<SQL >/tmp/report-persist-commit.txt
 begin;
 select id from public.audit_jobs where id='$JOB_REPORT_COMMIT' for update;
 insert into public.audit_reports(audit_job_id,tier,version,access_status,storage_path,sha256,content_type)
@@ -153,7 +153,12 @@ commit;
 SQL
 ) &
 REPORT_COMMIT_PID=$!
-sleep 0.2
+for _ in $(seq 1 50); do
+  COMMIT_WRITER_ACTIVE="$(psql "$DB" -qAt -v ON_ERROR_STOP=1 -c "select count(*) from pg_stat_activity where application_name='report-persist-commit-writer' and query like '%pg_sleep(2)%' and state='active'")"
+  [ "$COMMIT_WRITER_ACTIVE" = "1" ] && break
+  sleep 0.1
+done
+test "$COMMIT_WRITER_ACTIVE" = "1"
 COMMIT_RECONCILED="$(psql "$DB" -qAt -v ON_ERROR_STOP=1 -c "set role service_role; select public.reconcile_audit_report_reference('$JOB_REPORT_COMMIT','sample','ci/report-commit.pdf','commit-hash')")"
 wait "$REPORT_COMMIT_PID"
 test "$COMMIT_RECONCILED" = "t"
@@ -163,7 +168,7 @@ seed_job "$JOB_REPORT_ROLLBACK"
 TOKEN_REPORT_ROLLBACK="$(claim_job "$JOB_REPORT_ROLLBACK" ci-report-rollback-worker)"
 test -n "$TOKEN_REPORT_ROLLBACK"
 (
-  psql "$DB" -v ON_ERROR_STOP=1 <<SQL >/tmp/report-persist-rollback.txt
+  PGAPPNAME=report-persist-rollback-writer psql "$DB" -v ON_ERROR_STOP=1 <<SQL >/tmp/report-persist-rollback.txt
 begin;
 select id from public.audit_jobs where id='$JOB_REPORT_ROLLBACK' for update;
 insert into public.audit_reports(audit_job_id,tier,version,access_status,storage_path,sha256,content_type)
@@ -173,7 +178,12 @@ rollback;
 SQL
 ) &
 REPORT_ROLLBACK_PID=$!
-sleep 0.2
+for _ in $(seq 1 50); do
+  ROLLBACK_WRITER_ACTIVE="$(psql "$DB" -qAt -v ON_ERROR_STOP=1 -c "select count(*) from pg_stat_activity where application_name='report-persist-rollback-writer' and query like '%pg_sleep(2)%' and state='active'")"
+  [ "$ROLLBACK_WRITER_ACTIVE" = "1" ] && break
+  sleep 0.1
+done
+test "$ROLLBACK_WRITER_ACTIVE" = "1"
 ROLLBACK_RECONCILED="$(psql "$DB" -qAt -v ON_ERROR_STOP=1 -c "set role service_role; select public.reconcile_audit_report_reference('$JOB_REPORT_ROLLBACK','sample','ci/report-rollback.pdf','rollback-hash')")"
 wait "$REPORT_ROLLBACK_PID"
 test "$ROLLBACK_RECONCILED" = "f"
