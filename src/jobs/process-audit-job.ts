@@ -294,7 +294,7 @@ export async function processAuditJob(
         reconciliation: reconciliationEvidence(reconciliation),
       };
       const sonicDna = catalogSonicDna(metadata);
-      const assessment = await awaitWithLease(deps, () => deps.generateAssessment({
+      const assessment = await awaitWithLease(deps, (signal) => deps.generateAssessment({
         evidence,
         sonicDna,
         catalogMetadata: catalogEvidence(metadata, identity),
@@ -344,14 +344,14 @@ export async function processAuditJob(
       sonicDna,
       catalogMetadata: null,
     }, signal));
-    await awaitWithLease(deps, () => deps.saveAssessment(jobId, job.claimToken, assessment));
+    await awaitWithLease(deps, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
     const generatedAt = new Date().toISOString();
     const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
     await deps.stopHeartbeat?.();
-    await awaitWithLease(deps, () => deps.markCompleted(jobId, job.claimToken));
+    await awaitWithLease(deps, (signal) => deps.markCompleted(jobId, job.claimToken, signal));
     return { status: "completed" };
   } catch (error) {
     if (deps.signal?.aborted) throw leaseLostError(deps.signal);
