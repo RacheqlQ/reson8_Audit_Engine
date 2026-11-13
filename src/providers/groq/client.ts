@@ -161,8 +161,32 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
   return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, 1000 * (2 ** fallbackAttempt));
 }
 
+function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  return new Promise<void>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      cleanup();
+      reject(signal?.reason ?? new Error("Groq retry aborted"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+  });
+}
+
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
-  groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number)=>Promise<void>, signal?: AbortSignal): Promise<T> {
+  groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number, signal?:AbortSignal)=>Promise<void>, signal?: AbortSignal): Promise<T> {
   let lastError = "No valid response was returned";
   for(let attempt=0;attempt<2;attempt++){
     let response:Response|null=null;
@@ -179,7 +203,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if(response.ok)break;
       const transient=response.status===429||response.status>=500;
       if(!transient||networkAttempt===MAX_NETWORK_ATTEMPTS-1)break;
-      await sleepImpl(await providerRetryDelayMs(response,networkAttempt));
+      await sleepImpl(await providerRetryDelayMs(response,networkAttempt), signal);
       signal?.throwIfAborted();
     }
     if(!response||!response.ok){const detail=await response?.text().catch(()=>"")??"";throw new Error("Groq "+groupName+" assessment failed with HTTP "+(response?.status??"unknown")+(detail?": "+detail.slice(0,300):""));}
@@ -195,8 +219,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 }
 
 export class GroqClient implements GroqAssessmentClient {
-  private readonly apiKey:string; private readonly model:string; private readonly fetchImpl:typeof fetch; private readonly sleepImpl:(ms:number)=>Promise<void>;
-  constructor(apiKey=process.env.GROQ_API_KEY??process.env.GROQ_API,model=process.env.GROQ_MODEL??DEFAULT_GROQ_MODEL,fetchImpl:typeof fetch=fetch,sleepImpl:(ms:number)=>Promise<void>=(ms)=>new Promise(resolve=>setTimeout(resolve,ms))){
+  private readonly apiKey:string; private readonly model:string; private readonly fetchImpl:typeof fetch; private readonly sleepImpl:(ms:number,signal?:AbortSignal)=>Promise<void>;
+  constructor(apiKey=process.env.GROQ_API_KEY??process.env.GROQ_API,model=process.env.GROQ_MODEL??DEFAULT_GROQ_MODEL,fetchImpl:typeof fetch=fetch,sleepImpl:(ms:number,signal?:AbortSignal)=>Promise<void>=abortableSleep){
     if(!apiKey)throw new Error("GROQ_API is required");this.apiKey=apiKey;this.model=model;this.fetchImpl=fetchImpl;this.sleepImpl=sleepImpl;
   }
   async assess(input:GroqAssessmentInput, signal?:AbortSignal):Promise<ArAssessment>{
