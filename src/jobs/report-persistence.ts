@@ -19,7 +19,18 @@ function abortReason(signal?: AbortSignal): Error {
  */
 export async function persistUploadedReport(input: UploadedReportPersistence): Promise<void> {
   input.signal?.throwIfAborted();
-  await input.upload();
+  try {
+    await input.upload();
+  } catch (uploadError) {
+    if (input.signal?.aborted) {
+      try {
+        await input.cleanup();
+      } catch (cleanupError) {
+        throw new AggregateError([uploadError, cleanupError], "Aborted report upload failed and artifact cleanup failed");
+      }
+    }
+    throw uploadError;
+  }
 
   if (input.signal?.aborted) {
     const aborted = abortReason(input.signal);
