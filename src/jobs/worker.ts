@@ -83,11 +83,13 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   let shutdownAbortTimer: ReturnType<typeof setTimeout> | undefined;
   let heartbeatPromise: Promise<void> | null = null;
   let heartbeatStopped = false;
+  const heartbeatAbortController = new AbortController();
   let leaseLost: Error | null = null;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   const stopHeartbeatNow = () => {
     heartbeatStopped = true;
+    heartbeatAbortController.abort(new Error("AUDIT_HEARTBEAT_STOPPED"));
     if (heartbeat) {
       clearInterval(heartbeat);
       heartbeat = undefined;
@@ -111,11 +113,16 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     heartbeatPromise = (async () => {
       try {
         await withAbortTimeout(
-          () => store.renewLease(job.id, job.claimToken),
+          (timeoutSignal) => store.renewLease(
+            job.id,
+            job.claimToken,
+            AbortSignal.any([timeoutSignal, heartbeatAbortController.signal]),
+          ),
           HEARTBEAT_TIMEOUT_MS,
           "AUDIT_HEARTBEAT_TIMEOUT",
         );
       } catch (error) {
+        if (heartbeatStopped) return;
         leaseLost = new Error("AUDIT_LEASE_LOST", { cause: error });
         stopHeartbeatNow();
         leaseController.abort(leaseLost);
