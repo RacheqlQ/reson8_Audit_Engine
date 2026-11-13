@@ -185,3 +185,25 @@ describe("GroqClient section groups",()=>{
  });
 
 });
+
+
+describe("GroqClient cancellation", () => {
+  it("aborts an in-flight provider request when the audit signal is aborted", async () => {
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal ?? undefined;
+      if (!requestSignal) return new Response("missing abort signal", { status: 400 });
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal!.addEventListener("abort", () => reject(requestSignal!.reason ?? new Error("aborted")), { once: true });
+      });
+    });
+    const client = new GroqClient("test-key", "test-model", fetchMock as typeof fetch, async () => {});
+    const pending = (client.assess({ evidence: {}, sonicDna: null }, controller.signal) as Promise<unknown>);
+    await Promise.resolve();
+    controller.abort(new Error("AUDIT_SHUTDOWN_DRAIN_TIMEOUT"));
+    await expect(pending).rejects.toThrow("AUDIT_SHUTDOWN_DRAIN_TIMEOUT");
+    expect(requestSignal).toBe(controller.signal);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
