@@ -18,9 +18,9 @@ interface SpotifyErrorPayload {
 }
 
 export interface SpotifyApiClient {
-  getTrack(trackId: string): Promise<Record<string, unknown>>;
-  getTrackByIsrc(isrc: string): Promise<Record<string, unknown> | null>;
-  getArtist(artistId: string): Promise<Record<string, unknown>>;
+  getTrack(trackId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
+  getTrackByIsrc(isrc: string, signal?: AbortSignal): Promise<Record<string, unknown> | null>;
+  getArtist(artistId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
 }
 
 export class SpotifyClient implements SpotifyApiClient {
@@ -41,7 +41,8 @@ export class SpotifyClient implements SpotifyApiClient {
     this.cachedToken = null;
   }
 
-  private async fetchAccessToken(force = false): Promise<string> {
+  private async fetchAccessToken(force = false, signal?: AbortSignal): Promise<string> {
+    signal?.throwIfAborted();
     const now = Date.now();
 
     if (
@@ -53,26 +54,27 @@ export class SpotifyClient implements SpotifyApiClient {
     }
 
     // Prevent concurrent jobs from requesting multiple Spotify tokens.
-    if (!force && this.tokenRequest) {
+    if (!force && !signal && this.tokenRequest) {
       return this.tokenRequest;
     }
 
-    const request = this.requestAccessToken();
+    const request = this.requestAccessToken(signal);
 
-    if (!force) {
+    if (!force && !signal) {
       this.tokenRequest = request;
     }
 
     try {
       return await request;
     } finally {
-      if (!force) {
+      if (!force && !signal) {
         this.tokenRequest = null;
       }
     }
   }
 
-  private async requestAccessToken(): Promise<string> {
+  private async requestAccessToken(signal?: AbortSignal): Promise<string> {
+    signal?.throwIfAborted();
     const basic = Buffer.from(
       `${this.clientId}:${this.clientSecret}`,
     ).toString("base64");
@@ -87,6 +89,7 @@ export class SpotifyClient implements SpotifyApiClient {
       body: new URLSearchParams({
         grant_type: "client_credentials",
       }).toString(),
+      signal,
     });
 
     const payload = (await response.json().catch(() => null)) as
@@ -133,8 +136,10 @@ export class SpotifyClient implements SpotifyApiClient {
   private async spotifyRequest<T>(
     url: string,
     init: RequestInit = {},
+    signal?: AbortSignal,
   ): Promise<T> {
-    let accessToken = await this.fetchAccessToken();
+    signal?.throwIfAborted();
+    let accessToken = await this.fetchAccessToken(false, signal);
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const response = await fetch(url, {
@@ -144,6 +149,7 @@ export class SpotifyClient implements SpotifyApiClient {
           ...(init.headers ?? {}),
           Authorization: `Bearer ${accessToken}`,
         },
+        signal,
       });
 
       if (response.ok) {
@@ -158,7 +164,7 @@ export class SpotifyClient implements SpotifyApiClient {
       // cached token and obtain a completely new Client Credentials token.
       if (response.status === 401 && attempt === 0) {
         this.clearToken();
-        accessToken = await this.fetchAccessToken(true);
+        accessToken = await this.fetchAccessToken(true, signal);
         continue;
       }
 
@@ -189,6 +195,7 @@ export class SpotifyClient implements SpotifyApiClient {
 
   async getTrackByIsrc(
     isrc: string,
+    signal?: AbortSignal,
   ): Promise<Record<string, unknown> | null> {
     const normalizedIsrc = isrc.trim().replace(/-/g, "");
     const params = new URLSearchParams({
@@ -202,22 +209,28 @@ export class SpotifyClient implements SpotifyApiClient {
       tracks?: { items?: Array<Record<string, unknown>> };
     }>(
       `https://api.spotify.com/v1/search?${params.toString()}`,
+      {},
+      signal,
     );
 
     return payload.tracks?.items?.[0] ?? null;
   }
 
-  async getArtist(artistId: string): Promise<Record<string, unknown>> {
+  async getArtist(artistId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
     return this.spotifyRequest<Record<string, unknown>>(
       `https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}`,
+      {},
+      signal,
     );
   }
 
-  async getTrack(trackId: string): Promise<Record<string, unknown>> {
+  async getTrack(trackId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
     const params = new URLSearchParams({ market: this.market });
 
     return this.spotifyRequest<Record<string, unknown>>(
       `https://api.spotify.com/v1/tracks/${encodeURIComponent(trackId)}?${params.toString()}`,
+      {},
+      signal,
     );
   }
 }

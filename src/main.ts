@@ -3,8 +3,12 @@ import { resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { buildServer } from "./server.js";
 import { runAuditQueueWorker } from "./jobs/worker.js";
+import { withAbortTimeout } from "./jobs/with-abort-timeout.js";
 
 type ShutdownSignal = "SIGTERM" | "SIGINT";
+
+const WORKER_DRAIN_TIMEOUT_MS = 24_000;
+const HTTP_CLOSE_TIMEOUT_MS = 24_000;
 
 interface SignalSource {
   on(event: ShutdownSignal, listener: () => void): unknown;
@@ -65,13 +69,22 @@ export async function startAuditEngine(
   const shutdown = (): Promise<void> => {
     if (shutdownTask) return shutdownTask;
 
-    // Stop the next poll immediately; an already-claimed job is allowed to finish.
+    // Stop new claims immediately; active work has a separate 18-second abort deadline.
     controller.abort();
     shutdownTask = (async () => {
-      const closeHttp = app.server.listening ? app.close() : Promise.resolve();
-      const drainWorker = workerTask.then(
-        () => undefined,
-        () => undefined,
+      const closeHttp = app.server.listening
+        ? withAbortTimeout(
+          async () => { await app.close(); },
+          HTTP_CLOSE_TIMEOUT_MS,
+          "AUDIT_HTTP_CLOSE_TIMEOUT",
+        )
+        : Promise.resolve();
+      const drainWorker = withAbortTimeout(
+        async () => {
+          await workerTask;
+        },
+        WORKER_DRAIN_TIMEOUT_MS,
+        "AUDIT_WORKER_DRAIN_TIMEOUT",
       );
       const outcomes = await Promise.allSettled([closeHttp, drainWorker]);
       signals.off("SIGTERM", onSigterm);
@@ -98,8 +111,9 @@ export async function startAuditEngine(
   signals.on("SIGINT", onSigint);
 
   workerTask = Promise.resolve().then(() => runWorker(controller.signal));
-  workerTask.catch((error) => {
-    reportError(error);
+  workerTask.catch(() => {
+    // Shutdown observes and reports the worker rejection together with any
+    // HTTP-close failure; do not report the same worker error twice.
     void shutdown().catch(reportError);
   });
 

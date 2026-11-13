@@ -33,15 +33,16 @@ function normalizeUrl(input:string){const u=new URL(input.trim());if(u.protocol!
 function idFromPath(u:URL,p:DspPlatform){const a=u.pathname.split("/").filter(Boolean);if(p==="spotify"){const i=a.indexOf("track");return i>=0?a[i+1]??null:null;}if(p==="apple_music"){const i=a.indexOf("i");return i>=0?a[i+1]??null:u.searchParams.get("i");}if(p==="deezer"){const i=a.indexOf("track");return i>=0?a[i+1]??null:null;}if(p==="tidal"){const i=a.indexOf("track");return i>=0?a[i+1]??null:null;}return u.searchParams.get("v")??(u.hostname==="youtu.be"?a[0]??null:null);}
 function base(p:DspPlatform,u:URL):CatalogMetadata{return{platform:p,sourceUrl:u.toString(),canonicalUrl:u.toString(),catalogId:idFromPath(u,p),artist:null,title:null,album:null,releaseDate:null,isrc:null,upc:null,catalogPopularity:null,catalogPopularityScale:null,label:null,genre:null,artworkUrl:null,previewUrl:null,externalIds:{},raw:{},evidenceStatus:"partial",sonicProfile:null};}
 
-async function spotify(u:URL){
+async function spotify(u:URL, signal?:AbortSignal){
   const metadata = base("spotify", u);
   const id = metadata.catalogId;
   if (!id) throw new Error("Spotify track ID could not be detected");
 
   try {
     const client = new SpotifyClient();
-    return await normalizeSpotifyTrack(u.toString(), await client.getTrack(id));
+    return await normalizeSpotifyTrack(u.toString(), await client.getTrack(id, signal));
   } catch (error) {
+    if (signal?.aborted) throw signal.reason;
     // Spotify is optional enrichment for the audit pipeline. A denied or
     // unavailable Spotify API must never prevent the audit from completing.
     const message = error instanceof Error ? error.message : "Unknown Spotify enrichment error";
@@ -57,8 +58,8 @@ async function spotify(u:URL){
   }
 }
 
-async function apple(u:URL){const m=base("apple_music",u);if(!m.catalogId)throw new Error("Apple Music track ID could not be detected");const r=await fetch("https://itunes.apple.com/lookup?id="+encodeURIComponent(m.catalogId)+"&entity=song");if(!r.ok)throw new Error("Apple Music metadata request failed with HTTP "+r.status);const d=await r.json() as {results?:Array<Record<string,unknown>>};const x=d.results?.find(v=>v.kind==="song")??d.results?.[0];if(!x)throw new Error("Apple Music track was not found");m.canonicalUrl=String(x.trackViewUrl??u);m.artist=String(x.artistName??"")||null;m.title=String(x.trackName??"")||null;m.album=String(x.collectionName??"")||null;m.releaseDate=String(x.releaseDate??"").slice(0,10)||null;m.genre=String(x.primaryGenreName??"")||null;m.artworkUrl=String(x.artworkUrl100??"")||null;m.previewUrl=String(x.previewUrl??"")||null;m.isrc=String(x.isrc??"")||null;if(x.trackId)m.externalIds.apple_music=String(x.trackId);m.raw=x;m.evidenceStatus=m.title&&m.artist?"recognized":"partial";return m;}
-async function tidal(u:URL){
+async function apple(u:URL, signal?:AbortSignal){const m=base("apple_music",u);if(!m.catalogId)throw new Error("Apple Music track ID could not be detected");const r=await fetch("https://itunes.apple.com/lookup?id="+encodeURIComponent(m.catalogId)+"&entity=song", { signal });if(!r.ok)throw new Error("Apple Music metadata request failed with HTTP "+r.status);const d=await r.json() as {results?:Array<Record<string,unknown>>};const x=d.results?.find(v=>v.kind==="song")??d.results?.[0];if(!x)throw new Error("Apple Music track was not found");m.canonicalUrl=String(x.trackViewUrl??u);m.artist=String(x.artistName??"")||null;m.title=String(x.trackName??"")||null;m.album=String(x.collectionName??"")||null;m.releaseDate=String(x.releaseDate??"").slice(0,10)||null;m.genre=String(x.primaryGenreName??"")||null;m.artworkUrl=String(x.artworkUrl100??"")||null;m.previewUrl=String(x.previewUrl??"")||null;m.isrc=String(x.isrc??"")||null;if(x.trackId)m.externalIds.apple_music=String(x.trackId);m.raw=x;m.evidenceStatus=m.title&&m.artist?"recognized":"partial";return m;}
+async function tidal(u:URL, signal?:AbortSignal){
   const id=idFromPath(u,"tidal");
   if(!id){
     const path=u.pathname.split("/").filter(Boolean);
@@ -66,13 +67,13 @@ async function tidal(u:URL){
     throw new Error("TIDAL track ID could not be detected");
   }
   const client=new TidalClient();
-  const track=await client.getTrack(id);
+  const track=await client.getTrack(id, signal);
   const metadata = normalizeTidalTrack(u.toString(), track);
 
   if (metadata.isrc && (!metadata.genre || !metadata.label || metadata.catalogPopularity === null)) {
     try {
       const spotifyClient = new SpotifyClient();
-      const spotifyTrack = await spotifyClient.getTrackByIsrc(metadata.isrc);
+      const spotifyTrack = await spotifyClient.getTrackByIsrc(metadata.isrc, signal);
       if (!spotifyTrack) return metadata;
 
       const artistId = (
@@ -80,7 +81,7 @@ async function tidal(u:URL){
       )?.[0]?.id;
 
       if (typeof artistId === "string" && artistId) {
-        const artist = await spotifyClient.getArtist(artistId);
+        const artist = await spotifyClient.getArtist(artistId, signal);
         const genres = Array.isArray(artist.genres)
           ? artist.genres.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
           : [];
@@ -114,15 +115,16 @@ async function tidal(u:URL){
           },
         };
       }
-    } catch {
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason;
       // TIDAL remains authoritative when optional Spotify enrichment is unavailable.
     }
   }
 
   return metadata;
 }
-async function deezer(u:URL){const m=base("deezer",u);if(!m.catalogId)throw new Error("Deezer track ID could not be detected");const r=await fetch("https://api.deezer.com/track/"+encodeURIComponent(m.catalogId));if(!r.ok)throw new Error("Deezer metadata request failed with HTTP "+r.status);const x=await r.json() as Record<string,unknown>;if(x.error)throw new Error("Deezer track was not found");const a=x.artist as Record<string,unknown>|undefined,b=x.album as Record<string,unknown>|undefined;m.title=String(x.title??"")||null;m.artist=String(a?.name??"")||null;m.album=String(b?.title??"")||null;m.artworkUrl=String(b?.cover_medium??"")||null;m.previewUrl=String(x.preview??"")||null;m.canonicalUrl=String(x.link??u);if(m.catalogId)m.externalIds.deezer=m.catalogId;m.raw=x;m.evidenceStatus=m.title&&m.artist?"recognized":"partial";return m;}
-async function youtube(u:URL){const m=base("youtube_music",u);const r=await fetch("https://www.youtube.com/oembed?url="+encodeURIComponent(u.toString())+"&format=json");if(!r.ok)throw new Error("YouTube metadata request failed with HTTP "+r.status);const d=await r.json() as {title?:string;author_name?:string;thumbnail_url?:string};m.title=d.title??null;m.artist=d.author_name??null;m.artworkUrl=d.thumbnail_url??null;if(m.catalogId)m.externalIds.youtube=m.catalogId;m.raw=d;m.evidenceStatus=m.title&&m.artist?"recognized":"partial";return m;}
+async function deezer(u:URL, signal?:AbortSignal){const m=base("deezer",u);if(!m.catalogId)throw new Error("Deezer track ID could not be detected");const r=await fetch("https://api.deezer.com/track/"+encodeURIComponent(m.catalogId), { signal });if(!r.ok)throw new Error("Deezer metadata request failed with HTTP "+r.status);const x=await r.json() as Record<string,unknown>;if(x.error)throw new Error("Deezer track was not found");const a=x.artist as Record<string,unknown>|undefined,b=x.album as Record<string,unknown>|undefined;m.title=String(x.title??"")||null;m.artist=String(a?.name??"")||null;m.album=String(b?.title??"")||null;m.artworkUrl=String(b?.cover_medium??"")||null;m.previewUrl=String(x.preview??"")||null;m.canonicalUrl=String(x.link??u);if(m.catalogId)m.externalIds.deezer=m.catalogId;m.raw=x;m.evidenceStatus=m.title&&m.artist?"recognized":"partial";return m;}
+async function youtube(u:URL, signal?:AbortSignal){const m=base("youtube_music",u);const r=await fetch("https://www.youtube.com/oembed?url="+encodeURIComponent(u.toString())+"&format=json", { signal });if(!r.ok)throw new Error("YouTube metadata request failed with HTTP "+r.status);const d=await r.json() as {title?:string;author_name?:string;thumbnail_url?:string};m.title=d.title??null;m.artist=d.author_name??null;m.artworkUrl=d.thumbnail_url??null;if(m.catalogId)m.externalIds.youtube=m.catalogId;m.raw=d;m.evidenceStatus=m.title&&m.artist?"recognized":"partial";return m;}
 
-export async function collectCatalogMetadata(input:string):Promise<CatalogMetadata>{const u=normalizeUrl(input);switch(HOSTS[u.hostname.toLowerCase()]){case"spotify":return spotify(u);case"apple_music":return apple(u);case"deezer":return deezer(u);case"youtube_music":return youtube(u);case"tidal":return tidal(u);default:throw new Error("Unsupported DSP or catalog URL");}}
+export async function collectCatalogMetadata(input:string, signal?:AbortSignal):Promise<CatalogMetadata>{signal?.throwIfAborted();const u=normalizeUrl(input);switch(HOSTS[u.hostname.toLowerCase()]){case"spotify":return spotify(u,signal);case"apple_music":return apple(u,signal);case"deezer":return deezer(u,signal);case"youtube_music":return youtube(u,signal);case"tidal":return tidal(u,signal);default:throw new Error("Unsupported DSP or catalog URL");}}
 export function detectDspPlatform(input:string):DspPlatform{try{return HOSTS[normalizeUrl(input).hostname.toLowerCase()]??"unknown";}catch{return"unknown";}}

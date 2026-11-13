@@ -1,13 +1,15 @@
 import { spawn } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 
-type Runner = (args: string[]) => Promise<Uint8Array>;
+type Runner = (args: string[], signal?: AbortSignal) => Promise<Uint8Array>;
 
 export async function createRecognitionSample(
   master: Uint8Array,
   _mimeType: string,
   runner?: Runner,
+  signal?: AbortSignal,
 ): Promise<Uint8Array> {
+  signal?.throwIfAborted();
   const args = [
     "-hide_banner",
     "-loglevel",
@@ -26,13 +28,17 @@ export async function createRecognitionSample(
     "pipe:1",
   ];
 
-  if (runner) return runner(args);
+  if (runner) {
+    const result = await runner(args, signal);
+    signal?.throwIfAborted();
+    return result;
+  }
 
   const binary = ffmpegPath as unknown as string | null;
   if (!binary) throw new Error("FFmpeg binary is unavailable");
 
   return new Promise((resolve, reject) => {
-    const ffmpeg = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const ffmpeg = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"], signal });
 
     const chunks: Buffer[] = [];
     let stderr = "";

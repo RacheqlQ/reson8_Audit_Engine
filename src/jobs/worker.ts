@@ -7,13 +7,20 @@ import { generateAuditReport } from "../reports/generate-audit-report.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
 import { runQueueWorkerLoop } from "./worker-loop.js";
+import { withAbortTimeout } from "./with-abort-timeout.js";
 
 const POLL_INTERVAL_MS = 15_000;
+const HEARTBEAT_INTERVAL_MS = 45_000;
+const HEARTBEAT_TIMEOUT_MS = 10_000;
+const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
 export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jobId: string; status: "completed" | "failed" } | null> {
   if (signal?.aborted) return null;
   const store = createSupabaseAuditStore();
   if (signal?.aborted) return null;
+  // Validate required provider configuration before claiming work so a
+  // misconfigured worker cannot strand a queued job in processing.
+  const groq = new GroqClient();
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
     job = await store.claimNextQueuedJob();
@@ -27,10 +34,17 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     throw error;
   }
   if (!job) return null;
+  if (signal?.aborted) {
+    console.info(JSON.stringify({
+      worker: "audit",
+      jobId: job.id,
+      event: "claimed_job_deferred_for_shutdown",
+    }));
+    return null;
+  }
 
   const audd = process.env.AUDD_API || process.env.AUDD_API_TOKEN ? new AuddClient() : null;
   const decoder = createAudioDecoder();
-  const groq = new GroqClient();
 
   const deps: AuditProcessorDependencies = {
     getJob: async () => ({
@@ -45,57 +59,108 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       leaseExpiresAt: job.leaseExpiresAt,
       workerId: job.workerId,
     }),
-    markProcessing: async (jobId, claimToken) => store.markProcessing(jobId, claimToken),
-    downloadMaster: async (path) => store.downloadMaster(path),
-    createRecognitionSample: audd ? createRecognitionSample : async () => new Uint8Array(),
-    recognize: (sample) => audd ? audd.recognize(sample) : Promise.resolve({ matched: false }),
-    recognizeUrl: (url) => audd ? audd.recognizeUrl(url) : Promise.resolve({ matched: false }),
-    collectCatalogMetadata,
-    saveRecognition: async (jobId, _claimToken, recognition) => store.saveRecognition(jobId, _claimToken, recognition),
-    saveSonicDna: async (jobId, _claimToken, dna) => store.saveSonicDna(jobId, _claimToken, dna),
-    saveEvidence: async (jobId, _claimToken, recognition, reconciliation, metadata) =>
-      store.saveEvidence(jobId, _claimToken, recognition, reconciliation, metadata),
-    saveCatalogMetadata: async (jobId, _claimToken, metadata) => store.saveCatalogMetadata(jobId, _claimToken, metadata),
-    decode: async (bytes) => decoder.decode(bytes),
-    generateAssessment: (input) => groq.assess(input),
-    saveAssessment: async (jobId, _claimToken, assessment) => store.saveAssessment(jobId, _claimToken, assessment),
+    markProcessing: async (jobId, claimToken, signal) => store.markProcessing(jobId, claimToken, signal),
+    downloadMaster: async (path, signal) => store.downloadMaster(path, signal),
+    createRecognitionSample: audd
+      ? (master, mimeType, signal) => createRecognitionSample(master, mimeType, undefined, signal)
+      : async () => new Uint8Array(),
+    recognize: (sample, signal) => audd ? audd.recognize(sample, signal) : Promise.resolve({ matched: false }),
+    recognizeUrl: (url, signal) => audd ? audd.recognizeUrl(url, signal) : Promise.resolve({ matched: false }),
+    collectCatalogMetadata: (url, signal) => collectCatalogMetadata(url, signal),
+    saveRecognition: async (jobId, _claimToken, recognition, signal) => store.saveRecognition(jobId, _claimToken, recognition, signal),
+    saveSonicDna: async (jobId, _claimToken, dna, signal) => store.saveSonicDna(jobId, _claimToken, dna, signal),
+    saveEvidence: async (jobId, _claimToken, recognition, reconciliation, metadata, signal) =>
+      store.saveEvidence(jobId, _claimToken, recognition, reconciliation, metadata, signal),
+    saveCatalogMetadata: async (jobId, _claimToken, metadata, signal) => store.saveCatalogMetadata(jobId, _claimToken, metadata, signal),
+    decode: async (bytes, _mimeType, signal) => decoder.decode(bytes, signal),
+    generateAssessment: (input, signal) => groq.assess(input, signal),
+    saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
     generateReport: generateAuditReport,
-    saveReport: async (jobId, _claimToken, tier, pdf, reportInput) => store.saveReport(jobId, _claimToken, tier, pdf, reportInput),
-    markCompleted: async (jobId, _claimToken) => store.markCompleted(jobId, _claimToken),
-    markFailed: async (jobId, _claimToken, message) => store.markFailed(jobId, _claimToken, message),
+    saveReport: async (jobId, _claimToken, tier, pdf, reportInput, signal) => store.saveReport(jobId, _claimToken, tier, pdf, reportInput, signal),
+    markCompleted: async (jobId, _claimToken, signal) => store.markCompleted(jobId, _claimToken, signal),
+    markFailed: async (jobId, _claimToken, message, signal) => store.markFailed(jobId, _claimToken, message, signal),
   };
 
+  const leaseController = new AbortController();
+  let shutdownAbortTimer: ReturnType<typeof setTimeout> | undefined;
   let heartbeatPromise: Promise<void> | null = null;
   let heartbeatStopped = false;
+  const heartbeatAbortController = new AbortController();
   let leaseLost: Error | null = null;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+
+  const stopHeartbeatNow = () => {
+    heartbeatStopped = true;
+    heartbeatAbortController.abort(new Error("AUDIT_HEARTBEAT_STOPPED"));
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = undefined;
+    }
+  };
+
+  const abortActiveJobAfterDrain = () => {
+    stopHeartbeatNow();
+    if (shutdownAbortTimer) return;
+    shutdownAbortTimer = setTimeout(() => {
+      leaseController.abort(new Error("AUDIT_SHUTDOWN_DRAIN_TIMEOUT"));
+    }, SHUTDOWN_JOB_ABORT_TIMEOUT_MS);
+    shutdownAbortTimer.unref?.();
+  };
+  const onShutdown = () => abortActiveJobAfterDrain();
+  if (signal?.aborted) onShutdown();
+  else signal?.addEventListener("abort", onShutdown, { once: true });
+
   const heartbeatTick = () => {
     if (heartbeatStopped || heartbeatPromise || leaseLost) return;
     heartbeatPromise = (async () => {
       try {
-        await store.renewLease(job.id, job.claimToken);
+        await withAbortTimeout(
+          (timeoutSignal) => store.renewLease(
+            job.id,
+            job.claimToken,
+            AbortSignal.any([timeoutSignal, heartbeatAbortController.signal]),
+          ),
+          HEARTBEAT_TIMEOUT_MS,
+          "AUDIT_HEARTBEAT_TIMEOUT",
+        );
       } catch (error) {
-        leaseLost = error instanceof Error ? error : new Error(String(error));
-        console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "lease_lost" }));
+        if (heartbeatStopped) return;
+        leaseLost = new Error("AUDIT_LEASE_LOST", { cause: error });
+        stopHeartbeatNow();
+        leaseController.abort(leaseLost);
+        console.error(JSON.stringify({
+          worker: "audit",
+          jobId: job.id,
+          event: "lease_lost",
+          reason: error instanceof Error ? error.message : String(error),
+        }));
       }
     })().finally(() => { heartbeatPromise = null; });
   };
-  const heartbeat = setInterval(heartbeatTick, 45_000);
-  heartbeat.unref();
+  if (!heartbeatStopped) {
+    heartbeat = setInterval(heartbeatTick, HEARTBEAT_INTERVAL_MS);
+    heartbeat.unref();
+  }
 
   const stopHeartbeat = async () => {
-    heartbeatStopped = true;
-    clearInterval(heartbeat);
+    stopHeartbeatNow();
     if (heartbeatPromise) await heartbeatPromise;
-    if (leaseLost) throw new Error("AUDIT_LEASE_LOST");
+    if (leaseLost) throw leaseLost;
   };
   deps.stopHeartbeat = stopHeartbeat;
+  deps.signal = leaseController.signal;
 
   try {
     const result = await processAuditJob(job.id, deps);
+    if (leaseController.signal.aborted) {
+      const reason = leaseController.signal.reason;
+      throw leaseLost ?? (reason instanceof Error ? reason : new Error("AUDIT_LEASE_LOST"));
+    }
     return { jobId: job.id, ...result };
   } finally {
-    heartbeatStopped = true;
-    clearInterval(heartbeat);
+    stopHeartbeatNow();
+    if (shutdownAbortTimer) clearTimeout(shutdownAbortTimer);
+    signal?.removeEventListener("abort", onShutdown);
     if (heartbeatPromise) await heartbeatPromise;
   }
 }

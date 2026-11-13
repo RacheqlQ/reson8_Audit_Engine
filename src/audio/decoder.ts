@@ -8,16 +8,18 @@ export interface DecodedAudio {
 }
 
 export interface AudioDecoder {
-  decode(bytes: Uint8Array): Promise<DecodedAudio>;
+  decode(bytes: Uint8Array, signal?: AbortSignal): Promise<DecodedAudio>;
 }
 
-type FloatDecoder = (bytes: Uint8Array) => Promise<Float32Array>;
+type FloatDecoder = (bytes: Uint8Array, signal?: AbortSignal) => Promise<Float32Array>;
 
 export function createAudioDecoder(floatDecoder?: FloatDecoder): AudioDecoder {
   if (floatDecoder) {
     return {
-      async decode(bytes) {
-        const samples = await floatDecoder(bytes);
+      async decode(bytes, signal) {
+        signal?.throwIfAborted();
+        const samples = await floatDecoder(bytes, signal);
+        signal?.throwIfAborted();
         return { samples, sampleRate: 44100, channels: 1 };
       },
     };
@@ -27,13 +29,14 @@ export function createAudioDecoder(floatDecoder?: FloatDecoder): AudioDecoder {
   if (!binary) throw new Error("FFmpeg binary is unavailable");
 
   return {
-    decode(bytes) {
-      return decodeWithFfmpeg(bytes, binary);
+    decode(bytes, signal) {
+      return decodeWithFfmpeg(bytes, binary, signal);
     },
   };
 }
 
-async function decodeWithFfmpeg(bytes: Uint8Array, binary: string): Promise<DecodedAudio> {
+async function decodeWithFfmpeg(bytes: Uint8Array, binary: string, signal?: AbortSignal): Promise<DecodedAudio> {
+  signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn(binary, [
       "-hide_banner",
@@ -49,7 +52,7 @@ async function decodeWithFfmpeg(bytes: Uint8Array, binary: string): Promise<Deco
       "-f",
       "f32le",
       "pipe:1",
-    ], { stdio: ["pipe", "pipe", "pipe"] });
+    ], { stdio: ["pipe", "pipe", "pipe"], signal });
 
     const chunks: Buffer[] = [];
     let stderr = "";

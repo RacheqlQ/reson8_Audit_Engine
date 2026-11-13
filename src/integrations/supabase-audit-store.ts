@@ -11,22 +11,26 @@ import type { AuditReportInput, AuditReportTier } from "../reports/generate-audi
 import { ensurePdfReport, isPdf } from "../reports/pdf-output.js";
 import { sha256 } from "../jobs/content-hash.js";
 import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
+import { persistUploadedReport } from "../jobs/report-persistence.js";
+
+const REPORT_RECONCILIATION_TIMEOUT_MS = 2_000;
+const REPORT_CLEANUP_TIMEOUT_MS = 2_000;
 
 export interface SupabaseAuditStore {
   admin: SupabaseClient;
   createJobDependencies(): CreateAuditJobDependencies;
   claimNextQueuedJob(): Promise<AuditJobRecord | null>;
-  renewLease(jobId: string, claimToken: string): Promise<void>;
-  markProcessing(jobId: string, claimToken: string): Promise<void>;
-  downloadMaster(path: string): Promise<Uint8Array>;
-  saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition): Promise<void>;
-  saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata): Promise<void>;
-  saveCatalogMetadata(jobId: string, claimToken: string, metadata: CatalogMetadata): Promise<void>;
-  saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures): Promise<void>;
-  saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment): Promise<void>;
-  saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput): Promise<void>;
-  markCompleted(jobId: string, claimToken: string): Promise<void>;
-  markFailed(jobId: string, claimToken: string, message: string): Promise<void>;
+  renewLease(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
+  markProcessing(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
+  downloadMaster(path: string, signal?: AbortSignal): Promise<Uint8Array>;
+  saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition, signal?: AbortSignal): Promise<void>;
+  saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata, signal?: AbortSignal): Promise<void>;
+  saveCatalogMetadata(jobId: string, claimToken: string, metadata: CatalogMetadata, signal?: AbortSignal): Promise<void>;
+  saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
+  saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment, signal?: AbortSignal): Promise<void>;
+  saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
+  markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
+  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
   getAuditStatus(jobId: string): Promise<{
     jobId: string;
     status: "queued" | "processing" | "completed" | "failed";
@@ -54,10 +58,13 @@ export function createSupabaseAuditStore(
   });
 
 
-  const fencedStep = async (jobId: string, claimToken: string, operation: string, payload: Record<string, unknown> = {}) => {
-    const { data, error } = await admin.rpc("persist_fenced_audit_step", {
+  const fencedStep = async (jobId: string, claimToken: string, operation: string, payload: Record<string, unknown> = {}, signal?: AbortSignal) => {
+    signal?.throwIfAborted();
+    let request = admin.rpc("persist_fenced_audit_step", {
       p_job_id: jobId, p_claim_token: claimToken, p_operation: operation, p_payload: payload,
     });
+    if (signal) request = request.abortSignal(signal);
+    const { data, error } = await request;
     if (error) {
       if (error.message.includes("AUDIT_LEASE_LOST") || error.code === "P0001") {
         throw new Error("AUDIT_LEASE_LOST");
@@ -148,28 +155,43 @@ export function createSupabaseAuditStore(
         workerId: claimed.worker_id as string,
       };
     },
-    async renewLease(jobId, claimToken) {
-      const { error } = await admin.rpc("renew_audit_job_lease", {
+    async renewLease(jobId, claimToken, signal) {
+      let request = admin.rpc("renew_audit_job_lease", {
         p_job_id: jobId, p_claim_token: claimToken, p_lease_seconds: 180,
       });
-      if (error) throw new Error(error.message.includes("AUDIT_LEASE_LOST") ? "AUDIT_LEASE_LOST" : `Unable to renew audit lease: ${error.message}`);
+      if (signal) request = request.abortSignal(signal);
+      const { error } = await request;
+      if (error) {
+        if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error("AUDIT_HEARTBEAT_ABORTED");
+        throw new Error(error.message.includes("AUDIT_LEASE_LOST") ? "AUDIT_LEASE_LOST" : `Unable to renew audit lease: ${error.message}`);
+      }
     },
-    async markProcessing(jobId, claimToken) {
-      await fencedStep(jobId, claimToken, "processing_started");
+    async markProcessing(jobId, claimToken, signal) {
+      await fencedStep(jobId, claimToken, "processing_started", {}, signal);
     },
-    async downloadMaster(path) {
-      const { data, error } = await admin.storage.from("audit-audio").download(path);
-      if (error || !data) throw new Error(`Unable to download audio master: ${error?.message ?? "not found"}`);
-      return new Uint8Array(await data.arrayBuffer());
+    async downloadMaster(path, signal) {
+      signal?.throwIfAborted();
+      const objectPath = path.split("/").map(encodeURIComponent).join("/");
+      const downloadUrl = new URL(`/storage/v1/object/authenticated/audit-audio/${objectPath}`, url);
+      const response = await fetch(downloadUrl, {
+        method: "GET",
+        headers: { apikey: secretKey, Authorization: `Bearer ${secretKey}` },
+        signal,
+      });
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Unable to download audio master: HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ""}`);
+      }
+      return new Uint8Array(await response.arrayBuffer());
     },
-    async saveCatalogMetadata(jobId, claimToken, metadata) {
+    async saveCatalogMetadata(jobId, claimToken, metadata, signal) {
       await fencedStep(jobId, claimToken, "catalog_metadata", {
         platform: metadata.platform, catalogId: metadata.catalogId, raw: metadata.raw,
         evidenceStatus: metadata.evidenceStatus,
         eventPayload: { platform: metadata.platform, catalogId: metadata.catalogId, hasPreview: Boolean(metadata.previewUrl), evidenceClass: "RECOGNIZED" },
-      });
+      }, signal);
     },
-    async saveRecognition(jobId, claimToken, recognition) {
+    async saveRecognition(jobId, claimToken, recognition, signal) {
       await fencedStep(jobId, claimToken, "recognition", {
         matched: recognition.matched,
         artist: recognition.matched ? recognition.artist ?? null : null,
@@ -182,9 +204,9 @@ export function createSupabaseAuditStore(
         songLink: recognition.matched ? recognition.songLink ?? recognition.spotifyUrl ?? null : null,
         rawResponse: recognition.rawResponse ?? recognition,
         eventPayload: { evidenceClass: recognition.matched ? "RECOGNIZED" : null, rawResponsePreserved: Boolean(recognition.rawResponse) },
-      });
+      }, signal);
     },
-    async saveEvidence(jobId, claimToken, recognition, reconciliation, metadata) {
+    async saveEvidence(jobId, claimToken, recognition, reconciliation, metadata, signal) {
       const identity = reconciliation.identity;
       const hasIdentity = Boolean(identity.artist || identity.title || identity.album || identity.isrc || identity.label || identity.releaseDate);
       const evidenceStatus = reconciliation.status === "reconciled" ? "verified" : hasIdentity ? "partial" : "unresolved";
@@ -212,9 +234,9 @@ export function createSupabaseAuditStore(
           evidenceStatus, sources, reconciledFields: reconciliation.reconciledFields,
           conflicts: reconciliation.conflicts, identity,
         },
-      });
+      }, signal);
     },
-    async saveSonicDna(jobId, claimToken, dna) {
+    async saveSonicDna(jobId, claimToken, dna, signal) {
       await fencedStep(jobId, claimToken, "sonic_dna", {
         durationSeconds: dna.durationSeconds, sampleRate: dna.sampleRate, channels: dna.channels,
         bpm: dna.bpm, key: dna.key, mode: dna.mode, loudnessLufs: dna.loudnessLufs,
@@ -225,38 +247,109 @@ export function createSupabaseAuditStore(
         moodTags: dna.moodTags, genreContext: dna.genreContext,
         rawFeatures: { ...dna, provenance: "uploaded_audio_master", evidenceClass: "OBSERVED" },
         eventPayload: { analysisVersion: "audit-engine-0.2.0", evidenceClass: "OBSERVED" },
-      });
+      }, signal);
     },
-    async saveAssessment(jobId, claimToken, assessment) {
+    async saveAssessment(jobId, claimToken, assessment, signal) {
       await fencedStep(jobId, claimToken, "assessment", {
         model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
         promptVersion: GROQ_PROMPT_VERSION, assessment,
         eventPayload: { provider: "groq", model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, promptVersion: GROQ_PROMPT_VERSION, confidence: assessment.confidence },
-      });
+      }, signal);
     },
-    async saveReport(jobId, claimToken, tier, pdf, reportInput) {
+    async saveReport(jobId, claimToken, tier, pdf, reportInput, signal) {
+      signal?.throwIfAborted();
       if (!isPdf(pdf)) throw new Error(`Unable to store ${tier} report: generated bytes are not a PDF`);
       const digest = await sha256(pdf);
+      signal?.throwIfAborted();
       const storagePath = `${jobId}/${claimToken}/${tier}.pdf`;
-      const { error: uploadError } = await admin.storage.from("audit-reports").upload(storagePath, pdf, {
-        contentType: "application/pdf", upsert: false,
-      });
-      if (uploadError) throw new Error(`Unable to store ${tier} report: ${uploadError.message}`);
       try {
-        await fencedStep(jobId, claimToken, "report", {
-          tier, storagePath, sha256: digest,
-          eventPayload: {
-            tier, accessStatus: "available", sha256: digest,
-            ...(tier === "full" && reportInput ? { reportInput } : {}),
+        await persistUploadedReport({
+          signal,
+          upload: async () => {
+            const objectPath = storagePath.split("/").map(encodeURIComponent).join("/");
+            const uploadUrl = new URL(`/storage/v1/object/audit-reports/${objectPath}`, url);
+            const response = await fetch(uploadUrl, {
+              method: "POST",
+              headers: {
+                apikey: secretKey,
+                Authorization: `Bearer ${secretKey}`,
+                "Content-Type": "application/pdf",
+                "x-upsert": "false",
+              },
+              body: new Blob([new Uint8Array(pdf)], { type: "application/pdf" }),
+              signal,
+            });
+            const detail = await response.text();
+            if (!response.ok) {
+              throw new Error(`Unable to store ${tier} report: HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ""}`);
+            }
+          },
+          // The fenced RPC receives the worker signal. If transport abort makes
+          // the commit outcome uncertain, reconcile() takes the same job-row lock
+          // before cleanup so a committed report object is never deleted.
+          persist: async () => {
+            await fencedStep(jobId, claimToken, "report", {
+              tier, storagePath, sha256: digest,
+              eventPayload: {
+                tier, accessStatus: "available", sha256: digest,
+                ...(tier === "full" && reportInput ? { reportInput } : {}),
+              },
+            }, signal);
+          },
+          reconcile: async () => {
+            const { data, error } = await withAbortTimeout(
+              (timeoutSignal) => Promise.resolve(admin.rpc("reconcile_audit_report_reference", {
+                p_job_id: jobId,
+                p_tier: tier,
+                p_storage_path: storagePath,
+                p_sha256: digest,
+              }).abortSignal(timeoutSignal)),
+              REPORT_RECONCILIATION_TIMEOUT_MS,
+              "AUDIT_REPORT_RECONCILIATION_TIMEOUT",
+            );
+            if (error) throw new Error(`Unable to reconcile ${tier} report persistence: ${error.message}`);
+            if (typeof data !== "boolean") {
+              throw new Error("Report persistence reconciliation returned an invalid result");
+            }
+            return data;
+          },
+          cleanup: async () => {
+            await withAbortTimeout(async (timeoutSignal) => {
+              const deleteUrl = new URL("/storage/v1/object/audit-reports", url);
+              const response = await fetch(deleteUrl, {
+                method: "DELETE",
+                headers: {
+                  apikey: secretKey,
+                  Authorization: `Bearer ${secretKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ prefixes: [storagePath] }),
+                signal: timeoutSignal,
+              });
+              const detail = await response.text();
+              if (!response.ok) {
+                throw new Error(`Unable to clean up interrupted ${tier} report upload: HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ""}`);
+              }
+            }, REPORT_CLEANUP_TIMEOUT_MS, "AUDIT_REPORT_CLEANUP_TIMEOUT");
           },
         });
       } catch (error) {
-        await admin.storage.from("audit-reports").remove([storagePath]);
+        if (error instanceof AggregateError) {
+          console.error(JSON.stringify({
+            worker: "audit",
+            jobId,
+            event: error.message.includes("outcome is unknown")
+              ? "report_artifact_persistence_outcome_unknown"
+              : "report_artifact_cleanup_failed",
+            tier,
+            errors: error.errors.map((entry) => entry instanceof Error ? entry.message : String(entry)),
+          }));
+        }
         throw error;
       }
     },
-    async markCompleted(jobId, claimToken) {
-      await fencedStep(jobId, claimToken, "complete");
+    async markCompleted(jobId, claimToken, signal) {
+      await fencedStep(jobId, claimToken, "complete", {}, signal);
     },
     async getAuditStatus(jobId) {
       const { data: job, error: jobError } = await admin
@@ -363,8 +456,8 @@ export function createSupabaseAuditStore(
     async getAuditReportPayload(jobId) {
       return readAuditReportPayload(jobId);
     },
-    async markFailed(jobId, claimToken, message) {
-      await fencedStep(jobId, claimToken, "fail", { message });
+    async markFailed(jobId, claimToken, message, signal) {
+      await fencedStep(jobId, claimToken, "fail", { message }, signal);
     },
   };
 }

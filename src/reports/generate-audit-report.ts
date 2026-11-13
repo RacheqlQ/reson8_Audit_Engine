@@ -111,8 +111,11 @@ export function chartLayoutIssuesForReport(input:AuditReportInput):string[]{
  const issues:string[]=[];for(const section of sections(input)){for(const panel of chartsForSection(input,section.title)){issues.push(...chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,TOP,chartPanelHeight(panel.kind,panel.rows)));}}return issues;
 }
 export function planAuditReportPages(input:AuditReportInput,tier:AuditReportTier):ReportPagePlan[]{const all=sections(input);return (tier==="sample"?all.slice(0,8):all).map(s=>({title:s.title,text:s.body}));}
-export async function generateAuditReport(input:AuditReportInput,tier:AuditReportTier):Promise<Uint8Array>{
- const pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);cover(pdf,input,fonts);
+export async function generateAuditReport(input:AuditReportInput,tier:AuditReportTier,signal?:AbortSignal):Promise<Uint8Array>{
+ signal?.throwIfAborted();
+ const pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
+ signal?.throwIfAborted();
+ cover(pdf,input,fonts);
  const selected=tier==="sample"?sections(input).slice(0,8):sections(input);
  const estimatedHeight=selected.reduce((total,section)=>{
   const titleHeight=wrap(section.title,fonts.bold,19.5,W-2*M-34).length*25+10;
@@ -208,5 +211,9 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; "));
   const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes page falls below the 65% content-occupancy threshold");
  }
- if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");return pdf.save();
+ if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");
+ signal?.throwIfAborted();
+ const bytes=await pdf.save();
+ signal?.throwIfAborted();
+ return bytes;
 }

@@ -193,7 +193,7 @@ describe("processAuditJob", () => {
     });
   });
 
-  it("records a failed assessment event and never saves a report after Groq validation fails", async () => {
+  it("preserves recognition and Sonic DNA when the second evidence-score validation fails", async () => {
     const events: string[] = [];
     let failureMessage = "";
     const result = await processAuditJob("job-groq-failure", {
@@ -215,12 +215,12 @@ describe("processAuditJob", () => {
       downloadMaster: async () => new Uint8Array([1, 2, 3]),
       createRecognitionSample: async () => new Uint8Array([4, 5]),
       recognize: async () => ({ matched: false as const }),
-      saveRecognition: async () => {},
-      saveEvidence: async () => {},
+      saveRecognition: async () => { events.push("recognition-saved"); },
+      saveEvidence: async () => { events.push("evidence-saved"); },
       decode: async () => ({ samples: new Float32Array([0, 0.1, -0.1]), sampleRate: 44100, channels: 1 }),
-      saveSonicDna: async () => {},
+      saveSonicDna: async () => { events.push("sonic-dna-saved"); },
       generateAssessment: async () => {
-        throw new Error("Groq narrative response failed Zod validation after one retry: executiveSummary must contain at least 45 words.");
+        throw new Error("Groq evidence-score response failed Zod validation after one retry: evidenceGaps[0] must contain at least 8 words.");
       },
       saveAssessment: async () => { events.push("assessment-saved"); },
       generateReport: async () => {
@@ -236,7 +236,12 @@ describe("processAuditJob", () => {
     });
 
     expect(result.status).toBe("failed");
-    expect(failureMessage).toContain("failed Zod validation after one retry");
+    expect(failureMessage).toContain("evidenceGaps[0] must contain at least 8 words");
+    expect(events).toContain("recognition-saved");
+    expect(events).toContain("evidence-saved");
+    expect(events).toContain("sonic-dna-saved");
+    expect(events.indexOf("recognition-saved")).toBeLessThan(events.indexOf("sonic-dna-saved"));
+    expect(events.indexOf("sonic-dna-saved")).toBeLessThan(events.indexOf("audit_failed"));
     expect(events).toContain("audit_failed");
     expect(events).not.toContain("assessment-saved");
     expect(events).not.toContain("report-generated");
@@ -286,4 +291,167 @@ describe("processAuditJob", () => {
     expect(result.status).toBe("failed");
     expect(failure).toBe("master unavailable");
   });
+  it("aborts after lease loss and prevents assessment, report, and terminal persistence", async () => {
+    const controller = new AbortController();
+    let releaseAssessment!: () => void;
+    let assessmentStarted!: () => void;
+    const started = new Promise<void>((resolve) => { assessmentStarted = resolve; });
+    const assessmentGate = new Promise<void>((resolve) => { releaseAssessment = resolve; });
+    const writes: string[] = [];
+
+    const deps = {
+      signal: controller.signal,
+      getJob: async () => ({
+        id: "lease-loss-job", ownerId: null, sourceAudioPath: "fixture/master.wav",
+        mimeType: "audio/wav", sourceType: "master" as const, catalogUrl: null,
+        status: "processing" as const, claimToken: "11111111-1111-4111-8111-111111111111",
+        leaseExpiresAt: "2099-01-01T00:00:00.000Z", workerId: "lease-loss-test",
+      }),
+      markProcessing: async () => { writes.push("processing"); },
+      collectCatalogMetadata: async () => { throw new Error("not used"); },
+      recognizeUrl: async () => ({ matched: false as const }),
+      downloadMaster: async () => new Uint8Array([1, 2, 3]),
+      createRecognitionSample: async () => new Uint8Array([1, 2]),
+      recognize: async () => ({ matched: false as const }),
+      saveRecognition: async () => { writes.push("recognition"); },
+      saveEvidence: async () => { writes.push("evidence"); },
+      decode: async () => ({ samples: new Float32Array([0, 0.1, -0.1]), sampleRate: 44100, channels: 1 }),
+      saveSonicDna: async () => { writes.push("sonic-dna"); },
+      generateAssessment: async () => {
+        assessmentStarted();
+        await assessmentGate;
+        return assessment;
+      },
+      saveAssessment: async () => { writes.push("assessment"); },
+      generateReport: async () => { writes.push("report-generated"); return new Uint8Array([37, 80, 68, 70, 45]); },
+      saveReport: async () => { writes.push("report-saved"); },
+      markCompleted: async () => { writes.push("completed"); },
+      markFailed: async () => { writes.push("failed"); },
+    } as unknown as import("../src/jobs/process-audit-job.js").AuditProcessorDependencies;
+
+    const processing = processAuditJob("lease-loss-job", deps);
+    await started;
+    controller.abort(new Error("AUDIT_LEASE_LOST"));
+    releaseAssessment();
+
+    await expect(processing).rejects.toThrow("AUDIT_LEASE_LOST");
+    expect(writes).toContain("recognition");
+    expect(writes).toContain("evidence");
+    expect(writes).toContain("sonic-dna");
+    expect(writes).not.toContain("assessment");
+    expect(writes).not.toContain("report-generated");
+    expect(writes).not.toContain("report-saved");
+    expect(writes).not.toContain("completed");
+    expect(writes).not.toContain("failed");
+  });
+
+  it("passes the lease signal to an in-flight provider and safely observes its late rejection", async () => {
+    const controller = new AbortController();
+    let providerSignal: AbortSignal | undefined;
+    let providerStarted!: () => void;
+    const started = new Promise<void>((resolve) => { providerStarted = resolve; });
+    const writes: string[] = [];
+    const deps = {
+      signal: controller.signal,
+      getJob: async () => ({
+        id: "provider-abort-job", ownerId: null, sourceAudioPath: "fixture/master.wav",
+        mimeType: "audio/wav", sourceType: "master" as const, catalogUrl: null,
+        status: "processing" as const, claimToken: "11111111-1111-4111-8111-111111111111",
+        leaseExpiresAt: "2099-01-01T00:00:00.000Z", workerId: "provider-abort-test",
+      }),
+      markProcessing: async () => { writes.push("processing"); },
+      collectCatalogMetadata: async () => { throw new Error("not used"); },
+      recognizeUrl: async () => ({ matched: false as const }),
+      downloadMaster: async () => new Uint8Array([1, 2, 3]),
+      createRecognitionSample: async () => new Uint8Array([1, 2]),
+      recognize: async (_sample: Uint8Array, signal?: AbortSignal) => {
+        providerSignal = signal;
+        providerStarted();
+        return new Promise<import("../src/providers/audd/normalize.js").AuditRecognition>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason ?? new Error("provider aborted")), { once: true });
+        });
+      },
+      saveRecognition: async () => { writes.push("recognition"); },
+      saveEvidence: async () => { writes.push("evidence"); },
+      decode: async () => ({ samples: new Float32Array([0, 0.1, -0.1]), sampleRate: 44100, channels: 1 }),
+      saveSonicDna: async () => { writes.push("sonic-dna"); },
+      generateAssessment: async () => { writes.push("assessment"); return assessment; },
+      saveAssessment: async () => { writes.push("assessment-saved"); },
+      generateReport: async () => new Uint8Array([37, 80, 68, 70, 45]),
+      saveReport: async () => { writes.push("report-saved"); },
+      markCompleted: async () => { writes.push("completed"); },
+      markFailed: async () => { writes.push("failed"); },
+    } as unknown as import("../src/jobs/process-audit-job.js").AuditProcessorDependencies;
+
+    const processing = processAuditJob("provider-abort-job", deps);
+    await started;
+    expect(providerSignal).toBe(controller.signal);
+    controller.abort(new Error("AUDIT_LEASE_LOST"));
+
+    await expect(processing).rejects.toThrow("AUDIT_LEASE_LOST");
+    await Promise.resolve();
+    expect(writes).toEqual(["processing"]);
+  });
+
+  it("waits for late report-upload cleanup before the aborted processor settles", async () => {
+    const controller = new AbortController();
+    let finishUpload!: () => void;
+    let finishCleanup!: () => void;
+    let reportStarted!: () => void;
+    let cleanupStarted!: () => void;
+    const uploadGate = new Promise<void>((resolve) => { finishUpload = resolve; });
+    const cleanupGate = new Promise<void>((resolve) => { finishCleanup = resolve; });
+    const started = new Promise<void>((resolve) => { reportStarted = resolve; });
+    const cleaning = new Promise<void>((resolve) => { cleanupStarted = resolve; });
+    const writes: string[] = [];
+    const deps = {
+      signal: controller.signal,
+      getJob: async () => ({
+        id: "late-report-job", ownerId: null, sourceAudioPath: "fixture/master.wav",
+        mimeType: "audio/wav", sourceType: "master" as const, catalogUrl: null,
+        status: "processing" as const, claimToken: "11111111-1111-4111-8111-111111111111",
+        leaseExpiresAt: "2099-01-01T00:00:00.000Z", workerId: "late-report-test",
+      }),
+      markProcessing: async () => { writes.push("processing"); },
+      collectCatalogMetadata: async () => { throw new Error("not used"); },
+      recognizeUrl: async () => ({ matched: false as const }),
+      downloadMaster: async () => new Uint8Array([1, 2, 3]),
+      createRecognitionSample: async () => new Uint8Array([1, 2]),
+      recognize: async () => ({ matched: false as const }),
+      saveRecognition: async () => { writes.push("recognition"); },
+      saveEvidence: async () => { writes.push("evidence"); },
+      decode: async () => ({ samples: new Float32Array([0, 0.1, -0.1]), sampleRate: 44100, channels: 1 }),
+      saveSonicDna: async () => { writes.push("sonic-dna"); },
+      generateAssessment: async () => assessment,
+      saveAssessment: async () => { writes.push("assessment"); },
+      generateReport: async () => new Uint8Array([37, 80, 68, 70, 45]),
+      saveReport: async (_jobId: string, _claimToken: string, _tier: string, _pdf: Uint8Array, _input?: unknown, signal?: AbortSignal) => {
+        reportStarted();
+        await uploadGate;
+        if (signal?.aborted) {
+          cleanupStarted();
+          await cleanupGate;
+          throw signal.reason;
+        }
+      },
+      markCompleted: async () => { writes.push("completed"); },
+      markFailed: async () => { writes.push("failed"); },
+    } as unknown as import("../src/jobs/process-audit-job.js").AuditProcessorDependencies;
+
+    const processing = processAuditJob("late-report-job", deps);
+    await started;
+    controller.abort(new Error("AUDIT_SHUTDOWN_DRAIN_TIMEOUT"));
+    let settled = false;
+    void processing.finally(() => { settled = true; }).catch(() => {});
+    finishUpload();
+    await cleaning;
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    finishCleanup();
+    await expect(processing).rejects.toThrow("AUDIT_SHUTDOWN_DRAIN_TIMEOUT");
+    expect(writes).not.toContain("completed");
+    expect(writes).not.toContain("failed");
+  });
+
 });

@@ -164,4 +164,46 @@ describe("GroqClient section groups",()=>{
   expect(sleeps).toContain(626400);
  });
 
+ it("stops after the corrective retry when evidenceGaps remains below eight words",async()=>{
+  let evidenceScoreCalls=0;
+  const prompts:string[]=[];
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="evidence-score"){
+    evidenceScoreCalls++;
+    prompts.push(body.messages[1].content);
+    const invalid={...p(group),evidenceGaps:["Missing audience data"]};
+    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(invalid)}}]}),{status:200});
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  await expect(client.assess({evidence:{},sonicDna:null}))
+   .rejects.toThrow("Groq evidence-score response failed Zod validation after one retry");
+  expect(evidenceScoreCalls).toBe(2);
+  expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
+ });
+
+});
+
+
+describe("GroqClient cancellation", () => {
+  it("aborts an in-flight provider request when the audit signal is aborted", async () => {
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal ?? undefined;
+      if (!requestSignal) return new Response("missing abort signal", { status: 400 });
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal!.addEventListener("abort", () => reject(requestSignal!.reason ?? new Error("aborted")), { once: true });
+      });
+    });
+    const client = new GroqClient("test-key", "test-model", fetchMock as typeof fetch, async () => {});
+    const pending = (client.assess({ evidence: {}, sonicDna: null }, controller.signal) as Promise<unknown>);
+    await Promise.resolve();
+    controller.abort(new Error("AUDIT_SHUTDOWN_DRAIN_TIMEOUT"));
+    await expect(pending).rejects.toThrow("AUDIT_SHUTDOWN_DRAIN_TIMEOUT");
+    expect(requestSignal).toBe(controller.signal);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

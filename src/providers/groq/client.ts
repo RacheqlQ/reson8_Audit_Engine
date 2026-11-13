@@ -85,7 +85,7 @@ export interface GroqAssessmentInput {
   sonicDna: Record<string, unknown> | null;
   catalogMetadata?: Record<string, unknown> | null;
 }
-export interface GroqAssessmentClient { assess(input: GroqAssessmentInput): Promise<ArAssessment>; }
+export interface GroqAssessmentClient { assess(input: GroqAssessmentInput, signal?: AbortSignal): Promise<ArAssessment>; }
 
 const SYSTEM_PROMPT = [
   "You are the A&R intelligence analyst for a private music-audit service.",
@@ -161,14 +161,40 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
   return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, 1000 * (2 ** fallbackAttempt));
 }
 
+function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  return new Promise<void>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      cleanup();
+      reject(signal?.reason ?? new Error("Groq retry aborted"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+  });
+}
+
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
-  groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number)=>Promise<void>): Promise<T> {
+  groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number, signal?:AbortSignal)=>Promise<void>, signal?: AbortSignal): Promise<T> {
   let lastError = "No valid response was returned";
   for(let attempt=0;attempt<2;attempt++){
     let response:Response|null=null;
     for(let networkAttempt=0;networkAttempt<MAX_NETWORK_ATTEMPTS;networkAttempt++){
+      signal?.throwIfAborted();
       response=await fetchImpl("https://api.groq.com/openai/v1/chat/completions",{
         method:"POST",headers:{authorization:"Bearer "+apiKey,"content-type":"application/json"},
+        signal,
         body:JSON.stringify({model,temperature:0.1,max_completion_tokens:MAX_COMPLETION_TOKENS,response_format:{type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
           messages:[{role:"system",content:SYSTEM_PROMPT+" "+instructions},
             {role:"user",content:JSON.stringify({promptVersion:GROQ_PROMPT_VERSION,sectionGroup:groupName,evidence:input.evidence,
@@ -177,7 +203,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if(response.ok)break;
       const transient=response.status===429||response.status>=500;
       if(!transient||networkAttempt===MAX_NETWORK_ATTEMPTS-1)break;
-      await sleepImpl(await providerRetryDelayMs(response,networkAttempt));
+      await sleepImpl(await providerRetryDelayMs(response,networkAttempt), signal);
+      signal?.throwIfAborted();
     }
     if(!response||!response.ok){const detail=await response?.text().catch(()=>"")??"";throw new Error("Groq "+groupName+" assessment failed with HTTP "+(response?.status??"unknown")+(detail?": "+detail.slice(0,300):""));}
     const payload=await response.json() as {choices?:Array<{message?:{content?:string|null}}>};
@@ -192,21 +219,22 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 }
 
 export class GroqClient implements GroqAssessmentClient {
-  private readonly apiKey:string; private readonly model:string; private readonly fetchImpl:typeof fetch; private readonly sleepImpl:(ms:number)=>Promise<void>;
-  constructor(apiKey=process.env.GROQ_API_KEY??process.env.GROQ_API,model=process.env.GROQ_MODEL??DEFAULT_GROQ_MODEL,fetchImpl:typeof fetch=fetch,sleepImpl:(ms:number)=>Promise<void>=(ms)=>new Promise(resolve=>setTimeout(resolve,ms))){
+  private readonly apiKey:string; private readonly model:string; private readonly fetchImpl:typeof fetch; private readonly sleepImpl:(ms:number,signal?:AbortSignal)=>Promise<void>;
+  constructor(apiKey=process.env.GROQ_API_KEY??process.env.GROQ_API,model=process.env.GROQ_MODEL??DEFAULT_GROQ_MODEL,fetchImpl:typeof fetch=fetch,sleepImpl:(ms:number,signal?:AbortSignal)=>Promise<void>=abortableSleep){
     if(!apiKey)throw new Error("GROQ_API is required");this.apiKey=apiKey;this.model=model;this.fetchImpl=fetchImpl;this.sleepImpl=sleepImpl;
   }
-  async assess(input:GroqAssessmentInput):Promise<ArAssessment>{
+  async assess(input:GroqAssessmentInput, signal?:AbortSignal):Promise<ArAssessment>{
+    signal?.throwIfAborted();
     const tasks=[
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema,this.sleepImpl),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"positioning","Write evidence-bounded A&R positioning and commercial read.",PositioningSchema,this.sleepImpl),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"release","Write a grounded release recommendation and priorities.",ReleaseSchema,this.sleepImpl),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"evidence-score","Score only evidence-derivable dimensions. Return the unscored human listening checklist. Every evidenceGaps item and every limitations item must contain at least 8 words. Every scorecard rationale must contain at least 25 words. In particular, scorecard.rhythmicConsistency.rationale needs at least 25 words even for a null score; state which uploaded-master timing evidence is missing in a complete sentence. Every humanListeningChecklist item must contain at least 5 words. Do not use fragments or short labels; write complete, specific sentences. If the correction field identifies a word-count failure, repair that exact field while preserving the evidence-bounded meaning.",EvidenceScoreSchema,this.sleepImpl),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"production","Give actionable production and arrangement guidance. Separate lane-general craft as INDUSTRY PRACTICE.",ProductionSchema,this.sleepImpl),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"comparables","Provide inferred lane descriptors and reference-search criteria to verify; do not invent named artists or tracks.",ComparableSchema,this.sleepImpl),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"promotion","Build a staged promotion plan, general pitching angles, content concepts and playlist categories only. Each playlist category must be a descriptive phrase of at least three words. Include INDUSTRY PRACTICE separately.",PromotionSchema,this.sleepImpl),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"label-fit","Describe category-level partner fit and evidence criteria; no claims of label interest. Include INDUSTRY PRACTICE separately.",LabelFitSchema,this.sleepImpl),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"timeline","Build actionable 30/60/90-day steps without inventing dates, budgets or targets.",TimelineSchema,this.sleepImpl)
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema,this.sleepImpl,signal),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"positioning","Write evidence-bounded A&R positioning and commercial read.",PositioningSchema,this.sleepImpl,signal),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"release","Write a grounded release recommendation and priorities.",ReleaseSchema,this.sleepImpl,signal),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"evidence-score","Score only evidence-derivable dimensions. Return the unscored human listening checklist. Every evidenceGaps item and every limitations item must contain at least 8 words. Every scorecard rationale must contain at least 25 words. In particular, scorecard.rhythmicConsistency.rationale needs at least 25 words even for a null score; state which uploaded-master timing evidence is missing in a complete sentence. Every humanListeningChecklist item must contain at least 5 words. Do not use fragments or short labels; write complete, specific sentences. If the correction field identifies a word-count failure, repair that exact field while preserving the evidence-bounded meaning.",EvidenceScoreSchema,this.sleepImpl,signal),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"production","Give actionable production and arrangement guidance. Separate lane-general craft as INDUSTRY PRACTICE.",ProductionSchema,this.sleepImpl,signal),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"comparables","Provide inferred lane descriptors and reference-search criteria to verify; do not invent named artists or tracks.",ComparableSchema,this.sleepImpl,signal),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"promotion","Build a staged promotion plan, general pitching angles, content concepts and playlist categories only. Each playlist category must be a descriptive phrase of at least three words. Include INDUSTRY PRACTICE separately.",PromotionSchema,this.sleepImpl,signal),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"label-fit","Describe category-level partner fit and evidence criteria; no claims of label interest. Include INDUSTRY PRACTICE separately.",LabelFitSchema,this.sleepImpl,signal),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"timeline","Build actionable 30/60/90-day steps without inventing dates, budgets or targets.",TimelineSchema,this.sleepImpl,signal)
     ];
     const groups:unknown[]=new Array(tasks.length);let cursor=0;
     const settled=await Promise.allSettled(Array.from({length:1},async()=>{while(cursor<tasks.length){const index=cursor++;groups[index]=await tasks[index]();}}));

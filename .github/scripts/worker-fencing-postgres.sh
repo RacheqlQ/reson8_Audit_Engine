@@ -49,6 +49,7 @@ assert_sql "t" "select relrowsecurity from pg_class where oid='public.recognitio
 assert_sql "t" "select relrowsecurity from pg_class where oid='public.audit_reports_legacy'::regclass"
 assert_sql "t" "select relrowsecurity from pg_class where oid='public.audit_assessments'::regclass"
 assert_sql "false:true" "select has_function_privilege('anon','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text || ':' || has_function_privilege('service_role','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text"
+assert_sql "false:true" "select has_function_privilege('anon','public.reconcile_audit_report_reference(uuid,text,text,text)','execute')::text || ':' || has_function_privilege('service_role','public.reconcile_audit_report_reference(uuid,text,text,text)','execute')::text"
 
 echo "Regression 1/8: concurrent claims grant the sole queued job exactly once"
 seed_job "$JOB_MAIN"
@@ -136,4 +137,56 @@ wait "$COMPLETE_PID"
 if ! wait "$HEARTBEAT_PID"; then grep -q "AUDIT_LEASE_LOST" /tmp/worker-heartbeat.txt; fi
 assert_sql "completed:true:true:true" "select status || ':' || (claim_token is null)::text || ':' || (lease_expires_at is null)::text || ':' || (worker_id is null)::text from public.audit_jobs where id='$JOB_RACE'"
 
-echo "All full-schema PostgreSQL 17 worker-fencing regressions passed."
+echo "Regression 9/9: report reconciliation waits for in-flight commit or rollback"
+JOB_REPORT_COMMIT="77777777-7777-4777-8777-777777777777"
+seed_job "$JOB_REPORT_COMMIT"
+TOKEN_REPORT_COMMIT="$(claim_job "$JOB_REPORT_COMMIT" ci-report-commit-worker)"
+test -n "$TOKEN_REPORT_COMMIT"
+(
+  PGAPPNAME=report-persist-commit-writer psql "$DB" -v ON_ERROR_STOP=1 <<SQL >/tmp/report-persist-commit.txt
+begin;
+select id from public.audit_jobs where id='$JOB_REPORT_COMMIT' for update;
+insert into public.audit_reports(audit_job_id,tier,version,access_status,storage_path,sha256,content_type)
+values ('$JOB_REPORT_COMMIT','sample',1,'available','ci/report-commit.pdf','commit-hash','application/pdf');
+select pg_sleep(2);
+commit;
+SQL
+) &
+REPORT_COMMIT_PID=$!
+for _ in $(seq 1 50); do
+  COMMIT_WRITER_ACTIVE="$(psql "$DB" -qAt -v ON_ERROR_STOP=1 -c "select count(*) from pg_stat_activity where application_name='report-persist-commit-writer' and query like '%pg_sleep(2)%' and state='active'")"
+  [ "$COMMIT_WRITER_ACTIVE" = "1" ] && break
+  sleep 0.1
+done
+test "$COMMIT_WRITER_ACTIVE" = "1"
+COMMIT_RECONCILED="$(psql "$DB" -qAt -v ON_ERROR_STOP=1 -c "set role service_role; select public.reconcile_audit_report_reference('$JOB_REPORT_COMMIT','sample','ci/report-commit.pdf','commit-hash')")"
+wait "$REPORT_COMMIT_PID"
+test "$COMMIT_RECONCILED" = "t"
+
+JOB_REPORT_ROLLBACK="88888888-8888-4888-8888-888888888888"
+seed_job "$JOB_REPORT_ROLLBACK"
+TOKEN_REPORT_ROLLBACK="$(claim_job "$JOB_REPORT_ROLLBACK" ci-report-rollback-worker)"
+test -n "$TOKEN_REPORT_ROLLBACK"
+(
+  PGAPPNAME=report-persist-rollback-writer psql "$DB" -v ON_ERROR_STOP=1 <<SQL >/tmp/report-persist-rollback.txt
+begin;
+select id from public.audit_jobs where id='$JOB_REPORT_ROLLBACK' for update;
+insert into public.audit_reports(audit_job_id,tier,version,access_status,storage_path,sha256,content_type)
+values ('$JOB_REPORT_ROLLBACK','sample',1,'available','ci/report-rollback.pdf','rollback-hash','application/pdf');
+select pg_sleep(2);
+rollback;
+SQL
+) &
+REPORT_ROLLBACK_PID=$!
+for _ in $(seq 1 50); do
+  ROLLBACK_WRITER_ACTIVE="$(psql "$DB" -qAt -v ON_ERROR_STOP=1 -c "select count(*) from pg_stat_activity where application_name='report-persist-rollback-writer' and query like '%pg_sleep(2)%' and state='active'")"
+  [ "$ROLLBACK_WRITER_ACTIVE" = "1" ] && break
+  sleep 0.1
+done
+test "$ROLLBACK_WRITER_ACTIVE" = "1"
+ROLLBACK_RECONCILED="$(psql "$DB" -qAt -v ON_ERROR_STOP=1 -c "set role service_role; select public.reconcile_audit_report_reference('$JOB_REPORT_ROLLBACK','sample','ci/report-rollback.pdf','rollback-hash')")"
+wait "$REPORT_ROLLBACK_PID"
+test "$ROLLBACK_RECONCILED" = "f"
+echo "PASS: reconciliation observes committed rows and rejects rolled-back rows after acquiring the job lock"
+
+echo "All full-schema PostgreSQL 17 worker-fencing and report-persistence regressions passed."
