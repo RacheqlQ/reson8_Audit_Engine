@@ -59,7 +59,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       leaseExpiresAt: job.leaseExpiresAt,
       workerId: job.workerId,
     }),
-    markProcessing: async (jobId, claimToken) => store.markProcessing(jobId, claimToken),
+    markProcessing: async (jobId, claimToken, signal) => store.markProcessing(jobId, claimToken, signal),
     downloadMaster: async (path, signal) => store.downloadMaster(path, signal),
     createRecognitionSample: audd ? createRecognitionSample : async () => new Uint8Array(),
     recognize: (sample, signal) => audd ? audd.recognize(sample, signal) : Promise.resolve({ matched: false }),
