@@ -74,4 +74,15 @@ describe("persistUploadedReport", () => {
     })).rejects.toThrow("AUDIT_LEASE_LOST");
     expect(upload).not.toHaveBeenCalled();
   });
+  it("removes the uploaded object when the fenced database write fails", async () => {
+    const cleanup = vi.fn(async () => {});
+    const persistError = new Error("AUDIT_LEASE_LOST");
+    await expect(persistUploadedReport({
+      upload: async () => {},
+      persist: async () => { throw persistError; },
+      cleanup,
+    })).rejects.toBe(persistError);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
 });
