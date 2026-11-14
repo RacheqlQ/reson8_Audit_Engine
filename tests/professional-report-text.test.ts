@@ -47,7 +47,7 @@ describe("professional report text and metadata coverage", () => {
   it("includes all key identity fields and explicit unavailable states in full reports", () => {
     const input = {
       ...fullAudioFixture,
-      evidence: { ...fullAudioFixture.evidence, isrc: "NGABC2600001", upc: null, genre: null, genres: [], externalIds: {}, sourceProviders: ["spotify", "audd"], reconciliation: { status: "conflict", reconciledFields: [], conflicts: [{ field: "isrc", values: ["NGABC2600001", "NGABC2600002"] }] } },
+      evidence: { ...fullAudioFixture.evidence, fixture: false, sources: [], isrc: "NGABC2600001", upc: null, genre: null, genres: [], externalIds: {}, sourceProviders: ["spotify", "audd"], reconciliation: { status: "conflict", reconciledFields: [], conflicts: [{ field: "isrc", values: ["NGABC2600001", "NGABC2600002"] }] } },
     };
     expect(metadataFieldStatus(input.evidence as Record<string, unknown>, "isrc")).toBe("Conflicting source values");
     const text = planAuditReportPages(input as any, "full").flatMap((page) => [page.title, ...page.text]).join(" ");
