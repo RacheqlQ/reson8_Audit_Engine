@@ -7,7 +7,7 @@ const assessment = {} as import("../src/providers/groq/client.js").ArAssessment;
 const metadata = {
   platform: "spotify", sourceUrl: "https://open.spotify.com/track/abc",
   canonicalUrl: "https://open.spotify.com/track/abc", catalogId: "abc",
-  artist: "Catalog Artist", title: "Catalog Song", album: "Album",
+  artist: "Master Artist", title: "Master Song", album: "Album",
   releaseDate: null, isrc: "US-ABC-12-34567", upc: null,
   catalogPopularity: 42, catalogPopularityScale: "0_100", label: "Label",
   genre: "Alt R&B", artworkUrl: null, previewUrl: "https://example.com/preview.mp3",
