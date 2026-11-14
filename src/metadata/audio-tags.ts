@@ -35,7 +35,7 @@ function decodeText(bytes: Uint8Array): string | null {
   }
 }
 
-function frameMap(id: string): keyof Omit<AudioTagMetadata, "genres"> | "genres" | null {
+function frameMap(id: string): keyof Omit<AudioTagMetadata, "genres" | "track"> | "genres" | null {
   switch (id) {
     case "TIT2":
     case "TT2": return "title";
