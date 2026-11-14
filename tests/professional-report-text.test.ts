@@ -14,6 +14,13 @@ describe("professional report text and metadata coverage", () => {
     expect(text).not.toMatch(/\d+\.\d{4,}/);
   });
 
+  it("does not present synthetic fixture identity as recognized metadata", () => {
+    const evidence = { ...fullAudioFixture.evidence, metadataSourcesChecked: ["synthetic_audio_fixture"] };
+    expect(metadataFieldStatus(evidence as Record<string, unknown>, "artist")).toBe("Synthetic test value — not a real identity match");
+    const text = planAuditReportPages({ ...fullAudioFixture, evidence } as any, "full").flatMap((page) => [page.title, ...page.text]).join(" ");
+    expect(text).toContain("Synthetic report fixture (layout testing only)");
+  });
+
   it("includes all key identity fields and explicit unavailable states in full reports", () => {
     const input = {
       ...fullAudioFixture,
