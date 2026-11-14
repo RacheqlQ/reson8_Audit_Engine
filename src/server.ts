@@ -48,7 +48,12 @@ async function servePublicFile(filename: string) {
 }
 
 export function paymentsEnabled(value: string | undefined = process.env.PAYMENTS_ENABLED): boolean {
-  return typeof value === "string" && value.trim().toLowerCase() === "true";
+  if (value === undefined || value.trim() === "") return false;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  // An unrecognized non-empty value must never silently disable the payment gate.
+  return true;
 }
 
 /** Operator access fails closed unless a strong secret is configured. */
