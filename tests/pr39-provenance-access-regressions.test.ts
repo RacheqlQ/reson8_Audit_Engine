@@ -94,7 +94,7 @@ describe("PR #39 issued access capability", () => {
     expect(script).not.toContain("if(pastedKey)reportAccessToken=pastedKey");
     expect(script).toContain('const accessToken=pastedKey||reportAccessToken;');
     expect(script).toMatch(/downloadReport\(["']full["'],\s*accessToken\)/);
-    expect(script).toMatch(/async function downloadReport\(tier,\s*accessToken\)/);
+    expect(script).toMatch(/async function downloadReport\(tier,\s*accessToken(?:=reportAccessToken)?\)/);
     expect(script).toMatch(/"x-reson8-report-token":\s*accessToken/);
     expect(script).not.toContain("localStorage");
     expect(script).not.toContain("sessionStorage");
