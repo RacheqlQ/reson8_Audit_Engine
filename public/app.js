@@ -1,3 +1,4 @@
+import { readPdfResponse, triggerPdfDownload } from "./report-download.js";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
 const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),fullReportButton=document.querySelector("#fullReportButton"),operatorKey=document.querySelector("#operatorKey"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain");
 const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.querySelector("#detectCatalog"),catalogPlatform=document.querySelector("#catalogPlatform"),catalogPreview=document.querySelector("#catalogPreview"),catalogState=document.querySelector("#catalogState"),catalogCheck=document.querySelector("#catalogCheck");
@@ -111,15 +112,8 @@ async function downloadReport(tier){
   try{
     const headers=tier==="sample"&&reportAccessToken?{"x-reson8-report-token":reportAccessToken}:{"x-reson8-operator-key":key};
     const response=await fetch("/v1/audits/"+encodeURIComponent(currentAuditPayload.jobId)+"/reports/"+tier,{headers});
-    const type=(response.headers.get("content-type")||"").toLowerCase();
-    if(!response.ok||!type.includes("application/pdf")){
-      const error=await response.json().catch(()=>({}));
-      throw new Error(error.message||"Report retrieval failed (HTTP "+response.status+")");
-    }
-    const blob=await response.blob(),bytes=new Uint8Array(await blob.arrayBuffer());
-    if(new TextDecoder().decode(bytes.slice(0,5))!=="%PDF-")throw new Error("Server response was not a valid PDF. No file was downloaded.");
-    const url=URL.createObjectURL(blob),anchor=document.createElement("a");
-    anchor.href=url;anchor.download="reson8-audit-"+tier+"-"+currentAuditPayload.jobId+".pdf";document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    const blob=await readPdfResponse(response);
+    triggerPdfDownload(blob,"reson8-audit-"+tier+"-"+currentAuditPayload.jobId+".pdf");
     reportDownloadMessage.textContent=tier+" PDF downloaded successfully.";
   }catch(error){reportDownloadMessage.textContent=error instanceof Error?error.message:"Report retrieval failed.";}
 }
