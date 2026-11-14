@@ -253,10 +253,13 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         message === "Audio filename is required" ||
         message === "Unsupported audio type" ||
         message === "Audio file is empty" ||
-        message === "Audio file exceeds the 50 MB limit"
+        message === "Audio file exceeds the 50 MB limit" ||
+        message === "DSP URL must use HTTPS" ||
+        message === "DSP URL must not contain credentials" ||
+        message === "Invalid URL"
       ) {
         return reply.code(400).send({
-          error: "INVALID_AUDIO_UPLOAD",
+          error: message.startsWith("DSP URL") || message === "Invalid URL" ? "INVALID_CATALOG_URL" : "INVALID_AUDIO_UPLOAD",
           message,
         });
       }
