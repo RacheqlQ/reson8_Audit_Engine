@@ -104,4 +104,11 @@ describe("MetadataEngine", () => {
     expect(Object.isFrozen(identity.genres)).toBe(true);
     expect(Object.isFrozen(identity.sourceProviders)).toBe(true);
   });
+  it("retains UPC identifiers from DSP metadata without fabricating missing values", () => {
+    const identity = MetadataEngine.normalize({
+      spotify: { title: "Known Title", artist: "Known Artist", upc: "123456789012" },
+    });
+    expect(identity.upc).toBe("123456789012");
+  });
+
 });
