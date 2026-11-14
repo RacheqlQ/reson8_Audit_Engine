@@ -1,6 +1,6 @@
 import { readPdfResponse, triggerPdfDownload } from "./report-download.js";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
-const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),fullReportButton=document.querySelector("#fullReportButton"),operatorKey=document.querySelector("#operatorKey"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain");
+const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain");
 const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.querySelector("#detectCatalog"),catalogPlatform=document.querySelector("#catalogPlatform"),catalogPreview=document.querySelector("#catalogPreview"),catalogState=document.querySelector("#catalogState"),catalogCheck=document.querySelector("#catalogCheck");
 const checks={type:document.querySelector("#checkType"),size:document.querySelector("#checkSize"),hash:document.querySelector("#checkHash")};
 const MAX_BYTES=50*1024*1024,AUDIO_EXTENSIONS=new Set(["mp3","wav","flac","aac","ogg","m4a"]);
@@ -63,15 +63,15 @@ function applyAuditPayload(payload){
   if(payload.status==="completed"&&payload.full?.available){
     reportActions.classList.remove("hidden");
     sampleReportButton.disabled=false;
-    fullReportButton.disabled=false;
-    resultMessage.textContent="Audit complete. Sample and full report retrieval are available to an authorized operator.";
+    resultMessage.textContent="Audit complete. Your sample report is available through the private access token issued for this audit.";
   }
 }
-async function pollAudit(job){
+async function pollAudit(job,token){
+  if(!token){resultMessage.textContent="The private audit access token is unavailable. Submit a new audit to receive a fresh token.";return;}
   stopPolling();const started=Date.now(),maxWait=10*60*1000;
   async function check(){
     try{
-      const response=await fetch("/v1/audits/"+encodeURIComponent(job));const payload=await response.json().catch(()=>({}));
+      const response=await fetch("/v1/audits/"+encodeURIComponent(job),{headers:{"x-reson8-report-token":token}});const payload=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(payload.message||"Could not read audit status");
       applyAuditPayload(payload);
       if(payload.status==="completed"&&payload.full?.available)return;
@@ -101,24 +101,21 @@ async function submitAudit(){
     if(!response.ok)throw new Error(payload.message||"Audit intake failed");
     jobId.textContent=payload.jobId||"—";serverHash.textContent=payload.sha256||"—";reportAccessToken=payload.reportAccessToken||null;resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
     resultMessage.textContent=hasMaster&&hasCatalog?"Accepted. Master Sonic DNA and DSP catalog evidence will be reconciled into one report.":hasMaster?"Accepted. Master Sonic DNA analysis is processing.":"Accepted. DSP catalog analysis is processing.";
-    submit.querySelector("span").textContent="Audit processing";pollAudit(payload.jobId);
+    submit.querySelector("span").textContent="Audit processing";pollAudit(payload.jobId,reportAccessToken);
   }catch(e){actionMessage.textContent=e instanceof Error?e.message:"Audit intake failed.";submit.disabled=false;updateSubmit();}
 }
 async function downloadReport(tier){
-  const key=operatorKey.value.trim();
-  if(tier==="full"&&!key){reportDownloadMessage.textContent="Enter the operator access key to retrieve the full report.";return;}
-  if(tier==="sample"&&!reportAccessToken&&!key){reportDownloadMessage.textContent="Sample report access is unavailable for this older job. Enter the operator key.";return;}
+  if(!reportAccessToken){reportDownloadMessage.textContent="This audit's private access token is unavailable. Submit a new audit to receive a fresh token.";return;}
   reportDownloadMessage.textContent="Retrieving "+tier+" PDF…";
   try{
-    const headers=tier==="sample"&&reportAccessToken?{"x-reson8-report-token":reportAccessToken}:{"x-reson8-operator-key":key};
-    const response=await fetch("/v1/audits/"+encodeURIComponent(currentAuditPayload.jobId)+"/reports/"+tier,{headers});
+    const response=await fetch("/v1/audits/"+encodeURIComponent(currentAuditPayload.jobId)+"/reports/"+tier,{headers:{"x-reson8-report-token":reportAccessToken}});
     const blob=await readPdfResponse(response);
     triggerPdfDownload(blob,"reson8-audit-"+tier+"-"+currentAuditPayload.jobId+".pdf");
     reportDownloadMessage.textContent=tier+" PDF downloaded successfully.";
   }catch(error){reportDownloadMessage.textContent=error instanceof Error?error.message:"Report retrieval failed.";}
 }
 input.addEventListener("change",()=>input.files?.[0]&&inspect(input.files[0]));removeFile.addEventListener("click",clearFile);detectCatalog.addEventListener("click",previewCatalog);catalogUrl.addEventListener("input",()=>{catalogReady=false;setCheck(catalogCheck,"","—");updateSubmit();});catalogUrl.addEventListener("blur",previewCatalog);submit.addEventListener("click",submitAudit);
-sampleReportButton.addEventListener("click",()=>downloadReport("sample"));fullReportButton.addEventListener("click",()=>downloadReport("full"));
+sampleReportButton.addEventListener("click",()=>downloadReport("sample"));
 ["dragenter","dragover"].forEach(type=>dropzone.addEventListener(type,e=>{e.preventDefault();dropzone.classList.add("dragover");}));
 ["dragleave","drop"].forEach(type=>dropzone.addEventListener(type,e=>{e.preventDefault();dropzone.classList.remove("dragover");}));
 dropzone.addEventListener("drop",e=>{const f=e.dataTransfer?.files?.[0];if(f)inspect(f);});
