@@ -53,10 +53,6 @@
             </div>
             <span class="limit">Use either source or combine both in one audit</span>
           </div>
-          <div class="source-tabs" role="tablist" aria-label="Audit source">
-            <button class="source-tab active" id="masterTab" type="button">MASTER TRACK <small>Measured Sonic DNA</small></button>
-            <button class="source-tab" id="dspTab" type="button">DSP / CATALOG LINK <small>Identity + catalog evidence</small></button>
-          </div>
           <section id="masterSource">
             <div class="section-heading compact">
               <div><p class="kicker">SOURCE MASTER</p><h3>Upload the recording</h3></div>
@@ -127,7 +123,10 @@
             </div>
             <p id="resultMessage">Your recording is now in the processing queue. Recognition, measurement and reconciliation run as separate evidence stages.</p>
             <div class="report-actions hidden" id="reportActions">
-              <a class="primary-btn" id="fullReportLink" href="#" download>Download full report <b>↓</b></a>
+              <label for="operatorKey">Operator access key</label>
+              <input id="operatorKey" type="password" autocomplete="off" placeholder="Enter operator key to retrieve reports" />
+              <div class="report-downloads"><button class="primary-btn" id="sampleReportButton" type="button">Download sample report <b>↓</b></button><button class="primary-btn" id="fullReportButton" type="button">Download full report <b>↓</b></button></div>
+              <p id="reportDownloadMessage" role="status"></p>
             </div>
           </div>
         </div>
