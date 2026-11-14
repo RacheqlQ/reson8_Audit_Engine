@@ -120,9 +120,5 @@ describe("audio metadata tag extraction", () => {
     expect(readAudioTags(new TextEncoder().encode("not an ID3 file"))).toEqual({
       title: null, artist: null, album: null, isrc: null, genres: [], releaseDate: null, label: null, track: null,
     });
-  });  it("returns an empty structured result for files without recognized tags", () => {
-    expect(readAudioTags(new TextEncoder().encode("not an ID3 file"))).toEqual({
-      title: null, artist: null, album: null, isrc: null, genres: [], releaseDate: null, label: null, track: null,
-    });
   });
 });
