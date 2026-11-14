@@ -40,7 +40,38 @@ async function spotify(u:URL, signal?:AbortSignal){
 
   try {
     const client = new SpotifyClient();
-    return await normalizeSpotifyTrack(u.toString(), await client.getTrack(id, signal));
+    const track = await client.getTrack(id, signal);
+    let normalized = normalizeSpotifyTrack(u.toString(), track);
+    const artists = Array.isArray(track.artists) ? track.artists as Array<Record<string, unknown>> : [];
+    const artistId = typeof artists[0]?.id === "string" ? artists[0].id : null;
+    if (artistId) {
+      try {
+        const artist = await client.getArtist(artistId, signal);
+        const genres = Array.isArray(artist.genres)
+          ? artist.genres.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          : [];
+        if (genres.length) normalized = { ...normalized, genre: genres[0], raw: { ...normalized.raw, artistGenres: genres } };
+      } catch (error) {
+        if (signal?.aborted) throw signal.reason;
+        // Track metadata remains valid if optional artist-genre enrichment is unavailable.
+      }
+    }
+    const album = track.album && typeof track.album === "object" ? track.album as Record<string, unknown> : {};
+    const albumId = typeof album.id === "string" ? album.id : null;
+    if (albumId && client.getAlbum) {
+      try {
+        const albumDetails = await client.getAlbum(albumId, signal);
+        const externalIds = albumDetails.external_ids && typeof albumDetails.external_ids === "object"
+          ? albumDetails.external_ids as Record<string, unknown> : {};
+        const upc = typeof externalIds.upc === "string" ? externalIds.upc : normalized.upc;
+        const label = typeof albumDetails.label === "string" ? albumDetails.label : normalized.label;
+        normalized = { ...normalized, upc, label, raw: { ...normalized.raw, albumMetadata: albumDetails } };
+      } catch (error) {
+        if (signal?.aborted) throw signal.reason;
+        // Missing album enrichment does not invalidate recognized track identity.
+      }
+    }
+    return normalized;
   } catch (error) {
     if (signal?.aborted) throw signal.reason;
     // Spotify is optional enrichment for the audit pipeline. A denied or

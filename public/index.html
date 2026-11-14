@@ -113,10 +113,10 @@
             </button>
             <p id="actionMessage">Upload a master, add a DSP link, or provide both for one merged audit.</p>
           </div>
-          <p class="capability-warning">Access is anonymous and password-free. A private job credential is issued once after submission; keep this page open until you have downloaded it.</p>
+          <p class="capability-warning">Access is anonymous. A private, job-specific key is issued once after submission. Keep it private; anyone with the key can access this audit.</p>
 
           <div class="result-panel hidden" id="resultPanel" aria-live="polite">
-            <div class="result-label">AUDIT ACCEPTED</div>
+            <div class="result-label" id="resultName">AUDIT ACCEPTED</div>
             <div class="result-grid">
               <div><span>JOB ID</span><strong id="jobId">—</strong></div>
               <div><span>SERVER HASH</span><strong id="serverHash">—</strong></div>
@@ -124,14 +124,21 @@
             </div>
             <p id="resultMessage">Your recording is now in the processing queue. Recognition, measurement and reconciliation run as separate evidence stages.</p>
             <div class="capability-save">
-              <p>Important: your private access credential is issued once. Download and keep it somewhere secure. Closing or reloading this page loses the in-memory credential; the job ID alone cannot restore access.</p>
-              <button class="ghost-btn" id="saveAccessTokenButton" type="button" disabled>Download private access credential</button>
+              <p>Your private audit key is shown masked. Reveal it only when needed, or copy it securely. It is held in this page's memory only; closing or reloading the page loses it.</p>
+              <div class="access-key-display">
+                <code id="accessTokenDisplay" aria-label="Masked private audit key">••••••••••••••••••••••••••••••••</code>
+                <button class="ghost-btn" id="revealAccessTokenButton" type="button" disabled>Reveal</button>
+                <button class="ghost-btn" id="copyAccessTokenButton" type="button" disabled>Copy key</button>
+              </div>
+              <label for="fullReportAccessKey">Full-report access key</label>
+              <input id="fullReportAccessKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste this audit's private key" />
+              <button class="primary-btn" id="unlockFullReportButton" type="button" disabled>Unlock full report</button>
               <p id="tokenSaveMessage" role="status"></p>
             </div>
             <div class="report-actions hidden" id="reportActions">
               <div class="report-downloads"><button class="primary-btn" id="sampleReportButton" type="button">Download sample report <b>↓</b></button></div>
               <p id="reportDownloadMessage" role="status"></p>
-              <p>Full reports remain restricted to the Reson8 operator while payment verification is disabled. No account or password is needed to retrieve your sample report.</p>
+              <p>The private key unlocks only this audit. Payment enforcement, when enabled, remains mandatory.</p>
             </div>
           </div>
         </div>

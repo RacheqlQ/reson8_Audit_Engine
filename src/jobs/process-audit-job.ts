@@ -6,12 +6,14 @@ import { isPdf } from "../reports/pdf-output.js";
 import { analyzePcm, type SonicDnaFeatures } from "../audio/sonic-dna.js";
 import type { TrackIdentity } from "../metadata/MetadataEngine.js";
 import { reconcileMetadata, type MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
+import { readAudioTags } from "../metadata/audio-tags.js";
 
 export interface AuditJobRecord {
   id: string;
   ownerId: string | null;
   sourceAudioPath: string | null;
   mimeType: string | null;
+  filename?: string | null;
   sourceType: "master" | "dsp_link" | "combined";
   catalogUrl: string | null;
   status: "queued" | "processing" | "completed" | "failed";
@@ -101,6 +103,7 @@ function catalogMetadataInput(metadata: CatalogMetadata) {
           artist: metadata.artist,
           album: metadata.album,
           isrc: metadata.isrc,
+          upc: metadata.upc,
           label: metadata.label,
           releaseDate: metadata.releaseDate,
           genres: metadata.genre ? [metadata.genre] : [],
@@ -135,8 +138,10 @@ function identityEvidence(identity: TrackIdentity): Record<string, unknown> {
     releaseDate: identity.releaseDate,
     label: identity.label,
     isrc: identity.isrc,
+    upc: identity.upc,
     genres: identity.genres,
     sourceProviders: identity.sourceProviders,
+    fieldProvenance: identity.fieldProvenance,
   };
 }
 
@@ -266,10 +271,16 @@ export async function processAuditJob(
 
     let masterDna: SonicDnaFeatures | null = null;
     let masterRecognition: AuditRecognition | null = null;
+    let masterTags: ReturnType<typeof readAudioTags> | null = null;
+    const attemptedRecognitionProviders = new Set<string>();
     if (hasMaster) {
       const master = await awaitWithLease(deps, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
+      masterTags = readAudioTags(master);
       const sample = await awaitWithLease(deps, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
-      masterRecognition = await awaitWithLease(deps, (signal) => deps.recognize(sample, signal));
+      masterRecognition = await awaitWithLease(deps, (signal) => {
+        attemptedRecognitionProviders.add("audd");
+        return deps.recognize(sample, signal);
+      });
       const decoded = await awaitWithLease(deps, (signal) => deps.decode(master, job.mimeType!, signal));
       const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
       masterDna = {
@@ -283,7 +294,10 @@ export async function processAuditJob(
     let catalogRecognition: AuditRecognition | null = null;
     if (metadata?.previewUrl) {
       try {
-        catalogRecognition = await awaitWithLease(deps, (signal) => deps.recognizeUrl(metadata!.previewUrl!, signal));
+        catalogRecognition = await awaitWithLease(deps, (signal) => {
+          attemptedRecognitionProviders.add("audd");
+          return deps.recognizeUrl(metadata!.previewUrl!, signal);
+        });
       } catch (error) {
         if (deps.signal?.aborted) throw leaseLostError(deps.signal);
         // Optional preview recognition must not block catalog-only or combined analysis.
@@ -301,6 +315,8 @@ export async function processAuditJob(
 
     const metadataInput = {
       ...(metadata ? catalogMetadataInput(metadata) : {}),
+      ...(masterTags ? { id3: masterTags } : {}),
+      ...(job.filename ? { filename: job.filename } : {}),
       audd: recognitionMetadataInput(recognition),
     };
     const reconciliation = reconcileMetadata(metadataInput);
@@ -320,6 +336,7 @@ export async function processAuditJob(
         : identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
       identity: identityEvidence(identity),
       reconciliation: reconciliationEvidence(reconciliation),
+      metadataSourcesChecked: [...(metadata ? [metadata.platform] : []), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...attemptedRecognitionProviders],
       sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };

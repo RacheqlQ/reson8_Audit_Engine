@@ -35,18 +35,24 @@ export function strengthRiskItemsForColumn(rows:ChartRow[],group:"strength"|"ris
  return rows.filter(row=>row.group===group);
 }
 
-function shown(v:ChartRow["value"]):string{return v===null||v===undefined||v===""||(typeof v==="number"&&!Number.isFinite(v))?"Not determined":String(v);}
+function shown(v:ChartRow["value"]):string{
+ if(v===null||v===undefined||v===""||(typeof v==="number"&&!Number.isFinite(v)))return "Not determined";
+ if(typeof v==="number")return String(Number(v.toFixed(2)));
+ return String(v).replace(/[\u2010-\u2015\u2212]/g,"-").replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/\u2026/g,"...");
+}
 function line(p:PDFPage,x1:number,y1:number,x2:number,y2:number,c=C.line,w=.8){p.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},color:c,thickness:w});}
+function normalizeChartText(value:string):string{return value.normalize("NFKC").replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/[\u2010-\u2015\u2212]/g,"-").replace(/[\u00A0\u202F]/g," ").replace(/\u2026/g,"...").replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"?");}
 function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
+ s=normalizeChartText(s);
  const out:string[]=[];let current="";
  for(const word of s.split(/\s+/).filter(Boolean)){const next=current?current+" "+word:word;if(font.widthOfTextAtSize(next,size)>width&&current){out.push(current);current=word;}else current=next;}
  if(current)out.push(current);return out;
 }
-function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink){p.drawText(s,{x,y,font,size,color:c});}
+function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink){p.drawText(normalizeChartText(s),{x,y,font,size,color:c});}
 function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
 export function chartPanelHeight(kind:ChartKind="bars",rows:ChartRow[]=[]):number{
  if(kind==="radar")return 345;
- if(kind==="layers")return 180;if(kind==="tension"){const maxItems=Math.max(rows.filter(row=>row.group==="strength").length,rows.filter(row=>row.group==="risk").length);return Math.max(255,110+75+Math.min(10,maxItems)*21);}
+ if(kind==="layers")return 180;if(kind==="tension")return 205;
  if(kind==="sonic")return 230;
  if(kind==="spectrum")return 270;
  if(kind==="constellation"||kind==="timeline"||kind==="chain")return 202;
@@ -81,14 +87,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
    result.push({x:cx+9,y:panelTop-15,width:colW-18,height:12,id:"label-tension-title-"+col});
    result.push({x:cx+9,y:panelTop-42,width:colW-18,height:12,id:"label-tension-count-"+col});
    result.push({x:cx+9,y:panelTop-58,width:colW-13,height:15,id:"shape-tension-count-bar-and-shadow-"+col});
-   let baseline=panelTop-75;
-   strengthRiskItemsForColumn(rows,col===0?"strength":"risk").slice(0,10).forEach((row,index)=>{
-    const charsPerLine=Math.max(1,Math.floor((colW-34)/(7.5*.52)));
-    const lineCount=Math.min(2,Math.max(1,Math.ceil(row.label.length/charsPerLine)));
-    result.push({x:cx+8,y:baseline-2,width:13,height:9,id:"label-tension-index-"+col+"-"+index});
-    result.push({x:cx+21,y:baseline-10,width:colW-32,height:lineCount*9.5,id:"label-tension-item-"+col+"-"+index});
-    baseline-=Math.max(11,lineCount*9.5+2);
-   });
+   result.push({x:cx+9,y:panelTop-84,width:colW-18,height:10,id:"label-tension-detail-"+col});
   });
  }else if(kind==="spectrum"){
   const trackX=x+170,trackW=240;
@@ -208,7 +207,7 @@ function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,hei
  p.drawRectangle({x,y:top-HEADER_H,width:w,height:HEADER_H,color:C.navy});
  p.drawRectangle({x,y:top-HEADER_H,width:5,height:HEADER_H,color:input.inferred?C.violet:input.unavailable?C.coral:C.teal});
  tracked(p,input.title.toUpperCase(),x+13,top-19,bold,8,C.white,.65);
- const status=input.unavailable?"REQUIRES AUDIO":input.inferred?"INFERRED":"OBSERVED";
+ const status=input.unavailable?"REQUIRES AUDIO":input.inferred?"HYPOTHESIS":"MEASURED";
  tracked(p,status,x+w-90,top-19,bold,6.2,input.inferred?C.gold:C.teal,.45);
  const captionTop=bottom+CAPTION_H;
  line(p,x+9,captionTop,x+w-9,captionTop,C.line,.65);
@@ -245,12 +244,17 @@ function drawSonic(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<ty
    ring(p,x+22,y-29,15,n===null?null:n,c,f,b);
    if(n===null)text(p,"Not determined",x+45,y-32,f,6.5,C.muted);
   }else if(v!==null){
-   text(p,String(v),x,y-34,b,25,c);
-   if(/LUFS/i.test(label))text(p,"LUFS",x+Math.min(74,String(v).length*14),y-32,b,7,C.muted);
-   else if(/BPM/i.test(label))text(p,"BPM",x+Math.min(70,String(v).length*14),y-32,b,7,C.muted);
-   else if(/RANGE/i.test(label))text(p,"dB",x+Math.min(80,String(v).length*14),y-32,b,7,C.muted);
+   const display=shown(row.value);
+   const unit=/LUFS/i.test(label)?"LUFS":/BPM/i.test(label)?"BPM":/RANGE/i.test(label)?"dB":"";
+   let metricSize=25;
+   const maxMetricWidth=unit?102:138;
+   while(metricSize>11&&b.widthOfTextAtSize(display,metricSize)>maxMetricWidth)metricSize-=1;
+   text(p,display,x,y-34,b,metricSize,c);
+   const unitX=x+b.widthOfTextAtSize(display,metricSize)+5;
+   if(unit&&unitX+b.widthOfTextAtSize(unit,7)<=x+150)text(p,unit,unitX,y-32,b,7,C.muted);
   }else if(/KEY/i.test(label)&&shown(row.value)!=="Not determined"){
-   text(p,shown(row.value),x,y-33,b,15,c);
+   let keySize=15;const keyText=shown(row.value);while(keySize>9&&b.widthOfTextAtSize(keyText,keySize)>138)keySize-=1;
+   text(p,keyText,x,y-33,b,keySize,c);
   }else{
    ring(p,x+14,y-30,13,null,c,f,b);
    text(p,"Not determined",x+35,y-32,f,6.2,C.muted);
@@ -305,14 +309,9 @@ function drawTension(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<
   tracked(p,title,x+9,panelTop-12,b,7,C.white,.5);
   text(p,String(count)+" documented",x+9,panelTop-37,b,9,accent);
   shadowBar(p,x+9,panelTop-56,(colW-18)*count/maxCount,5,accent,c);
-  const summaries=strengthRiskItemsForColumn(rows,c===0?"strength":"risk").slice(0,10);
-  let y=panelTop-75;
-  summaries.slice(0,10).forEach((item,index)=>{
-   const lines=wrapChartSummary(item.label,f,7.5,colW-34,2);
-   text(p,String(index+1)+".",x+8,y,b,7.5,accent);
-   lines.forEach((part,lineIndex)=>text(p,part,x+21,y-lineIndex*9.5,f,7.5,C.ink));
-   y-=Math.max(11,lines.length*9.5+2);
-  });
+  // The complete written strengths and risks appear in the adjacent report sections.
+  // Keep this dashboard comparative and uncluttered instead of truncating long prose.
+  text(p,"See written assessment for complete details",x+9,panelTop-78,f,6.5,C.muted);
  }
 }
 function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
@@ -331,7 +330,7 @@ function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType
    const markerX=trackX+ratio*trackW;
    p.drawLine({start:{x:markerX,y:trackY-4},end:{x:markerX,y:trackY+trackH+4},color:C.coral,thickness:2});
    p.drawCircle({x:markerX,y:trackY+trackH/2,size:4,color:C.coral,borderColor:C.white,borderWidth:.8});
-   text(p,String(raw)+(range.unit?" "+range.unit:""),trackX+trackW+7,trackY+1,b,7,C.ink);
+   text(p,String(Number(raw.toFixed(2)))+(range.unit?" "+range.unit:""),trackX+trackW+7,trackY+1,b,7,C.ink);
   }
   text(p,String(range.min),trackX,trackY-13,f,5.8,C.muted);
   text(p,String(range.max)+(range.unit?" "+range.unit:""),trackX+trackW-36,trackY-13,f,5.8,C.muted);

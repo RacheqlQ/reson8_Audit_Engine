@@ -47,15 +47,12 @@ describe("capability-protected anonymous report access", () => {
     expect(response.statusCode).toBe(404);
     await app.close();
   });
-  it("requires both the job capability and operator authorization for full reports while payments are disabled", async () => {
+  it("allows the matching job capability to unlock full reports while payments are disabled", async () => {
     process.env.PAYMENTS_ENABLED = "false";
-    process.env.RESON8_OPERATOR_KEY = OPERATOR_KEY;
+    delete process.env.RESON8_OPERATOR_KEY;
     const app = buildServer(store());
     const tokenOnly = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { "x-reson8-report-token": ACCESS_TOKEN } });
-    const operatorAndToken = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { "x-reson8-operator-key": OPERATOR_KEY, "x-reson8-report-token": ACCESS_TOKEN } });
-    expect(tokenOnly.statusCode).toBe(403);
-    expect(tokenOnly.json().error).toBe("OPERATOR_AUTH_REQUIRED");
-    expect(operatorAndToken.statusCode).toBe(200);
+    expect(tokenOnly.statusCode).toBe(200);
     await app.close();
   });
   it("keeps full reports payment-gated when payments are enabled and no operator is authenticated", async () => {
@@ -102,10 +99,7 @@ describe("capability-protected anonymous report access", () => {
     const sample = await app.inject({ method: "GET", url: "/v1/audits/id/reports/sample", headers });
     const fullWithoutOperator = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers });
     expect(sample.statusCode).toBe(200);
-    expect(fullWithoutOperator.statusCode).toBe(403);
-    expect(getAuditReportPayload).toHaveBeenCalledTimes(1);
-    const authorizedFull = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { ...headers, "x-reson8-operator-key": OPERATOR_KEY } });
-    expect(authorizedFull.statusCode).toBe(200);
+    expect(fullWithoutOperator.statusCode).toBe(200);
     expect(getAuditReportPayload).toHaveBeenCalledTimes(2);
     process.env.PAYMENTS_ENABLED = "true";
     const paymentGatedFull = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { ...headers, "x-reson8-operator-key": OPERATOR_KEY } });
@@ -119,13 +113,20 @@ describe("capability-protected anonymous report access", () => {
     expect(operatorAuthorized("wrong-key-that-is-at-least-32-bytes-long", OPERATOR_KEY)).toBe(false);
     expect(operatorAuthorized(OPERATOR_KEY, OPERATOR_KEY)).toBe(true);
   });
-  it("treats malformed payment flag values as disabled without opening full report access", async () => {
+  it("interprets only explicit false as disabled and accepts surrounding whitespace", () => {
+    expect(paymentsEnabled(undefined)).toBe(false);
+    expect(paymentsEnabled(" false ")).toBe(false);
+    expect(paymentsEnabled(" TRUE ")).toBe(true);
+    expect(paymentsEnabled("true")).toBe(true);
+  });
+  it("fails closed for malformed non-empty payment configuration", async () => {
     process.env.PAYMENTS_ENABLED = "enabled-ish";
     process.env.RESON8_OPERATOR_KEY = OPERATOR_KEY;
-    expect(paymentsEnabled()).toBe(false);
+    expect(paymentsEnabled()).toBe(true);
     const app = buildServer(store());
     const response = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { "x-reson8-report-token": ACCESS_TOKEN } });
-    expect(response.statusCode).toBe(403);
+    expect(response.statusCode).toBe(402);
+    expect(response.json().error).toBe("PAYMENT_REQUIRED");
     await app.close();
   });
 });

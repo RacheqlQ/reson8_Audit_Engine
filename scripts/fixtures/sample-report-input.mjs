@@ -52,7 +52,7 @@ const assessment = {
  }
 };
 const audio={provenance:"uploaded_audio_master",sampleRate:44100,channels:2,durationSeconds:182.4,bpm:96,alternateTempo:192,tempoConfidence:0.94,key:"A",mode:"minor",keyConfidence:0.78,loudnessLufs:-9.8,rmsEnergy:0.17,dynamicRangeDb:8.4,spectralCentroidHz:2140,spectralBandwidthHz:1860,spectralRolloffHz:7400,zeroCrossingRate:0.071,moodTags:["Energetic","Warm"],genreContext:["R&B","Afro-R&B"]};
-const evidence={auditType:"AUDIO-BASED AUDIT",status:"fixture",artist:"Fixture Artist",title:"Fixture Track",album:"Fixture EP",releaseDate:"2026-10-01",label:"Fixture Label",isrc:"NGFIX2600001",platform:"fixture",sources:["synthetic_audio_fixture"],fixture:true};
+const evidence={auditType:"AUDIO-BASED AUDIT",status:"fixture",artist:"Fixture Artist",title:"Fixture Track",album:"Fixture EP",releaseDate:"2026-10-01",label:"Fixture Label",isrc:"NGFIX2600001",platform:"fixture",externalIds:{spotify:"fixture-spotify-id",apple_music:"fixture-apple-music-id"},sources:["synthetic_audio_fixture"],fixture:true};
 export const sampleReportInput={auditId:"fixture-full-audio",generatedAt:"2026-11-09T00:00:00.000Z",evidence,sonicDna:audio,assessment};
 export const fullAudioFixture=sampleReportInput;
 export const partialAudioFixture={...sampleReportInput,auditId:"fixture-partial-audio-low-confidence",evidence:{...evidence,title:"Fixture Track — Partial"},sonicDna:{...audio,key:null,mode:null,keyConfidence:0.12},assessment:{...assessment,confidence:0.28,scorecard:{...assessment.scorecard,dynamicRangeLoudness:{score:null,rationale:"Key confidence is low in this partial fixture; this null score exercises the unsupported-evidence state and is not a real master assessment."}}}};

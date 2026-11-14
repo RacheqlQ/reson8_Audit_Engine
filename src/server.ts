@@ -48,7 +48,12 @@ async function servePublicFile(filename: string) {
 }
 
 export function paymentsEnabled(value: string | undefined = process.env.PAYMENTS_ENABLED): boolean {
-  return typeof value === "string" && value.trim().toLowerCase() === "true";
+  if (value === undefined || value.trim() === "") return false;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  // An unrecognized non-empty value must never silently disable the payment gate.
+  return true;
 }
 
 /** Operator access fails closed unless a strong secret is configured. */
@@ -92,10 +97,6 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
 
   app.get("/audit-polling.js", async (_request, reply) => {
     return reply.type("text/javascript; charset=utf-8").send(await servePublicFile("audit-polling.js"));
-  });
-
-  app.get("/credential-download.js", async (_request, reply) => {
-    return reply.type("text/javascript; charset=utf-8").send(await servePublicFile("credential-download.js"));
   });
 
   app.post<{
@@ -193,22 +194,13 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
       return reply.code(500).send({ error: "REPORT_ACCESS_VERIFICATION_FAILED", message: "Unable to verify report access" });
     }
 
-    if (tier === "full") {
-      // Payment enforcement is fail-closed. Operator credentials never substitute
-      // for a verified payment when public payment enforcement is enabled.
-      if (paymentsEnabled()) {
-        return reply.code(402).send({
-          error: "PAYMENT_REQUIRED",
-          message: "Verified payment is required; payment verification is not configured.",
-        });
-      }
-      const isOperator = operatorAuthorized(request.headers["x-reson8-operator-key"]);
-      if (!isOperator) {
-        return reply.code(403).send({
-          error: "OPERATOR_AUTH_REQUIRED",
-          message: "Full report retrieval is restricted to an authorized Reson8 operator until payment verification is implemented.",
-        });
-      }
+    if (tier === "full" && paymentsEnabled()) {
+      // A job-scoped capability never substitutes for verified payment.
+      // Keep public full-report access fail-closed until payment verification exists.
+      return reply.code(402).send({
+        error: "PAYMENT_REQUIRED",
+        message: "Verified payment is required; payment verification is not configured.",
+      });
     }
 
     try {

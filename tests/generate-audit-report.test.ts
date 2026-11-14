@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,generateAuditReport,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,generateAuditReport,metadataFieldSource,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
@@ -9,16 +9,16 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(checkLayout([{x:0,y:0,width:20,height:20,id:"a"},{x:10,y:10,width:20,height:20,id:"b"}]).ok).toBe(false);
   expect(checkLayout([{x:590,y:0,width:20,height:20,id:"overflow"}]).ok).toBe(false);
  });
- it("enforces the 35 percent maximum empty-area threshold and rejects empty pages",()=>{
+ it("enforces the 40 percent maximum empty-area threshold and rejects empty pages",()=>{
   expect(checkPageDensity([{x:48,y:76,width:499,height:659,id:"dense"}]).ok).toBe(true);
   expect(checkPageDensity([{x:48,y:600,width:499,height:100,id:"sparse"}]).ok).toBe(false);
   expect(checkPageDensity([]).ok).toBe(false);
  });
- it("sizes the strength-risk chart to its actual row count without clipping the maximum fixture",()=>{
+ it("keeps the strengths-versus-risks summary compact while full statements remain in the written report",()=>{
   const compact=chartPanelHeight("tension",buildStrengthRiskChartRows(["A","B","C"],["D","E"]));
-  const fourItems=chartPanelHeight("tension",buildStrengthRiskChartRows(["A","B","C","D"],["E","F","G","H"]));
   const maximum=chartPanelHeight("tension",buildStrengthRiskChartRows(Array.from({length:10},(_,i)=>"Strength "+i),Array.from({length:10},(_,i)=>"Risk "+i)));
-  expect(compact).toBe(255);expect(fourItems).toBeGreaterThanOrEqual(245);expect(maximum).toBeGreaterThanOrEqual(371);
+  expect(compact).toBe(205);expect(maximum).toBe(205);
+  expect(chartLayoutIssuesForReport(fullAudioFixture as any)).toEqual([]);
  });
  it("checks chart-caption separation for every chart in all four fixtures",()=>{
   for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
@@ -54,7 +54,19 @@ describe("A4 report layout and fixture coverage",()=>{
   const report=pages.flatMap(p=>[p.title,...p.text]).join(" ");
   expect(report).toContain("Tempo and lane fit");expect(report).toContain("Rhythmic consistency");
   expect(report).toContain("Dynamic range and loudness readiness");expect(report).toContain("Human listening checklist");
-  expect(report).toContain("INDUSTRY PRACTICE");expect(report).toContain("references to verify");
+  expect(report).toContain("General industry guidance");expect(report).toContain("references to verify");
+ });
+ it("prints field-level source attribution and leaves absent provenance explicitly unavailable",()=>{
+  expect(metadataFieldSource({fieldProvenance:{title:"spotify",artist:"id3",album:"filename"}}, "title")).toBe("Field source: Spotify");
+  expect(metadataFieldSource({fieldProvenance:{title:"spotify",artist:"id3",album:"filename"}}, "artist")).toBe("Field source: Embedded audio tags");
+  expect(metadataFieldSource({fieldProvenance:{title:"spotify",artist:"id3",album:"filename"}}, "album")).toBe("Field source: Uploaded filename");
+  expect(metadataFieldSource({fieldProvenance:{}}, "isrc")).toBe("Field source: unavailable");
+  const input=structuredClone(fullAudioFixture) as any;
+  input.evidence.fieldProvenance={title:"spotify",artist:"id3",album:null,isrc:null,upc:null,label:null,releaseDate:null};
+  const identity=planAuditReportPages(input,"full").find(page=>page.title==="Identity and source reconciliation");
+  expect(identity?.text.join(" ")).toContain("Track: ");
+  expect(identity?.text.join(" ")).toContain("Field source: Spotify");
+  expect(identity?.text.join(" ")).toContain("Field source: Embedded audio tags");
  });
  it("collapses all missing audio measurements into one empty state",()=>{
   const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");

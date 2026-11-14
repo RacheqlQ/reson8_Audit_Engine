@@ -67,6 +67,7 @@ describe("MetadataEngine", () => {
     expect(identity.title).toBe("(Sittin' On) the Dock of the Bay - Mono");
     expect(identity.artist).toBeNull();
     expect(identity.sourceProviders).toEqual([]);
+    expect(identity.fieldProvenance).toMatchObject({ title: "filename", artist: null, album: null });
   });
 
   it("uses filename artist/title parsing only when structured providers do not supply them", () => {
@@ -104,4 +105,11 @@ describe("MetadataEngine", () => {
     expect(Object.isFrozen(identity.genres)).toBe(true);
     expect(Object.isFrozen(identity.sourceProviders)).toBe(true);
   });
+  it("retains UPC identifiers from DSP metadata without fabricating missing values", () => {
+    const identity = MetadataEngine.normalize({
+      spotify: { title: "Known Title", artist: "Known Artist", upc: "123456789012" },
+    });
+    expect(identity.upc).toBe("123456789012");
+  });
+
 });

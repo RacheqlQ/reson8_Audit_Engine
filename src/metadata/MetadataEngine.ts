@@ -1,14 +1,18 @@
 export type MetadataProvider = "spotify" | "tidal" | "apple_music" | "deezer" | "youtube_music" | "audd" | "id3";
 
+export type MetadataIdentityField = "title" | "artist" | "album" | "isrc" | "upc" | "label" | "releaseDate";
+
 export interface TrackIdentity {
   readonly title: string | null;
   readonly artist: string | null;
   readonly album: string | null;
   readonly isrc: string | null;
+  readonly upc: string | null;
   readonly label: string | null;
   readonly releaseDate: string | null;
   readonly genres: readonly string[];
   readonly sourceProviders: readonly MetadataProvider[];
+  readonly fieldProvenance: Readonly<Record<MetadataIdentityField, MetadataProvider | "filename" | null>>;
 }
 
 export interface StructuredMetadata {
@@ -16,6 +20,7 @@ export interface StructuredMetadata {
   artist?: string | null;
   album?: string | null;
   isrc?: string | null;
+  upc?: string | null;
   label?: string | null;
   releaseDate?: string | null;
   genres?: readonly string[] | null;
@@ -28,6 +33,7 @@ export interface AuddMetadata {
   artist?: string | null;
   album?: string | null;
   isrc?: string | null;
+  upc?: string | null;
   label?: string | null;
   releaseDate?: string | null;
   genres?: readonly string[] | null;
@@ -149,35 +155,54 @@ export class MetadataEngine {
 
     const filename = parseFilename(input.filename);
 
-    const title = MetadataEngine.pickField(
-      providers,
-      "title",
-      filename.title,
-    );
-    const artist = MetadataEngine.pickField(
-      providers,
-      "artist",
-      filename.artist,
-    );
+    const title = MetadataEngine.pickField(providers, "title", filename.title);
+    const artist = MetadataEngine.pickField(providers, "artist", filename.artist);
     const album = MetadataEngine.pickField(providers, "album", null);
     const isrc = MetadataEngine.pickIsrc(providers);
+    const upc = MetadataEngine.pickField(providers, "upc", null);
     const label = MetadataEngine.pickField(providers, "label", null);
     const releaseDate = MetadataEngine.pickField(providers, "releaseDate", null);
     const genres = MetadataEngine.pickGenres(providers);
     const sourceProviders = MetadataEngine.collectSourceProviders(providers);
+    const fieldProvenance = Object.freeze({
+      title: MetadataEngine.fieldSource(providers, "title", filename.title),
+      artist: MetadataEngine.fieldSource(providers, "artist", filename.artist),
+      album: MetadataEngine.fieldSource(providers, "album", null),
+      isrc: MetadataEngine.fieldSource(providers, "isrc", null, true),
+      upc: MetadataEngine.fieldSource(providers, "upc", null),
+      label: MetadataEngine.fieldSource(providers, "label", null),
+      releaseDate: MetadataEngine.fieldSource(providers, "releaseDate", null),
+    });
 
     const identity: TrackIdentity = Object.freeze({
       title,
       artist,
       album,
       isrc,
+      upc,
       label,
       releaseDate: cleanDate(releaseDate),
       genres: Object.freeze([...genres]),
       sourceProviders: Object.freeze([...sourceProviders]),
+      fieldProvenance,
     });
 
     return identity;
+  }
+
+  private static fieldSource(
+    providers: Readonly<Record<MetadataProvider, StructuredMetadata | null>>,
+    field: keyof StructuredMetadata,
+    filenameFallback: string | null,
+    isrc = false,
+  ): MetadataProvider | "filename" | null {
+    for (const provider of PROVIDER_PRIORITY) {
+      const value = isrc
+        ? normalizeIsrc(providers[provider]?.[field])
+        : cleanString(providers[provider]?.[field]);
+      if (value) return provider;
+    }
+    return filenameFallback ? "filename" : null;
   }
 
   private static pickField(
@@ -224,6 +249,7 @@ export class MetadataEngine {
         cleanString(metadata.artist),
         cleanString(metadata.album),
         normalizeIsrc(metadata.isrc),
+        cleanString(metadata.upc),
         cleanString(metadata.label),
         cleanDate(metadata.releaseDate),
         ...cleanGenres(metadata.genres),
