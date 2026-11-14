@@ -1,3 +1,5 @@
+import { detectDspPlatform } from "../providers/dsp/catalog.js";
+
 export type AuditSourceType = "master" | "dsp_link" | "combined";
 
 export interface AuditSourceSelection {
@@ -15,6 +17,7 @@ export function classifyAuditSources(input: AuditSourceSelection): AuditSourceTy
     const url = new URL(catalogUrl);
     if (url.protocol !== "https:") throw new Error("DSP URL must use HTTPS");
     if (url.username || url.password) throw new Error("DSP URL must not contain credentials");
+    if (detectDspPlatform(url.toString()) === "unknown") throw new Error("Unsupported DSP or catalog URL");
   }
   if (input.hasMaster && catalogUrl) return "combined";
   return input.hasMaster ? "master" : "dsp_link";
