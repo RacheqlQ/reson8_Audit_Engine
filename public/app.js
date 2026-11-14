@@ -57,7 +57,8 @@ function renderEvidenceChain(currentStepIndex=0){
 }
 function stopPolling(){auditPoller.stop();}
 function applyAuditPayload(payload){
-  currentAuditPayload=payload;
+  currentAuditPayload={...payload,displayName:currentAuditPayload?.displayName??payload.displayName};
+  unlockFullReportButton.disabled=!(payload.status==="completed"&&payload.full?.available);
   renderEvidenceChain(payload.currentStepIndex ?? (payload.status==="completed" ? 5 : 0));
   auditStatus.textContent=(payload.status||"unknown").toUpperCase();
   auditStatus.className=payload.status==="failed"?"failed":payload.status==="completed"?"completed":"queued";
