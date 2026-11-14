@@ -87,11 +87,11 @@ function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready
 function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
 function professionalEvidenceLanguage(value:string):string {
  return value
-  .replace(/\\bOBSERVED\\b/g,"Measured from the uploaded master")
-  .replace(/\\bRECOGNIZED\\b/g,"Returned by an external source")
-  .replace(/\\bRECONCILED\\b/g,"Cross-checked across independent sources")
-  .replace(/\\bINFERRED\\b/g,"Analytical hypothesis")
-  .replace(/\\bINDUSTRY PRACTICE\\b/g,"General industry guidance");
+  .replace(/\bOBSERVED\b/g,"Measured from the uploaded master")
+  .replace(/\bRECOGNIZED\b/g,"Returned by an external source")
+  .replace(/\bRECONCILED\b/g,"Cross-checked across independent sources")
+  .replace(/\bINFERRED\b/g,"Analytical hypothesis")
+  .replace(/\bINDUSTRY PRACTICE\b/g,"General industry guidance");
 }
 export function metadataFieldStatus(e:Record<string,unknown>,field:string):string{
  const value=text(field==="genre"?(e.genre??e.genres):e[field]);
