@@ -185,18 +185,22 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
       return reply.code(500).send({ error: "REPORT_ACCESS_VERIFICATION_FAILED", message: "Unable to verify report access" });
     }
 
-    const isOperator = operatorAuthorized(request.headers["x-reson8-operator-key"]);
-    if (tier === "full" && !isOperator) {
+    if (tier === "full") {
+      // Payment enforcement is fail-closed. Operator credentials never substitute
+      // for a verified payment when public payment enforcement is enabled.
       if (paymentsEnabled()) {
         return reply.code(402).send({
           error: "PAYMENT_REQUIRED",
           message: "Verified payment is required; payment verification is not configured.",
         });
       }
-      return reply.code(403).send({
-        error: "OPERATOR_AUTH_REQUIRED",
-        message: "Full report retrieval is restricted to an authorized Reson8 operator until payment verification is implemented.",
-      });
+      const isOperator = operatorAuthorized(request.headers["x-reson8-operator-key"]);
+      if (!isOperator) {
+        return reply.code(403).send({
+          error: "OPERATOR_AUTH_REQUIRED",
+          message: "Full report retrieval is restricted to an authorized Reson8 operator until payment verification is implemented.",
+        });
+      }
     }
 
     try {

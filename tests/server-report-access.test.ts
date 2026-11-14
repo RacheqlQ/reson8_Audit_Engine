@@ -67,11 +67,20 @@ describe("capability-protected anonymous report access", () => {
     expect(response.json().error).toBe("PAYMENT_REQUIRED");
     await app.close();
   });
-  it("allows an operator to retrieve a full report only with the job capability too", async () => {
+  it("does not let operator credentials bypass enabled payment enforcement", async () => {
     process.env.PAYMENTS_ENABLED = "true";
     process.env.RESON8_OPERATOR_KEY = OPERATOR_KEY;
     const app = buildServer(store());
     const response = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { "x-reson8-operator-key": OPERATOR_KEY, "x-reson8-report-token": ACCESS_TOKEN } });
+    expect(response.statusCode).toBe(402);
+    expect(response.json().error).toBe("PAYMENT_REQUIRED");
+    await app.close();
+  });
+  it("allows anonymous sample retrieval while payment enforcement is enabled", async () => {
+    process.env.PAYMENTS_ENABLED = "true";
+    delete process.env.RESON8_OPERATOR_KEY;
+    const app = buildServer(store());
+    const response = await app.inject({ method: "GET", url: "/v1/audits/id/reports/sample", headers: { "x-reson8-report-token": ACCESS_TOKEN } });
     expect(response.statusCode).toBe(200);
     await app.close();
   });
