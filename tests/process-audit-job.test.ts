@@ -3,6 +3,24 @@ import { processAuditJob } from "../src/jobs/process-audit-job.js";
 
 const assessment = {} as import("../src/providers/groq/client.js").ArAssessment;
 
+function id3Fixture(): Uint8Array {
+  const encoder = new TextEncoder();
+  const frame = (id: string, value: string): number[] => {
+    const data = [3, ...encoder.encode(value)];
+    return [...encoder.encode(id), 0, 0, 0, data.length, 0, 0, ...data];
+  };
+  const frames = [
+    ...frame("TIT2", "Embedded Title"), ...frame("TPE1", "Embedded Artist"),
+    ...frame("TALB", "Embedded Album"), ...frame("TSRC", "NGABC2600001"),
+    ...frame("TCON", "Afrobeats"), ...frame("TDRC", "2025-08-27"),
+    ...frame("TPUB", "BlackBeard Entertainment"),
+  ];
+  const size = frames.length;
+  return new Uint8Array([73,68,51,4,0,0,(size>>21)&127,(size>>14)&127,(size>>7)&127,size&127,...frames]);
+}
+
+
+
 describe("processAuditJob", () => {
   it("moves a queued master through evidence, Sonic DNA, Groq assessment and completion", async () => {
     const events: string[] = [];
@@ -11,7 +29,8 @@ describe("processAuditJob", () => {
         id: "job-123",
         ownerId: "owner-123",
         sourceAudioPath: "owner-123/job-123/master.wav",
-        mimeType: "audio/wav",
+        mimeType: "audio/mpeg",
+        filename: "Filename Artist - Filename Title.mp3",
         sourceType: "master",
         catalogUrl: null,
         status: "processing" as const,
@@ -22,16 +41,18 @@ describe("processAuditJob", () => {
       markProcessing: async () => events.push("processing"),
       collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
       recognizeUrl: async () => ({ matched: false as const }),
-      downloadMaster: async () => new Uint8Array([1, 2, 3]),
+      downloadMaster: async () => id3Fixture(),
       createRecognitionSample: async () => new Uint8Array([4, 5]),
-      recognize: async () => ({
-        matched: true as const,
-        artist: "Artist",
-        title: "Song",
-        spotifyUrl: "https://open.spotify.com/track/abc",
-      }),
+      recognize: async () => ({ matched: false as const }),
       saveRecognition: async () => events.push("recognition"),
-      saveEvidence: async () => events.push("evidence"),
+      saveEvidence: async (_jobId, _claimToken, _recognition, reconciliation) => {
+        expect(reconciliation.identity).toMatchObject({
+          artist: "Embedded Artist", title: "Embedded Title", album: "Embedded Album",
+          isrc: "NGABC2600001", genres: ["Afrobeats"], releaseDate: "2025-08-27",
+          label: "BlackBeard Entertainment",
+        });
+        events.push("evidence");
+      },
       decode: async () => ({
         samples: new Float32Array([0, 0, 0.1, 0.1, -0.1, -0.1, 0, 0]),
         sampleRate: 44100,
@@ -48,8 +69,12 @@ describe("processAuditJob", () => {
         expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
         expect(input.evidence).toMatchObject({
           auditType: "MASTER-BASED AUDIT",
-          artist: "Artist",
-          title: "Song",
+          metadataSourcesChecked: ["id3", "filename"],
+          artist: "Embedded Artist",
+          title: "Embedded Title",
+          album: "Embedded Album",
+          isrc: "NGABC2600001",
+          genres: ["Afrobeats"],
         });
         return assessment;
       },
