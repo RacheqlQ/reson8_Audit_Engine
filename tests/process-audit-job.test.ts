@@ -69,7 +69,7 @@ describe("processAuditJob", () => {
         expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
         expect(input.evidence).toMatchObject({
           auditType: "MASTER-BASED AUDIT",
-          metadataSourcesChecked: ["id3", "filename"],
+          metadataSourcesChecked: ["id3", "filename", "audd"],
           artist: "Embedded Artist",
           title: "Embedded Title",
           album: "Embedded Album",
