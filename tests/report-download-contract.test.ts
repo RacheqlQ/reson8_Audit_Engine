@@ -12,7 +12,7 @@ const store = () => ({
   createJobDependencies: () => { throw new Error("not used"); },
   getAuditStatus: async () => ({ jobId: "job-1", status: "completed" as const, currentStepIndex: 5, full: { available: true, version: 1 } }),
   verifyAuditAccessToken: async (jobId: string, token: string) => jobId === "job-1" && token === ACCESS_TOKEN,
-  getAuditReport: async () => ({ bytes: new TextEncoder().encode("%PDF-1.4\n% valid test fixture"), contentType: "application/pdf", filename: "report.pdf" }),
+  getAuditReport: async () => ({ bytes: new TextEncoder().encode("%PDF-1.4\\n% valid test fixture"), contentType: "application/pdf", filename: "report.pdf" }),
 });
 describe("report download contract", () => {
   it("serves the report download browser module as JavaScript", async () => {
@@ -23,6 +23,18 @@ describe("report download contract", () => {
     expect(response.headers["content-type"]).toContain("charset=utf-8");
     expect(response.body).toContain("export async function readPdfResponse");
     expect(response.body).toContain("export function triggerPdfDownload");
+    await app.close();
+  });
+  it.each([
+    ["/audit-polling.js", "export function createAuditPoller"],
+    ["/credential-download.js", "export function credentialFilename"],
+  ])("serves the %s browser dependency as JavaScript", async (path, exportedSymbol) => {
+    const app = buildServer(store() as any);
+    const response = await app.inject({ method: "GET", url: path });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/javascript");
+    expect(response.headers["content-type"]).toContain("charset=utf-8");
+    expect(response.body).toContain(exportedSymbol);
     await app.close();
   });
   it("does not reveal report existence without a matching capability token", async () => {
