@@ -86,8 +86,8 @@ async function submitAudit(){
     }else throw new Error("Provide a valid master file, DSP link, or both.");
     const payload=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(payload.message||"Audit intake failed");
-    const submittedName=hasMaster?selectedFile.name.replace(/\\.[^.]+$/,""):catalogPlatform.textContent+" "+(new URL(catalogUrl.value).pathname.split("/").filter(Boolean).at(-1)||"catalog");
-    const displayName=submittedName.replace(/[\\s]+/g," ").trim().slice(0,100)||"Untitled audit";
+    const submittedName=hasMaster?selectedFile.name.replace(/\.[^.]+$/,""):catalogPlatform.textContent+" "+(new URL(catalogUrl.value).pathname.split("/").filter(Boolean).at(-1)||"catalog");
+    const displayName=submittedName.replace(/[\s]+/g," ").trim().slice(0,100)||"Untitled audit";
     jobId.textContent=payload.jobId||"—";resultName.textContent=displayName+" — AUDIT ACCEPTED";serverHash.textContent=payload.sha256||"—";reportAccessToken=payload.reportAccessToken||null;currentAuditPayload={jobId:payload.jobId,status:"queued",currentStepIndex:0,displayName};resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
     resultMessage.textContent=hasMaster&&hasCatalog?"Accepted. Master Sonic DNA and DSP catalog evidence will be reconciled into one report.":hasMaster?"Accepted. Master Sonic DNA analysis is processing.":"Accepted. DSP catalog analysis is processing.";
     if(reportAccessToken){
