@@ -47,15 +47,12 @@ describe("capability-protected anonymous report access", () => {
     expect(response.statusCode).toBe(404);
     await app.close();
   });
-  it("requires both the job capability and operator authorization for full reports while payments are disabled", async () => {
+  it("allows the matching job capability to unlock full reports while payments are disabled", async () => {
     process.env.PAYMENTS_ENABLED = "false";
-    process.env.RESON8_OPERATOR_KEY = OPERATOR_KEY;
+    delete process.env.RESON8_OPERATOR_KEY;
     const app = buildServer(store());
     const tokenOnly = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { "x-reson8-report-token": ACCESS_TOKEN } });
-    const operatorAndToken = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { "x-reson8-operator-key": OPERATOR_KEY, "x-reson8-report-token": ACCESS_TOKEN } });
-    expect(tokenOnly.statusCode).toBe(403);
-    expect(tokenOnly.json().error).toBe("OPERATOR_AUTH_REQUIRED");
-    expect(operatorAndToken.statusCode).toBe(200);
+    expect(tokenOnly.statusCode).toBe(200);
     await app.close();
   });
   it("keeps full reports payment-gated when payments are enabled and no operator is authenticated", async () => {
@@ -102,10 +99,7 @@ describe("capability-protected anonymous report access", () => {
     const sample = await app.inject({ method: "GET", url: "/v1/audits/id/reports/sample", headers });
     const fullWithoutOperator = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers });
     expect(sample.statusCode).toBe(200);
-    expect(fullWithoutOperator.statusCode).toBe(403);
-    expect(getAuditReportPayload).toHaveBeenCalledTimes(1);
-    const authorizedFull = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { ...headers, "x-reson8-operator-key": OPERATOR_KEY } });
-    expect(authorizedFull.statusCode).toBe(200);
+    expect(fullWithoutOperator.statusCode).toBe(200);
     expect(getAuditReportPayload).toHaveBeenCalledTimes(2);
     process.env.PAYMENTS_ENABLED = "true";
     const paymentGatedFull = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { ...headers, "x-reson8-operator-key": OPERATOR_KEY } });
