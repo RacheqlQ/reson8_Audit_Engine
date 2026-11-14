@@ -36,14 +36,21 @@ function decodeText(bytes: Uint8Array): string | null {
 
 function frameMap(id: string): keyof Omit<AudioTagMetadata, "genres"> | "genres" | null {
   switch (id) {
-    case "TIT2":\n    case "TT2": return "title";
-    case "TPE1":\n    case "TP1": return "artist";
-    case "TALB":\n    case "TAL": return "album";
-    case "TSRC":\n    case "TRC": return "isrc";
-    case "TCON":\n    case "TCO": return "genres";
+    case "TIT2":
+    case "TT2": return "title";
+    case "TPE1":
+    case "TP1": return "artist";
+    case "TALB":
+    case "TAL": return "album";
+    case "TSRC":
+    case "TRC": return "isrc";
+    case "TCON":
+    case "TCO": return "genres";
     case "TDRC":
-    case "TYER":\n    case "TYE": return "releaseDate";
-    case "TPUB":\n    case "TPB": return "label";
+    case "TYER":
+    case "TYE": return "releaseDate";
+    case "TPUB":
+    case "TPB": return "label";
     default: return null;
   }
 }
@@ -72,7 +79,7 @@ function parseId3(bytes: Uint8Array): AudioTagMetadata {
       const value = decodeText(bytes.subarray(offset + headerSize, offset + headerSize + size));
       if (value) {
         if (field === "genres") result.genres = [...new Set([...result.genres, ...value.split(/[;,/]/).map((item) => item.trim()).filter(Boolean)])];
-        else if (!result[field]) result[field] = field === "isrc" ? value.replace(/[\\s-]/g, "").toUpperCase() : value;
+        else if (!result[field]) result[field] = field === "isrc" ? value.replace(/[\s-]/g, "").toUpperCase() : value;
       }
     }
     offset += headerSize + size;
@@ -111,7 +118,7 @@ function parseFlacComments(bytes: Uint8Array): AudioTagMetadata {
         if (key === "TITLE") result.title ??= value;
         else if (key === "ARTIST" || key === "ALBUMARTIST") result.artist ??= value;
         else if (key === "ALBUM") result.album ??= value;
-        else if (key === "ISRC") result.isrc ??= value.replace(/[\\s-]/g, "").toUpperCase();
+        else if (key === "ISRC") result.isrc ??= value.replace(/[\s-]/g, "").toUpperCase();
         else if (key === "GENRE") result.genres = [...new Set([...result.genres, ...value.split(/[;,/]/).map((item) => item.trim()).filter(Boolean)])];
         else if (key === "DATE" || key === "YEAR" || key === "RELEASEDATE") result.releaseDate ??= value;
         else if (key === "LABEL" || key === "ORGANIZATION") result.label ??= value;
