@@ -6,12 +6,14 @@ import { isPdf } from "../reports/pdf-output.js";
 import { analyzePcm, type SonicDnaFeatures } from "../audio/sonic-dna.js";
 import type { TrackIdentity } from "../metadata/MetadataEngine.js";
 import { reconcileMetadata, type MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
+import { readAudioTags } from "../metadata/audio-tags.js";
 
 export interface AuditJobRecord {
   id: string;
   ownerId: string | null;
   sourceAudioPath: string | null;
   mimeType: string | null;
+  filename?: string | null;
   sourceType: "master" | "dsp_link" | "combined";
   catalogUrl: string | null;
   status: "queued" | "processing" | "completed" | "failed";
@@ -266,8 +268,10 @@ export async function processAuditJob(
 
     let masterDna: SonicDnaFeatures | null = null;
     let masterRecognition: AuditRecognition | null = null;
+    let masterTags: ReturnType<typeof readAudioTags> | null = null;
     if (hasMaster) {
       const master = await awaitWithLease(deps, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
+      masterTags = readAudioTags(master);
       const sample = await awaitWithLease(deps, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
       masterRecognition = await awaitWithLease(deps, (signal) => deps.recognize(sample, signal));
       const decoded = await awaitWithLease(deps, (signal) => deps.decode(master, job.mimeType!, signal));
@@ -301,6 +305,8 @@ export async function processAuditJob(
 
     const metadataInput = {
       ...(metadata ? catalogMetadataInput(metadata) : {}),
+      ...(masterTags ? { id3: masterTags } : {}),
+      ...(job.filename ? { filename: job.filename } : {}),
       audd: recognitionMetadataInput(recognition),
     };
     const reconciliation = reconcileMetadata(metadataInput);
