@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeReportText, planAuditReportPages } from "../src/reports/generate-audit-report.js";
+import { metadataFieldStatus, normalizeReportText, planAuditReportPages } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("professional report text and metadata coverage", () => {
@@ -19,12 +19,13 @@ describe("professional report text and metadata coverage", () => {
       ...fullAudioFixture,
       evidence: { ...fullAudioFixture.evidence, isrc: "NGABC2600001", upc: null, genre: null, genres: [], externalIds: {}, sourceProviders: ["spotify", "audd"], reconciliation: { status: "conflict", reconciledFields: [], conflicts: [{ field: "isrc", values: ["NGABC2600001", "NGABC2600002"] }] } },
     };
+    expect(metadataFieldStatus(input.evidence as Record<string, unknown>, "isrc")).toBe("Conflicting source values");
     const text = planAuditReportPages(input as any, "full").flatMap((page) => [page.title, ...page.text]).join(" ");
     for (const field of ["Artist:", "Track:", "Album:", "Genre:", "ISRC:", "UPC:", "Release date:", "Label:", "External identifiers:", "Sources checked:"]) {
       expect(text).toContain(field);
     }
     expect(text).toContain("Unavailable — no source result");
-    expect(text).toContain("ISRC: Conflicting source values — NGABC2600001");
+    expect(text).toContain("ISRC: Conflicting source values");
     expect(text).toContain("not inferred or fabricated");
   });
 });
