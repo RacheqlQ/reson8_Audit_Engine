@@ -23,7 +23,7 @@ describe("professional report text and metadata coverage", () => {
     for (const field of ["Artist:", "Track:", "Album:", "Genre:", "ISRC:", "UPC:", "Release date:", "Label:", "External identifiers:", "Sources checked:"]) {
       expect(text).toContain(field);
     }
-    expect(text).toContain("UNAVAILABLE — No value returned by the supplied or queried sources");
+    expect(text).toContain("Unavailable — no source result");
     expect(text).toContain("not inferred or fabricated");
   });
 });
