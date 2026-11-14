@@ -41,12 +41,14 @@ function shown(v:ChartRow["value"]):string{
  return String(v).replace(/[\\u2010-\\u2015\\u2212]/g,"-").replace(/[\\u2018\\u2019]/g,"'").replace(/[\\u201C\\u201D]/g,'"').replace(/\\u2026/g,"...");
 }
 function line(p:PDFPage,x1:number,y1:number,x2:number,y2:number,c=C.line,w=.8){p.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},color:c,thickness:w});}
+function normalizeChartText(value:string):string{return value.normalize("NFKC").replace(/[\\u2018\\u2019]/g,"'").replace(/[\\u201C\\u201D]/g,'"').replace(/[\\u2010-\\u2015\\u2212]/g,"-").replace(/[\\u00A0\\u202F]/g," ").replace(/\\u2026/g,"...").replace(/[^\\x20-\\x7E\\u00A0-\\u00FF]/g,"?");}
 function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
+ s=normalizeChartText(s);
  const out:string[]=[];let current="";
  for(const word of s.split(/\s+/).filter(Boolean)){const next=current?current+" "+word:word;if(font.widthOfTextAtSize(next,size)>width&&current){out.push(current);current=word;}else current=next;}
  if(current)out.push(current);return out;
 }
-function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink){p.drawText(s,{x,y,font,size,color:c});}
+function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink){p.drawText(normalizeChartText(s),{x,y,font,size,color:c});}
 function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
 export function chartPanelHeight(kind:ChartKind="bars",rows:ChartRow[]=[]):number{
  if(kind==="radar")return 345;
