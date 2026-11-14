@@ -252,13 +252,13 @@ function drawSonic(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<ty
    if(n===null)text(p,"Not determined",x+45,y-32,f,6.5,C.muted);
   }else if(v!==null){
    const display=shown(row.value);
+   const unit=/LUFS/i.test(label)?"LUFS":/BPM/i.test(label)?"BPM":/RANGE/i.test(label)?"dB":"";
    let metricSize=25;
-   while(metricSize>16&&b.widthOfTextAtSize(display,metricSize)>132)metricSize-=1;
+   const maxMetricWidth=unit?102:138;
+   while(metricSize>11&&b.widthOfTextAtSize(display,metricSize)>maxMetricWidth)metricSize-=1;
    text(p,display,x,y-34,b,metricSize,c);
-   const unitX=x+Math.min(136,b.widthOfTextAtSize(display,metricSize)+5);
-   if(/LUFS/i.test(label))text(p,"LUFS",unitX,y-32,b,7,C.muted);
-   else if(/BPM/i.test(label))text(p,"BPM",unitX,y-32,b,7,C.muted);
-   else if(/RANGE/i.test(label))text(p,"dB",unitX,y-32,b,7,C.muted);
+   const unitX=x+b.widthOfTextAtSize(display,metricSize)+5;
+   if(unit&&unitX+b.widthOfTextAtSize(unit,7)<=x+150)text(p,unit,unitX,y-32,b,7,C.muted);
   }else if(/KEY/i.test(label)&&shown(row.value)!=="Not determined"){
    let keySize=15;const keyText=shown(row.value);while(keySize>9&&b.widthOfTextAtSize(keyText,keySize)>138)keySize-=1;
    text(p,keyText,x,y-33,b,keySize,c);
