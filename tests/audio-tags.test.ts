@@ -27,6 +27,25 @@ function flacComments(tags: Record<string, string>): Uint8Array {
 }
 
 
+function id3v1({ genre = 17, track = null, comment = "" }: { genre?: number; track?: number | null; comment?: string } = {}): Uint8Array {
+  const bytes = new Uint8Array(128);
+  const write = (offset: number, length: number, value: string) => {
+    bytes.set(new TextEncoder().encode(value).subarray(0, length), offset);
+  };
+  write(0, 3, "TAG");
+  write(3, 30, "Legacy title");
+  write(33, 30, "Legacy artist");
+  write(63, 30, "Legacy album");
+  write(93, 4, "1999");
+  write(97, 30, comment);
+  if (track !== null) {
+    bytes[125] = 0;
+    bytes[126] = track;
+  }
+  bytes[127] = genre;
+  return bytes;
+}
+
 function wavInfo(tags: Record<string, string>): Uint8Array {
   const encoder = new TextEncoder();
   const ids: Record<string, string> = { title: "INAM", artist: "IART", album: "IPRD", genre: "IGNR", releaseDate: "ICRD", label: "IPUB", isrc: "ISRC" };
@@ -48,7 +67,7 @@ describe("audio metadata tag extraction", () => {
       isrc: "NGABC2600001", genre: "Afrobeats", releaseDate: "2025-08-27", label: "BlackBeard Entertainment",
     }))).toEqual({
       title: "Bend Et", artist: "Stunixx", album: "The HoleHearted",
-      isrc: "NGABC2600001", genres: ["Afrobeats"], releaseDate: "2025-08-27", label: "BlackBeard Entertainment",
+      isrc: "NGABC2600001", genres: ["Afrobeats"], releaseDate: "2025-08-27", label: "BlackBeard Entertainment", track: null,
     });
   });
 
@@ -72,9 +91,38 @@ describe("audio metadata tag extraction", () => {
     });
   });
 
+  it("extracts the ID3v1 genre and an ID3v1.1 track number", () => {
+    expect(readAudioTags(id3v1({ genre: 17, track: 7 }))).toMatchObject({
+      title: "Legacy title", artist: "Legacy artist", album: "Legacy album",
+      genres: ["Rock"], releaseDate: "1999", track: 7,
+    });
+  });
+
+  it("does not invent a genre for unknown ID3v1 genre codes", () => {
+    expect(readAudioTags(id3v1({ genre: 255 }))).toMatchObject({ genres: [], track: null });
+  });
+
+  it("does not interpret an ID3v1.0 comment byte as a track number", () => {
+    expect(readAudioTags(id3v1({ genre: 14, comment: "legacy comment without v1.1 marker" }))).toMatchObject({
+      genres: ["R&B"], track: null,
+    });
+  });
+
+  it("ignores truncated and malformed ID3v1 trailers", () => {
+    const truncated = id3v1({ genre: 17, track: 4 }).subarray(0, 127);
+    expect(readAudioTags(truncated)).toMatchObject({ genres: [], track: null });
+    const malformed = id3v1({ genre: 17, track: 4 });
+    malformed[0] = 0;
+    expect(readAudioTags(malformed)).toMatchObject({ genres: [], track: null });
+  });
+
   it("returns an empty structured result for files without recognized tags", () => {
     expect(readAudioTags(new TextEncoder().encode("not an ID3 file"))).toEqual({
-      title: null, artist: null, album: null, isrc: null, genres: [], releaseDate: null, label: null,
+      title: null, artist: null, album: null, isrc: null, genres: [], releaseDate: null, label: null, track: null,
+    });
+  });  it("returns an empty structured result for files without recognized tags", () => {
+    expect(readAudioTags(new TextEncoder().encode("not an ID3 file"))).toEqual({
+      title: null, artist: null, album: null, isrc: null, genres: [], releaseDate: null, label: null, track: null,
     });
   });
 });
