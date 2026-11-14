@@ -97,6 +97,7 @@ export function createSupabaseAuditStore(
           const { data, error } = await admin.from("audit_jobs").insert({
             owner_id: input.ownerId, status: "queued", original_filename: input.filename,
             mime_type: input.mimeType, size_bytes: input.sizeBytes, sha256: input.sha256,
+            source_type: input.sourceType, catalog_url: input.catalogUrl,
           }).select("id").single();
           if (error || !data) throw new Error(`Unable to create audit job: ${error?.message ?? "unknown error"}`);
           return data.id as string;
@@ -147,7 +148,7 @@ export function createSupabaseAuditStore(
         ownerId: claimed.owner_id as string | null,
         sourceAudioPath: claimed.source_audio_path as string | null,
         mimeType: claimed.mime_type as string | null,
-        sourceType: (claimed.source_type ?? "master") as "master" | "dsp_link",
+        sourceType: (claimed.source_type ?? "master") as "master" | "dsp_link" | "combined",
         catalogUrl: claimed.catalog_url as string | null,
         status: "processing" as const,
         claimToken: claimed.claim_token as string,
