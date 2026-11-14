@@ -176,6 +176,7 @@ describe("processAuditJob", () => {
       saveSonicDna: async () => {},
       generateAssessment: async (input) => {
         assessmentInputs.push(input.evidence);
+        expect(input.evidence.metadataSourcesChecked).toEqual(["tidal", "audd"]);
         expect(input.sonicDna).toMatchObject({
           provenance: "tidal_catalog_metadata",
           evidenceClass: "RECOGNIZED",
