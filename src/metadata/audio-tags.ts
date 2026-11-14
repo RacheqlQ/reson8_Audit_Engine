@@ -146,12 +146,12 @@ function parseWavInfo(bytes: Uint8Array): AudioTagMetadata {
         const size = littleEndian32(bytes, cursor + 4);
         const valueStart = cursor + 8, valueEnd = valueStart + size;
         if (valueEnd > end) break;
-        const value = new TextDecoder("windows-1252").decode(bytes.subarray(valueStart, valueEnd)).replace(/\\u0000/g, "").trim();
+        const value = new TextDecoder("windows-1252").decode(bytes.subarray(valueStart, valueEnd)).replace(/\u0000/g, "").trim();
         if (value) {
           if (id === "INAM") result.title ??= value;
           else if (id === "IART") result.artist ??= value;
           else if (id === "IPRD") result.album ??= value;
-          else if (id === "ISRC") result.isrc ??= value.replace(/[\\s-]/g, "").toUpperCase();
+          else if (id === "ISRC") result.isrc ??= value.replace(/[\s-]/g, "").toUpperCase();
           else if (id === "IGNR") result.genres = [...new Set([...result.genres, ...value.split(/[;,/]/).map((item) => item.trim()).filter(Boolean)])];
           else if (id === "ICRD") result.releaseDate ??= value;
           else if (id === "IPUB" || id === "ICOP") result.label ??= value;
