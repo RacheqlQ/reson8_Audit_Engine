@@ -24,6 +24,15 @@ describe("browser PDF download contract", () => {
     await expect(readPdfResponse(response)).rejects.toThrow("Report retrieval failed (HTTP 200)");
   });
 
+  it("rejects a media type that only contains the PDF label", async () => {
+    const response = new Response("%PDF-1.7\\nfixture", {
+      status: 200,
+      headers: { "content-type": "application/pdfx" },
+    });
+
+    await expect(readPdfResponse(response)).rejects.toThrow("Report retrieval failed (HTTP 200)");
+  });
+
   it("rejects application/pdf responses with an invalid PDF signature", async () => {
     const response = new Response("not a PDF document", {
       status: 200,
