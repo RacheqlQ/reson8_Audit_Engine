@@ -12,7 +12,7 @@ export interface AuditJobRecord {
   ownerId: string | null;
   sourceAudioPath: string | null;
   mimeType: string | null;
-  sourceType: "master" | "dsp_link";
+  sourceType: "master" | "dsp_link" | "combined";
   catalogUrl: string | null;
   status: "queued" | "processing" | "completed" | "failed";
   claimToken: string;
