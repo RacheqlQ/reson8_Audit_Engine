@@ -10,6 +10,7 @@ afterEach(() => {
 const store = () => ({
   createJobDependencies: () => { throw new Error("not used"); },
   getAuditStatus: async () => ({ jobId: "job-1", status: "completed" as const, currentStepIndex: 5, full: { available: true, version: 1 } }),
+  verifySampleReportAccess: async (_jobId: string, token: string) => token === "valid-sample-token",
   getAuditReport: async () => ({
     bytes: new TextEncoder().encode("%PDF-1.4\n% valid test fixture"),
     contentType: "application/pdf",
@@ -25,6 +26,20 @@ describe("report download contract", () => {
     expect(response.statusCode).toBe(403);
     expect(response.headers["content-type"]).toContain("application/json");
     expect(response.json()).toMatchObject({ error: "OPERATOR_AUTH_REQUIRED" });
+    await app.close();
+  });
+
+  it("allows the submitting job's sample token without exposing operator credentials", async () => {
+    delete process.env.RESON8_OPERATOR_KEY;
+    const app = buildServer(store() as any);
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/audits/job-1/reports/sample",
+      headers: { "x-reson8-report-token": "valid-sample-token" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/pdf");
+    expect(response.body.startsWith("%PDF-")).toBe(true);
     await app.close();
   });
 
