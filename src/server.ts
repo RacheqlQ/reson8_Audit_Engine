@@ -23,7 +23,7 @@ export interface AuditStore {
     filename: string;
   }>;
   getAuditReportPayload?(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<unknown | null>;
-  verifySampleReportAccess?(jobId: string, token: string): Promise<boolean>;
+  verifyAuditAccessToken?(jobId: string, token: string): Promise<boolean>;
 }
 
 const PUBLIC_RATE_LIMIT = Number(process.env.PUBLIC_AUDIT_RATE_LIMIT_PER_HOUR ?? 30);
@@ -141,7 +141,19 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
   }));
   app.get<{
     Params: { jobId: string };
+    Headers: { "x-reson8-report-token"?: string };
   }>("/v1/audits/:jobId", async (request, reply) => {
+    const accessToken = request.headers["x-reson8-report-token"];
+    if (!accessToken || !store.verifyAuditAccessToken) {
+      return reply.code(404).send({ error: "AUDIT_NOT_FOUND", message: "Audit job not found" });
+    }
+    try {
+      const authorized = await store.verifyAuditAccessToken(request.params.jobId, accessToken);
+      if (!authorized) return reply.code(404).send({ error: "AUDIT_NOT_FOUND", message: "Audit job not found" });
+    } catch (error) {
+      request.log.error({ err: error }, "audit access token verification failed");
+      return reply.code(500).send({ error: "AUDIT_ACCESS_VERIFICATION_FAILED", message: "Unable to verify audit access" });
+    }
     try {
       return reply.send(await store.getAuditStatus(request.params.jobId));
     } catch (error) {
@@ -161,19 +173,21 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
     const tier = request.params.tier;
     if (tier !== "sample" && tier !== "full") return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
 
-    const isOperator = operatorAuthorized(request.headers["x-reson8-operator-key"]);
-    let isSampleAuthorized = false;
     const reportToken = request.headers["x-reson8-report-token"];
-    if (tier === "sample" && reportToken && store.verifySampleReportAccess) {
-      try {
-        isSampleAuthorized = await store.verifySampleReportAccess(request.params.jobId, reportToken);
-      } catch (error) {
-        request.log.error({ err: error }, "sample report access verification failed");
-        return reply.code(500).send({ error: "REPORT_ACCESS_VERIFICATION_FAILED", message: "Unable to verify sample report access" });
-      }
+    if (!reportToken || !store.verifyAuditAccessToken) {
+      return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
     }
-    if (!isOperator && !isSampleAuthorized) {
-      if (tier === "full" && paymentsEnabled()) {
+    try {
+      const authorized = await store.verifyAuditAccessToken(request.params.jobId, reportToken);
+      if (!authorized) return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
+    } catch (error) {
+      request.log.error({ err: error }, "audit report access verification failed");
+      return reply.code(500).send({ error: "REPORT_ACCESS_VERIFICATION_FAILED", message: "Unable to verify report access" });
+    }
+
+    const isOperator = operatorAuthorized(request.headers["x-reson8-operator-key"]);
+    if (tier === "full" && !isOperator) {
+      if (paymentsEnabled()) {
         return reply.code(402).send({
           error: "PAYMENT_REQUIRED",
           message: "Verified payment is required; payment verification is not configured.",
@@ -181,7 +195,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
       }
       return reply.code(403).send({
         error: "OPERATOR_AUTH_REQUIRED",
-        message: "Report retrieval is restricted to an authorized Reson8 operator.",
+        message: "Full report retrieval is restricted to an authorized Reson8 operator until payment verification is implemented.",
       });
     }
 

@@ -4,6 +4,7 @@ import { buildServer } from "../src/server.js";
 import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
 const OPERATOR_KEY = "test-operator-key-that-is-at-least-32-bytes-long";
+const ACCESS_TOKEN = "c".repeat(64);
 const originalPayments = process.env.PAYMENTS_ENABLED;
 const originalOperatorKey = process.env.RESON8_OPERATOR_KEY;
 
@@ -20,6 +21,7 @@ describe("full audit report response format", () => {
     process.env.RESON8_OPERATOR_KEY = OPERATOR_KEY;
     const store = {
       createJobDependencies: () => { throw new Error("not used"); },
+      verifyAuditAccessToken: async (jobId: string, token: string) => jobId === fullAudioFixture.auditId && token === ACCESS_TOKEN,
       getAuditStatus: async () => ({ jobId: fullAudioFixture.auditId, status: "completed", currentStepIndex: 5, full: { available: true, version: 1 } }),
       getAuditReport: async () => ({
         bytes: Buffer.from(JSON.stringify(fullAudioFixture)),
@@ -30,12 +32,12 @@ describe("full audit report response format", () => {
     const app = buildServer(store);
 
     try {
-      const status = await app.inject({ method: "GET", url: `/v1/audits/${fullAudioFixture.auditId}` });
+      const status = await app.inject({ method: "GET", url: `/v1/audits/${fullAudioFixture.auditId}`, headers: { "x-reson8-report-token": ACCESS_TOKEN } });
       expect(status.json().status).toBe("completed");
       const response = await app.inject({
         method: "GET",
         url: `/v1/audits/${fullAudioFixture.auditId}/reports/full`,
-        headers: { "x-reson8-operator-key": OPERATOR_KEY },
+        headers: { "x-reson8-operator-key": OPERATOR_KEY, "x-reson8-report-token": ACCESS_TOKEN },
       });
 
       expect(response.statusCode).toBe(200);
@@ -53,6 +55,7 @@ describe("full audit report response format", () => {
     process.env.RESON8_OPERATOR_KEY = OPERATOR_KEY;
     const store = {
       createJobDependencies: () => { throw new Error("not used"); },
+      verifyAuditAccessToken: async (jobId: string, token: string) => jobId === fullAudioFixture.auditId && token === ACCESS_TOKEN,
       getAuditReport: async () => { throw new Error("Unable to download audit report: not found"); },
       getAuditReportPayload: async () => fullAudioFixture,
     } as any;
@@ -62,7 +65,7 @@ describe("full audit report response format", () => {
       const response = await app.inject({
         method: "GET",
         url: `/v1/audits/${fullAudioFixture.auditId}/reports/full`,
-        headers: { "x-reson8-operator-key": OPERATOR_KEY },
+        headers: { "x-reson8-operator-key": OPERATOR_KEY, "x-reson8-report-token": ACCESS_TOKEN },
       });
 
       expect(response.statusCode).toBe(200);
