@@ -296,7 +296,7 @@ export async function processAuditJob(
       : catalogRecognition?.matched
         ? catalogRecognition
         : masterRecognition ?? catalogRecognition ?? { matched: false };
-    if (recognition.matched) {
+    if (masterRecognition || catalogRecognition) {
       await awaitWithLease(deps, (signal) => deps.saveRecognition(jobId, job.claimToken, recognition, signal));
     }
 
