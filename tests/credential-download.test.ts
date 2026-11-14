@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+afterEach(() => vi.useRealTimers());
 import { credentialFilename, triggerCredentialDownload } from "../public/credential-download.js";
 describe("private credential download", () => {
   it("uses a canonical UUID in the download filename", () => {
