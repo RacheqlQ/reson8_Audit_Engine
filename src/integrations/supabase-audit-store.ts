@@ -44,7 +44,7 @@ export interface SupabaseAuditStore {
     filename: string;
   }>;
   getAuditReportPayload(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<unknown | null>;
-  verifySampleReportAccess(jobId: string, token: string): Promise<boolean>;
+  verifyAuditAccessToken(jobId: string, token: string): Promise<boolean>;
 }
 
 export function createSupabaseAuditStore(
@@ -355,13 +355,13 @@ export function createSupabaseAuditStore(
     async markCompleted(jobId, claimToken, signal) {
       await fencedStep(jobId, claimToken, "complete", {}, signal);
     },
-    async verifySampleReportAccess(jobId, token) {
-      if (!token || token.length !== 64) return false;
+    async verifyAuditAccessToken(jobId, token) {
+      if (typeof token !== "string" || !/^[a-f0-9]{64}$/.test(token)) return false;
       const { data, error } = await admin.from("audit_jobs")
         .select("report_access_token_hash")
         .eq("id", jobId)
         .maybeSingle();
-      if (error) throw new Error(`Unable to verify sample report access: ${error.message}`);
+      if (error) throw new Error(`Unable to verify audit access token: ${error.message}`);
       const expected = typeof data?.report_access_token_hash === "string" ? data.report_access_token_hash : "";
       if (!/^[a-f0-9]{64}$/i.test(expected)) return false;
       const suppliedHash = await sha256(new TextEncoder().encode(token));
