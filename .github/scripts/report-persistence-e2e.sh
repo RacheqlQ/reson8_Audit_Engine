@@ -21,7 +21,7 @@ cleanup() {
   psql "$DB" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null 2>&1
 drop trigger if exists ci_abort_report_insert_for_case_b on public.audit_reports;
 drop function if exists public.ci_abort_report_insert_for_case_b();
-delete from public.profiles where id='11111111-1111-4111-8111-111111111111';
+delete from auth.users where id='11111111-1111-4111-8111-111111111111';
 revoke anon, authenticated, service_role from authenticator;
 drop role if exists authenticator;
 SQL
