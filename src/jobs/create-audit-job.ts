@@ -30,7 +30,9 @@ export async function createAuditJob(
     sizeBytes: input.bytes.byteLength,
   });
   const digest = await sha256(input.bytes);
-  const sourceType = classifyAuditSources({ hasMaster: true, catalogUrl: input.catalogUrl });
+  const classifiedSource = classifyAuditSources({ hasMaster: true, catalogUrl: input.catalogUrl });
+  if (classifiedSource === "dsp_link") throw new Error("A master upload must include a master source");
+  const sourceType: "master" | "combined" = classifiedSource;
 
   const jobId = await deps.createJob({
     ownerId: input.ownerId,
