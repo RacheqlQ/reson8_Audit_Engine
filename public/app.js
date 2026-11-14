@@ -124,15 +124,15 @@ function revealAccessToken(){
 }
 async function unlockFullReport(){
   const pastedKey=fullReportAccessKey.value.trim();
-  if(pastedKey)reportAccessToken=pastedKey;
-  if(!reportAccessToken){tokenSaveMessage.textContent="Paste this audit's private key before unlocking.";return;}
-  await downloadReport("full");
+  const accessToken=pastedKey||reportAccessToken;
+  if(!accessToken){tokenSaveMessage.textContent="Paste this audit's private key before unlocking.";return;}
+  await downloadReport("full",accessToken);
 }
-async function downloadReport(tier){
-  if(!reportAccessToken){reportDownloadMessage.textContent="This audit's private access token is unavailable. Submit a new audit to receive a fresh token.";return;}
+async function downloadReport(tier,accessToken=reportAccessToken){
+  if(!accessToken){reportDownloadMessage.textContent="This audit's private access token is unavailable. Submit a new audit to receive a fresh token.";return;}
   reportDownloadMessage.textContent="Retrieving "+tier+" PDF…";
   try{
-    const response=await fetch("/v1/audits/"+encodeURIComponent(currentAuditPayload.jobId)+"/reports/"+tier,{headers:{"x-reson8-report-token":reportAccessToken}});
+    const response=await fetch("/v1/audits/"+encodeURIComponent(currentAuditPayload.jobId)+"/reports/"+tier,{headers:{"x-reson8-report-token":accessToken}});
     const blob=await readPdfResponse(response);
     const name=(currentAuditPayload?.displayName||currentAuditPayload?.jobName||"audit").replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,80)||"audit";
     triggerPdfDownload(blob,"reson8-"+name+"-"+tier+".pdf");
