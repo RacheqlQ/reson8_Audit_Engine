@@ -55,7 +55,6 @@ fi
 
 export POSTGREST_URL="http://127.0.0.1:3000"
 export CI_REPORT_PERSISTENCE_JWT_SECRET="$JWT_SECRET"
-export SUPABASE_URL="http://127.0.0.1:54321"
 export WORKER_FENCING_DATABASE_URL="$DB"
 
 npx vitest run tests/report-persistence-e2e.test.ts
