@@ -23,6 +23,7 @@ export interface AuditStore {
     filename: string;
   }>;
   getAuditReportPayload?(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<unknown | null>;
+  verifySampleReportAccess?(jobId: string, token: string): Promise<boolean>;
 }
 
 const PUBLIC_RATE_LIMIT = Number(process.env.PUBLIC_AUDIT_RATE_LIMIT_PER_HOUR ?? 30);
@@ -85,6 +86,10 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
     return reply.type("text/javascript; charset=utf-8").send(await servePublicFile("app.js"));
   });
 
+  app.get("/report-download.js", async (_request, reply) => {
+    return reply.type("text/javascript; charset=utf-8").send(await servePublicFile("report-download.js"));
+  });
+
   app.post<{
     Body: { url?: string };
   }>("/v1/audits/catalog", async (request, reply) => {
@@ -121,6 +126,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         status: "queued",
         sourceType: "dsp_link",
         sha256: result.sha256,
+        reportAccessToken: result.reportAccessToken,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to create catalog audit job";
@@ -150,13 +156,23 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
 
   app.get<{
     Params: { jobId: string; tier: "sample" | "full" };
-    Headers: { "x-reson8-operator-key"?: string };
+    Headers: { "x-reson8-operator-key"?: string; "x-reson8-report-token"?: string };
   }>("/v1/audits/:jobId/reports/:tier", async (request, reply) => {
     const tier = request.params.tier;
     if (tier !== "sample" && tier !== "full") return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
 
     const isOperator = operatorAuthorized(request.headers["x-reson8-operator-key"]);
-    if (!isOperator) {
+    let isSampleAuthorized = false;
+    const reportToken = request.headers["x-reson8-report-token"];
+    if (tier === "sample" && reportToken && store.verifySampleReportAccess) {
+      try {
+        isSampleAuthorized = await store.verifySampleReportAccess(request.params.jobId, reportToken);
+      } catch (error) {
+        request.log.error({ err: error }, "sample report access verification failed");
+        return reply.code(500).send({ error: "REPORT_ACCESS_VERIFICATION_FAILED", message: "Unable to verify sample report access" });
+      }
+    }
+    if (!isOperator && !isSampleAuthorized) {
       if (tier === "full" && paymentsEnabled()) {
         return reply.code(402).send({
           error: "PAYMENT_REQUIRED",
@@ -204,6 +220,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
     Headers: {
       authorization?: string;
       "x-audio-filename"?: string;
+      "x-catalog-url"?: string;
     };
   }>("/v1/audits", async (request, reply) => {
     try {
@@ -234,6 +251,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
           filename,
           mimeType: contentType,
           bytes,
+          catalogUrl: request.headers["x-catalog-url"] ?? null,
         },
         store.createJobDependencies(),
       );
@@ -242,6 +260,8 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         jobId: result.jobId,
         status: "queued",
         sha256: result.sha256,
+        sourceType: result.sourceType,
+        reportAccessToken: result.reportAccessToken,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to create audit job";
@@ -250,10 +270,14 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         message === "Audio filename is required" ||
         message === "Unsupported audio type" ||
         message === "Audio file is empty" ||
-        message === "Audio file exceeds the 50 MB limit"
+        message === "Audio file exceeds the 50 MB limit" ||
+        message === "DSP URL must use HTTPS" ||
+        message === "DSP URL must not contain credentials" ||
+        message === "Unsupported DSP or catalog URL" ||
+        message === "Invalid URL"
       ) {
         return reply.code(400).send({
-          error: "INVALID_AUDIO_UPLOAD",
+          error: message.startsWith("DSP URL") || message === "Unsupported DSP or catalog URL" || message === "Invalid URL" ? "INVALID_CATALOG_URL" : "INVALID_AUDIO_UPLOAD",
           message,
         });
       }

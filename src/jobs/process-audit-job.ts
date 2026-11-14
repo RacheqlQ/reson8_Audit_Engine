@@ -12,7 +12,7 @@ export interface AuditJobRecord {
   ownerId: string | null;
   sourceAudioPath: string | null;
   mimeType: string | null;
-  sourceType: "master" | "dsp_link";
+  sourceType: "master" | "dsp_link" | "combined";
   catalogUrl: string | null;
   status: "queued" | "processing" | "completed" | "failed";
   claimToken: string;
@@ -254,92 +254,87 @@ export async function processAuditJob(
   try {
     await awaitWithLease(deps, (signal) => deps.markProcessing(jobId, job.claimToken, signal));
 
-    if (job.sourceType === "dsp_link") {
-      if (!job.catalogUrl) throw new Error("Catalog URL is missing");
-      const metadata = await awaitWithLease(deps, (signal) => deps.collectCatalogMetadata(job.catalogUrl!, signal));
-      await awaitWithLease(deps, (signal) => deps.saveCatalogMetadata(jobId, job.claimToken, metadata, signal));
+    const hasMaster = Boolean(job.sourceAudioPath && job.mimeType);
+    const hasCatalog = Boolean(job.catalogUrl);
+    if (!hasMaster && !hasCatalog) throw new Error("Audit job has no usable source");
 
-      let recognition: AuditRecognition | null = null;
-      if (metadata.previewUrl) {
-        try {
-          recognition = await awaitWithLease(deps, (signal) => deps.recognizeUrl(metadata.previewUrl!, signal));
-        } catch (error) {
-          if (deps.signal?.aborted) throw leaseLostError(deps.signal);
-          // Preview recognition is enrichment; catalog metadata remains authoritative evidence.
-        }
-        if (recognition) await awaitWithLease(deps, (signal) => deps.saveRecognition(jobId, job.claimToken, recognition!, signal));
-      }
-
-      const effectiveRecognition: AuditRecognition = recognition ?? { matched: false };
-      const metadataInput = {
-        ...catalogMetadataInput(metadata),
-        audd: recognitionMetadataInput(effectiveRecognition),
-      };
-      const reconciliation = reconcileMetadata(metadataInput);
-      await awaitWithLease(deps, (signal) => deps.saveEvidence(jobId, job.claimToken, effectiveRecognition, reconciliation, metadata, signal));
-      const identity = reconciliation.identity;
-      const evidence = {
-        ...catalogEvidence(metadata, identity),
-        ...recognitionEvidence(effectiveRecognition),
-        ...identityEvidence(identity),
-        evidenceClass: reconciliation.status === "reconciled"
-          ? "RECONCILED"
-          : identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
-        identity: identityEvidence(identity),
-        reconciliation: reconciliationEvidence(reconciliation),
-      };
-      const sonicDna = catalogSonicDna(metadata);
-      const assessment = await awaitWithLease(deps, (signal) => deps.generateAssessment({
-        evidence,
-        sonicDna,
-        catalogMetadata: catalogEvidence(metadata, identity),
-      }, signal));
-      await awaitWithLease(deps, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
-
-      const generatedAt = new Date().toISOString();
-      const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
-      await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
-      await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
-
-      await deps.stopHeartbeat?.();
-      await awaitWithLease(deps, (signal) => deps.markCompleted(jobId, job.claimToken, signal));
-      return { status: "completed" };
+    let metadata: CatalogMetadata | undefined;
+    if (hasCatalog) {
+      metadata = await awaitWithLease(deps, (signal) => deps.collectCatalogMetadata(job.catalogUrl!, signal));
+      await awaitWithLease(deps, (signal) => deps.saveCatalogMetadata(jobId, job.claimToken, metadata!, signal));
     }
 
-    if (!job.sourceAudioPath || !job.mimeType) throw new Error("Master source is missing");
-    const master = await awaitWithLease(deps, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
-    const sample = await awaitWithLease(deps, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
-    const recognition = await awaitWithLease(deps, (signal) => deps.recognize(sample, signal));
-    await awaitWithLease(deps, (signal) => deps.saveRecognition(jobId, job.claimToken, recognition, signal));
-    const reconciliation = reconcileMetadata({
+    let masterDna: SonicDnaFeatures | null = null;
+    let masterRecognition: AuditRecognition | null = null;
+    if (hasMaster) {
+      const master = await awaitWithLease(deps, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
+      const sample = await awaitWithLease(deps, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
+      masterRecognition = await awaitWithLease(deps, (signal) => deps.recognize(sample, signal));
+      const decoded = await awaitWithLease(deps, (signal) => deps.decode(master, job.mimeType!, signal));
+      const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
+      masterDna = {
+        ...dna,
+        sampleRate: decoded.sampleRate,
+        channels: decoded.channels,
+        durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
+      };
+    }
+
+    let catalogRecognition: AuditRecognition | null = null;
+    if (metadata?.previewUrl) {
+      try {
+        catalogRecognition = await awaitWithLease(deps, (signal) => deps.recognizeUrl(metadata!.previewUrl!, signal));
+      } catch (error) {
+        if (deps.signal?.aborted) throw leaseLostError(deps.signal);
+        // Optional preview recognition must not block catalog-only or combined analysis.
+      }
+    }
+
+    const recognition: AuditRecognition = masterRecognition?.matched
+      ? masterRecognition
+      : catalogRecognition?.matched
+        ? catalogRecognition
+        : masterRecognition ?? catalogRecognition ?? { matched: false };
+    if (masterRecognition || catalogRecognition) {
+      await awaitWithLease(deps, (signal) => deps.saveRecognition(jobId, job.claimToken, recognition, signal));
+    }
+
+    const metadataInput = {
+      ...(metadata ? catalogMetadataInput(metadata) : {}),
       audd: recognitionMetadataInput(recognition),
-    });
-    await awaitWithLease(deps, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, undefined, signal));
-    const decoded = await awaitWithLease(deps, (signal) => deps.decode(master, job.mimeType!, signal));
-    const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
-    const normalizedDna = {
-      ...dna,
-      sampleRate: decoded.sampleRate,
-      channels: decoded.channels,
-      durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
     };
-    await awaitWithLease(deps, (signal) => deps.saveSonicDna(jobId, job.claimToken, normalizedDna, signal));
+    const reconciliation = reconcileMetadata(metadataInput);
+    await awaitWithLease(deps, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal));
+    if (masterDna) {
+      await awaitWithLease(deps, (signal) => deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal));
+    }
 
     const identity = reconciliation.identity;
     const evidence = {
-      auditType: "MASTER-BASED AUDIT",
+      ...(metadata ? catalogEvidence(metadata, identity) : { auditType: "MASTER-BASED AUDIT" }),
+      auditType: hasMaster && hasCatalog ? "COMBINED MASTER + DSP AUDIT" : hasCatalog ? "METADATA-BASED AUDIT" : "MASTER-BASED AUDIT",
       ...recognitionEvidence(recognition),
       ...identityEvidence(identity),
+      evidenceClass: reconciliation.status === "reconciled"
+        ? "RECONCILED"
+        : identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
       identity: identityEvidence(identity),
       reconciliation: reconciliationEvidence(reconciliation),
+      sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
+      ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
-    const sonicDna = dnaEvidence(normalizedDna);
+    const sonicDna = masterDna
+      ? dnaEvidence(masterDna)
+      : metadata
+        ? catalogSonicDna(metadata)
+        : null;
     const assessment = await awaitWithLease(deps, (signal) => deps.generateAssessment({
       evidence,
       sonicDna,
-      catalogMetadata: null,
+      catalogMetadata: metadata ? catalogEvidence(metadata, identity) : null,
     }, signal));
     await awaitWithLease(deps, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
+
     const generatedAt = new Date().toISOString();
     const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);

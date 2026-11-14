@@ -18,6 +18,9 @@ describe("createAuditJob", () => {
         createJob: async (input) => {
           calls.push("job");
           expect(input.ownerId).toBeNull();
+          expect(input.sourceType).toBe("master");
+          expect(input.catalogUrl).toBeNull();
+          expect(input.reportAccessTokenHash).toMatch(/^[a-f0-9]{64}$/);
           expect(input.sha256).toBe("039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81");
           return "job-123";
         },
@@ -41,6 +44,8 @@ describe("createAuditJob", () => {
       jobId: "job-123",
       sourceAudioPath: "anonymous/job-123/My Song.wav",
       sha256: expect.any(String),
+      sourceType: "master",
+      reportAccessToken: expect.any(String),
     });
     expect(calls).toEqual(["job", "upload", "path"]);
   });
@@ -104,4 +109,28 @@ describe("createAuditJob", () => {
 
     expect(calls).toEqual(["upload", "path", "delete-master", "delete-job"]);
   });
+  it("creates one combined job when both master audio and a DSP link are supplied", async () => {
+    let created: any;
+    const result = await createAuditJob({
+      ownerId: null,
+      filename: "combined.wav",
+      mimeType: "audio/wav",
+      bytes: new Uint8Array([1, 2, 3]),
+      catalogUrl: "https://open.spotify.com/track/abc",
+    }, {
+      createJob: async (input) => { created = input; return "combined-job"; },
+      createCatalogJob: async () => { throw new Error("must not create a second job"); },
+      uploadMaster: async () => {},
+      setSourcePath: async () => {},
+      deleteMaster: async () => {},
+    });
+
+    expect(created).toMatchObject({
+      sourceType: "combined",
+      catalogUrl: "https://open.spotify.com/track/abc",
+      reportAccessTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(result).toMatchObject({ jobId: "combined-job", sourceType: "combined", reportAccessToken: expect.any(String) });
+  });
+
 });

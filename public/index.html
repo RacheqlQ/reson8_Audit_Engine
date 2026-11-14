@@ -51,11 +51,7 @@
               <p class="kicker">AUDIT SOURCE</p>
               <h2>Choose your evidence source</h2>
             </div>
-            <span class="limit">Master + DSP catalog can be combined</span>
-          </div>
-          <div class="source-tabs" role="tablist" aria-label="Audit source">
-            <button class="source-tab active" id="masterTab" type="button">MASTER TRACK <small>Measured Sonic DNA</small></button>
-            <button class="source-tab" id="dspTab" type="button">DSP / CATALOG LINK <small>Identity + catalog evidence</small></button>
+            <span class="limit">Use either source or combine both in one audit</span>
           </div>
           <section id="masterSource">
             <div class="section-heading compact">
@@ -100,7 +96,7 @@
 
           </section>
 
-          <section id="dspSource" class="hidden">
+          <section id="dspSource">
             <div class="section-heading compact"><div><p class="kicker">DSP / CATALOG</p><h3>Ingest an existing release link</h3></div><span class="limit">Spotify · Apple Music · YouTube · Deezer · Tidal</span></div>
             <div class="catalog-form">
               <label for="catalogUrl">DSP or catalog URL</label>
@@ -115,7 +111,7 @@
             <button class="primary-btn" id="submitAudit" type="button" disabled>
               <span>Start A&R audit</span><b>→</b>
             </button>
-            <p id="actionMessage">Select a valid master or DSP/catalog link to continue.</p>
+            <p id="actionMessage">Upload a master, add a DSP link, or provide both for one merged audit.</p>
           </div>
 
           <div class="result-panel hidden" id="resultPanel" aria-live="polite">
@@ -127,7 +123,10 @@
             </div>
             <p id="resultMessage">Your recording is now in the processing queue. Recognition, measurement and reconciliation run as separate evidence stages.</p>
             <div class="report-actions hidden" id="reportActions">
-              <a class="primary-btn" id="fullReportLink" href="#" download>Download full report <b>↓</b></a>
+              <label for="operatorKey">Operator access key (full report)</label>
+              <input id="operatorKey" type="password" autocomplete="off" placeholder="Enter operator key to retrieve reports" />
+              <div class="report-downloads"><button class="primary-btn" id="sampleReportButton" type="button">Download sample report <b>↓</b></button><button class="primary-btn" id="fullReportButton" type="button">Download full report <b>↓</b></button></div>
+              <p id="reportDownloadMessage" role="status"></p>
             </div>
           </div>
         </div>

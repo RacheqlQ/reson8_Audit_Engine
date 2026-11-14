@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { CreateAuditJobDependencies } from "../jobs/create-audit-job.js";
 import type { AuditJobRecord } from "../jobs/process-audit-job.js";
@@ -44,6 +44,7 @@ export interface SupabaseAuditStore {
     filename: string;
   }>;
   getAuditReportPayload(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<unknown | null>;
+  verifySampleReportAccess(jobId: string, token: string): Promise<boolean>;
 }
 
 export function createSupabaseAuditStore(
@@ -97,6 +98,8 @@ export function createSupabaseAuditStore(
           const { data, error } = await admin.from("audit_jobs").insert({
             owner_id: input.ownerId, status: "queued", original_filename: input.filename,
             mime_type: input.mimeType, size_bytes: input.sizeBytes, sha256: input.sha256,
+            source_type: input.sourceType, catalog_url: input.catalogUrl,
+            report_access_token_hash: input.reportAccessTokenHash,
           }).select("id").single();
           if (error || !data) throw new Error(`Unable to create audit job: ${error?.message ?? "unknown error"}`);
           return data.id as string;
@@ -105,6 +108,7 @@ export function createSupabaseAuditStore(
           const { data, error } = await admin.from("audit_jobs").insert({
             owner_id: input.ownerId, status: "queued", source_type: "dsp_link",
             catalog_url: input.catalogUrl, sha256: input.sha256,
+            report_access_token_hash: input.reportAccessTokenHash,
           }).select("id").single();
           if (error || !data) throw new Error(`Unable to create catalog audit job: ${error?.message ?? "unknown error"}`);
           return data.id as string;
@@ -147,7 +151,7 @@ export function createSupabaseAuditStore(
         ownerId: claimed.owner_id as string | null,
         sourceAudioPath: claimed.source_audio_path as string | null,
         mimeType: claimed.mime_type as string | null,
-        sourceType: (claimed.source_type ?? "master") as "master" | "dsp_link",
+        sourceType: (claimed.source_type ?? "master") as "master" | "dsp_link" | "combined",
         catalogUrl: claimed.catalog_url as string | null,
         status: "processing" as const,
         claimToken: claimed.claim_token as string,
@@ -350,6 +354,20 @@ export function createSupabaseAuditStore(
     },
     async markCompleted(jobId, claimToken, signal) {
       await fencedStep(jobId, claimToken, "complete", {}, signal);
+    },
+    async verifySampleReportAccess(jobId, token) {
+      if (!token || token.length !== 64) return false;
+      const { data, error } = await admin.from("audit_jobs")
+        .select("report_access_token_hash")
+        .eq("id", jobId)
+        .maybeSingle();
+      if (error) throw new Error(`Unable to verify sample report access: ${error.message}`);
+      const expected = typeof data?.report_access_token_hash === "string" ? data.report_access_token_hash : "";
+      if (!/^[a-f0-9]{64}$/i.test(expected)) return false;
+      const suppliedHash = await sha256(new TextEncoder().encode(token));
+      const expectedBytes = Buffer.from(expected, "hex");
+      const suppliedBytes = Buffer.from(suppliedHash, "hex");
+      return expectedBytes.length === suppliedBytes.length && timingSafeEqual(expectedBytes, suppliedBytes);
     },
     async getAuditStatus(jobId) {
       const { data: job, error: jobError } = await admin
