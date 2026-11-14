@@ -81,7 +81,7 @@ describe("report download contract", () => {
     expect(response.json()).toMatchObject({ error: "PAYMENT_REQUIRED" });
     await app.close();
   });
-  it("allows operator full-report access only with both operator credentials and the job token", async () => {
+  it("allows the job capability to retrieve the full report while payments are disabled", async () => {
     process.env.RESON8_OPERATOR_KEY = OPERATOR_KEY;
     process.env.PAYMENTS_ENABLED = "false";
     const app = buildServer(store() as any);
