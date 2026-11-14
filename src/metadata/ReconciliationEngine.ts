@@ -7,7 +7,7 @@ import {
 export type ReconciliationStatus = "reconciled" | "conflict" | "partial";
 
 export interface MetadataConflict {
-  field: "title" | "artist" | "album" | "isrc" | "label" | "releaseDate";
+  field: "title" | "artist" | "album" | "isrc" | "upc" | "label" | "releaseDate";
   values: readonly string[];
 }
 
@@ -24,6 +24,7 @@ const FIELDS = [
   "artist",
   "album",
   "isrc",
+  "upc",
   "label",
   "releaseDate",
 ] as const;
