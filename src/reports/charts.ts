@@ -35,7 +35,11 @@ export function strengthRiskItemsForColumn(rows:ChartRow[],group:"strength"|"ris
  return rows.filter(row=>row.group===group);
 }
 
-function shown(v:ChartRow["value"]):string{return v===null||v===undefined||v===""||(typeof v==="number"&&!Number.isFinite(v))?"Not determined":typeof v==="number"?String(Number(v.toFixed(2))):String(v).replace(/[\\u2010-\\u2015\\u2212]/g,"-").replace(/[\\u2018\\u2019]/g,"\'").replace(/[\\u201C\\u201D]/g,\'"\').replace(/\\u2026/g,"...");}
+function shown(v:ChartRow["value"]):string{
+ if(v===null||v===undefined||v===""||(typeof v==="number"&&!Number.isFinite(v)))return "Not determined";
+ if(typeof v==="number")return String(Number(v.toFixed(2)));
+ return String(v).replace(/[\\u2010-\\u2015\\u2212]/g,"-").replace(/[\\u2018\\u2019]/g,"'").replace(/[\\u201C\\u201D]/g,'"').replace(/\\u2026/g,"...");
+}
 function line(p:PDFPage,x1:number,y1:number,x2:number,y2:number,c=C.line,w=.8){p.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},color:c,thickness:w});}
 function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
  const out:string[]=[];let current="";
