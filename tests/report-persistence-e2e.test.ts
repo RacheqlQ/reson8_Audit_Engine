@@ -1,6 +1,6 @@
 import { createHmac, createHash } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { AddressInfo } from "node:net";
+import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createSupabaseAuditStore } from "../src/integrations/supabase-audit-store.js";
 
@@ -169,7 +169,7 @@ describe.sequential("real saveReport persistence recovery through PostgREST and 
   it("cleans the uploaded object after the report transaction is rolled back", async () => {
     const beforeCleanup = cleanupRequests;
     const storagePath = `${fixtures.b.job}/${fixtures.b.token}/sample.pdf`;
-    await expect(store().saveReport(fixtures.b.job, fixtures.b.token, "sample", pdf)).rejects.toThrow();
+    await expect(store().saveReport(fixtures.b.job, fixtures.b.token, "sample", pdf))\n      .rejects.toThrow("CI_INJECTED_REPORT_INSERT_ROLLBACK");
     expect(await reportRow(fixtures.b.job)).toBeNull();
     expect(objects.has(storagePath)).toBe(false);
     expect(cleanupRequests).toBe(beforeCleanup + 1);
