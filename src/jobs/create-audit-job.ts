@@ -1,16 +1,18 @@
 import { sha256 } from "./content-hash.js";
 import { validateAudioUpload } from "./audio-intake.js";
+import { classifyAuditSources } from "./audit-source.js";
 
 export interface CreateAuditJobInput {
   ownerId: string | null;
   filename: string;
   mimeType: string;
   bytes: Uint8Array;
+  catalogUrl?: string | null;
 }
 
 export interface CreateAuditJobDependencies {
   ensureProfile?: (ownerId: string) => Promise<void>;
-  createJob: (input: { ownerId: string | null; filename: string; mimeType: string; sizeBytes: number; sha256: string; }) => Promise<string>;
+  createJob: (input: { ownerId: string | null; filename: string; mimeType: string; sizeBytes: number; sha256: string; sourceType: "master" | "combined"; catalogUrl: string | null; }) => Promise<string>;
   createCatalogJob: (input: { ownerId: string | null; catalogUrl: string; sha256: string }) => Promise<string>;
   uploadMaster: (path: string, bytes: Uint8Array, mimeType: string) => Promise<void>;
   setSourcePath: (jobId: string, path: string) => Promise<void>;
@@ -28,6 +30,7 @@ export async function createAuditJob(
     sizeBytes: input.bytes.byteLength,
   });
   const digest = await sha256(input.bytes);
+  const sourceType = classifyAuditSources({ hasMaster: true, catalogUrl: input.catalogUrl });
 
   const jobId = await deps.createJob({
     ownerId: input.ownerId,
@@ -35,6 +38,8 @@ export async function createAuditJob(
     mimeType: validated.mimeType,
     sizeBytes: validated.sizeBytes,
     sha256: digest,
+    sourceType,
+    catalogUrl: input.catalogUrl?.trim() || null,
   });
 
   const sourceAudioPath = `${input.ownerId ?? "anonymous"}/${jobId}/${validated.filename}`;
@@ -56,5 +61,5 @@ export async function createAuditJob(
     throw error;
   }
 
-  return { jobId, sourceAudioPath, sha256: digest };
+  return { jobId, sourceAudioPath, sha256: digest, sourceType };
 }
