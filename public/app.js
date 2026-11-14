@@ -1,8 +1,7 @@
 import { readPdfResponse, triggerPdfDownload } from "./report-download.js";
 import { createAuditPoller } from "./audit-polling.js";
-import { credentialFilename, triggerCredentialDownload } from "./credential-download.js";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
-const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain"),saveAccessTokenButton=document.querySelector("#saveAccessTokenButton"),tokenSaveMessage=document.querySelector("#tokenSaveMessage");
+const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain"),accessTokenDisplay=document.querySelector("#accessTokenDisplay"),revealAccessTokenButton=document.querySelector("#revealAccessTokenButton"),copyAccessTokenButton=document.querySelector("#copyAccessTokenButton"),fullReportAccessKey=document.querySelector("#fullReportAccessKey"),unlockFullReportButton=document.querySelector("#unlockFullReportButton"),tokenSaveMessage=document.querySelector("#tokenSaveMessage");
 const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.querySelector("#detectCatalog"),catalogPlatform=document.querySelector("#catalogPlatform"),catalogPreview=document.querySelector("#catalogPreview"),catalogState=document.querySelector("#catalogState"),catalogCheck=document.querySelector("#catalogCheck");
 const checks={type:document.querySelector("#checkType"),size:document.querySelector("#checkSize"),hash:document.querySelector("#checkHash")};
 const MAX_BYTES=50*1024*1024,AUDIO_EXTENSIONS=new Set(["mp3","wav","flac","aac","ogg","m4a"]);
@@ -14,7 +13,7 @@ const EVIDENCE_STEPS=[
   {number:"05",title:"A&R assessment",description:"Evidence-bound interpretation"},
   {number:"06",title:"Report",description:"Song-specific PDF output"}
 ];
-let selectedFile=null,digest=null,catalogReady=false,currentAuditPayload=null,reportAccessToken=null;
+let selectedFile=null,digest=null,catalogReady=false,currentAuditPayload=null,reportAccessToken=null,tokenRevealed=false;
 
 function setCheck(el,state,value){el.classList.remove("ok","bad");if(state)el.classList.add(state);el.querySelector("b").textContent=value;}
 function extensionOf(name){return name.includes(".")?name.split(".").pop().toLowerCase():"";}
@@ -72,7 +71,7 @@ const auditPoller=createAuditPoller({onPayload:applyAuditPayload,onMessage:messa
 async function pollAudit(job,token){await auditPoller.poll(job,token);}
 
 async function submitAudit(){
-  stopPolling();reportAccessToken=null;currentAuditPayload=null;saveAccessTokenButton.disabled=true;tokenSaveMessage.textContent="";
+  stopPolling();reportAccessToken=null;currentAuditPayload=null;tokenRevealed=false;accessTokenDisplay.textContent="••••••••••••••••••••••••••••••••";revealAccessTokenButton.disabled=true;copyAccessTokenButton.disabled=true;fullReportAccessKey.value="";tokenSaveMessage.textContent="";
   submit.disabled=true;submit.querySelector("span").textContent="Submitting…";
   try{
     const hasMaster=Boolean(selectedFile&&digest),hasCatalog=catalogReady;
@@ -89,28 +88,42 @@ async function submitAudit(){
     jobId.textContent=payload.jobId||"—";serverHash.textContent=payload.sha256||"—";reportAccessToken=payload.reportAccessToken||null;currentAuditPayload={jobId:payload.jobId,status:"queued",currentStepIndex:0};resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
     resultMessage.textContent=hasMaster&&hasCatalog?"Accepted. Master Sonic DNA and DSP catalog evidence will be reconciled into one report.":hasMaster?"Accepted. Master Sonic DNA analysis is processing.":"Accepted. DSP catalog analysis is processing.";
     if(reportAccessToken){
-      saveAccessTokenButton.disabled=false;
-      tokenSaveMessage.textContent="Save this private credential now. The token is issued once and is not recoverable from the job ID. Reloading or closing this page loses the in-memory copy.";
+      revealAccessTokenButton.disabled=false;
+      copyAccessTokenButton.disabled=false;
+      tokenSaveMessage.textContent="Private key issued. Reveal or copy it now, or paste it into the access-key field to unlock the full report. It cannot be recovered after this page is closed or reloaded.";
     }else{
-      saveAccessTokenButton.disabled=true;
-      tokenSaveMessage.textContent="The server did not return an access credential. Contact support before leaving this page.";
+      revealAccessTokenButton.disabled=true;
+      copyAccessTokenButton.disabled=true;
+      tokenSaveMessage.textContent="The server did not return an access key. Contact support before leaving this page.";
     }
     submit.querySelector("span").textContent="Audit processing";pollAudit(payload.jobId,reportAccessToken);
   }catch(e){actionMessage.textContent=e instanceof Error?e.message:"Audit intake failed.";submit.disabled=false;updateSubmit();}
 }
-function saveAccessCredential(){
-  if(!reportAccessToken||!currentAuditPayload?.jobId){tokenSaveMessage.textContent="The private access credential is unavailable.";return;}
-  const contents=[
-    "Reson8 Audit Engine — private audit access credential",
-    "Job ID: "+currentAuditPayload.jobId,
-    "Capability token: "+reportAccessToken,
-    "",
-    "Keep this file private. Anyone with this token can access this audit.",
-    "The token cannot be recovered from the job ID."
-  ].join("\n");
-  const blob=new Blob([contents],{type:"text/plain;charset=utf-8"});
-  triggerCredentialDownload(blob,credentialFilename(currentAuditPayload.jobId));
-  tokenSaveMessage.textContent="Private access credential download started. If iOS opens it as text instead of saving it, use Share > Save to Files. Store it securely; it is not saved in browser storage.";
+function renderAccessToken(){
+  accessTokenDisplay.textContent=reportAccessToken
+    ? tokenRevealed?reportAccessToken:"•".repeat(Math.min(reportAccessToken.length,64))
+    : "No key issued";
+  revealAccessTokenButton.textContent=tokenRevealed?"Hide":"Reveal";
+}
+async function copyAccessToken(){
+  if(!reportAccessToken){tokenSaveMessage.textContent="No private key is available to copy.";return;}
+  try{
+    await navigator.clipboard.writeText(reportAccessToken);
+    tokenSaveMessage.textContent="Private audit key copied. Keep it secure.";
+  }catch{
+    tokenSaveMessage.textContent="Clipboard access was unavailable. Reveal the key and copy it manually.";
+  }
+}
+function revealAccessToken(){
+  if(!reportAccessToken)return;
+  tokenRevealed=!tokenRevealed;
+  renderAccessToken();
+}
+async function unlockFullReport(){
+  const pastedKey=fullReportAccessKey.value.trim();
+  if(pastedKey)reportAccessToken=pastedKey;
+  if(!reportAccessToken){tokenSaveMessage.textContent="Paste this audit's private key before unlocking.";return;}
+  await downloadReport("full");
 }
 async function downloadReport(tier){
   if(!reportAccessToken){reportDownloadMessage.textContent="This audit's private access token is unavailable. Submit a new audit to receive a fresh token.";return;}
@@ -118,12 +131,16 @@ async function downloadReport(tier){
   try{
     const response=await fetch("/v1/audits/"+encodeURIComponent(currentAuditPayload.jobId)+"/reports/"+tier,{headers:{"x-reson8-report-token":reportAccessToken}});
     const blob=await readPdfResponse(response);
-    triggerPdfDownload(blob,"reson8-audit-"+tier+"-"+currentAuditPayload.jobId+".pdf");
+    const name=(currentAuditPayload?.displayName||currentAuditPayload?.jobName||"audit").replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,80)||"audit";
+    triggerPdfDownload(blob,"reson8-"+name+"-"+tier+".pdf");
     reportDownloadMessage.textContent=tier+" PDF downloaded successfully.";
   }catch(error){reportDownloadMessage.textContent=error instanceof Error?error.message:"Report retrieval failed.";}
 }
 input.addEventListener("change",()=>input.files?.[0]&&inspect(input.files[0]));removeFile.addEventListener("click",clearFile);detectCatalog.addEventListener("click",previewCatalog);catalogUrl.addEventListener("input",()=>{catalogReady=false;setCheck(catalogCheck,"","—");updateSubmit();});catalogUrl.addEventListener("blur",previewCatalog);submit.addEventListener("click",submitAudit);
-sampleReportButton.addEventListener("click",()=>downloadReport("sample"));saveAccessTokenButton.addEventListener("click",saveAccessCredential);
+sampleReportButton.addEventListener("click",()=>downloadReport("sample"));
+revealAccessTokenButton.addEventListener("click",revealAccessToken);
+copyAccessTokenButton.addEventListener("click",copyAccessToken);
+unlockFullReportButton.addEventListener("click",unlockFullReport);
 ["dragenter","dragover"].forEach(type=>dropzone.addEventListener(type,e=>{e.preventDefault();dropzone.classList.add("dragover");}));
 ["dragleave","drop"].forEach(type=>dropzone.addEventListener(type,e=>{e.preventDefault();dropzone.classList.remove("dragover");}));
 dropzone.addEventListener("drop",e=>{const f=e.dataTransfer?.files?.[0];if(f)inspect(f);});
