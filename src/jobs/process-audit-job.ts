@@ -328,7 +328,7 @@ export async function processAuditJob(
         : identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
       identity: identityEvidence(identity),
       reconciliation: reconciliationEvidence(reconciliation),
-      metadataSourcesChecked: [...(metadata ? [metadata.platform] : []), ...(masterTags ? ["id3"] : []), "audd"],
+      metadataSourcesChecked: [...(metadata ? [metadata.platform] : []), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...(process.env.AUDD_API ? ["audd"] : [])],
       sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
