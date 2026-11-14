@@ -5,6 +5,7 @@ export interface TrackIdentity {
   readonly artist: string | null;
   readonly album: string | null;
   readonly isrc: string | null;
+  readonly upc: string | null;
   readonly label: string | null;
   readonly releaseDate: string | null;
   readonly genres: readonly string[];
@@ -16,6 +17,7 @@ export interface StructuredMetadata {
   artist?: string | null;
   album?: string | null;
   isrc?: string | null;
+  upc?: string | null;
   label?: string | null;
   releaseDate?: string | null;
   genres?: readonly string[] | null;
@@ -28,6 +30,7 @@ export interface AuddMetadata {
   artist?: string | null;
   album?: string | null;
   isrc?: string | null;
+  upc?: string | null;
   label?: string | null;
   releaseDate?: string | null;
   genres?: readonly string[] | null;
@@ -161,6 +164,7 @@ export class MetadataEngine {
     );
     const album = MetadataEngine.pickField(providers, "album", null);
     const isrc = MetadataEngine.pickIsrc(providers);
+    const upc = MetadataEngine.pickField(providers, "upc", null);
     const label = MetadataEngine.pickField(providers, "label", null);
     const releaseDate = MetadataEngine.pickField(providers, "releaseDate", null);
     const genres = MetadataEngine.pickGenres(providers);
@@ -171,6 +175,7 @@ export class MetadataEngine {
       artist,
       album,
       isrc,
+      upc,
       label,
       releaseDate: cleanDate(releaseDate),
       genres: Object.freeze([...genres]),
@@ -224,6 +229,7 @@ export class MetadataEngine {
         cleanString(metadata.artist),
         cleanString(metadata.album),
         normalizeIsrc(metadata.isrc),
+        cleanString(metadata.upc),
         cleanString(metadata.label),
         cleanDate(metadata.releaseDate),
         ...cleanGenres(metadata.genres),
