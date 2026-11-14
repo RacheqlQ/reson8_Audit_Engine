@@ -9,10 +9,24 @@ export interface ReportRect { x:number;y:number;width:number;height:number;id:st
 export interface ReportPagePlan { title:string;text:string[]; }
 const W=595.28,H=841.89,M=48,TOP=735,BOTTOM=76,AVAILABLE=TOP-BOTTOM;
 const C={navy:rgb(11/255,27/255,58/255),blue:rgb(47/255,107/255,1),violet:rgb(124/255,77/255,1),teal:rgb(31/255,209/255,178/255),coral:rgb(1,107/255,94/255),paper:rgb(247/255,245/255,240/255),ink:rgb(22/255,29/255,43/255),muted:rgb(91/255,101/255,119/255),line:rgb(220/255,222/255,226/255),white:rgb(1,1,1)};
-const text=(v:unknown):string=>v===null||v===undefined||v===""?"":Array.isArray(v)?v.map(text).filter(Boolean).join(", "):typeof v==="object"?"":String(v);
+export function normalizeReportText(value: string): string {
+ return value.normalize("NFKC")
+  .replace(/[\\u2018\\u2019\\u201A\\u201B]/g,"'")
+  .replace(/[\\u201C\\u201D\\u201E\\u201F]/g,'"')
+  .replace(/[\\u2010-\\u2015\\u2212]/g,"-")
+  .replace(/[\\u00A0\\u202F]/g," ")
+  .replace(/[\\u2026]/g,"...")
+  .replace(/[\\u2022\\u25CF]/g,"-")
+  .replace(/[\\u00D7]/g,"x")
+  .replace(/[\\u266F]/g,"#")
+  .replace(/[\\uFFFD]/g,"?")
+  .replace(/[^\\x20-\\x7E\\u00A0-\\u00FF]/g,"?");
+}
+const text=(v:unknown):string=>v===null||v===undefined||v===""?"":Array.isArray(v)?v.map(text).filter(Boolean).join(", "):typeof v==="object"?"":typeof v==="number"&&Number.isFinite(v)?String(Number(v.toFixed(2))):normalizeReportText(String(v));
 const val=(v:unknown,fallback="Not supplied")=>text(v)||fallback;
 const chartValue=(v:unknown):string|number|null=>typeof v==="string"||typeof v==="number"&&Number.isFinite(v)?v:null;
 function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
+ value=normalizeReportText(value);
  const out:string[]=[];let line="";
  for(const word of value.split(/\s+/).filter(Boolean)){
   if(font.widthOfTextAtSize(word,size)>width){
@@ -90,7 +104,14 @@ function sections(i:AuditReportInput):Section[]{
  const score=(name:string,v:{score:number|null;rationale:string})=>name+" — "+(v.score===null?"NOT SCORED":v.score+"/100")+" — "+v.rationale;
  return [
  {title:"Executive assessment",accent:"blue",body:[...(e.fixture?["FIXTURE — synthetic renderer test data; not a real analysis."]:[]),a.executiveSummary,"Verdict: "+verdictLabel(a.commercialRead.marketability),"Verdict rule: "+verdictRule(a.commercialRead.marketability),"Reason: "+a.commercialRead.rationale,"Confidence: "+Math.round(a.confidence*100)+"%","Assessment basis: "+(hasAudio?"Uploaded master and supplied identity evidence.":"Metadata/provider evidence only; no uploaded master.") ]},
- {title:"Identity and source reconciliation",accent:"violet",body:["Artist: "+val(e.artist),"Track: "+val(e.title),"Album: "+val(e.album),"ISRC: "+val(e.isrc),"Release date: "+val(e.releaseDate),"Label: "+val(e.label),"Evidence sources: "+val(e.sources??e.sourceProviders)]},
+ {title:"Identity and source reconciliation",accent:"violet",body:["Artist: "+val(e.artist),"Track: "+val(e.title),"Album: "+val(e.album),"Genre: "+val(e.genre??e.genres),"ISRC: "+val(e.isrc),"UPC: "+val(e.upc),"Release date: "+val(e.releaseDate),"Label: "+val(e.label),"DSP / platform: "+val(e.platform),"External identifiers: "+val(e.externalIds),"Evidence sources: "+val(e.sources??e.sourceProviders)]},
+ {title:"Metadata coverage and verification",accent:"teal",body:[
+  ...(["artist","title","album","genre","isrc","upc","label","releaseDate"] as const).map((field)=>field+": "+(text(e[field])?"Available — "+text(e[field]):"Unavailable — no value returned by the supplied or queried sources")),
+  "External identifiers: "+(text(e.externalIds)?"Available — "+text(e.externalIds):"Unavailable — no external identifiers returned"),
+  "Sources checked: "+val(e.sourceProviders??e.sources??e.source),
+  "Coverage status: "+val(e.evidenceStatus??e.status,"Partial — one or more identity fields remain unavailable"),
+  "Verification note: unavailable fields are not inferred or fabricated."
+ ]},
  {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>x.label+" — "+x.claim+" [Source: "+x.source+"]")},
  {title:"Sonic DNA and technical profile",accent:"blue",body:!hasAudio?(s?["Provider-supplied sonic context (not master-measured)","Provider BPM: "+val(s.bpm),"Provider key / mode: "+[text(s.key),text(s.mode)].filter(Boolean).join(" "),"Provider mood tags: "+val(s.moodTags),"Not measured: no master audio supplied."]:["Requires audio upload","Not measured: no master audio supplied."]):[e.fixture?"FIXTURE VALUES — synthetic audio-profile test data":"OBSERVED master-derived values","Tempo: "+val(s?.bpm),"Key / mode: "+[text(s?.key),text(s?.mode)].filter(Boolean).join(" "),"Loudness LUFS: "+val(s?.loudnessLufs),"Dynamic range dB: "+val(s?.dynamicRangeDb),"RMS energy: "+val(s?.rmsEnergy)]},
  {title:"Creative identity and A&R positioning",accent:"violet",body:[a.creativeIdentity,"Primary lane: "+a.aAndRPositioning.primaryLane,"Adjacent lanes: "+a.aAndRPositioning.adjacentLanes.join(", "),a.aAndRPositioning.rationale]},
