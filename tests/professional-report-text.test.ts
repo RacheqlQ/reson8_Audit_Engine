@@ -14,11 +14,34 @@ describe("professional report text and metadata coverage", () => {
     expect(text).not.toMatch(/\d+\.\d{4,}/);
   });
 
-  it("does not present synthetic fixture identity as recognized metadata", () => {
-    const evidence = { ...fullAudioFixture.evidence, metadataSourcesChecked: ["synthetic_audio_fixture"] };
-    expect(metadataFieldStatus(evidence as Record<string, unknown>, "artist")).toBe("Synthetic test value — not a real identity match");
-    const text = planAuditReportPages({ ...fullAudioFixture, evidence } as any, "full").flatMap((page) => [page.title, ...page.text]).join(" ");
-    expect(text).toContain("Synthetic report fixture (layout testing only)");
+  it("recognizes the actual exported fixture provenance without inventing checked-provider metadata", () => {
+    expect(fullAudioFixture.evidence.fixture).toBe(true);
+    expect(fullAudioFixture.evidence.sources).toContain("synthetic_audio_fixture");
+    expect(metadataFieldStatus(fullAudioFixture.evidence as Record<string, unknown>, "artist")).toBe("Synthetic test value — not a real identity match");
+    expect(metadataFieldStatus(fullAudioFixture.evidence as Record<string, unknown>, "upc")).toBe("Unavailable — no source result");
+    const reportText = planAuditReportPages(fullAudioFixture as any, "full").flatMap((page) => [page.title, ...page.text]).join(" ");
+    expect(reportText).toContain("Artist: Synthetic test value — not a real identity match");
+    expect(reportText).toContain("Track: Synthetic test value — not a real identity match");
+    expect(reportText).toContain("FIXTURE VALUES — synthetic audio-profile test data");
+    expect(reportText).toContain("Synthetic report fixture (layout testing only)");
+  });
+  it("serializes supported external identifiers and ignores arbitrary nested objects", () => {
+    const input = {
+      ...fullAudioFixture,
+      evidence: {
+        ...fullAudioFixture.evidence,
+        externalIds: {
+          spotify: "spotify:track:fixture123",
+          apple_music: { id: "apple-track-456" },
+          unsupported: { arbitrary: { secret: "must-not-leak" } },
+          malformed: [null, { nested: "must-not-leak-either" }],
+        },
+      },
+    };
+    const reportText = planAuditReportPages(input as any, "full").flatMap((page) => [page.title, ...page.text]).join(" ");
+    expect(reportText).toContain("External identifiers: Available — Spotify: spotify:track:fixture123; Apple Music: apple-track-456");
+    expect(reportText).not.toContain("must-not-leak");
+    expect(reportText).not.toContain("[object Object]");
   });
 
   it("includes all key identity fields and explicit unavailable states in full reports", () => {
