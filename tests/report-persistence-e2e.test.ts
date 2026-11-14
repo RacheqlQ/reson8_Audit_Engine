@@ -170,7 +170,8 @@ describe.sequential("real saveReport persistence recovery through PostgREST and 
   it("cleans the uploaded object after the report transaction is rolled back", async () => {
     const beforeCleanup = cleanupRequests;
     const storagePath = `${fixtures.b.job}/${fixtures.b.token}/sample.pdf`;
-    await expect(store().saveReport(fixtures.b.job, fixtures.b.token, "sample", pdf))\n      .rejects.toThrow("CI_INJECTED_REPORT_INSERT_ROLLBACK");
+    await expect(store().saveReport(fixtures.b.job, fixtures.b.token, "sample", pdf))
+      .rejects.toThrow("CI_INJECTED_REPORT_INSERT_ROLLBACK");
     expect(await reportRow(fixtures.b.job)).toBeNull();
     expect(objects.has(storagePath)).toBe(false);
     expect(cleanupRequests).toBe(beforeCleanup + 1);
@@ -194,6 +195,10 @@ describe.sequential("real saveReport persistence recovery through PostgREST and 
       expect(cleanupRequests).toBe(beforeCleanup);
       expect(objects.get(storagePath)?.bytes.equals(Buffer.from(pdf))).toBe(true);
       expect(objects.get(storagePath)?.contentType).toBe("application/pdf");
+      expect(await reportRow(fixtures.c.job)).toMatchObject({
+        audit_job_id: fixtures.c.job, tier: "sample", storage_path: storagePath,
+        sha256: digest, content_type: "application/pdf",
+      });
       expect(log).toHaveBeenCalledWith(expect.stringContaining("report_artifact_persistence_outcome_unknown"));
     } finally {
       log.mockRestore();
