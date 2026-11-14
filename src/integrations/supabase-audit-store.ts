@@ -151,6 +151,7 @@ export function createSupabaseAuditStore(
         ownerId: claimed.owner_id as string | null,
         sourceAudioPath: claimed.source_audio_path as string | null,
         mimeType: claimed.mime_type as string | null,
+        filename: claimed.original_filename as string | null,
         sourceType: (claimed.source_type ?? "master") as "master" | "dsp_link" | "combined",
         catalogUrl: claimed.catalog_url as string | null,
         status: "processing" as const,
