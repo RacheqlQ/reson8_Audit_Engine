@@ -38,10 +38,10 @@ export function strengthRiskItemsForColumn(rows:ChartRow[],group:"strength"|"ris
 function shown(v:ChartRow["value"]):string{
  if(v===null||v===undefined||v===""||(typeof v==="number"&&!Number.isFinite(v)))return "Not determined";
  if(typeof v==="number")return String(Number(v.toFixed(2)));
- return String(v).replace(/[\\u2010-\\u2015\\u2212]/g,"-").replace(/[\\u2018\\u2019]/g,"'").replace(/[\\u201C\\u201D]/g,'"').replace(/\\u2026/g,"...");
+ return String(v).replace(/[\u2010-\u2015\u2212]/g,"-").replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/\u2026/g,"...");
 }
 function line(p:PDFPage,x1:number,y1:number,x2:number,y2:number,c=C.line,w=.8){p.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},color:c,thickness:w});}
-function normalizeChartText(value:string):string{return value.normalize("NFKC").replace(/[\\u2018\\u2019]/g,"'").replace(/[\\u201C\\u201D]/g,'"').replace(/[\\u2010-\\u2015\\u2212]/g,"-").replace(/[\\u00A0\\u202F]/g," ").replace(/\\u2026/g,"...").replace(/[^\\x20-\\x7E\\u00A0-\\u00FF]/g,"?");}
+function normalizeChartText(value:string):string{return value.normalize("NFKC").replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/[\u2010-\u2015\u2212]/g,"-").replace(/[\u00A0\u202F]/g," ").replace(/\u2026/g,"...").replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"?");}
 function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
  s=normalizeChartText(s);
  const out:string[]=[];let current="";
