@@ -23,4 +23,9 @@ describe("createCatalogAuditJob", () => {
     });
     expect(created.reportAccessTokenHash).not.toBe(result.reportAccessToken);
   });
+  it("rejects unsupported DSP hosts before creating a queued job", async () => {
+    await expect(createCatalogAuditJob({ ownerId: null, catalogUrl: "https://example.com/track/abc" }, {
+      createCatalogJob: async () => { throw new Error("must not create job"); },
+    })).rejects.toThrow("Unsupported DSP or catalog URL");
+  });
 });
