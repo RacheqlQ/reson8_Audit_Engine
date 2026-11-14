@@ -17,13 +17,14 @@ describe("professional report text and metadata coverage", () => {
   it("includes all key identity fields and explicit unavailable states in full reports", () => {
     const input = {
       ...fullAudioFixture,
-      evidence: { ...fullAudioFixture.evidence, isrc: null, upc: null, genre: null, genres: [], externalIds: {} },
+      evidence: { ...fullAudioFixture.evidence, isrc: "NGABC2600001", upc: null, genre: null, genres: [], externalIds: {}, sourceProviders: ["spotify", "audd"], reconciliation: { status: "conflict", reconciledFields: [], conflicts: [{ field: "isrc", values: ["NGABC2600001", "NGABC2600002"] }] } },
     };
     const text = planAuditReportPages(input as any, "full").flatMap((page) => [page.title, ...page.text]).join(" ");
     for (const field of ["Artist:", "Track:", "Album:", "Genre:", "ISRC:", "UPC:", "Release date:", "Label:", "External identifiers:", "Sources checked:"]) {
       expect(text).toContain(field);
     }
     expect(text).toContain("Unavailable — no source result");
+    expect(text).toContain("ISRC: Conflicting source values — NGABC2600001");
     expect(text).toContain("not inferred or fabricated");
   });
 });
