@@ -69,7 +69,8 @@ describe("job-scoped full-report capability experience", () => {
     expect(html).toContain('id="fullReportAccessKey"');
     expect(html).toContain('id="unlockFullReportButton"');
     expect(script).toContain("navigator.clipboard");
-    expect(script).toContain("downloadReport(\"full\")");
+    expect(script).toContain('const accessToken=pastedKey||reportAccessToken;');
+    expect(script).toContain('downloadReport("full",accessToken)');
     expect(script).not.toContain("triggerCredentialDownload(");
     expect(script).not.toContain("localStorage");
     expect(script).not.toContain("sessionStorage");
