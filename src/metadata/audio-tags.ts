@@ -6,10 +6,11 @@ export interface AudioTagMetadata {
   genres: string[];
   releaseDate: string | null;
   label: string | null;
+  track: number | null;
 }
 
 const EMPTY: AudioTagMetadata = {
-  title: null, artist: null, album: null, isrc: null, genres: [], releaseDate: null, label: null,
+  title: null, artist: null, album: null, isrc: null, genres: [], releaseDate: null, label: null, track: null,
 };
 
 function syncSafe(bytes: Uint8Array, offset: number): number {
@@ -164,6 +165,24 @@ function parseWavInfo(bytes: Uint8Array): AudioTagMetadata {
   return result;
 }
 
+const ID3V1_GENRES = [
+  "Blues","Classic Rock","Country","Dance","Disco","Funk","Grunge","Hip-Hop","Jazz","Metal",
+  "New Age","Oldies","Other","Pop","R&B","Rap","Reggae","Rock","Techno","Industrial",
+  "Alternative","Ska","Death Metal","Pranks","Soundtrack","Euro-Techno","Ambient","Trip-Hop","Vocal","Jazz+Funk",
+  "Fusion","Trance","Classical","Instrumental","Acid","House","Game","Sound Clip","Gospel","Noise",
+  "AlternRock","Bass","Soul","Punk","Space","Meditative","Instrumental Pop","Instrumental Rock","Ethnic","Gothic",
+  "Darkwave","Techno-Industrial","Electronic","Pop-Folk","Eurodance","Dream","Southern Rock","Comedy","Cult","Gangsta",
+  "Top 40","Christian Rap","Pop/Funk","Jungle","Native American","Cabaret","New Wave","Psychedelic","Rave","Showtunes",
+  "Trailer","Lo-Fi","Tribal","Acid Punk","Acid Jazz","Polka","Retro","Musical","Rock & Roll","Hard Rock",
+  "Folk","Folk-Rock","National Folk","Swing","Fast Fusion","Bebob","Latin","Revival","Celtic","Bluegrass",
+  "Avantgarde","Gothic Rock","Progressive Rock","Psychedelic Rock","Symphonic Rock","Slow Rock","Big Band","Chorus","Easy Listening","Acoustic",
+  "Humour","Speech","Chanson","Opera","Chamber Music","Sonata","Symphony","Booty Bass","Primus","Porn Groove",
+  "Satire","Slow Jam","Club","Tango","Samba","Folklore","Ballad","Power Ballad","Rhythmic Soul","Freestyle",
+  "Duet","Punk Rock","Drum Solo","A Cappella","Euro-House","Dance Hall","Goa","Drum & Bass","Club-House","Hardcore",
+  "Terror","Indie","BritPop","Negerpunk","Polsk Punk","Beat","Christian Gangsta Rap","Heavy Metal","Black Metal","Crossover",
+  "Contemporary Christian","Christian Rock","Merengue","Salsa","Thrash Metal","Anime","JPop","SynthPop",
+] as const;
+
 function parseId3v1(bytes: Uint8Array): AudioTagMetadata {
   if (bytes.length < 128) return { ...EMPTY, genres: [] };
   const offset = bytes.length - 128;
@@ -173,9 +192,12 @@ function parseId3v1(bytes: Uint8Array): AudioTagMetadata {
     return value || null;
   };
   const year = field(93, 4);
+  const genre = ID3V1_GENRES[bytes[offset + 127]];
+  const trackByte = bytes[offset + 126];
+  const track = bytes[offset + 125] === 0 && trackByte > 0 ? trackByte : null;
   return {
     title: field(3, 30), artist: field(33, 30), album: field(63, 30), isrc: null,
-    genres: [], releaseDate: year, label: null,
+    genres: genre ? [genre] : [], releaseDate: year, label: null, track,
   };
 }
 
@@ -192,5 +214,6 @@ export function readAudioTags(input: Uint8Array): AudioTagMetadata {
     genres: v2.genres.length ? v2.genres : flac.genres.length ? flac.genres : wav.genres.length ? wav.genres : v1.genres,
     releaseDate: v2.releaseDate ?? flac.releaseDate ?? wav.releaseDate ?? v1.releaseDate,
     label: v2.label ?? flac.label ?? wav.label,
+    track: v1.track,
   };
 }
