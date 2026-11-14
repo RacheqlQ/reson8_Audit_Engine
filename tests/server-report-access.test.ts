@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildServer, operatorAuthorized, paymentsEnabled } from "../src/server.js";
 const PDF = Buffer.from("%PDF-1.7\n");
 const OPERATOR_KEY = "test-operator-key-that-is-at-least-32-bytes-long";
@@ -82,6 +82,35 @@ describe("capability-protected anonymous report access", () => {
     const app = buildServer(store());
     const response = await app.inject({ method: "GET", url: "/v1/audits/id/reports/sample", headers: { "x-reson8-report-token": ACCESS_TOKEN } });
     expect(response.statusCode).toBe(200);
+    await app.close();
+  });
+  it("keeps stored-payload fallback behind capability, payment, and operator authorization", async () => {
+    delete process.env.PAYMENTS_ENABLED;
+    process.env.RESON8_OPERATOR_KEY = OPERATOR_KEY;
+    const getAuditReportPayload = vi.fn(async () => PDF);
+    const app = buildServer({
+      ...store(),
+      getAuditReport: async () => { throw new Error("stored PDF unavailable"); },
+      getAuditReportPayload,
+    } as any);
+    const deniedSample = await app.inject({ method: "GET", url: "/v1/audits/id/reports/sample" });
+    const deniedFull = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { "x-reson8-operator-key": OPERATOR_KEY } });
+    expect(deniedSample.statusCode).toBe(404);
+    expect(deniedFull.statusCode).toBe(404);
+    expect(getAuditReportPayload).not.toHaveBeenCalled();
+    const headers = { "x-reson8-report-token": ACCESS_TOKEN };
+    const sample = await app.inject({ method: "GET", url: "/v1/audits/id/reports/sample", headers });
+    const fullWithoutOperator = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers });
+    expect(sample.statusCode).toBe(200);
+    expect(fullWithoutOperator.statusCode).toBe(403);
+    expect(getAuditReportPayload).toHaveBeenCalledTimes(1);
+    const authorizedFull = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { ...headers, "x-reson8-operator-key": OPERATOR_KEY } });
+    expect(authorizedFull.statusCode).toBe(200);
+    expect(getAuditReportPayload).toHaveBeenCalledTimes(2);
+    process.env.PAYMENTS_ENABLED = "true";
+    const paymentGatedFull = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { ...headers, "x-reson8-operator-key": OPERATOR_KEY } });
+    expect(paymentGatedFull.statusCode).toBe(402);
+    expect(getAuditReportPayload).toHaveBeenCalledTimes(2);
     await app.close();
   });
   it("fails closed for absent or weak configured operator secrets", () => {

@@ -1,4 +1,6 @@
 import { readPdfResponse, triggerPdfDownload } from "./report-download.js";
+import { createAuditPoller } from "./audit-polling.js";
+import { credentialFilename, triggerCredentialDownload } from "./credential-download.js";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
 const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain"),saveAccessTokenButton=document.querySelector("#saveAccessTokenButton"),tokenSaveMessage=document.querySelector("#tokenSaveMessage");
 const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.querySelector("#detectCatalog"),catalogPlatform=document.querySelector("#catalogPlatform"),catalogPreview=document.querySelector("#catalogPreview"),catalogState=document.querySelector("#catalogState"),catalogCheck=document.querySelector("#catalogCheck");
@@ -12,7 +14,7 @@ const EVIDENCE_STEPS=[
   {number:"05",title:"A&R assessment",description:"Evidence-bound interpretation"},
   {number:"06",title:"Report",description:"Song-specific PDF output"}
 ];
-let selectedFile=null,digest=null,catalogReady=false,pollTimer=null,currentAuditPayload=null,reportAccessToken=null;
+let selectedFile=null,digest=null,catalogReady=false,currentAuditPayload=null,reportAccessToken=null;
 
 function setCheck(el,state,value){el.classList.remove("ok","bad");if(state)el.classList.add(state);el.querySelector("b").textContent=value;}
 function extensionOf(name){return name.includes(".")?name.split(".").pop().toLowerCase():"";}
@@ -54,7 +56,7 @@ function renderEvidenceChain(currentStepIndex=0){
     return '<li class="'+classes+'" aria-current="'+(current?"step":"false")+'"><span>'+step.number+'</span><div><strong>'+step.title+'</strong><small>'+step.description+'</small></div></li>';
   }).join("");
 }
-function stopPolling(){if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}}
+function stopPolling(){auditPoller.stop();}
 function applyAuditPayload(payload){
   currentAuditPayload=payload;
   renderEvidenceChain(payload.currentStepIndex ?? (payload.status==="completed" ? 5 : 0));
@@ -66,30 +68,9 @@ function applyAuditPayload(payload){
     resultMessage.textContent="Audit complete. Your sample report is available through the private access token issued for this audit.";
   }
 }
-async function pollAudit(job,token){
-  if(!token){resultMessage.textContent="The private audit access token is unavailable. Submit a new audit to receive a fresh token.";return;}
-  stopPolling();const started=Date.now(),maxWait=10*60*1000;
-  async function check(){
-    try{
-      const response=await fetch("/v1/audits/"+encodeURIComponent(job),{headers:{"x-reson8-report-token":token}});const payload=await response.json().catch(()=>({}));
-      if([401,403,404].includes(response.status)){
-        stopPolling();
-        resultMessage.textContent="This audit access credential was rejected or is no longer valid. The job ID cannot restore access. If you saved the one-time credential, keep it private and use it while this page is open; otherwise submit a new audit.";
-        return;
-      }
-      if(!response.ok)throw new Error(payload.message||"Temporary status request failure (HTTP "+response.status+")");
-      applyAuditPayload(payload);
-      if(payload.status==="completed"&&payload.full?.available)return;
-      if(payload.status==="failed"){resultMessage.textContent="Audit failed: "+(payload.errorMessage||"processing error");return;}
-      if(Date.now()-started>=maxWait){resultMessage.textContent="Audit is still processing. Keep this page open and check the job again shortly.";return;}
-      pollTimer=setTimeout(check,2500);
-    }catch(e){
-      if(Date.now()-started>=maxWait){resultMessage.textContent=e instanceof Error?e.message:"Could not read audit status";return;}
-      pollTimer=setTimeout(check,3000);
-    }
-  }
-  check();
-}
+const auditPoller=createAuditPoller({onPayload:applyAuditPayload,onMessage:message=>{resultMessage.textContent=message;}});
+async function pollAudit(job,token){await auditPoller.poll(job,token);}
+
 async function submitAudit(){
   stopPolling();reportAccessToken=null;currentAuditPayload=null;saveAccessTokenButton.disabled=true;tokenSaveMessage.textContent="";
   submit.disabled=true;submit.querySelector("span").textContent="Submitting…";
@@ -126,13 +107,10 @@ function saveAccessCredential(){
     "",
     "Keep this file private. Anyone with this token can access this audit.",
     "The token cannot be recovered from the job ID."
-  ].join("\n");
+  ].join("\\n");
   const blob=new Blob([contents],{type:"text/plain;charset=utf-8"});
-  const url=URL.createObjectURL(blob),anchor=document.createElement("a");
-  anchor.href=url;anchor.download="reson8-audit-access-"+currentAuditPayload.jobId+".txt";
-  document.body.appendChild(anchor);anchor.click();anchor.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),60_000);
-  tokenSaveMessage.textContent="Private access credential downloaded. Store it securely; it is not saved in browser storage.";
+  triggerCredentialDownload(blob,credentialFilename(currentAuditPayload.jobId));
+  tokenSaveMessage.textContent="Private access credential download started. If iOS opens it as text instead of saving it, use Share > Save to Files. Store it securely; it is not saved in browser storage.";
 }
 async function downloadReport(tier){
   if(!reportAccessToken){reportDownloadMessage.textContent="This audit's private access token is unavailable. Submit a new audit to receive a fresh token.";return;}
