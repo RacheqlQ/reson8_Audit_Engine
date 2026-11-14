@@ -85,7 +85,7 @@ interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string
 function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"Insufficient evidence"};return m[v.toLowerCase()]??"Insufficient evidence";}
 function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready to pitch requires verified commercial-performance evidence, a defined reporting period and a supportable release proposition.",moderate:"Develop applies when evidence supports a credible direction but important execution or positioning work remains.",low:"Needs work applies when supplied evidence identifies material gaps that should be addressed before pitching.",undetermined:"Insufficient evidence applies when source-attributed commercial or release evidence is missing; no demand or partner interest is inferred."};return m[v.toLowerCase()]??m.undetermined;}
 function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
-function professionalHypothesis(v:string):string{return v.replace(/^INFERRED(?:\\s+|[—:-]\\s*)/i,"Analytical hypothesis — ");}
+function professionalHypothesis(v:string):string{return v.replace(/^INFERRED(?:\s+|[—:-]\s*)/i,"Analytical hypothesis — ");}
 export function metadataFieldStatus(e:Record<string,unknown>,field:string):string{
  const value=text(field==="genre"?(e.genre??e.genres):e[field]);
  if(!value)return "Unavailable — no source result";
