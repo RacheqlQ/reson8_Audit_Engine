@@ -52,7 +52,7 @@ function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.
 function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
 export function chartPanelHeight(kind:ChartKind="bars",rows:ChartRow[]=[]):number{
  if(kind==="radar")return 345;
- if(kind==="layers")return 180;if(kind==="tension"){const maxItems=Math.max(rows.filter(row=>row.group==="strength").length,rows.filter(row=>row.group==="risk").length);return Math.max(255,110+75+Math.min(10,maxItems)*21);}
+ if(kind==="layers")return 180;if(kind==="tension")return 205;
  if(kind==="sonic")return 230;
  if(kind==="spectrum")return 270;
  if(kind==="constellation"||kind==="timeline"||kind==="chain")return 202;
@@ -87,14 +87,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
    result.push({x:cx+9,y:panelTop-15,width:colW-18,height:12,id:"label-tension-title-"+col});
    result.push({x:cx+9,y:panelTop-42,width:colW-18,height:12,id:"label-tension-count-"+col});
    result.push({x:cx+9,y:panelTop-58,width:colW-13,height:15,id:"shape-tension-count-bar-and-shadow-"+col});
-   let baseline=panelTop-75;
-   strengthRiskItemsForColumn(rows,col===0?"strength":"risk").slice(0,10).forEach((row,index)=>{
-    const charsPerLine=Math.max(1,Math.floor((colW-34)/(7.5*.52)));
-    const lineCount=Math.min(2,Math.max(1,Math.ceil(row.label.length/charsPerLine)));
-    result.push({x:cx+8,y:baseline-2,width:13,height:9,id:"label-tension-index-"+col+"-"+index});
-    result.push({x:cx+21,y:baseline-10,width:colW-32,height:lineCount*9.5,id:"label-tension-item-"+col+"-"+index});
-    baseline-=Math.max(11,lineCount*9.5+2);
-   });
+   result.push({x:cx+9,y:panelTop-84,width:colW-18,height:10,id:"label-tension-detail-"+col});
   });
  }else if(kind==="spectrum"){
   const trackX=x+170,trackW=240;
