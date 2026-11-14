@@ -37,6 +37,10 @@ jobs:
         env:
           WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
         run: bash .github/scripts/worker-lease-recovery-postgres.sh
+      - name: Run real report-persistence recovery against disposable PostgREST and Storage emulator
+        env:
+          WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
+        run: bash .github/scripts/report-persistence-e2e.sh
       - name: Run unit tests
         run: npm test
       - name: Build
