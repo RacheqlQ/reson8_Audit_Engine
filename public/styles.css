@@ -164,3 +164,12 @@ h3 { font-size:16px; }
 
 
 .report-downloads{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}.report-actions>label{display:block;margin:12px 0 6px}.report-actions>input{width:100%;max-width:420px}.report-actions [role=status]{min-height:1.4em;color:var(--muted,#8b93a7);font-size:.85rem}
+
+
+.access-key-display{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding:10px;border:1px solid var(--line);background:#080a0d}
+.access-key-display code{flex:1;min-width:180px;overflow-wrap:anywhere;color:var(--accent);font-size:11px;letter-spacing:.04em}
+.capability-save>label{display:block;margin:16px 0 7px;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.capability-save>input{display:block;width:100%;max-width:560px;border:1px solid var(--line-strong);background:#080a0d;color:var(--text);padding:11px 12px;outline:none}
+.capability-save>input:focus{border-color:var(--accent)}
+.capability-save>#unlockFullReportButton{margin-top:10px}
+.capability-save .ghost-btn:disabled{opacity:.4;cursor:not-allowed}
