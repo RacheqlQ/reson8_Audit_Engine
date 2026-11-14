@@ -26,6 +26,21 @@ function flacComments(tags: Record<string, string>): Uint8Array {
   return new Uint8Array([102,76,97,67,0x84,(body.length >> 16)&255,(body.length >> 8)&255,body.length&255,...body]);
 }
 
+
+function wavInfo(tags: Record<string, string>): Uint8Array {
+  const encoder = new TextEncoder();
+  const ids: Record<string, string> = { title: "INAM", artist: "IART", album: "IPRD", genre: "IGNR", releaseDate: "ICRD", label: "IPUB", isrc: "ISRC" };
+  const info: number[] = [73,78,70,79];
+  for (const [key, value] of Object.entries(tags)) {
+    const data = [...encoder.encode(value), 0];
+    info.push(...encoder.encode(ids[key]), data.length & 255, (data.length >> 8) & 255, (data.length >> 16) & 255, (data.length >> 24) & 255, ...data);
+    if (data.length % 2) info.push(0);
+  }
+  const list = [...[76,73,83,84], info.length & 255, (info.length >> 8) & 255, (info.length >> 16) & 255, (info.length >> 24) & 255, ...info];
+  const body = [...[87,65,86,69], ...list];
+  return new Uint8Array([82,73,70,70, (body.length)&255, (body.length>>8)&255, (body.length>>16)&255, (body.length>>24)&255, ...body]);
+}
+
 describe("audio metadata tag extraction", () => {
   it("extracts ID3v2 title, artist, album, ISRC, genre, date and label", () => {
     expect(readAudioTags(id3({
@@ -41,6 +56,16 @@ describe("audio metadata tag extraction", () => {
     expect(readAudioTags(flacComments({
       TITLE: "Bend Et", ARTIST: "Stunixx", ALBUM: "The HoleHearted",
       ISRC: "NGABC2600001", GENRE: "Afrobeats", DATE: "2025-08-27", LABEL: "BlackBeard Entertainment",
+    }))).toMatchObject({
+      title: "Bend Et", artist: "Stunixx", album: "The HoleHearted",
+      isrc: "NGABC2600001", genres: ["Afrobeats"], releaseDate: "2025-08-27", label: "BlackBeard Entertainment",
+    });
+  });
+
+  it("extracts standard INFO metadata from WAV masters", () => {
+    expect(readAudioTags(wavInfo({
+      title: "Bend Et", artist: "Stunixx", album: "The HoleHearted",
+      isrc: "NGABC2600001", genre: "Afrobeats", releaseDate: "2025-08-27", label: "BlackBeard Entertainment",
     }))).toMatchObject({
       title: "Bend Et", artist: "Stunixx", album: "The HoleHearted",
       isrc: "NGABC2600001", genres: ["Afrobeats"], releaseDate: "2025-08-27", label: "BlackBeard Entertainment",
