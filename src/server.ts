@@ -94,10 +94,6 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
     return reply.type("text/javascript; charset=utf-8").send(await servePublicFile("audit-polling.js"));
   });
 
-  app.get("/credential-download.js", async (_request, reply) => {
-    return reply.type("text/javascript; charset=utf-8").send(await servePublicFile("credential-download.js"));
-  });
-
   app.post<{
     Body: { url?: string };
   }>("/v1/audits/catalog", async (request, reply) => {
