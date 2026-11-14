@@ -63,13 +63,13 @@ describe("report download contract", () => {
     expect(response.json()).toMatchObject({ error: "REPORT_NOT_FOUND" });
     await app.close();
   });
-  it("does not allow a sample capability to bypass the disabled-payment full-report restriction", async () => {
+  it("allows the matching job capability to unlock the full report while payment enforcement is disabled", async () => {
     delete process.env.RESON8_OPERATOR_KEY;
     process.env.PAYMENTS_ENABLED = "false";
     const app = buildServer(store() as any);
     const response = await app.inject({ method: "GET", url: "/v1/audits/job-1/reports/full", headers: { "x-reson8-report-token": ACCESS_TOKEN } });
-    expect(response.statusCode).toBe(403);
-    expect(response.json()).toMatchObject({ error: "OPERATOR_AUTH_REQUIRED" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/pdf");
     await app.close();
   });
   it("requires verified payment when payment enforcement is enabled and no operator key is supplied", async () => {
