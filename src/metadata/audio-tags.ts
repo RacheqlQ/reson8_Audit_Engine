@@ -36,14 +36,14 @@ function decodeText(bytes: Uint8Array): string | null {
 
 function frameMap(id: string): keyof Omit<AudioTagMetadata, "genres"> | "genres" | null {
   switch (id) {
-    case "TIT2": return "title";
-    case "TPE1": return "artist";
-    case "TALB": return "album";
-    case "TSRC": return "isrc";
-    case "TCON": return "genres";
+    case "TIT2":\n    case "TT2": return "title";
+    case "TPE1":\n    case "TP1": return "artist";
+    case "TALB":\n    case "TAL": return "album";
+    case "TSRC":\n    case "TRC": return "isrc";
+    case "TCON":\n    case "TCO": return "genres";
     case "TDRC":
-    case "TYER": return "releaseDate";
-    case "TPUB": return "label";
+    case "TYER":\n    case "TYE": return "releaseDate";
+    case "TPUB":\n    case "TPB": return "label";
     default: return null;
   }
 }
@@ -56,26 +56,72 @@ function parseId3(bytes: Uint8Array): AudioTagMetadata {
   const tagSize = syncSafe(bytes, 6);
   const end = Math.min(bytes.length, 10 + tagSize);
   let offset = 10;
-  while (offset + 10 <= end) {
-    const id = String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
-    if (!/^[A-Z0-9]{4}$/.test(id)) break;
-    const size = version === 4
-      ? syncSafe(bytes, offset + 4)
-      : ((bytes[offset + 4] << 24) | (bytes[offset + 5] << 16) | (bytes[offset + 6] << 8) | bytes[offset + 7]);
-    if (!Number.isFinite(size) || size <= 0 || offset + 10 + size > end) break;
+  const headerSize = version === 2 ? 6 : 10;
+  while (offset + headerSize <= end) {
+    const idLength = version === 2 ? 3 : 4;
+    const id = String.fromCharCode(...bytes.subarray(offset, offset + idLength));
+    if (!/^[A-Z0-9]+$/.test(id)) break;
+    const size = version === 2
+      ? (bytes[offset + 3] << 16) | (bytes[offset + 4] << 8) | bytes[offset + 5]
+      : version === 4
+        ? syncSafe(bytes, offset + 4)
+        : ((bytes[offset + 4] << 24) | (bytes[offset + 5] << 16) | (bytes[offset + 6] << 8) | bytes[offset + 7]);
+    if (!Number.isFinite(size) || size <= 0 || offset + headerSize + size > end) break;
     const field = frameMap(id);
     if (field) {
-      const value = decodeText(bytes.subarray(offset + 10, offset + 10 + size));
+      const value = decodeText(bytes.subarray(offset + headerSize, offset + headerSize + size));
       if (value) {
         if (field === "genres") result.genres = [...new Set([...result.genres, ...value.split(/[;,/]/).map((item) => item.trim()).filter(Boolean)])];
-        else if (!result[field]) result[field] = field === "isrc" ? value.replace(/[\s-]/g, "").toUpperCase() : value;
+        else if (!result[field]) result[field] = field === "isrc" ? value.replace(/[\\s-]/g, "").toUpperCase() : value;
       }
     }
-    offset += 10 + size;
+    offset += headerSize + size;
   }
   return result;
 }
 
+function littleEndian32(bytes: Uint8Array, offset: number): number {
+  return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0;
+}
+
+function parseFlacComments(bytes: Uint8Array): AudioTagMetadata {
+  const result: AudioTagMetadata = { ...EMPTY, genres: [] };
+  if (bytes.length < 8 || bytes[0] !== 0x66 || bytes[1] !== 0x4c || bytes[2] !== 0x61 || bytes[3] !== 0x43) return result;
+  let offset = 4;
+  while (offset + 4 <= bytes.length) {
+    const type = bytes[offset] & 0x7f;
+    const length = (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3];
+    const blockStart = offset + 4, blockEnd = blockStart + length;
+    if (blockEnd > bytes.length) break;
+    if (type === 4 && length >= 8) {
+      let cursor = blockStart;
+      const vendorLength = littleEndian32(bytes, cursor); cursor += 4 + vendorLength;
+      if (cursor + 4 > blockEnd) break;
+      const count = Math.min(littleEndian32(bytes, cursor), 1000); cursor += 4;
+      for (let index = 0; index < count && cursor + 4 <= blockEnd; index++) {
+        const commentLength = littleEndian32(bytes, cursor); cursor += 4;
+        if (commentLength <= 0 || cursor + commentLength > blockEnd) break;
+        const comment = new TextDecoder("utf-8").decode(bytes.subarray(cursor, cursor + commentLength));
+        cursor += commentLength;
+        const separator = comment.indexOf("=");
+        if (separator <= 0) continue;
+        const key = comment.slice(0, separator).trim().toUpperCase();
+        const value = comment.slice(separator + 1).trim();
+        if (!value) continue;
+        if (key === "TITLE") result.title ??= value;
+        else if (key === "ARTIST" || key === "ALBUMARTIST") result.artist ??= value;
+        else if (key === "ALBUM") result.album ??= value;
+        else if (key === "ISRC") result.isrc ??= value.replace(/[\\s-]/g, "").toUpperCase();
+        else if (key === "GENRE") result.genres = [...new Set([...result.genres, ...value.split(/[;,/]/).map((item) => item.trim()).filter(Boolean)])];
+        else if (key === "DATE" || key === "YEAR" || key === "RELEASEDATE") result.releaseDate ??= value;
+        else if (key === "LABEL" || key === "ORGANIZATION") result.label ??= value;
+      }
+    }
+    offset = blockEnd;
+    if (bytes[offset - length - 4] & 0x80) break;
+  }
+  return result;
+}
 function parseId3v1(bytes: Uint8Array): AudioTagMetadata {
   if (bytes.length < 128) return { ...EMPTY, genres: [] };
   const offset = bytes.length - 128;
@@ -93,14 +139,15 @@ function parseId3v1(bytes: Uint8Array): AudioTagMetadata {
 
 export function readAudioTags(input: Uint8Array): AudioTagMetadata {
   const v2 = parseId3(input);
+  const flac = parseFlacComments(input);
   const v1 = parseId3v1(input);
   return {
-    title: v2.title ?? v1.title,
-    artist: v2.artist ?? v1.artist,
-    album: v2.album ?? v1.album,
-    isrc: v2.isrc,
-    genres: v2.genres.length ? v2.genres : v1.genres,
-    releaseDate: v2.releaseDate ?? v1.releaseDate,
-    label: v2.label,
+    title: v2.title ?? flac.title ?? v1.title,
+    artist: v2.artist ?? flac.artist ?? v1.artist,
+    album: v2.album ?? flac.album ?? v1.album,
+    isrc: v2.isrc ?? flac.isrc,
+    genres: v2.genres.length ? v2.genres : flac.genres.length ? flac.genres : v1.genres,
+    releaseDate: v2.releaseDate ?? flac.releaseDate ?? v1.releaseDate,
+    label: v2.label ?? flac.label,
   };
 }
