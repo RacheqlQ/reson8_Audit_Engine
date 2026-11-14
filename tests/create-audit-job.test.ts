@@ -20,6 +20,7 @@ describe("createAuditJob", () => {
           expect(input.ownerId).toBeNull();
           expect(input.sourceType).toBe("master");
           expect(input.catalogUrl).toBeNull();
+          expect(input.reportAccessTokenHash).toMatch(/^[a-f0-9]{64}$/);
           expect(input.sha256).toBe("039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81");
           return "job-123";
         },
@@ -44,6 +45,7 @@ describe("createAuditJob", () => {
       sourceAudioPath: "anonymous/job-123/My Song.wav",
       sha256: expect.any(String),
       sourceType: "master",
+      reportAccessToken: expect.any(String),
     });
     expect(calls).toEqual(["job", "upload", "path"]);
   });
@@ -126,8 +128,9 @@ describe("createAuditJob", () => {
     expect(created).toMatchObject({
       sourceType: "combined",
       catalogUrl: "https://open.spotify.com/track/abc",
+      reportAccessTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
-    expect(result).toMatchObject({ jobId: "combined-job", sourceType: "combined" });
+    expect(result).toMatchObject({ jobId: "combined-job", sourceType: "combined", reportAccessToken: expect.any(String) });
   });
 
 });
