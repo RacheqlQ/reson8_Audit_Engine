@@ -51,7 +51,7 @@ describe("browser PDF download contract", () => {
     });
 
     const blob = await readPdfResponse(response);
-    expect(blob.type).toBe("application/pdf");
+    expect(blob.type).toBe("application/pdf;charset=binary");
     expect(await blob.slice(0, 5).text()).toBe("%PDF-");
   });
 
