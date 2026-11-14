@@ -337,7 +337,7 @@ function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType
    const markerX=trackX+ratio*trackW;
    p.drawLine({start:{x:markerX,y:trackY-4},end:{x:markerX,y:trackY+trackH+4},color:C.coral,thickness:2});
    p.drawCircle({x:markerX,y:trackY+trackH/2,size:4,color:C.coral,borderColor:C.white,borderWidth:.8});
-   text(p,String(raw)+(range.unit?" "+range.unit:""),trackX+trackW+7,trackY+1,b,7,C.ink);
+   text(p,String(Number(raw.toFixed(2)))+(range.unit?" "+range.unit:""),trackX+trackW+7,trackY+1,b,7,C.ink);
   }
   text(p,String(range.min),trackX,trackY-13,f,5.8,C.muted);
   text(p,String(range.max)+(range.unit?" "+range.unit:""),trackX+trackW-36,trackY-13,f,5.8,C.muted);
