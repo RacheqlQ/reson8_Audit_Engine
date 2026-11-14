@@ -38,7 +38,7 @@ describe("combined master and DSP processing", () => {
       saveEvidence: async (_id, _token, _recognition, reconciliation, savedMetadata) => {
         events.push("evidence-saved");
         expect(savedMetadata?.platform).toBe("spotify");
-        expect(reconciliation.identity.isrc).toBe("US-ABC-12-34567");
+        expect(reconciliation.identity.isrc).toBe("USABC1234567");
       },
       decode: async () => ({ samples: new Float32Array([0,0,0.1,0.1,-0.1,-0.1,0,0]), sampleRate: 44100, channels: 2 }),
       saveSonicDna: async (_id, _token, dna) => { events.push("dna-saved"); expect(dna.sampleRate).toBe(44100); },
