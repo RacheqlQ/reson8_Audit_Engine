@@ -278,7 +278,6 @@ export async function processAuditJob(
         channels: decoded.channels,
         durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
       };
-      await awaitWithLease(deps, (signal) => deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal));
     }
 
     let catalogRecognition: AuditRecognition | null = null;
@@ -306,6 +305,9 @@ export async function processAuditJob(
     };
     const reconciliation = reconcileMetadata(metadataInput);
     await awaitWithLease(deps, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal));
+    if (masterDna) {
+      await awaitWithLease(deps, (signal) => deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal));
+    }
 
     const identity = reconciliation.identity;
     const evidence = {
