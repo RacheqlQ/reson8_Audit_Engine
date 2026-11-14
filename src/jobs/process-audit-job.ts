@@ -310,6 +310,7 @@ export async function processAuditJob(
     const identity = reconciliation.identity;
     const evidence = {
       ...(metadata ? catalogEvidence(metadata, identity) : { auditType: "MASTER-BASED AUDIT" }),
+      auditType: hasMaster && hasCatalog ? "COMBINED MASTER + DSP AUDIT" : hasCatalog ? "METADATA-BASED AUDIT" : "MASTER-BASED AUDIT",
       ...recognitionEvidence(recognition),
       ...identityEvidence(identity),
       evidenceClass: reconciliation.status === "reconciled"
