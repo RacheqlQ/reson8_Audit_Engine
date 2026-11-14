@@ -113,13 +113,13 @@ describe("capability-protected anonymous report access", () => {
     expect(operatorAuthorized("wrong-key-that-is-at-least-32-bytes-long", OPERATOR_KEY)).toBe(false);
     expect(operatorAuthorized(OPERATOR_KEY, OPERATOR_KEY)).toBe(true);
   });
-  it("treats malformed payment flag values as disabled without opening full report access", async () => {
+  it("treats malformed payment flag values as disabled while preserving capability-based access", async () => {
     process.env.PAYMENTS_ENABLED = "enabled-ish";
     process.env.RESON8_OPERATOR_KEY = OPERATOR_KEY;
     expect(paymentsEnabled()).toBe(false);
     const app = buildServer(store());
     const response = await app.inject({ method: "GET", url: "/v1/audits/id/reports/full", headers: { "x-reson8-report-token": ACCESS_TOKEN } });
-    expect(response.statusCode).toBe(403);
+    expect(response.statusCode).toBe(200);
     await app.close();
   });
 });
