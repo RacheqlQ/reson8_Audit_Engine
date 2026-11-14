@@ -85,7 +85,14 @@ interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string
 function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"Insufficient evidence"};return m[v.toLowerCase()]??"Insufficient evidence";}
 function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready to pitch requires verified commercial-performance evidence, a defined reporting period and a supportable release proposition.",moderate:"Develop applies when evidence supports a credible direction but important execution or positioning work remains.",low:"Needs work applies when supplied evidence identifies material gaps that should be addressed before pitching.",undetermined:"Insufficient evidence applies when source-attributed commercial or release evidence is missing; no demand or partner interest is inferred."};return m[v.toLowerCase()]??m.undetermined;}
 function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
-function professionalHypothesis(v:string):string{return v.replace(/^INFERRED(?:\s+|[—:-]\s*)/i,"Analytical hypothesis — ");}
+function professionalEvidenceLanguage(value:string):string {
+ return value
+  .replace(/\\bOBSERVED\\b/g,"Measured from the uploaded master")
+  .replace(/\\bRECOGNIZED\\b/g,"Returned by an external source")
+  .replace(/\\bRECONCILED\\b/g,"Cross-checked across independent sources")
+  .replace(/\\bINFERRED\\b/g,"Analytical hypothesis")
+  .replace(/\\bINDUSTRY PRACTICE\\b/g,"General industry guidance");
+}
 export function metadataFieldStatus(e:Record<string,unknown>,field:string):string{
  const value=text(field==="genre"?(e.genre??e.genres):e[field]);
  if(!value)return "Unavailable — no source result";
@@ -116,7 +123,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
 function sections(i:AuditReportInput):Section[]{
  const a=i.assessment,e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master");
  const score=(name:string,v:{score:number|null;rationale:string})=>name+" — "+(v.score===null?"NOT SCORED":v.score+"/100")+" — "+v.rationale;
- return [
+ const output:Section[]=[
  {title:"Executive assessment",accent:"blue",body:[...(e.fixture?["FIXTURE — synthetic renderer test data; not a real analysis."]:[]),a.executiveSummary,"Verdict: "+verdictLabel(a.commercialRead.marketability),"Verdict rule: "+verdictRule(a.commercialRead.marketability),"Reason: "+a.commercialRead.rationale,"Confidence: "+Math.round(a.confidence*100)+"%","Assessment basis: "+(hasAudio?"Uploaded master and supplied identity evidence.":"Metadata/provider evidence only; no uploaded master.") ]},
  {title:"Identity and source reconciliation",accent:"violet",body:["Artist: "+val(e.artist),"Track: "+val(e.title),"Album: "+val(e.album),"Genre: "+val(e.genre??e.genres),"ISRC: "+val(e.isrc),"UPC: "+val(e.upc),"Release date: "+val(e.releaseDate),"Label: "+val(e.label),"DSP / platform: "+val(e.platform),"External identifiers: "+val(e.externalIds),"Evidence sources: "+val(e.sources??e.sourceProviders),...(["artist","title","album","genre","isrc","upc","label","releaseDate"] as const).map((field)=>({artist:"Artist",title:"Track",album:"Album",genre:"Genre",isrc:"ISRC",upc:"UPC",label:"Label",releaseDate:"Release date"}[field])+": "+metadataFieldStatus(e,field)+" — "+(text(field==="genre"?(e.genre??e.genres):e[field])||"No value returned by the supplied or queried sources")),"External identifiers: "+(text(e.externalIds)?"Available — "+text(e.externalIds):"Unavailable — no external identifiers returned"),"Sources checked: "+val(Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked.map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition"} as Record<string,string>)[String(provider)]??String(provider)).join(", "):e.sourceProviders??e.sources??e.source),"Coverage status: "+val(e.evidenceStatus??e.status,"Partial — one or more identity fields remain unavailable"),"Verification note: unavailable fields are not inferred or fabricated. Analytical recommendations remain hypotheses and are never presented as verified identity metadata."]},
  {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>(({OBSERVED:"Measured from the uploaded master",RECOGNIZED:"Returned by an external identification source",RECONCILED:"Cross-checked across independent sources",INFERRED:"Analytical hypothesis — not independently verified","INDUSTRY PRACTICE":"General industry guidance"} as Record<string,string>)[x.label]??"Evidence item")+" — "+x.claim+" [Source: "+x.source+"]")},
@@ -127,13 +134,14 @@ function sections(i:AuditReportInput):Section[]{
  {title:"Evidence-derived scorecard",accent:"blue",body:[score("Tempo and lane fit",a.scorecard.tempoLaneFit),score("Rhythmic consistency",a.scorecard.rhythmicConsistency),score("Dynamic range and loudness readiness",a.scorecard.dynamicRangeLoudness),score("Metadata completeness",a.scorecard.metadataCompleteness),score("Release readiness",a.scorecard.releaseReadiness)]},
  {title:"Human listening checklist (unscored)",accent:"violet",body:a.humanListeningChecklist},
  {title:"Production and arrangement guidance",accent:"teal",body:[a.productionArrangementGuidance,industryPractice("General lane craft knowledge, not track-specific evidence."),industryPractice(a.industryPractice),...a.listeningChecks]},
- {title:"Comparable lanes and listening references to verify",accent:"violet",body:["Analytical hypotheses — comparisons not independently verified",professionalHypothesis(a.laneHypothesis),...a.referencesToVerify.map(professionalHypothesis),a.verificationMethod]},
+ {title:"Comparable lanes and listening references to verify",accent:"violet",body:["Analytical hypotheses — comparisons not independently verified",a.laneHypothesis,...a.referencesToVerify,a.verificationMethod]},
  {title:"Promotion plan",accent:"coral",body:[a.promotionPlan.preRelease,a.promotionPlan.releaseWindow,a.promotionPlan.postRelease,"Content concepts: "+a.promotionPlan.contentIdeas.join(" • "),"General pitching guidance — angles to adapt to verified track facts: "+a.promotionPlan.pitchingAngles.join(" • "),"Playlist categories to investigate only: "+a.promotionPlan.playlistCategories.join(", "),industryPractice(a.promotionPlan.industryPractice)]},
  {title:"Label and partner fit",accent:"blue",body:[a.labelPartnerFit.partnerProfile,...a.labelPartnerFit.criteriaToDemonstrate,a.labelPartnerFit.diligenceBeforeContact,industryPractice(a.labelPartnerFit.industryPractice)]},
  {title:"30 / 60 / 90-day execution plan",accent:"violet",body:["DAYS 01–30 — "+a.executionPlan.days30,"DAYS 31–60 — "+a.executionPlan.days60,"DAYS 61–90 — "+a.executionPlan.days90]},
  {title:"Commercial evidence and measurement",accent:"blue",body:[a.commercialRead.rationale,"Catalog popularity: "+val(e.catalogPopularity),"Audience telemetry: "+val(e.audienceTelemetry)]},
  {title:"Decision record and evidence gates",accent:"coral",body:[a.releaseStrategy.recommendation,...a.releaseStrategy.priorities.map((p,n)=>"Priority "+(n+1)+": "+p),"Evidence gaps: "+a.evidenceGaps.join(" "),"Limitations: "+a.limitations.join(" ")]}
  ];
+ return output.map((section)=>({...section,body:section.body.map(professionalEvidenceLanguage)}));
 }
 export function chartLayoutIssuesForReport(input:AuditReportInput):string[]{
  const issues:string[]=[];for(const section of sections(input)){for(const panel of chartsForSection(input,section.title)){issues.push(...chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,TOP,chartPanelHeight(panel.kind,panel.rows)));}}return issues;
