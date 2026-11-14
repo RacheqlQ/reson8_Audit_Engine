@@ -106,6 +106,7 @@ export function metadataFieldStatus(e:Record<string,unknown>,field:string):strin
  if(providers.length||e.evidenceClass==="RECOGNIZED")return "Returned by an identification or catalog source";
  if(e.evidenceClass==="INFERRED")return "Analytical hypothesis — not verified";
  const checked=Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked:[];
+ if(checked.includes("synthetic_audio_fixture"))return "Synthetic test value — not a real identity match";
  if((field==="artist"||field==="title")&&checked.includes("filename"))return "Parsed from uploaded filename — not independently verified";
  return "Available — source classification not confirmed";
 }
@@ -132,7 +133,7 @@ function sections(i:AuditReportInput):Section[]{
  ...(["artist","title","album","genre","isrc","upc","label","releaseDate"] as const).map((field)=>({artist:"Artist",title:"Track",album:"Album",genre:"Genre",isrc:"ISRC",upc:"UPC",label:"Label",releaseDate:"Release date"}[field])+": "+metadataFieldStatus(e,field)+" — "+(text(field==="genre"?(e.genre??e.genres):e[field])||"No value returned by the supplied or queried sources")),
  "DSP / platform: "+val(e.platform),
  "External identifiers: "+(text(e.externalIds)?"Available — "+text(e.externalIds):"Unavailable — no external identifiers returned"),
- "Sources checked: "+val(Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked.map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition"} as Record<string,string>)[String(provider)]??String(provider)).join(", "):e.sourceProviders??e.sources??e.source),
+ "Sources checked: "+val(Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked.map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition",synthetic_audio_fixture:"Synthetic report fixture (layout testing only)"} as Record<string,string>)[String(provider)]??String(provider)).join(", "):e.sourceProviders??e.sources??e.source),
  "Coverage status: "+val(e.evidenceStatus??e.status,"Partial — one or more identity fields remain unavailable"),
  "Verification note: unavailable fields are not inferred or fabricated. Analytical recommendations remain hypotheses and are never presented as verified identity metadata."
 ]},
