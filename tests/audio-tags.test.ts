@@ -16,12 +16,32 @@ function id3(tags: Record<string, string>): Uint8Array {
   return new Uint8Array([73,68,51,4,0,0,...syncSafe(frames.length),...frames]);
 }
 
+
+function flacComments(tags: Record<string, string>): Uint8Array {
+  const encoder = new TextEncoder();
+  const comments = Object.entries(tags).map(([key, value]) => encoder.encode(key.toUpperCase() + "=" + value));
+  const vendor = encoder.encode("Reson8 test fixture");
+  const body: number[] = [...[vendor.length,0,0,0], ...vendor, ...[comments.length,0,0,0]];
+  for (const comment of comments) body.push(comment.length & 255,(comment.length >> 8) & 255,(comment.length >> 16) & 255,(comment.length >> 24) & 255,...comment);
+  return new Uint8Array([102,76,97,67,0x84,(body.length >> 16)&255,(body.length >> 8)&255,body.length&255,...body]);
+}
+
 describe("audio metadata tag extraction", () => {
   it("extracts ID3v2 title, artist, album, ISRC, genre, date and label", () => {
     expect(readAudioTags(id3({
       title: "Bend Et", artist: "Stunixx", album: "The HoleHearted",
       isrc: "NGABC2600001", genre: "Afrobeats", releaseDate: "2025-08-27", label: "BlackBeard Entertainment",
     }))).toEqual({
+      title: "Bend Et", artist: "Stunixx", album: "The HoleHearted",
+      isrc: "NGABC2600001", genres: ["Afrobeats"], releaseDate: "2025-08-27", label: "BlackBeard Entertainment",
+    });
+  });
+
+  it("extracts Vorbis comments from FLAC masters", () => {
+    expect(readAudioTags(flacComments({
+      TITLE: "Bend Et", ARTIST: "Stunixx", ALBUM: "The HoleHearted",
+      ISRC: "NGABC2600001", GENRE: "Afrobeats", DATE: "2025-08-27", LABEL: "BlackBeard Entertainment",
+    }))).toMatchObject({
       title: "Bend Et", artist: "Stunixx", album: "The HoleHearted",
       isrc: "NGABC2600001", genres: ["Afrobeats"], releaseDate: "2025-08-27", label: "BlackBeard Entertainment",
     });
