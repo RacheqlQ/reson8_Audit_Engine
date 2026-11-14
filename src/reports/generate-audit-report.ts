@@ -140,6 +140,12 @@ export function metadataFieldStatus(e:Record<string,unknown>,field:string):strin
  if((field==="artist"||field==="title")&&checked.includes("filename"))return "Parsed from uploaded filename — not independently verified";
  return "Available — source classification not confirmed";
 }
+export function metadataFieldSource(e:Record<string,unknown>,field:string):string{
+ const provenance=e.fieldProvenance&&typeof e.fieldProvenance==="object"?e.fieldProvenance as Record<string,unknown>:{};
+ const provider=provenance[field];
+ const labels:Record<string,string>={spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audd:"AudD recognition",id3:"Embedded audio tags",filename:"Uploaded filename"};
+ return typeof provider==="string"&&labels[provider]? "Field source: "+labels[provider] : "Field source: unavailable";
+}
 function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  const a=i.assessment,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),counts=countEvidenceLayers(a.evidenceLabels);
  if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",rows:[{label:"Measured",value:counts.OBSERVED},{label:"Source matches",value:counts.RECOGNIZED},{label:"Cross-checked",value:counts.RECONCILED},{label:"Hypotheses",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful."}];
@@ -160,7 +166,7 @@ function sections(i:AuditReportInput):Section[]{
  const output:Section[]=[
  {title:"Executive assessment",accent:"blue",body:[...(e.fixture?["FIXTURE — synthetic renderer test data; not a real analysis."]:[]),a.executiveSummary,"Verdict: "+verdictLabel(a.commercialRead.marketability),"Verdict rule: "+verdictRule(a.commercialRead.marketability),"Reason: "+a.commercialRead.rationale,"Confidence: "+Math.round(a.confidence*100)+"%","Assessment basis: "+(e.fixture?"Synthetic renderer fixture — no real master or identity evidence.":hasAudio?"Uploaded master and supplied identity evidence.":"Metadata/provider evidence only; no uploaded master.") ]},
  {title:"Identity and source reconciliation",accent:"violet",body:[
- ...(["artist","title","album","genre","isrc","upc","label","releaseDate"] as const).map((field)=>({artist:"Artist",title:"Track",album:"Album",genre:"Genre",isrc:"ISRC",upc:"UPC",label:"Label",releaseDate:"Release date"}[field])+": "+metadataFieldStatus(e,field)+" — "+(text(field==="genre"?(e.genre??e.genres):e[field])||"No value returned by the supplied or queried sources")),
+ ...(["artist","title","album","genre","isrc","upc","label","releaseDate"] as const).map((field)=>({artist:"Artist",title:"Track",album:"Album",genre:"Genre",isrc:"ISRC",upc:"UPC",label:"Label",releaseDate:"Release date"}[field])+": "+metadataFieldStatus(e,field)+" — "+(text(field==="genre"?(e.genre??e.genres):e[field])||"No value returned by the supplied or queried sources")+" — "+metadataFieldSource(e,field)),
  "DSP / platform: "+val(e.platform),
  "External identifiers: "+(externalIdentifiers(e.externalIds)?(e.fixture?"Synthetic test identifiers — ":"Available — ")+externalIdentifiers(e.externalIds):"Unavailable — no external identifiers returned"),
  "Sources checked: "+val((Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked:Array.isArray(e.sourceProviders)?e.sourceProviders:Array.isArray(e.sources)?e.sources:null)?.map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition",synthetic_audio_fixture:"Synthetic report fixture (layout testing only)"} as Record<string,string>)[String(provider)]??String(provider)).join(", ")??e.source),
