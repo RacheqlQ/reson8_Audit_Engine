@@ -102,8 +102,11 @@ export function metadataFieldStatus(e:Record<string,unknown>,field:string):strin
  const reconciled=Array.isArray(reconciliation.reconciledFields)?reconciliation.reconciledFields:[];
  if(reconciled.includes(field))return "Cross-checked across independent sources";
  const providers=Array.isArray(e.sourceProviders)?e.sourceProviders:[];
+ if(providers.length&&providers.every((provider)=>provider==="id3"))return "Read from embedded audio tags";
  if(providers.length||e.evidenceClass==="RECOGNIZED")return "Returned by an identification or catalog source";
  if(e.evidenceClass==="INFERRED")return "Analytical hypothesis — not verified";
+ const checked=Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked:[];
+ if((field==="artist"||field==="title")&&checked.includes("filename"))return "Parsed from uploaded filename — not independently verified";
  return "Available — source classification not confirmed";
 }
 function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
