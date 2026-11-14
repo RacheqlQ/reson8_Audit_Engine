@@ -21,6 +21,9 @@ describe("anonymous capability API surface", () => {
     expect(denied.statusCode).toBe(404);
     expect(accepted.statusCode).toBe(200);
     expect(accepted.json()).toMatchObject({ jobId: "job-1", status: "completed", currentStepIndex: 4 });
+    expect(accepted.json()).not.toHaveProperty("reportAccessToken");
+    expect(accepted.json()).not.toHaveProperty("report_access_token_hash");
+    expect(JSON.stringify(accepted.json())).not.toContain(ACCESS_TOKEN);
     await app.close();
   });
   it("does not disclose whether a different job exists to a token holder", async () => {

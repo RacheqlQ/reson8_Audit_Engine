@@ -19,21 +19,25 @@ afterEach(() => {
 function makeStore(row: unknown, status = 200) {
   process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
   process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
-  const fetchMock = vi.fn(async () => new Response(
-    status >= 400 ? JSON.stringify({ message: "database unavailable", code: "XX000" }) : JSON.stringify(row),
-    { status, headers: { "content-type": "application/json", ...(status === 200 ? { "content-range": "0-0/1" } : {}) } },
-  ));
+  let requestUrl = "";
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    requestUrl = input instanceof Request ? input.url : String(input);
+    return new Response(
+      status >= 400 ? JSON.stringify({ message: "database unavailable", code: "XX000" }) : JSON.stringify(row),
+      { status, headers: { "content-type": "application/json", ...(status === 200 ? { "content-range": "0-0/1" } : {}) } },
+    );
+  });
   vi.stubGlobal("fetch", fetchMock);
   const store = createSupabaseAuditStore();
-  return { store, fetchMock };
+  return { store, fetchMock, getRequestUrl: () => requestUrl };
 }
 
 describe("Supabase capability-token verification adapter", () => {
   it("accepts the correct token when the selected job row contains its SHA-256 hash", async () => {
-    const { store, fetchMock } = makeStore({ report_access_token_hash: hash(TOKEN_A) });
+    const { store, getRequestUrl } = makeStore({ report_access_token_hash: hash(TOKEN_A) });
     await expect(store.verifyAuditAccessToken("job-a", TOKEN_A)).resolves.toBe(true);
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("id=eq.job-a");
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("select=report_access_token_hash");
+    expect(getRequestUrl()).toContain("id=eq.job-a");
+    expect(getRequestUrl()).toContain("select=report_access_token_hash");
   });
 
   it("rejects an incorrect token for the same job", async () => {

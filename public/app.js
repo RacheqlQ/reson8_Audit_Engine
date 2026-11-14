@@ -91,6 +91,7 @@ async function pollAudit(job,token){
   check();
 }
 async function submitAudit(){
+  stopPolling();reportAccessToken=null;currentAuditPayload=null;saveAccessTokenButton.disabled=true;tokenSaveMessage.textContent="";
   submit.disabled=true;submit.querySelector("span").textContent="Submitting…";
   try{
     const hasMaster=Boolean(selectedFile&&digest),hasCatalog=catalogReady;
@@ -104,7 +105,7 @@ async function submitAudit(){
     }else throw new Error("Provide a valid master file, DSP link, or both.");
     const payload=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(payload.message||"Audit intake failed");
-    jobId.textContent=payload.jobId||"—";serverHash.textContent=payload.sha256||"—";reportAccessToken=payload.reportAccessToken||null;resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
+    jobId.textContent=payload.jobId||"—";serverHash.textContent=payload.sha256||"—";reportAccessToken=payload.reportAccessToken||null;currentAuditPayload={jobId:payload.jobId,status:"queued",currentStepIndex:0};resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
     resultMessage.textContent=hasMaster&&hasCatalog?"Accepted. Master Sonic DNA and DSP catalog evidence will be reconciled into one report.":hasMaster?"Accepted. Master Sonic DNA analysis is processing.":"Accepted. DSP catalog analysis is processing.";
     if(reportAccessToken){
       saveAccessTokenButton.disabled=false;
