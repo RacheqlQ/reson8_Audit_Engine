@@ -48,7 +48,7 @@ function externalIdentifiers(value:unknown):string{
  return Object.entries(value as Record<string,unknown>).flatMap(([provider,raw])=>{
   const identifiers=externalIdentifierValue(raw);
   if(!identifiers.length)return [];
-  const label=EXTERNAL_ID_LABELS[provider]??provider.replace(/[_-]+/g," ").replace(/\\b\\w/g,(letter)=>letter.toUpperCase());
+  const label=EXTERNAL_ID_LABELS[provider]??provider.replace(/[_-]+/g," ").replace(/\b\w/g,(letter)=>letter.toUpperCase());
   return [label+": "+identifiers.join(", ")];
  }).join("; ");
 }
