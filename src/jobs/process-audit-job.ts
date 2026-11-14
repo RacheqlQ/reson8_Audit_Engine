@@ -272,11 +272,15 @@ export async function processAuditJob(
     let masterDna: SonicDnaFeatures | null = null;
     let masterRecognition: AuditRecognition | null = null;
     let masterTags: ReturnType<typeof readAudioTags> | null = null;
+    const attemptedRecognitionProviders = new Set<string>();
     if (hasMaster) {
       const master = await awaitWithLease(deps, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
       masterTags = readAudioTags(master);
       const sample = await awaitWithLease(deps, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
-      masterRecognition = await awaitWithLease(deps, (signal) => deps.recognize(sample, signal));
+      masterRecognition = await awaitWithLease(deps, (signal) => {
+        attemptedRecognitionProviders.add("audd");
+        return deps.recognize(sample, signal);
+      });
       const decoded = await awaitWithLease(deps, (signal) => deps.decode(master, job.mimeType!, signal));
       const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
       masterDna = {
@@ -290,7 +294,10 @@ export async function processAuditJob(
     let catalogRecognition: AuditRecognition | null = null;
     if (metadata?.previewUrl) {
       try {
-        catalogRecognition = await awaitWithLease(deps, (signal) => deps.recognizeUrl(metadata!.previewUrl!, signal));
+        catalogRecognition = await awaitWithLease(deps, (signal) => {
+          attemptedRecognitionProviders.add("audd");
+          return deps.recognizeUrl(metadata!.previewUrl!, signal);
+        });
       } catch (error) {
         if (deps.signal?.aborted) throw leaseLostError(deps.signal);
         // Optional preview recognition must not block catalog-only or combined analysis.
@@ -329,7 +336,7 @@ export async function processAuditJob(
         : identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
       identity: identityEvidence(identity),
       reconciliation: reconciliationEvidence(reconciliation),
-      metadataSourcesChecked: [...(metadata ? [metadata.platform] : []), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...(process.env.AUDD_API ? ["audd"] : [])],
+      metadataSourcesChecked: [...(metadata ? [metadata.platform] : []), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...attemptedRecognitionProviders],
       sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
