@@ -78,8 +78,9 @@ beforeAll(async () => {
         return;
       }
 
-      if (path.startsWith("/rest/v1/rpc/")) {
-        const rpc = path.slice("/rest/v1/rpc/".length).split("?")[0];
+      if (path.startsWith("/rest/v1/")) {
+        const isRpc = path.startsWith("/rest/v1/rpc/");
+        const rpc = isRpc ? path.slice("/rest/v1/rpc/".length).split("?")[0] : "";
         if (rpc === "reconcile_audit_report_reference") {
           reconciliationRequests += 1;
           if (scenario.failReconciliation) {
@@ -87,8 +88,8 @@ beforeAll(async () => {
             return;
           }
         }
-        const parsed = body.length ? JSON.parse(body.toString("utf8")) as { p_operation?: string } : {};
-        const shouldLose = rpc === "persist_fenced_audit_step"
+        const parsed = isRpc && body.length ? JSON.parse(body.toString("utf8")) as { p_operation?: string } : {};
+        const shouldLose = isRpc && rpc === "persist_fenced_audit_step"
           && parsed.p_operation === "report" && scenario.loseReportResponse;
         const headers = new Headers();
         for (const [name, value] of Object.entries(req.headers)) {
