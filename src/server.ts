@@ -86,6 +86,10 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
     return reply.type("text/javascript; charset=utf-8").send(await servePublicFile("app.js"));
   });
 
+  app.get("/report-download.js", async (_request, reply) => {
+    return reply.type("text/javascript; charset=utf-8").send(await servePublicFile("report-download.js"));
+  });
+
   app.post<{
     Body: { url?: string };
   }>("/v1/audits/catalog", async (request, reply) => {
