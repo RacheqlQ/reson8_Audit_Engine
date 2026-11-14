@@ -35,7 +35,7 @@ export function strengthRiskItemsForColumn(rows:ChartRow[],group:"strength"|"ris
  return rows.filter(row=>row.group===group);
 }
 
-function shown(v:ChartRow["value"]):string{return v===null||v===undefined||v===""||(typeof v==="number"&&!Number.isFinite(v))?"Not determined":String(v);}
+function shown(v:ChartRow["value"]):string{return v===null||v===undefined||v===""||(typeof v==="number"&&!Number.isFinite(v))?"Not determined":typeof v==="number"?String(Number(v.toFixed(2))):String(v).replace(/[\\u2010-\\u2015\\u2212]/g,"-").replace(/[\\u2018\\u2019]/g,"\'").replace(/[\\u201C\\u201D]/g,\'"\').replace(/\\u2026/g,"...");}
 function line(p:PDFPage,x1:number,y1:number,x2:number,y2:number,c=C.line,w=.8){p.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},color:c,thickness:w});}
 function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
  const out:string[]=[];let current="";
@@ -305,14 +305,9 @@ function drawTension(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<
   tracked(p,title,x+9,panelTop-12,b,7,C.white,.5);
   text(p,String(count)+" documented",x+9,panelTop-37,b,9,accent);
   shadowBar(p,x+9,panelTop-56,(colW-18)*count/maxCount,5,accent,c);
-  const summaries=strengthRiskItemsForColumn(rows,c===0?"strength":"risk").slice(0,10);
-  let y=panelTop-75;
-  summaries.slice(0,10).forEach((item,index)=>{
-   const lines=wrapChartSummary(item.label,f,7.5,colW-34,2);
-   text(p,String(index+1)+".",x+8,y,b,7.5,accent);
-   lines.forEach((part,lineIndex)=>text(p,part,x+21,y-lineIndex*9.5,f,7.5,C.ink));
-   y-=Math.max(11,lines.length*9.5+2);
-  });
+  // The complete written strengths and risks appear in the adjacent report sections.
+  // Keep this dashboard comparative and uncluttered instead of truncating long prose.
+  text(p,"See written assessment for complete details",x+9,panelTop-78,f,6.5,C.muted);
  }
 }
 function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
