@@ -103,6 +103,7 @@ function catalogMetadataInput(metadata: CatalogMetadata) {
           artist: metadata.artist,
           album: metadata.album,
           isrc: metadata.isrc,
+          upc: metadata.upc,
           label: metadata.label,
           releaseDate: metadata.releaseDate,
           genres: metadata.genre ? [metadata.genre] : [],
@@ -137,6 +138,7 @@ function identityEvidence(identity: TrackIdentity): Record<string, unknown> {
     releaseDate: identity.releaseDate,
     label: identity.label,
     isrc: identity.isrc,
+    upc: identity.upc,
     genres: identity.genres,
     sourceProviders: identity.sourceProviders,
   };
