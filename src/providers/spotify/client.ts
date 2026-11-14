@@ -21,6 +21,7 @@ export interface SpotifyApiClient {
   getTrack(trackId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
   getTrackByIsrc(isrc: string, signal?: AbortSignal): Promise<Record<string, unknown> | null>;
   getArtist(artistId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
+  getAlbum?(albumId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
 }
 
 export class SpotifyClient implements SpotifyApiClient {
@@ -219,6 +220,14 @@ export class SpotifyClient implements SpotifyApiClient {
   async getArtist(artistId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
     return this.spotifyRequest<Record<string, unknown>>(
       `https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}`,
+      {},
+      signal,
+    );
+  }
+
+  async getAlbum(albumId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return this.spotifyRequest<Record<string, unknown>>(
+      `https://api.spotify.com/v1/albums/${encodeURIComponent(albumId)}`,
       {},
       signal,
     );
