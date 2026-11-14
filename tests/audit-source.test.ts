@@ -18,6 +18,10 @@ describe("classifyAuditSources", () => {
     expect(() => classifyAuditSources({ hasMaster: false, catalogUrl: null })).toThrow("At least one audit source is required");
   });
 
+  it("rejects unsupported catalog hosts before creating a queued job", () => {
+    expect(() => classifyAuditSources({ hasMaster: true, catalogUrl: "https://example.com/track/abc" })).toThrow("Unsupported DSP or catalog URL");
+  });
+
   it("rejects malformed catalog URLs", () => {
     expect(() => classifyAuditSources({ hasMaster: false, catalogUrl: "javascript:alert(1)" })).toThrow("DSP URL must use HTTPS");
   });
