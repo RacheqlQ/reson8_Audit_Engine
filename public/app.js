@@ -107,7 +107,7 @@ function saveAccessCredential(){
     "",
     "Keep this file private. Anyone with this token can access this audit.",
     "The token cannot be recovered from the job ID."
-  ].join("\\n");
+  ].join("\n");
   const blob=new Blob([contents],{type:"text/plain;charset=utf-8"});
   triggerCredentialDownload(blob,credentialFilename(currentAuditPayload.jobId));
   tokenSaveMessage.textContent="Private access credential download started. If iOS opens it as text instead of saving it, use Share > Save to Files. Store it securely; it is not saved in browser storage.";
