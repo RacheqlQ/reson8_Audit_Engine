@@ -17,11 +17,14 @@ describe("professional report text and metadata coverage", () => {
   it("recognizes the actual exported fixture provenance without inventing checked-provider metadata", () => {
     expect(fullAudioFixture.evidence.fixture).toBe(true);
     expect(fullAudioFixture.evidence.sources).toContain("synthetic_audio_fixture");
+    expect(fullAudioFixture.evidence.externalIds).toMatchObject({ spotify: "fixture-spotify-id", apple_music: "fixture-apple-music-id" });
     expect(metadataFieldStatus(fullAudioFixture.evidence as Record<string, unknown>, "artist")).toBe("Synthetic test value — not a real identity match");
     expect(metadataFieldStatus(fullAudioFixture.evidence as Record<string, unknown>, "upc")).toBe("Unavailable — no source result");
     const reportText = planAuditReportPages(fullAudioFixture as any, "full").flatMap((page) => [page.title, ...page.text]).join(" ");
     expect(reportText).toContain("Artist: Synthetic test value — not a real identity match");
     expect(reportText).toContain("Track: Synthetic test value — not a real identity match");
+    expect(reportText).toContain("Assessment basis: Synthetic renderer fixture — no real master or identity evidence.");
+    expect(reportText).toContain("External identifiers: Synthetic test identifiers — Spotify: fixture-spotify-id; Apple Music: fixture-apple-music-id");
     expect(reportText).toContain("FIXTURE VALUES — synthetic audio-profile test data");
     expect(reportText).toContain("Synthetic report fixture (layout testing only)");
   });
@@ -39,7 +42,7 @@ describe("professional report text and metadata coverage", () => {
       },
     };
     const reportText = planAuditReportPages(input as any, "full").flatMap((page) => [page.title, ...page.text]).join(" ");
-    expect(reportText).toContain("External identifiers: Available — Spotify: spotify:track:fixture123; Apple Music: apple-track-456");
+    expect(reportText).toContain("External identifiers: Synthetic test identifiers — Spotify: spotify:track:fixture123; Apple Music: apple-track-456");
     expect(reportText).not.toContain("must-not-leak");
     expect(reportText).not.toContain("[object Object]");
   });
