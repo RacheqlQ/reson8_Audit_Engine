@@ -214,7 +214,7 @@ function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,hei
  p.drawRectangle({x,y:top-HEADER_H,width:w,height:HEADER_H,color:C.navy});
  p.drawRectangle({x,y:top-HEADER_H,width:5,height:HEADER_H,color:input.inferred?C.violet:input.unavailable?C.coral:C.teal});
  tracked(p,input.title.toUpperCase(),x+13,top-19,bold,8,C.white,.65);
- const status=input.unavailable?"REQUIRES AUDIO":input.inferred?"INFERRED":"OBSERVED";
+ const status=input.unavailable?"REQUIRES AUDIO":input.inferred?"HYPOTHESIS":"MEASURED";
  tracked(p,status,x+w-90,top-19,bold,6.2,input.inferred?C.gold:C.teal,.45);
  const captionTop=bottom+CAPTION_H;
  line(p,x+9,captionTop,x+w-9,captionTop,C.line,.65);
