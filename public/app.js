@@ -117,7 +117,7 @@ async function downloadReport(tier){
     const blob=await response.blob(),bytes=new Uint8Array(await blob.arrayBuffer());
     if(new TextDecoder().decode(bytes.slice(0,5))!=="%PDF-")throw new Error("Server response was not a valid PDF. No file was downloaded.");
     const url=URL.createObjectURL(blob),anchor=document.createElement("a");
-    anchor.href=url;anchor.download="reson8-audit-"+tier+"-"+currentAuditPayload.jobId+".pdf";document.body.append(anchor);anchor.click();anchor.remove();URL.revokeObjectURL(url);
+    anchor.href=url;anchor.download="reson8-audit-"+tier+"-"+currentAuditPayload.jobId+".pdf";document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
     reportDownloadMessage.textContent=tier+" PDF downloaded successfully.";
   }catch(error){reportDownloadMessage.textContent=error instanceof Error?error.message:"Report retrieval failed.";}
 }
