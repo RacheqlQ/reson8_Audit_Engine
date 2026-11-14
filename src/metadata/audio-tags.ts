@@ -129,6 +129,41 @@ function parseFlacComments(bytes: Uint8Array): AudioTagMetadata {
   }
   return result;
 }
+function parseWavInfo(bytes: Uint8Array): AudioTagMetadata {
+  const result: AudioTagMetadata = { ...EMPTY, genres: [] };
+  if (bytes.length < 12 || String.fromCharCode(...bytes.subarray(0, 4)) !== "RIFF" ||
+      String.fromCharCode(...bytes.subarray(8, 12)) !== "WAVE") return result;
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const chunkId = String.fromCharCode(...bytes.subarray(offset, offset + 4));
+    const length = littleEndian32(bytes, offset + 4);
+    const start = offset + 8, end = start + length;
+    if (end > bytes.length) break;
+    if (chunkId === "LIST" && length >= 4 && String.fromCharCode(...bytes.subarray(start, start + 4)) === "INFO") {
+      let cursor = start + 4;
+      while (cursor + 8 <= end) {
+        const id = String.fromCharCode(...bytes.subarray(cursor, cursor + 4));
+        const size = littleEndian32(bytes, cursor + 4);
+        const valueStart = cursor + 8, valueEnd = valueStart + size;
+        if (valueEnd > end) break;
+        const value = new TextDecoder("windows-1252").decode(bytes.subarray(valueStart, valueEnd)).replace(/\\u0000/g, "").trim();
+        if (value) {
+          if (id === "INAM") result.title ??= value;
+          else if (id === "IART") result.artist ??= value;
+          else if (id === "IPRD") result.album ??= value;
+          else if (id === "ISRC") result.isrc ??= value.replace(/[\\s-]/g, "").toUpperCase();
+          else if (id === "IGNR") result.genres = [...new Set([...result.genres, ...value.split(/[;,/]/).map((item) => item.trim()).filter(Boolean)])];
+          else if (id === "ICRD") result.releaseDate ??= value;
+          else if (id === "IPUB" || id === "ICOP") result.label ??= value;
+        }
+        cursor = valueEnd + (size % 2);
+      }
+    }
+    offset = end + (length % 2);
+  }
+  return result;
+}
+
 function parseId3v1(bytes: Uint8Array): AudioTagMetadata {
   if (bytes.length < 128) return { ...EMPTY, genres: [] };
   const offset = bytes.length - 128;
@@ -147,14 +182,15 @@ function parseId3v1(bytes: Uint8Array): AudioTagMetadata {
 export function readAudioTags(input: Uint8Array): AudioTagMetadata {
   const v2 = parseId3(input);
   const flac = parseFlacComments(input);
+  const wav = parseWavInfo(input);
   const v1 = parseId3v1(input);
   return {
-    title: v2.title ?? flac.title ?? v1.title,
-    artist: v2.artist ?? flac.artist ?? v1.artist,
-    album: v2.album ?? flac.album ?? v1.album,
-    isrc: v2.isrc ?? flac.isrc,
-    genres: v2.genres.length ? v2.genres : flac.genres.length ? flac.genres : v1.genres,
-    releaseDate: v2.releaseDate ?? flac.releaseDate ?? v1.releaseDate,
-    label: v2.label ?? flac.label,
+    title: v2.title ?? flac.title ?? wav.title ?? v1.title,
+    artist: v2.artist ?? flac.artist ?? wav.artist ?? v1.artist,
+    album: v2.album ?? flac.album ?? wav.album ?? v1.album,
+    isrc: v2.isrc ?? flac.isrc ?? wav.isrc,
+    genres: v2.genres.length ? v2.genres : flac.genres.length ? flac.genres : wav.genres.length ? wav.genres : v1.genres,
+    releaseDate: v2.releaseDate ?? flac.releaseDate ?? wav.releaseDate ?? v1.releaseDate,
+    label: v2.label ?? flac.label ?? wav.label,
   };
 }
