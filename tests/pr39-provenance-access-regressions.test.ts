@@ -96,7 +96,7 @@ describe("PR #39 AudD attempt provenance", () => {
       saveCatalogMetadata: async () => {},
       decode: async () => ({ samples: new Float32Array(), sampleRate: 44100, channels: 1 }),
       saveSonicDna: async () => {},
-      generateAssessment: async ({ evidence }) => {
+      generateAssessment: async ({ evidence }: { evidence: Record<string, unknown> }) => {
         checkedSources = evidence.metadataSourcesChecked;
         return {} as import("../src/providers/groq/client.js").ArAssessment;
       },
