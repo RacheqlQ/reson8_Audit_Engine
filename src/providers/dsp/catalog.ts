@@ -40,7 +40,23 @@ async function spotify(u:URL, signal?:AbortSignal){
 
   try {
     const client = new SpotifyClient();
-    return await normalizeSpotifyTrack(u.toString(), await client.getTrack(id, signal));
+    const track = await client.getTrack(id, signal);
+    const normalized = normalizeSpotifyTrack(u.toString(), track);
+    const artists = Array.isArray(track.artists) ? track.artists as Array<Record<string, unknown>> : [];
+    const artistId = typeof artists[0]?.id === "string" ? artists[0].id : null;
+    if (artistId) {
+      try {
+        const artist = await client.getArtist(artistId, signal);
+        const genres = Array.isArray(artist.genres)
+          ? artist.genres.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          : [];
+        if (genres.length) return { ...normalized, genre: genres[0], raw: { ...normalized.raw, artistGenres: genres } };
+      } catch (error) {
+        if (signal?.aborted) throw signal.reason;
+        // Track metadata remains valid if optional artist-genre enrichment is unavailable.
+      }
+    }
+    return normalized;
   } catch (error) {
     if (signal?.aborted) throw signal.reason;
     // Spotify is optional enrichment for the audit pipeline. A denied or
