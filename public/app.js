@@ -11,7 +11,7 @@ const EVIDENCE_STEPS=[
   {number:"05",title:"A&R assessment",description:"Evidence-bound interpretation"},
   {number:"06",title:"Report",description:"Song-specific PDF output"}
 ];
-let selectedFile=null,digest=null,catalogReady=false,pollTimer=null,currentAuditPayload=null;
+let selectedFile=null,digest=null,catalogReady=false,pollTimer=null,currentAuditPayload=null,reportAccessToken=null;
 
 function setCheck(el,state,value){el.classList.remove("ok","bad");if(state)el.classList.add(state);el.querySelector("b").textContent=value;}
 function extensionOf(name){return name.includes(".")?name.split(".").pop().toLowerCase():"";}
@@ -98,17 +98,19 @@ async function submitAudit(){
     }else throw new Error("Provide a valid master file, DSP link, or both.");
     const payload=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(payload.message||"Audit intake failed");
-    jobId.textContent=payload.jobId||"—";serverHash.textContent=payload.sha256||"—";resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
+    jobId.textContent=payload.jobId||"—";serverHash.textContent=payload.sha256||"—";reportAccessToken=payload.reportAccessToken||null;resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
     resultMessage.textContent=hasMaster&&hasCatalog?"Accepted. Master Sonic DNA and DSP catalog evidence will be reconciled into one report.":hasMaster?"Accepted. Master Sonic DNA analysis is processing.":"Accepted. DSP catalog analysis is processing.";
     submit.querySelector("span").textContent="Audit processing";pollAudit(payload.jobId);
   }catch(e){actionMessage.textContent=e instanceof Error?e.message:"Audit intake failed.";submit.disabled=false;updateSubmit();}
 }
 async function downloadReport(tier){
   const key=operatorKey.value.trim();
-  if(!key){reportDownloadMessage.textContent="Enter the operator access key. It is sent only in the request header and is not stored.";return;}
+  if(tier==="full"&&!key){reportDownloadMessage.textContent="Enter the operator access key to retrieve the full report.";return;}
+  if(tier==="sample"&&!reportAccessToken&&!key){reportDownloadMessage.textContent="Sample report access is unavailable for this older job. Enter the operator key.";return;}
   reportDownloadMessage.textContent="Retrieving "+tier+" PDF…";
   try{
-    const response=await fetch("/v1/audits/"+encodeURIComponent(currentAuditPayload.jobId)+"/reports/"+tier,{headers:{"x-reson8-operator-key":key}});
+    const headers=tier==="sample"&&reportAccessToken?{"x-reson8-report-token":reportAccessToken}:{"x-reson8-operator-key":key};
+    const response=await fetch("/v1/audits/"+encodeURIComponent(currentAuditPayload.jobId)+"/reports/"+tier,{headers});
     const type=(response.headers.get("content-type")||"").toLowerCase();
     if(!response.ok||!type.includes("application/pdf")){
       const error=await response.json().catch(()=>({}));
