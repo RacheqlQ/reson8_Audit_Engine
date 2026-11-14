@@ -141,6 +141,7 @@ function identityEvidence(identity: TrackIdentity): Record<string, unknown> {
     upc: identity.upc,
     genres: identity.genres,
     sourceProviders: identity.sourceProviders,
+    fieldProvenance: identity.fieldProvenance,
   };
 }
 
