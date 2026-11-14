@@ -27,6 +27,6 @@ describe("professional report text and metadata coverage", () => {
     expect(text).toContain("Unavailable — no source result");
     expect(text).toContain("ISRC: Conflicting source values");
     expect(text).toContain("not inferred or fabricated");
-    expect(text).not.toMatch(/\\b(OBSERVED|RECOGNIZED|RECONCILED|INFERRED|INDUSTRY PRACTICE)\\b/);
+    expect(text).not.toMatch(/\b(OBSERVED|RECOGNIZED|RECONCILED|INFERRED|INDUSTRY PRACTICE)\b/);
   });
 });
