@@ -113,6 +113,7 @@
             </button>
             <p id="actionMessage">Upload a master, add a DSP link, or provide both for one merged audit.</p>
           </div>
+          <p class="capability-warning">Access is anonymous and password-free. A private job credential is issued once after submission; keep this page open until you have downloaded it.</p>
 
           <div class="result-panel hidden" id="resultPanel" aria-live="polite">
             <div class="result-label">AUDIT ACCEPTED</div>
@@ -122,6 +123,11 @@
               <div><span>STATUS</span><strong class="queued" id="auditStatus">QUEUED</strong></div>
             </div>
             <p id="resultMessage">Your recording is now in the processing queue. Recognition, measurement and reconciliation run as separate evidence stages.</p>
+            <div class="capability-save">
+              <p>Important: your private access credential is issued once. Download and keep it somewhere secure. Closing or reloading this page loses the in-memory credential; the job ID alone cannot restore access.</p>
+              <button class="ghost-btn" id="saveAccessTokenButton" type="button" disabled>Download private access credential</button>
+              <p id="tokenSaveMessage" role="status"></p>
+            </div>
             <div class="report-actions hidden" id="reportActions">
               <div class="report-downloads"><button class="primary-btn" id="sampleReportButton" type="button">Download sample report <b>↓</b></button></div>
               <p id="reportDownloadMessage" role="status"></p>

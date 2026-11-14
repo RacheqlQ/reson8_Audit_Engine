@@ -1,6 +1,6 @@
 import { readPdfResponse, triggerPdfDownload } from "./report-download.js";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
-const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain");
+const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain"),saveAccessTokenButton=document.querySelector("#saveAccessTokenButton"),tokenSaveMessage=document.querySelector("#tokenSaveMessage");
 const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.querySelector("#detectCatalog"),catalogPlatform=document.querySelector("#catalogPlatform"),catalogPreview=document.querySelector("#catalogPreview"),catalogState=document.querySelector("#catalogState"),catalogCheck=document.querySelector("#catalogCheck");
 const checks={type:document.querySelector("#checkType"),size:document.querySelector("#checkSize"),hash:document.querySelector("#checkHash")};
 const MAX_BYTES=50*1024*1024,AUDIO_EXTENSIONS=new Set(["mp3","wav","flac","aac","ogg","m4a"]);
@@ -72,7 +72,12 @@ async function pollAudit(job,token){
   async function check(){
     try{
       const response=await fetch("/v1/audits/"+encodeURIComponent(job),{headers:{"x-reson8-report-token":token}});const payload=await response.json().catch(()=>({}));
-      if(!response.ok)throw new Error(payload.message||"Could not read audit status");
+      if([401,403,404].includes(response.status)){
+        stopPolling();
+        resultMessage.textContent="This audit access credential was rejected or is no longer valid. The job ID cannot restore access. If you saved the one-time credential, keep it private and use it while this page is open; otherwise submit a new audit.";
+        return;
+      }
+      if(!response.ok)throw new Error(payload.message||"Temporary status request failure (HTTP "+response.status+")");
       applyAuditPayload(payload);
       if(payload.status==="completed"&&payload.full?.available)return;
       if(payload.status==="failed"){resultMessage.textContent="Audit failed: "+(payload.errorMessage||"processing error");return;}
@@ -101,8 +106,32 @@ async function submitAudit(){
     if(!response.ok)throw new Error(payload.message||"Audit intake failed");
     jobId.textContent=payload.jobId||"—";serverHash.textContent=payload.sha256||"—";reportAccessToken=payload.reportAccessToken||null;resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
     resultMessage.textContent=hasMaster&&hasCatalog?"Accepted. Master Sonic DNA and DSP catalog evidence will be reconciled into one report.":hasMaster?"Accepted. Master Sonic DNA analysis is processing.":"Accepted. DSP catalog analysis is processing.";
+    if(reportAccessToken){
+      saveAccessTokenButton.disabled=false;
+      tokenSaveMessage.textContent="Save this private credential now. The token is issued once and is not recoverable from the job ID. Reloading or closing this page loses the in-memory copy.";
+    }else{
+      saveAccessTokenButton.disabled=true;
+      tokenSaveMessage.textContent="The server did not return an access credential. Contact support before leaving this page.";
+    }
     submit.querySelector("span").textContent="Audit processing";pollAudit(payload.jobId,reportAccessToken);
   }catch(e){actionMessage.textContent=e instanceof Error?e.message:"Audit intake failed.";submit.disabled=false;updateSubmit();}
+}
+function saveAccessCredential(){
+  if(!reportAccessToken||!currentAuditPayload?.jobId){tokenSaveMessage.textContent="The private access credential is unavailable.";return;}
+  const contents=[
+    "Reson8 Audit Engine — private audit access credential",
+    "Job ID: "+currentAuditPayload.jobId,
+    "Capability token: "+reportAccessToken,
+    "",
+    "Keep this file private. Anyone with this token can access this audit.",
+    "The token cannot be recovered from the job ID."
+  ].join("\n");
+  const blob=new Blob([contents],{type:"text/plain;charset=utf-8"});
+  const url=URL.createObjectURL(blob),anchor=document.createElement("a");
+  anchor.href=url;anchor.download="reson8-audit-access-"+currentAuditPayload.jobId+".txt";
+  document.body.appendChild(anchor);anchor.click();anchor.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60_000);
+  tokenSaveMessage.textContent="Private access credential downloaded. Store it securely; it is not saved in browser storage.";
 }
 async function downloadReport(tier){
   if(!reportAccessToken){reportDownloadMessage.textContent="This audit's private access token is unavailable. Submit a new audit to receive a fresh token.";return;}
@@ -115,7 +144,7 @@ async function downloadReport(tier){
   }catch(error){reportDownloadMessage.textContent=error instanceof Error?error.message:"Report retrieval failed.";}
 }
 input.addEventListener("change",()=>input.files?.[0]&&inspect(input.files[0]));removeFile.addEventListener("click",clearFile);detectCatalog.addEventListener("click",previewCatalog);catalogUrl.addEventListener("input",()=>{catalogReady=false;setCheck(catalogCheck,"","—");updateSubmit();});catalogUrl.addEventListener("blur",previewCatalog);submit.addEventListener("click",submitAudit);
-sampleReportButton.addEventListener("click",()=>downloadReport("sample"));
+sampleReportButton.addEventListener("click",()=>downloadReport("sample"));saveAccessTokenButton.addEventListener("click",saveAccessCredential);
 ["dragenter","dragover"].forEach(type=>dropzone.addEventListener(type,e=>{e.preventDefault();dropzone.classList.add("dragover");}));
 ["dragleave","drop"].forEach(type=>dropzone.addEventListener(type,e=>{e.preventDefault();dropzone.classList.remove("dragover");}));
 dropzone.addEventListener("drop",e=>{const f=e.dataTransfer?.files?.[0];if(f)inspect(f);});
