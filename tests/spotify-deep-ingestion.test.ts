@@ -38,7 +38,7 @@ describe("Spotify deep catalog ingestion", () => {
 
     const result = await collectCatalogMetadata("https://open.spotify.com/track/spotify-track-123");
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://accounts.spotify.com/api/token");
     expect(fetchMock.mock.calls[1]?.[0]).toBe("https://api.spotify.com/v1/tracks/spotify-track-123?market=US");
     expect(result).toMatchObject({
