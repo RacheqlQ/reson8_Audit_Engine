@@ -22,6 +22,17 @@ const store = () => ({
 });
 
 describe("report download contract", () => {
+  it("serves the report download browser module as JavaScript", async () => {
+    const app = buildServer(store() as any);
+    const response = await app.inject({ method: "GET", url: "/report-download.js" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/javascript");
+    expect(response.headers["content-type"]).toContain("charset=utf-8");
+    expect(response.body).toContain("export async function readPdfResponse");
+    expect(response.body).toContain("export function triggerPdfDownload");
+    await app.close();
+  });
+
   it("returns structured authorization JSON rather than pretending an unauthorized response is a PDF", async () => {
     process.env.RESON8_OPERATOR_KEY = "operator-secret-value-with-more-than-32-bytes";
     const app = buildServer(store() as any);
