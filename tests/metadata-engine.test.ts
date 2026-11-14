@@ -67,6 +67,7 @@ describe("MetadataEngine", () => {
     expect(identity.title).toBe("(Sittin' On) the Dock of the Bay - Mono");
     expect(identity.artist).toBeNull();
     expect(identity.sourceProviders).toEqual([]);
+    expect(identity.fieldProvenance).toMatchObject({ title: "filename", artist: null, album: null });
   });
 
   it("uses filename artist/title parsing only when structured providers do not supply them", () => {
