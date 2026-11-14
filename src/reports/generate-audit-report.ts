@@ -11,16 +11,16 @@ const W=595.28,H=841.89,M=48,TOP=735,BOTTOM=76,AVAILABLE=TOP-BOTTOM;
 const C={navy:rgb(11/255,27/255,58/255),blue:rgb(47/255,107/255,1),violet:rgb(124/255,77/255,1),teal:rgb(31/255,209/255,178/255),coral:rgb(1,107/255,94/255),paper:rgb(247/255,245/255,240/255),ink:rgb(22/255,29/255,43/255),muted:rgb(91/255,101/255,119/255),line:rgb(220/255,222/255,226/255),white:rgb(1,1,1)};
 export function normalizeReportText(value: string): string {
  return value.normalize("NFKC")
-  .replace(/[\\u2018\\u2019\\u201A\\u201B]/g,"'")
-  .replace(/[\\u201C\\u201D\\u201E\\u201F]/g,'"')
-  .replace(/[\\u2010-\\u2015\\u2212]/g,"-")
-  .replace(/[\\u00A0\\u202F]/g," ")
-  .replace(/[\\u2026]/g,"...")
-  .replace(/[\\u2022\\u25CF]/g,"-")
-  .replace(/[\\u00D7]/g,"x")
-  .replace(/[\\u266F]/g,"#")
-  .replace(/[\\uFFFD]/g,"?")
-  .replace(/[^\\x20-\\x7E\\u00A0-\\u00FF]/g,"?");
+  .replace(/[\u2018\u2019\u201A\u201B]/g,"'")
+  .replace(/[\u201C\u201D\u201E\u201F]/g,'"')
+  .replace(/[\u2010-\u2015\u2212]/g,"-")
+  .replace(/[\u00A0\u202F]/g," ")
+  .replace(/[\u2026]/g,"...")
+  .replace(/[\u2022\u25CF]/g,"-")
+  .replace(/[\u00D7]/g,"x")
+  .replace(/[\u266F]/g,"#")
+  .replace(/[\uFFFD]/g,"?")
+  .replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"?");
 }
 const text=(v:unknown):string=>v===null||v===undefined||v===""?"":Array.isArray(v)?v.map(text).filter(Boolean).join(", "):typeof v==="object"?"":typeof v==="number"&&Number.isFinite(v)?String(Number(v.toFixed(2))):normalizeReportText(String(v));
 const val=(v:unknown,fallback="Not supplied")=>text(v)||fallback;
