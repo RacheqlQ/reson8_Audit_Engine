@@ -51,7 +51,7 @@
               <p class="kicker">AUDIT SOURCE</p>
               <h2>Choose your evidence source</h2>
             </div>
-            <span class="limit">Master + DSP catalog can be combined</span>
+            <span class="limit">Use either source or combine both in one audit</span>
           </div>
           <div class="source-tabs" role="tablist" aria-label="Audit source">
             <button class="source-tab active" id="masterTab" type="button">MASTER TRACK <small>Measured Sonic DNA</small></button>
@@ -100,7 +100,7 @@
 
           </section>
 
-          <section id="dspSource" class="hidden">
+          <section id="dspSource">
             <div class="section-heading compact"><div><p class="kicker">DSP / CATALOG</p><h3>Ingest an existing release link</h3></div><span class="limit">Spotify · Apple Music · YouTube · Deezer · Tidal</span></div>
             <div class="catalog-form">
               <label for="catalogUrl">DSP or catalog URL</label>
@@ -115,7 +115,7 @@
             <button class="primary-btn" id="submitAudit" type="button" disabled>
               <span>Start A&R audit</span><b>→</b>
             </button>
-            <p id="actionMessage">Select a valid master or DSP/catalog link to continue.</p>
+            <p id="actionMessage">Upload a master, add a DSP link, or provide both for one merged audit.</p>
           </div>
 
           <div class="result-panel hidden" id="resultPanel" aria-live="polite">
