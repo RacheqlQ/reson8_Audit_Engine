@@ -25,7 +25,7 @@ describe("browser PDF download contract", () => {
   });
 
   it("rejects a media type that only contains the PDF label", async () => {
-    const response = new Response("%PDF-1.7\\nfixture", {
+    const response = new Response("%PDF-1.7\nfixture", {
       status: 200,
       headers: { "content-type": "application/pdfx" },
     });
