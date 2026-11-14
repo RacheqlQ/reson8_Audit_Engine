@@ -121,7 +121,6 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         status: "queued",
         sourceType: "dsp_link",
         sha256: result.sha256,
-        sourceType: result.sourceType,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to create catalog audit job";
@@ -245,6 +244,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         jobId: result.jobId,
         status: "queued",
         sha256: result.sha256,
+        sourceType: result.sourceType,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to create audit job";
