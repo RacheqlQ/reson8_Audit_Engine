@@ -24,6 +24,34 @@ export function normalizeReportText(value: string): string {
 }
 const text=(v:unknown):string=>v===null||v===undefined||v===""?"":Array.isArray(v)?v.map(text).filter(Boolean).join(", "):typeof v==="object"?"":typeof v==="number"&&Number.isFinite(v)?String(Number(v.toFixed(2))):normalizeReportText(String(v));
 const val=(v:unknown,fallback="Not supplied")=>text(v)||fallback;
+const EXTERNAL_ID_LABELS:Record<string,string>={spotify:"Spotify",apple_music:"Apple Music",tidal:"TIDAL",deezer:"Deezer",youtube_music:"YouTube Music",audd:"AudD",musicbrainz:"MusicBrainz"};
+function externalIdentifierValue(value:unknown):string[]{
+ const scalar=(candidate:unknown):string|null=>{
+  if(typeof candidate==="string"&&candidate.trim())return normalizeReportText(candidate.trim());
+  if(typeof candidate==="number"&&Number.isFinite(candidate))return String(candidate);
+  return null;
+ };
+ const direct=scalar(value);
+ if(direct)return [direct];
+ if(Array.isArray(value))return value.map(scalar).filter((entry):entry is string=>Boolean(entry));
+ if(value&&typeof value==="object"){
+  const record=value as Record<string,unknown>;
+  for(const key of ["id","value","uri","url"]){
+   const candidate=scalar(record[key]);
+   if(candidate)return [candidate];
+  }
+ }
+ return [];
+}
+function externalIdentifiers(value:unknown):string{
+ if(!value||typeof value!=="object"||Array.isArray(value))return "";
+ return Object.entries(value as Record<string,unknown>).flatMap(([provider,raw])=>{
+  const identifiers=externalIdentifierValue(raw);
+  if(!identifiers.length)return [];
+  const label=EXTERNAL_ID_LABELS[provider]??provider.replace(/[_-]+/g," ").replace(/\\b\\w/g,(letter)=>letter.toUpperCase());
+  return [label+": "+identifiers.join(", ")];
+ }).join("; ");
+}
 const chartValue=(v:unknown):string|number|null=>typeof v==="string"||typeof v==="number"&&Number.isFinite(v)?v:null;
 function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
  value=normalizeReportText(value);
@@ -96,6 +124,8 @@ function professionalEvidenceLanguage(value:string):string {
 export function metadataFieldStatus(e:Record<string,unknown>,field:string):string{
  const value=text(field==="genre"?(e.genre??e.genres):e[field]);
  if(!value)return "Unavailable — no source result";
+ const sources=Array.isArray(e.sources)?e.sources:[];
+ if(e.fixture===true||sources.includes("synthetic_audio_fixture"))return "Synthetic test value — not a real identity match";
  const reconciliation=e.reconciliation&&typeof e.reconciliation==="object"?e.reconciliation as Record<string,unknown>:{};
  const conflicts=Array.isArray(reconciliation.conflicts)?reconciliation.conflicts as Array<Record<string,unknown>>:[];
  if(conflicts.some((entry)=>entry.field===field))return "Conflicting source values";
@@ -132,7 +162,7 @@ function sections(i:AuditReportInput):Section[]{
  {title:"Identity and source reconciliation",accent:"violet",body:[
  ...(["artist","title","album","genre","isrc","upc","label","releaseDate"] as const).map((field)=>({artist:"Artist",title:"Track",album:"Album",genre:"Genre",isrc:"ISRC",upc:"UPC",label:"Label",releaseDate:"Release date"}[field])+": "+metadataFieldStatus(e,field)+" — "+(text(field==="genre"?(e.genre??e.genres):e[field])||"No value returned by the supplied or queried sources")),
  "DSP / platform: "+val(e.platform),
- "External identifiers: "+(text(e.externalIds)?"Available — "+text(e.externalIds):"Unavailable — no external identifiers returned"),
+ "External identifiers: "+(externalIdentifiers(e.externalIds)?"Available — "+externalIdentifiers(e.externalIds):"Unavailable — no external identifiers returned"),
  "Sources checked: "+val(Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked.map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition",synthetic_audio_fixture:"Synthetic report fixture (layout testing only)"} as Record<string,string>)[String(provider)]??String(provider)).join(", "):e.sourceProviders??e.sources??e.source),
  "Coverage status: "+val(e.evidenceStatus??e.status,"Partial — one or more identity fields remain unavailable"),
  "Verification note: unavailable fields are not inferred or fabricated. Analytical recommendations remain hypotheses and are never presented as verified identity metadata."
