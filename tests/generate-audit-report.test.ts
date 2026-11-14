@@ -54,7 +54,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const report=pages.flatMap(p=>[p.title,...p.text]).join(" ");
   expect(report).toContain("Tempo and lane fit");expect(report).toContain("Rhythmic consistency");
   expect(report).toContain("Dynamic range and loudness readiness");expect(report).toContain("Human listening checklist");
-  expect(report).toContain("INDUSTRY PRACTICE");expect(report).toContain("references to verify");
+  expect(report).toContain("General industry guidance");expect(report).toContain("references to verify");
  });
  it("collapses all missing audio measurements into one empty state",()=>{
   const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");
