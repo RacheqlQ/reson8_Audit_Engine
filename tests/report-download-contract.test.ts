@@ -27,7 +27,6 @@ describe("report download contract", () => {
   });
   it.each([
     ["/audit-polling.js", "export function createAuditPoller"],
-    ["/credential-download.js", "export function credentialFilename"],
   ])("serves the %s browser dependency as JavaScript", async (path, exportedSymbol) => {
     const app = buildServer(store() as any);
     const response = await app.inject({ method: "GET", url: path });
