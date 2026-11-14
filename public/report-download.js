@@ -1,7 +1,7 @@
 export async function readPdfResponse(response) {
-  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  const contentType = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
 
-  if (!response.ok || !contentType.includes("application/pdf")) {
+  if (!response.ok || contentType !== "application/pdf") {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.message || "Report retrieval failed (HTTP " + response.status + ")");
   }
