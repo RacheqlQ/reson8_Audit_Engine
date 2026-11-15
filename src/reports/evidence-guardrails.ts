@@ -59,8 +59,8 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
       const hasGenreClaim = suppressGenre && GENRE_TAXONOMY.some((genre) =>
         genre.label.length >= 4 && lower.includes(genre.label.toLocaleLowerCase()),
       );
-      const commercialTerms = /\\b(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|marketability|commercial performance|commercial potential|commercial success|commercially (?:promising|viable|strong|successful|attractive|competitive)|demand|traction|market fit)\\b/i;
-      const cautionaryCommercialContext = /\\b(?:not|no|without|insufficient|unverified|unavailable|unknown|cannot|can't|could not|unable|withheld|requires? review|verify|verified|source-attributed|measure|monitor|track|investigate|evidence|reported)\\b/i.test(sentence);
+      const commercialTerms = /\b(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|marketability|commercial performance|commercial potential|commercial success|commercially (?:promising|viable|strong|successful|attractive|competitive)|demand|traction|market fit)\b/i;
+      const cautionaryCommercialContext = /\b(?:not|no|without|insufficient|unverified|unavailable|unknown|cannot|can't|could not|unable|withheld|requires? review|verify|verified|source-attributed|measure|monitor|track|investigate|evidence|reported)\b/i.test(sentence);
       const hasCommercialClaim = suppressCommercial && commercialTerms.test(sentence) && !cautionaryCommercialContext;
       return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim;
     });
