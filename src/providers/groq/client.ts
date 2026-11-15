@@ -132,7 +132,8 @@ function thresholdError(name: string, value: unknown): string | null {
 
 const MAX_PROVIDER_RETRY_DELAY_MS = 15 * 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
-const MAX_COMPLETION_TOKENS = 8192;
+const MAX_COMPLETION_TOKENS = 6000;
+const RETRY_COMPLETION_TOKENS = 4000;
 
 async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
   const retryAfter = response.headers.get("retry-after");
@@ -192,6 +193,7 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
   groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number, signal?:AbortSignal)=>Promise<void>, signal?: AbortSignal): Promise<T> {
   let lastError = "No valid response was returned";
+  let completionTokenBudget = MAX_COMPLETION_TOKENS;
   for(let attempt=0;attempt<2;attempt++){
     let response:Response|null=null;
     for(let networkAttempt=0;networkAttempt<MAX_NETWORK_ATTEMPTS;networkAttempt++){
@@ -199,7 +201,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       response=await fetchImpl("https://api.groq.com/openai/v1/chat/completions",{
         method:"POST",headers:{authorization:"Bearer "+apiKey,"content-type":"application/json"},
         signal,
-        body:JSON.stringify({model,temperature:0.1,max_completion_tokens:MAX_COMPLETION_TOKENS,response_format:{type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
+        body:JSON.stringify({model,temperature:0.1,max_completion_tokens:completionTokenBudget,response_format:{type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
           messages:[{role:"system",content:SYSTEM_PROMPT+" "+instructions},
             {role:"user",content:JSON.stringify({promptVersion:GROQ_PROMPT_VERSION,sectionGroup:groupName,evidence:input.evidence,
               sonicDna:input.sonicDna,catalogMetadata:input.catalogMetadata??null,correction:attempt===0?null:lastError})}]})
@@ -214,6 +216,11 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       const detail=await response?.text().catch(()=>"")??"";
       let providerError:{error?:{code?:unknown;message?:unknown}}={};
       try{providerError=JSON.parse(detail) as typeof providerError;}catch{/* Preserve the original provider response below. */}
+      if(response?.status===413&&attempt===0){
+        completionTokenBudget=RETRY_COMPLETION_TOKENS;
+        lastError="Groq rejected the request with HTTP 413. Retry once with a smaller completion-token reservation while preserving the complete supplied evidence.";
+        continue;
+      }
       if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&attempt===0){
         const message=typeof providerError.error.message==="string"?providerError.error.message:"The provider rejected its generated JSON against the supplied schema.";
         lastError="Groq returned json_validate_failed: "+message+". Retry with a complete JSON object that includes every property required by the supplied schema. Do not omit required properties, including evidenceLabels; when no track-specific source supports a label, use only a clearly separated INDUSTRY PRACTICE entry where appropriate.";
