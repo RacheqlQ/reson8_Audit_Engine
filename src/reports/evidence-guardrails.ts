@@ -47,7 +47,7 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
     && agreement >= 0.8 && agreement <= 1;
 }
 
-function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean): unknown {
+function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean): unknown {
   if (typeof value === "string") {
     const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
@@ -59,14 +59,23 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
       const hasGenreClaim = suppressGenre && GENRE_TAXONOMY.some((genre) =>
         genre.label.length >= 4 && lower.includes(genre.label.toLocaleLowerCase()),
       );
-      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim;
+      const commercialTerms = /\b(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|marketability|commercial performance|commercial potential|commercial success|commercially (?:promising|viable|strong|successful|attractive|competitive)|demand|traction|market fit)\b/i;
+      const cautionaryCommercialContext = /\b(?:cannot|can't|could not|unable|withheld|requires? review)\b/i.test(sentence)
+        || /\bno\s+(?:(?:verified|source-attributed|reliable|supporting|sufficient)\s+)*(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|commercial (?:performance|potential|success|metrics?)|market demand|traction|market fit|evidence)\b/i.test(sentence)
+        || /\bwithout\s+(?:(?:verified|source-attributed|reliable|sufficient)\s+)*(?:commercial (?:performance|metrics?|potential|success)|audience|streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|evidence)\b/i.test(sentence)
+        || /\b(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|commercial (?:performance|potential|success|metrics?)|market demand|traction|market fit|marketability)\s+(?:is|are|remains?|was|were)\s+(?:not|unavailable|unverified|unknown|undetermined|withheld|unsubstantiated)\b/i.test(sentence)
+        || /\bnot\s+(?:available|verified|supported|supplied|reported|provided|established|confirmed|measured|substantiated)\b/i.test(sentence)
+        || /\binsufficient\s+(?:evidence|data|metrics?|support|reporting)\b/i.test(sentence);
+      const actionableMonitoringInstruction = /\b(?:verify|measure|monitor|track|investigate)\s+(?:the\s+)?(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|market demand|commercial performance|marketability)\b/i.test(sentence);
+      const hasCommercialClaim = suppressCommercial && commercialTerms.test(sentence) && !cautionaryCommercialContext && !actionableMonitoringInstruction;
+      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim;
     });
     return kept.join(" ").trim() || "Not asserted: the supporting measurement confidence is insufficient.";
   }
-  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre));
+  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial));
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-      .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre)]));
+      .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial)]));
   }
   return value;
 }
@@ -128,7 +137,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     genre && typeof genre.primaryGenre === "string" && genre.primaryGenre.trim()
       && genre.abstained !== true,
   );
-  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre) as T;
+  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence)) as T;
 
   if (hasAlbumConflict(evidence)) {
     result = sanitizeAlbumConflictClaims(result) as T;

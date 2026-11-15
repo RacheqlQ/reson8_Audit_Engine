@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, feat/multi-dsp-enrichment]
   pull_request:
-    branches: [main]
+    branches: [main, fix/report-fixture-provenance-date]
   workflow_dispatch:
 
 permissions:
@@ -57,7 +57,13 @@ jobs:
         if: always()
         run: npm run build
 
-      - name: Generate sample reports
+      - name: Install PDF text-inspection tools
+        if: always()
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+
+      - name: Generate and inspect sample reports
         if: always()
         run: npm run sample-report
 

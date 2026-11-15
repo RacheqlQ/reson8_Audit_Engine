@@ -1,11 +1,18 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
-import { philloLowConfidenceFixture } from "../scripts/fixtures/phillo-low-confidence.mjs";
+import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
+const allFixtures=[...fixtures,ambiguousAudioFixture as unknown as AuditReportInput];
+const reportTiers=["sample","full"] as const;
 describe("A4 report layout and fixture coverage",()=>{
+ it("defines exactly five generic fixtures across two report tiers",()=>{
+  expect(allFixtures).toHaveLength(5);
+  expect(reportTiers).toEqual(["sample","full"]);
+  expect(allFixtures.length*reportTiers.length).toBe(10);
+ });
  it("detects element intersections and page overflow",()=>{
   expect(checkLayout([{x:0,y:0,width:20,height:20,id:"a"},{x:10,y:10,width:20,height:20,id:"b"}]).ok).toBe(false);
   expect(checkLayout([{x:590,y:0,width:20,height:20,id:"overflow"}]).ok).toBe(false);
@@ -22,20 +29,28 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(chartLayoutIssuesForReport(fullAudioFixture as any)).toEqual([]);
  });
  it("checks chart-caption separation for every chart in all four fixtures",()=>{
-  for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
+  for(const input of allFixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
- it("does not emit low-density warnings across the eight report variants",async()=>{
+ it("does not emit low-density warnings across all sample and full fixture variants",async()=>{
   const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
   try{
-   for(const input of fixtures)for(const tier of ["sample","full"] as const)await generateAuditReport(input,tier);
+   for(const input of allFixtures)for(const tier of reportTiers)await generateAuditReport(input,tier);
    expect(warning.mock.calls.filter(([message])=>String(message).includes("[report-layout]"))).toEqual([]);
   }finally{warning.mockRestore();}
  });
  it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
-  for(const input of fixtures)for(const tier of ["sample","full"] as const){
+  for(const input of allFixtures)for(const tier of reportTiers){
    const bytes=await generateAuditReport(input,tier),pdf=await PDFDocument.load(bytes);
    for(const page of pdf.getPages()){const size=page.getSize();expect(size.width).toBeCloseTo(595.28,0);expect(size.height).toBeCloseTo(841.89,0);}
-   expect(pdf.getForm().getFields().map(f=>f.getName())).toEqual(["ar_notes"]);
+   const fields=pdf.getForm().getFields();
+   expect(fields.map(f=>f.getName())).toEqual(["ar_notes"]);
+   const notesField=pdf.getForm().getTextField("ar_notes");
+   const widgets=notesField.acroField.getWidgets();
+   expect(widgets).toHaveLength(1);
+   const notesWidgetPage=widgets[0].P();
+   const notesPageIndex=pdf.getPages().findIndex(page=>page.ref.objectNumber===notesWidgetPage?.objectNumber&&page.ref.generationNumber===notesWidgetPage?.generationNumber);
+   expect(notesPageIndex).toBeGreaterThanOrEqual(0);
+   expect(notesPageIndex).toBe(pdf.getPageCount()-1);
    expect(pdf.getPageCount()).toBeLessThanOrEqual(20);
   }
  });
@@ -94,44 +109,88 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
  });
- it("uses the evidence-sanitized commercial verdict on the PDF cover",()=>{
-  expect(coverVerdictLabel(philloLowConfidenceFixture as any)).toBe("Insufficient evidence");
+ it("builds the A&R Notes decision-context structure used by the generated PDF",()=>{
+  const context=buildArNotesDecisionContext(ambiguousAudioFixture as any);
+  expect(context.heading).toBe("DECISION CONTEXT");
+  expect(context.verdict).toBe("INSUFFICIENT EVIDENCE");
+  expect(context.summary).not.toContain("zero-confidence tempo candidate");
+  expect(context.summary).not.toMatch(/\b(?:128\s*BPM|Afrobeats|streams?)\b/i);
+  expect(context.prompts).toHaveLength(3);
+  expect(context.prompts[0]).toContain("change the current decision");
+  expect(context.prompts[1]).toContain("identity, rights or source gaps");
+  expect(context.prompts[2]).toContain("before any external pitch");
  });
- it("renders the Phillo regression fixture with tempo, key, genre and commercial claims withheld",()=>{
-  const pages=planAuditReportPages(philloLowConfidenceFixture as any,"full");
+ it("splits long A&R Notes summaries into ordered, lossless continuation chunks",()=>{
+  const source=Array.from({length:100},(_,index)=>"summary-segment-"+(index+1));
+  const chunks=paginateArNotesSummary(source);
+  expect(chunks.length).toBeGreaterThan(1);
+  expect(chunks.flat()).toEqual(source);
+  expect(new Set(chunks.flat()).size).toBe(source.length);
+  expect(chunks.slice(0,-1).every(chunk=>chunk.length<=42)).toBe(true);
+  expect(chunks[chunks.length-1].length).toBeLessThanOrEqual(16);
+ });
+ it("uses the same evidence-sanitized assessment for A&R Notes and the report body",async()=>{
+  const input=structuredClone(ambiguousAudioFixture) as AuditReportInput;
+  input.assessment.executiveSummary=[
+   "The recording is a 128 BPM high-energy Afrobeats release.",
+   "The release has 24000 streams, strong market demand and high commercial potential.",
+   "Further listening and source verification are required before any external decision."
+  ].join(" ");
+  const context=buildArNotesDecisionContext(input);
+  const forbidden=/\b(?:128\s*BPM|high-energy|Afrobeats|24000 streams|market demand|commercial potential)\b/i;
+  expect(context.summary).not.toMatch(forbidden);
+  expect(context.summary).toContain("Further listening and source verification are required");
+  const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).not.toMatch(forbidden);
+  const pdf=await generateAuditReport(input,"full");
+  const generated=await PDFDocument.load(pdf);
+  expect(generated.getPageCount()).toBeLessThanOrEqual(20);
+  expect(generated.getForm().getTextField("ar_notes").acroField.getWidgets()).toHaveLength(1);
+ });
+
+ it("preserves the complete executive summary in the shared A&R Notes decision context",()=>{
+  const context=buildArNotesDecisionContext(longFormAudioFixture as any);
+  expect(context.summary).toBe(longFormAudioFixture.assessment.executiveSummary);
+  expect(context.prompts).toHaveLength(3);
+ });
+ it("uses the evidence-sanitized commercial verdict on the PDF cover",()=>{
+  expect(coverVerdictLabel(ambiguousAudioFixture as any)).toBe("Insufficient evidence");
+ });
+ it("renders the generic ambiguous-audio regression fixture with tempo, key, genre and commercial claims withheld",()=>{
+  const pages=planAuditReportPages(ambiguousAudioFixture as any,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not reported — insufficient confidence");
   expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
   expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
-  expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+  expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Verdict: Insufficient evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
   expect(report).toContain("Metadata completeness — NOT SCORED");
   expect(report).toContain("Album metadata is present but conflicting");
-  expect(report).not.toMatch(/156\\s*BPM|high-energy|album title is missing/i);
+  expect(report).not.toMatch(/128\\s*BPM|high-energy|album title is missing/i);
  });
- it("reports a present-but-conflicting album instead of calling it missing",()=>{
+ it("reports present-but-conflicting generic release metadata instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.evidence.fixture=true;
-  input.evidence.album="Hole-Hearted";
+  input.evidence.album="Sample Release";
   input.evidence.fieldProvenance={...input.evidence.fieldProvenance,album:"id3"};
-  input.evidence.reconciliation={conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]};
+  input.evidence.reconciliation={conflicts:[{field:"album",values:["Sample Release - EP","Sample Release"]}]};
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Album: Synthetic test value — not a real identity match");
-  expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+  expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).not.toContain("Album: Unavailable — no source result");
   input.evidence.fixture=false;
   input.evidence.sources=[];
   const sourceBackedReport=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
   expect(sourceBackedReport).toContain("Album: Conflicting source values");
-  expect(sourceBackedReport).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+  expect(sourceBackedReport).toContain("album: Sample Release - EP vs Sample Release");
  });
  it("withholds a low-confidence harmonic key from the report while retaining the diagnostic confidence",()=>{
   const input=structuredClone(fullAudioFixture) as any;
-  input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.0608,keySegmentAgreement:0.1667};
+  input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
@@ -140,17 +199,44 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("withholds zero-confidence BPM and tempo-derived A&R assertions from the rendered report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
-  input.sonicDna={...input.sonicDna,bpm:156,tempoConfidence:0,rhythmFeatures:{status:"measured"},genreClassification:{primaryGenre:null,abstained:true}};
-  input.assessment.executiveSummary="The recording is a 156 BPM high-energy release with a strong rhythmic lane.";
-  input.assessment.aAndRPositioning.primaryLane="Afrobeats";
-  input.assessment.aAndRPositioning.adjacentLanes=["Afro Soul"];
+  input.sonicDna={...input.sonicDna,bpm:128,tempoConfidence:0,rhythmFeatures:{status:"measured"},genreClassification:{primaryGenre:null,abstained:true}};
+  input.assessment.executiveSummary="The recording is a 128 BPM high-energy release with a strong rhythmic lane.";
+  input.assessment.aAndRPositioning.primaryLane="Unconfirmed";
+  input.assessment.aAndRPositioning.adjacentLanes=[];
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not reported — insufficient confidence");
   expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
-  expect(report).not.toMatch(/156\s*BPM|high-energy/);
+  expect(report).not.toMatch(/128\s*BPM|high-energy/);
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
+ });
+ it("checks generated-output pagination, chart-bearing pages, continuation pages, footer clearance, disclosures and the 20-page cap",async()=>{
+  const longInput=structuredClone(longFormAudioFixture) as AuditReportInput;
+  longInput.evidence={...longInput.evidence,fixture:true};
+  longInput.assessment={...longInput.assessment,executiveSummary:Array(100).fill("A long-form evidence paragraph must wrap at word boundaries and continue without clipping or overlapping the footer.").join(" ")};
+  expect(longInput.evidence.fixture).toBe(true);
+  const planned=planAuditReportPages(longInput,"full");
+  expect(planned.some(section=>section.title==="Sonic DNA and technical profile")).toBe(true);
+  expect(planned.flatMap(section=>section.text).join(" ")).toContain("FIXTURE — synthetic renderer test data; not a real analysis.");
+  expect(chartLayoutIssuesForReport(longInput)).toEqual([]);
+  for(const tier of ["sample","full"] as const){
+   const baseline=await generateAuditReport(longFormAudioFixture,tier);
+   const baselinePages=(await PDFDocument.load(baseline)).getPageCount();
+   const bytes=await generateAuditReport(longInput,tier),pdf=await PDFDocument.load(bytes);
+   const pages=pdf.getPages();
+   expect(pages.length).toBeGreaterThan(baselinePages);
+   expect(pages.length).toBeLessThanOrEqual(20);
+   for(const page of pages){
+    const size=page.getSize();
+    expect(size.width).toBeCloseTo(595.28,0);
+    expect(size.height).toBeCloseTo(841.89,0);
+    const contents=page.node.Contents();
+    expect(contents).toBeTruthy();
+   }
+   expect(pdf.getForm().getTextField("ar_notes").acroField.getWidgets()).toHaveLength(1);
+   expect(pdf.getPageCount()).toBeLessThanOrEqual(20);
+  }
  });
 });
