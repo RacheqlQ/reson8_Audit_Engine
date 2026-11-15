@@ -56,7 +56,7 @@ describe("Phillo evidence guardrails", () => {
     });
     expect(result.scorecard.tempoLaneFit.score).toBeNull();
     expect(result.scorecard.rhythmicConsistency.score).toBeNull();
-    expect(JSON.stringify(result)).not.toMatch(/156\\s*BPM|high-energy|fast tempo|tempo confirms/i);
+    expect(JSON.stringify(result)).not.toMatch(/156\s*BPM|high-energy|fast tempo|tempo confirms/i);
     expect(result.aAndRPositioning.primaryLane).toContain("Unconfirmed");
     expect(result.aAndRPositioning.adjacentLanes).toEqual([]);
   });
