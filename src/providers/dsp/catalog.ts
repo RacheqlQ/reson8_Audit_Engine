@@ -25,8 +25,7 @@ export interface CatalogMetadata {
 
 const HOSTS: Record<string,DspPlatform> = {
   "open.spotify.com":"spotify","play.spotify.com":"spotify","music.apple.com":"apple_music",
-  "itunes.apple.com":"apple_music","music.youtube.com":"youtube_music","youtube.com":"youtube_music",
-  "www.youtube.com":"youtube_music","youtu.be":"youtube_music","deezer.com":"deezer",
+  "itunes.apple.com":"apple_music","music.youtube.com":"youtube_music","deezer.com":"deezer",
   "www.deezer.com":"deezer","tidal.com":"tidal","listen.tidal.com":"tidal","audiomack.com":"audiomack","www.audiomack.com":"audiomack"
 };
 
