@@ -96,4 +96,51 @@ describe("multi-DSP audit processing", () => {
     });
     expect(JSON.stringify(reportEvidence)).toContain("Wrong Artist");
   });
+
+  it("persists a failed provider result while continuing with another DSP source", async () => {
+    const failed: Array<{ platform: string; catalogId: string; error: string }> = [];
+    const urls = [
+      "https://open.spotify.com/track/spotify-fail",
+      "https://tidal.com/browse/track/tidal-good",
+    ];
+    const result = await processAuditJob("provider-failure-job", {
+      getJob: async () => ({
+        id: "provider-failure-job", ownerId: null, sourceAudioPath: null, mimeType: null,
+        sourceType: "dsp_link" as const, catalogUrl: urls[0]!, catalogUrls: urls,
+        status: "processing" as const, claimToken, leaseExpiresAt: "2099-01-01T00:00:00.000Z",
+        workerId: "provider-failure-test",
+      }),
+      markProcessing: async () => {},
+      collectCatalogMetadata: async (url) => {
+        if (url.includes("spotify")) throw new Error("Spotify API request failed with HTTP 503");
+        return source("tidal", url);
+      },
+      saveCatalogFailure: async (_jobId, _claimToken, link, error) => {
+        failed.push({ platform: link.platform, catalogId: link.catalogId, error });
+      },
+      recognizeUrl: async () => ({ matched: false as const }),
+      downloadMaster: async () => new Uint8Array(),
+      createRecognitionSample: async () => new Uint8Array(),
+      recognize: async () => ({ matched: false as const }),
+      saveRecognition: async () => {},
+      saveEvidence: async () => {},
+      saveCatalogMetadata: async () => {},
+      decode: async () => ({ samples: new Float32Array(), sampleRate: 44100, channels: 1 }),
+      saveSonicDna: async () => {},
+      generateAssessment: async () => assessment,
+      saveAssessment: async () => {},
+      generateReport: async () => new Uint8Array([37, 80, 68, 70, 45]),
+      saveReport: async () => {},
+      markCompleted: async () => {},
+      markFailed: async (_jobId, _claimToken, message) => { throw new Error(message); },
+    });
+
+    expect(result.status).toBe("completed");
+    expect(failed).toEqual([{
+      platform: "spotify",
+      catalogId: "spotify-fail",
+      error: "Spotify API request failed with HTTP 503",
+    }]);
+  });
+
 });
