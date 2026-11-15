@@ -9,7 +9,7 @@ const links = [
   "https://music.apple.com/us/album/song/12345?i=67890",
   "https://www.deezer.com/track/deezer-1",
   "https://tidal.com/browse/track/tidal-1",
-  "https://www.youtube.com/watch?v=youtube-1",
+  "https://music.youtube.com/watch?v=youtube-1",
 ];
 
 function source(platform: DspPlatform, url: string): CatalogMetadata {
@@ -80,10 +80,12 @@ describe("multi-DSP audit processing", () => {
     expect(assessmentEvidence).toMatchObject({
       artist: "Tems",
       reconciliation: { status: "conflict", conflicts: [{ field: "artist", values: ["Tems", "Wrong Artist"] }] },
-      metadataSourcesChecked: ["spotify", "apple_music", "deezer", "tidal", "youtube_music"],
+      metadataSourcesChecked: ["apple_music", "deezer", "tidal", "youtube_music"],
 
     });
-    expect(assessmentEvidence?.catalogSources).toHaveLength(5);
+    expect(assessmentEvidence?.catalogSources).toHaveLength(4);
+    expect(assessmentEvidence?.sourceProviders).not.toContain("spotify");
+    expect(JSON.stringify(assessmentEvidence)).not.toContain("spotify-1");
     expect(reportEvidence).toMatchObject({
       artist: "Tems",
       reconciliation: { status: "conflict" },
