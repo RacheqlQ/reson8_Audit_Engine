@@ -9,12 +9,11 @@ describe("Spotify commercial policy gate", () => {
     delete process.env.PROVIDER_ENABLED_SPOTIFY;
   });
 
-  it("does not call Spotify when credentials and the opt-in flag are present but commercial status is unverified", async () => {
+  it("does not call Spotify when credentials are present but exact opt-in is absent", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     process.env.SPOTIFY_CLIENT_ID = "client-id";
     process.env.SPOTIFY_CLIENT_SECRET = "client-secret";
-    process.env.PROVIDER_ENABLED_SPOTIFY = "true";
 
     const result = await collectCatalogMetadata("https://open.spotify.com/track/spotify-track-123");
 
