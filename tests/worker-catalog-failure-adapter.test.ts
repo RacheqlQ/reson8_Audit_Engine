@@ -16,7 +16,6 @@ vi.mock("../src/integrations/supabase-audit-store.js", () => ({
     markProcessing: vi.fn(),
     downloadMaster: vi.fn(),
     saveRecognition: vi.fn(),
-    saveEvidence: mocks.saveEvidence,
     saveCatalogMetadata: vi.fn(),
     saveSonicDna: vi.fn(),
     saveAssessment: vi.fn(),
