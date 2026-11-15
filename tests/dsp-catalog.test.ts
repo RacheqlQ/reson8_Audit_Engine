@@ -33,6 +33,37 @@ describe("DSP catalog URL detection", () => {
   });
 });
 
+describe("catalogue policy gate coverage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.PROVIDER_ENABLED_APPLE_MUSIC;
+    delete process.env.PROVIDER_ENABLED_YOUTUBE_MUSIC;
+    delete process.env.PROVIDER_ENABLED_DEEZER;
+  });
+
+  it("does not call Apple, YouTube Music or denied Deezer even when opt-in flags are set", async () => {
+    process.env.PROVIDER_ENABLED_APPLE_MUSIC = "true";
+    process.env.PROVIDER_ENABLED_YOUTUBE_MUSIC = "true";
+    process.env.PROVIDER_ENABLED_DEEZER = "true";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const urls = [
+      "https://music.apple.com/us/album/song/12345?i=67890",
+      "https://music.youtube.com/watch?v=youtube-123",
+      "https://www.deezer.com/track/98765",
+    ];
+    const results = await Promise.all(urls.map((url) => collectCatalogMetadata(url)));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(results.map((result) => result.raw.providerPolicy)).toMatchObject([
+      { provider: "apple_music", reason: "disabled by data policy", commercialStatus: "unverified" },
+      { provider: "youtube_music", reason: "disabled by data policy", commercialStatus: "unverified" },
+      { provider: "deezer", reason: "disabled by data policy", commercialStatus: "denied" },
+    ]);
+  });
+});
+
 describe("Audiomack commercial policy gate", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
