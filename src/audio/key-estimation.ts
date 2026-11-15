@@ -107,7 +107,7 @@ function fundamentalPeaks(peaks: Array<{ frequency: number; magnitude: number }>
       if (lower.frequency >= peak.frequency) continue;
       const ratio = peak.frequency / lower.frequency;
       const harmonic = Math.round(ratio);
-      if (harmonic >= 2 && harmonic <= 4 && Math.abs(ratio - harmonic) / harmonic <= 0.015) return false;
+      if (harmonic >= 2 && harmonic <= 8 && Math.abs(ratio - harmonic) / harmonic <= 0.03) return false;
     }
     return true;
   });
@@ -168,10 +168,10 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
   if (fundamentals.length < 2) {
     return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
   }
-  const tuningCents = tuningOffset(fundamentals);
+  const tuningCents = tuningOffset(peaks);
   // A stable global tuning offset should explain independent tonal roots.
   // Do not compare upper harmonics as if each were an independent note.
-  if (fundamentals.length >= 4 && tuningDeviationCents(fundamentals, tuningCents) > 30) {
+  if (peaks.length >= 4 && tuningDeviationCents(peaks, tuningCents) > 30) {
     return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
   }
   const bassChroma = Array(12).fill(0);
