@@ -53,13 +53,16 @@ describe("commercial provider policy registry", () => {
     expect(providerDecision("groq", { GROQ_API: "present", PROVIDER_ENABLED_GROQ: "TRUE" }).enabled).toBe(false);
   });
 
-  it("keeps AudD disabled when an API token and opt-in flag are present", () => {
-    const decision = providerDecision("audd", {
+  it("enables AudD only with the exact opt-in flag after owner-authorized policy approval", () => {
+    const enabled = providerDecision("audd", {
       AUDD_API: "present",
       PROVIDER_ENABLED_AUDD: "true",
     });
-    expect(decision.enabled).toBe(false);
-    expect(decision.reason).toBe("disabled by data policy");
+    expect(enabled.enabled).toBe(true);
+    expect(enabled.commercialStatus).toBe("allowed");
+    expect(providerDecision("audd", { AUDD_API: "present", PROVIDER_ENABLED_AUDD: "false" }).enabled).toBe(false);
+    expect(providerDecision("audd", { AUDD_API: "present" }).enabled).toBe(false);
+    expect(providerDecision("audd", { AUDD_API: "present", PROVIDER_ENABLED_AUDD: "TRUE" }).enabled).toBe(false);
   });
 
   it("surfaces a policy-disabled DSP as unavailable instead of usable metadata", async () => {
