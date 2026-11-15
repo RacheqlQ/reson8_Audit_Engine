@@ -137,7 +137,7 @@ describe("Sonic DNA",()=>{
   expect(rhythm.rhythmFeatures).toMatchObject({status:"measured",method:"amplitude_envelope_autocorrelation"});
   expect(rhythm.rhythmFeatures.bpm).toBeGreaterThanOrEqual(115);
   expect(rhythm.rhythmFeatures.bpm).toBeLessThanOrEqual(125);
-  expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:"C",mode:"major",method:"sampled_spectral_chroma"});
+  expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:"C",mode:"major",method:"fft_harmonic_chroma_ensemble"});
   expect(rhythm.vocalFeatures).toMatchObject({status:"not_analyzed"});
   expect(rhythm.vocalFeatures.reason).toContain("No vocal");
  });
