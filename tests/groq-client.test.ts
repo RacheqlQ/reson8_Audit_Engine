@@ -24,8 +24,26 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   expect(body.max_completion_tokens).toBe(8192);
+   expect(body.max_completion_tokens).toBe(6000);
   }
+ });
+ it("retries a Groq 413 once with a smaller completion reservation",async()=>{
+  const evidenceScoreBudgets:number[]=[];
+  let evidenceScoreCalls=0;
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="evidence-score"){
+    evidenceScoreBudgets.push(body.max_completion_tokens);
+    evidenceScoreCalls++;
+    if(evidenceScoreCalls===1)return new Response(JSON.stringify({error:{message:"Request too large on tokens per minute. Limit 8000, Requested 8289."}}),{status:413});
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  const result=await client.assess({evidence:{},sonicDna:null});
+  expect(evidenceScoreBudgets).toEqual([6000,4000]);
+  expect(evidenceScoreCalls).toBe(2);
+  expect(result.evidenceLabels).toHaveLength(1);
  });
  it("requests and validates all nine Zod section groups with evidence guardrails",async()=>{
   let active=0,maxActive=0;
