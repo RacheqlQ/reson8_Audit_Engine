@@ -38,7 +38,7 @@ describe("uploaded master provenance in reports", () => {
     expect(report).toContain("Integrated loudness: -11.32 LUFS");
     expect(report).toContain("Dynamic range: 13.11 dB");
     expect(report).toContain("Vocal analysis: Not performed");
-    expect(report).toContain("vocal presence/absence is unknown");
+    expect(report).toMatch(/vocal presence\\/absence is unknown/i);
   });
 
 });
