@@ -70,7 +70,8 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
       const hasCommercialClaim = suppressCommercial && commercialTerms.test(sentence) && !cautionaryCommercialContext && !actionableMonitoringInstruction;
       const vocalClaim = /\b(?:instrumental(?:[- ]only)?|vocal[- ]free|no vocals|without vocals?|without vocal content|no vocal content|vocals? (?:are )?(?:absent|not present|not detected))\b/i;
       const hasUnsupportedVocalClaim = suppressVocal && vocalClaim.test(sentence);
-      const keyClaim = /\b(?:[A-G](?:#|b|♯|♭)?\s*(?:major|minor)|[A-G]-(?:sharp|flat)\s*(?:major|minor)|key\s*(?:is|of|:)\s*[A-G](?:#|b|♯|♭)?(?:\s*(?:major|minor))?|tonic\s*(?:is|at|centered on)\s*[A-G](?:#|b|♯|♭)?)\b/i;
+      const keyClaim = /\b(?:[A-G](?:#|b|♯|♭)?\s*(?:major|minor)|[A-G]-(?:sharp|flat)\s*(?:major|minor))\b/.test(sentence)
+        || /\b(?:[Kk][Ee][Yy]|[Mm][Oo][Dd][Ee])\s*(?:is|of|:)\s*[A-G](?:#|b|♯|♭)?(?:\s*(?:major|minor))?\b|\b[Tt][Oo][Nn][Ii][Cc]\s*(?:is|at|centered on)\s*[A-G](?:#|b|♯|♭)?\b/.test(sentence);
       const hasUnsupportedKeyClaim = suppressKey && keyClaim.test(sentence);
       return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim && !hasUnsupportedVocalClaim && !hasUnsupportedKeyClaim;
     });
