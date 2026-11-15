@@ -214,6 +214,7 @@ function sections(i:AuditReportInput):Section[]{
  const sourceCombinationLabel=String(e.sourceCombination??"")==="master_and_dsp"?"Combined — uploaded master audio + submitted DSP catalog link.":String(e.sourceCombination??"")==="master_only"?"Master audio only.":String(e.sourceCombination??"")==="dsp_only"?"DSP catalog link only.":hasMasterAudio?"Master audio submitted; DSP source combination not recorded.":"DSP source combination not recorded.";
  const providerName=(value:unknown)=>(({apple_music:"Apple Music",spotify:"Spotify",tidal:"TIDAL",youtube_music:"YouTube Music",deezer:"Deezer",audiomack:"Audiomack"} as Record<string,string>)[String(value)]??text(value))||"DSP provider";
  const providerLookupSummary=catalogSources.length?catalogSources.map((item)=>providerName(item.platform)+" — "+text(item.status||"unknown")+(text(item.error)?" — "+text(item.error):"")).join("; "):String(e.sourceCombination??"")==="master_and_dsp"?"No DSP provider lookup result was recorded; the submitted link requires retry or manual verification.":"No DSP provider lookup result was recorded.";
+ const platformPresenceSummary=catalogSources.length?catalogSources.map((item)=>providerName(item.platform)+": "+text(item.status||"unknown")+(text(item.canonicalUrl)?" ("+text(item.canonicalUrl)+")":"")).join("; "):"Not supplied — no platform presence results were recorded.";
  const genreRecord=(s?.genreClassification??e.genreClassification)&&typeof (s?.genreClassification??e.genreClassification)==="object"?(s?.genreClassification??e.genreClassification) as Record<string,unknown>:{};
  const genreCandidates=Array.isArray(genreRecord.genres)?genreRecord.genres.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
  const genreLabels=genreCandidates.map((item)=>text(item.label)).filter(Boolean);
@@ -333,6 +334,7 @@ function sections(i:AuditReportInput):Section[]{
  {title:"Identity and source reconciliation",accent:"violet",body:[
  ...(["artist","title","album","genre","isrc","upc","label","releaseDate"] as const).map((field)=>({artist:"Artist",title:"Track",album:"Album",genre:"Genre",isrc:"ISRC",upc:"UPC",label:"Label",releaseDate:"Release date"}[field])+": "+metadataFieldStatus(e,field)+" — "+(text(field==="genre"?(e.genre??e.genres):e[field])||"No value returned by the supplied or queried sources")+" — "+metadataFieldSource(e,field)),
  "DSP provider lookup outcomes: "+providerLookupSummary,
+ "Platform presence and consistency: "+platformPresenceSummary,
  "Conflict policy: values that disagree across providers remain visible as conflicts; a preferred identity value is not treated as proof that the other provider was wrong.",
  "Conflict details: "+conflictSummary,
  "External identifiers: "+(externalIdentifiers(e.externalIds)?(e.fixture?"Synthetic test identifiers — ":"Available — ")+externalIdentifiers(e.externalIds):"Unavailable — no external identifiers returned"),
