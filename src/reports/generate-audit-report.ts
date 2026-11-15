@@ -251,6 +251,10 @@ function sections(i:AuditReportInput):Section[]{
    ].join("; "),
    "Playlist categories are discovery hypotheses, not named playlists, curator contacts, relationships or evidence of acceptance.",
    "Target verification protocol: capture the official playlist or curator page, named curator or submission owner, recent programming activity, track-specific fit rationale, official submission route, current eligibility and published requirements, source URL and verification date.",
+   "Target qualification: compare the actual master with the curator's recent selections and stated programming remit. Check format, language, region, clean or explicit requirements, release stage and whether the target is currently accepting submissions; do not infer fit from a broad genre label alone.",
+   "Pitch packet: prepare an approved master, clean or explicit version where relevant, verified artist biography, one-sentence track description grounded in human listening, confirmed release date, ISRC/UPC when assigned, approved artwork, rights and contributor credits, and official DSP links.",
+   "Outreach log: record the target name, platform, official source URL, named owner or submission route, date checked, fit rationale, eligibility, fee or paid-promotion terms, submission date, response, follow-up date and final outcome.",
+   "Campaign control: use a small, evidence-matched shortlist and personalize each submission. Do not imply prior relationships, editorial support, guaranteed placement or audience outcomes; disclose any paid promotion separately from editorial consideration.",
    "Outreach decision: hold external curator pitching until identity, rights, genre and vocal status are verified. Then shortlist only active targets with documented fit and current official submission instructions."
   ];
  const reconciliation=e.reconciliation&&typeof e.reconciliation==="object"?e.reconciliation as Record<string,unknown>:{};
@@ -320,7 +324,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
   const sonicBlock=section.title==="Sonic DNA and technical profile";
-  const keepTogetherCount=chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
+  const keepTogetherCount=section.title==="Curator campaign and target verification"?Math.min(3,section.body.length):chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
   const openingHeight=section.body.slice(0,keepTogetherCount).reduce((sum,para)=>{
    const size=para===para.toUpperCase()&&para.length<100?8:9.7;
    return sum+wrap(para,fonts.regular,size,W-2*M-16).length*size*1.4+8;
