@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   claimNextQueuedJob: vi.fn(),
   saveCatalogFailure: vi.fn(),
+  saveEvidence: vi.fn(),
   processAuditJob: vi.fn(),
 }));
 
@@ -10,11 +11,12 @@ vi.mock("../src/integrations/supabase-audit-store.js", () => ({
   createSupabaseAuditStore: () => ({
     claimNextQueuedJob: mocks.claimNextQueuedJob,
     saveCatalogFailure: mocks.saveCatalogFailure,
+    saveEvidence: mocks.saveEvidence,
     renewLease: vi.fn(),
     markProcessing: vi.fn(),
     downloadMaster: vi.fn(),
     saveRecognition: vi.fn(),
-    saveEvidence: vi.fn(),
+    saveEvidence: mocks.saveEvidence,
     saveCatalogMetadata: vi.fn(),
     saveSonicDna: vi.fn(),
     saveAssessment: vi.fn(),
@@ -43,13 +45,21 @@ import { processNextQueuedAudit } from "../src/jobs/worker.js";
 describe("audit worker catalog failure adapter", () => {
   const jobId = "worker-catalog-failure-job";
   const claimToken = "11111111-1111-4111-8111-111111111111";
+  const secondUrl = "https://open.spotify.com/track/spotify-789";
   const link = {
     platform: "tidal",
     catalogId: "tidal-456",
     canonicalUrl: "https://tidal.com/browse/track/tidal-456",
   };
+  const metadata = { platform: "tidal", title: "Tidal track" };
+  const metadataSources = [
+    metadata,
+    { platform: "deezer", title: "Deezer track" },
+  ];
+  let observedJob: any;
 
   beforeEach(() => {
+    observedJob = null;
     vi.stubEnv("GROQ_API", "test-groq-key");
     mocks.claimNextQueuedJob.mockReset().mockResolvedValue({
       id: jobId,
@@ -58,20 +68,39 @@ describe("audit worker catalog failure adapter", () => {
       mimeType: null,
       sourceType: "dsp_link",
       catalogUrl: link.canonicalUrl,
+      catalogUrls: [link.canonicalUrl, secondUrl],
       status: "processing",
       claimToken,
       leaseExpiresAt: "2099-01-01T00:00:00.000Z",
       workerId: "worker-adapter-test",
     });
     mocks.saveCatalogFailure.mockReset().mockResolvedValue(undefined);
+    mocks.saveEvidence.mockReset().mockResolvedValue(undefined);
     mocks.processAuditJob.mockReset().mockImplementation(async (id, deps) => {
+      observedJob = await deps.getJob(id);
       await deps.saveCatalogFailure?.(id, claimToken, link, "TIDAL returned HTTP 503");
+      await deps.saveEvidence(id, claimToken, {}, {}, metadata, undefined, metadataSources);
       return { status: "failed" };
     });
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+  });
+
+  it("passes all submitted DSP URLs and metadata provenance through the embedded worker adapter", async () => {
+    await processNextQueuedAudit();
+
+    expect(observedJob.catalogUrls).toEqual([link.canonicalUrl, secondUrl]);
+    expect(mocks.saveEvidence).toHaveBeenCalledWith(
+      jobId,
+      claimToken,
+      {},
+      {},
+      metadata,
+      undefined,
+      metadataSources,
+    );
   });
 
   it("passes the fenced provider-failure persistence operation into the audit processor", async () => {
