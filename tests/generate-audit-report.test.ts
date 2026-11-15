@@ -2,6 +2,7 @@ import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
 import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,generateAuditReport,metadataFieldSource,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
+import { philloLowConfidenceFixture } from "../scripts/fixtures/phillo-low-confidence.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
 describe("A4 report layout and fixture coverage",()=>{
@@ -92,6 +93,20 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).not.toContain("Measured from the uploaded master");
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
+ });
+ it("renders the Phillo regression fixture with tempo, key, genre and commercial claims withheld",()=>{
+  const pages=planAuditReportPages(philloLowConfidenceFixture as any,"full");
+  const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Tempo: Not reported — insufficient confidence");
+  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
+  expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
+  expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
+  expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+  expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
+  expect(report).toContain("Verdict: Insufficient evidence");
+  expect(report).toContain("Tempo and lane fit — NOT SCORED");
+  expect(report).toContain("Rhythmic consistency — NOT SCORED");
+  expect(report).not.toMatch(/156\\s*BPM|high-energy/);
  });
  it("reports a present-but-conflicting album instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
