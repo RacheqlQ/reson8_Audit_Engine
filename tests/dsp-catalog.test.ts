@@ -63,7 +63,7 @@ describe("catalogue policy gate coverage", () => {
   it("extracts Apple Music track identity fields when the exact provider opt-in is enabled", async () => {
     process.env.PROVIDER_ENABLED_APPLE_MUSIC = "true";
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      expect(String(input)).toContain("itunes.apple.com/lookup?id=67890&entity=song");
+      expect(String(input)).toContain("itunes.apple.com/lookup?id=67890&entity=song&country=ng");
       return new Response(JSON.stringify({
       resultCount: 1,
       results: [{
@@ -80,7 +80,7 @@ describe("catalogue policy gate coverage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await collectCatalogMetadata("https://music.apple.com/us/album/test-album/12345?i=67890");
+    const result = await collectCatalogMetadata("https://music.apple.com/ng/album/test-album/12345?i=67890");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
