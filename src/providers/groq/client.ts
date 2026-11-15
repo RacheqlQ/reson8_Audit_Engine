@@ -246,7 +246,7 @@ export class GroqClient implements GroqAssessmentClient {
     const commercial=input.evidence.commercialEvidence;
     const hasCommercialEvidence=Boolean(commercial && typeof commercial==="object" && (commercial as Record<string,unknown>).verified===true && typeof (commercial as Record<string,unknown>).source==="string" && typeof (commercial as Record<string,unknown>).reportingPeriod==="string");
     if(!hasCommercialEvidence){assembled.commercialRead.marketability="undetermined";assembled.commercialRead.rationale="No verified commercial-performance source was included in this assessment. The supplied metadata and Sonic DNA do not establish listener demand, streams, sales, revenue, playlist conversion, demographic reach or campaign outcomes. Marketability remains undetermined until source-attributed audience or campaign measurements with a defined reporting period and method are provided.";}
-    if(!audioMaster || typeof dna?.dynamicRangeDb!=="number" || typeof dna?.loudnessLufs!=="number"){
+    if(!audioMaster || typeof dna?.dynamicRangeDb!=="number" || typeof dna?.rmsLevelDbfs!=="number"){
       assembled.scorecard.dynamicRangeLoudness={score:null,rationale:"Dynamic range and loudness readiness require numeric measurements from an uploaded audio master. Those measurements are absent or not master-derived in this assessment, so this dimension remains unscored for this specific recording."};
     }
     if(!audioMaster){
