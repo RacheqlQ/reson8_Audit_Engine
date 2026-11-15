@@ -7,6 +7,12 @@ on:
 
 jobs:
   test:
+    name: Acceptance verification pass ${{ matrix.pass }}/5
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        pass: [1, 2, 3, 4, 5]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -23,6 +29,8 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     steps:
+      - name: Identify acceptance verification pass
+        run: echo "Running full acceptance pass ${{ matrix.pass }} of 5"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -53,6 +61,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: audit-report-pdfs
+          name: audit-report-pdfs-pass-${{ matrix.pass }}
           path: artifacts/*.pdf
           if-no-files-found: warn
