@@ -135,7 +135,7 @@ const MAX_NETWORK_ATTEMPTS = 5;
 const MAX_COMPLETION_TOKENS = 2500;
 
 function retryCompletionTokenBudget(detail: string, currentBudget: number): number {
-  const match = detail.match(/Limit\\s+(\\d+)\\s*,\\s*Requested\\s+(\\d+)/i);
+  const match = detail.match(/Limit\s+(\d+)\s*,\s*Requested\s+(\d+)/i);
   if (!match) return Math.max(256, Math.floor(currentBudget / 2));
 
   const limit = Number(match[1]);
