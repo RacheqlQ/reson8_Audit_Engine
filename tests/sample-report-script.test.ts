@@ -9,6 +9,7 @@ describe("sample-report command",()=>{
   expect(script).toContain("full-audio-based");expect(script).toContain("partial-audio-low-confidence");expect(script).toContain("metadata-only");expect(script).toContain("phillo-low-confidence");
   expect(script).toContain('["sample","full"]');
   expect(script).toContain("FIXTURE");
+   expect(script).toContain("generatedAt: new Date().toISOString()");
   expect(script).not.toContain("fetch(");
   const phillo=await readFile(new URL("scripts/fixtures/phillo-low-confidence.mjs",root),"utf8");
   expect(phillo).toContain("156");expect(phillo).toContain("0.0608");expect(phillo).toContain("Hole-Hearted - EP");
