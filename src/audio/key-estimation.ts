@@ -102,8 +102,10 @@ function weightedMedian(values: Array<{ value: number; weight: number }>): numbe
 
 
 function fundamentalPeaks(peaks: Array<{ frequency: number; magnitude: number }>): Array<{ frequency: number; magnitude: number }> {
-  return peaks.filter((peak) => {
-    for (const lower of peaks) {
+  const strongest = peaks.reduce((maximum, peak) => Math.max(maximum, peak.magnitude), 0);
+  const crediblePeaks = peaks.filter((peak) => peak.magnitude >= strongest * 0.08);
+  return crediblePeaks.filter((peak) => {
+    for (const lower of crediblePeaks) {
       if (lower.frequency >= peak.frequency) continue;
       const ratio = peak.frequency / lower.frequency;
       const harmonic = Math.round(ratio);
