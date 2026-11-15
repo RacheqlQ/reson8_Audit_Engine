@@ -182,6 +182,9 @@ describe("A4 report layout and fixture coverage",()=>{
   const longInput=structuredClone(longFormAudioFixture) as AuditReportInput;
   longInput.evidence={...longInput.evidence,fixture:true};
   longInput.assessment={...longInput.assessment,executiveSummary:Array(24).fill("A long-form evidence paragraph must wrap at word boundaries and continue without clipping or overlapping the footer.").join(" ")};
+  expect(longInput.evidence.fixture).toBe(true);
+  expect(planAuditReportPages(longInput,"full").some(section=>section.title==="Sonic DNA and technical profile")).toBe(true);
+  expect(chartLayoutIssuesForReport(longInput)).toEqual([]);
   for(const tier of ["sample","full"] as const){
    const bytes=await generateAuditReport(longInput,tier),pdf=await PDFDocument.load(bytes);
    const pages=pdf.getPages();
