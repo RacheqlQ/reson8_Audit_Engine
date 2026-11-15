@@ -92,7 +92,13 @@ function deriveBeatGrid(novelty:number[],bpm:number,framesPerSecond:number):{
  }
  const beatTimesSeconds:number[]=[];
  for(let frame=bestPhase;frame<novelty.length&&beatTimesSeconds.length<512;frame+=periodFrames){
-  beatTimesSeconds.push(Number((frame/framesPerSecond).toFixed(4)));
+  const center=Math.round(frame);
+  let selected=center,selectedValue=novelty[center]??0;
+  for(let offset=-2;offset<=2;offset++){
+   const index=center+offset,value=novelty[index]??-1;
+   if(index>=0&&index<novelty.length&&value>selectedValue){selected=index;selectedValue=value;}
+  }
+  beatTimesSeconds.push(Number((selected/framesPerSecond).toFixed(4)));
  }
  const downbeatCandidateTimesSeconds=beatTimesSeconds.filter((_time,index)=>index%4===0);
  return {beatTimesSeconds,downbeatCandidateTimesSeconds};
