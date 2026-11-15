@@ -17,9 +17,9 @@ function syncopatedSwingPulse(bpm:number,seconds=12,sampleRate=8000):Float32Arra
   for(let i=0;i<length;i++)samples[start+i]+=accent*Math.sin(2*Math.PI*220*i/sampleRate)*Math.exp(-i/(sampleRate*0.004));
  };
  for(let beat=0;beat<seconds*bpm/60;beat++){
-  const time=beat*interval+(beat%2?interval*0.08:0);
+  const time=beat*interval+(beat%2?interval*0.03:0);
   add(time,beat%2?0.55:1);
-  if(beat%3===1)add(beat*interval+interval*0.48,0.28);
+  if(beat%3===1)add(beat*interval+interval*0.48,0.12);
  }
  return samples;
 }
