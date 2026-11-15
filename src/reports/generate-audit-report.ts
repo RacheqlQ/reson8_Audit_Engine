@@ -124,10 +124,11 @@ export function paginateArNotesSummary(lines:string[]):string[][] {
  return chunks;
 }
 export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecisionContext {
+ const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
  return {
   heading:"DECISION CONTEXT",
   verdict:coverVerdictLabel(input).toUpperCase(),
-  summary:val(input.assessment.executiveSummary,"No executive summary supplied."),
+  summary:val(safeAssessment.executiveSummary,"No executive summary supplied."),
   prompts:[
    "What evidence would change the current decision?",
    "Which identity, rights or source gaps remain unresolved?",
