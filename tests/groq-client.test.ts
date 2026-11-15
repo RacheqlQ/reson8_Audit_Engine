@@ -123,6 +123,45 @@ describe("GroqClient section groups",()=>{
   const result=await client.assess({evidence:{},sonicDna:null});
   expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);expect(sleeps).toContain(13973);
  });
+ it("retries Groq provider-side JSON schema validation failures with the failed generation as correction context",async()=>{
+  let evidenceScoreCalls=0;
+  const prompts:string[]=[];
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="evidence-score"){
+    evidenceScoreCalls++;
+    prompts.push(body.messages[1].content);
+    expect(body.response_format.json_schema.strict).toBe(true);
+    expect(body.response_format.json_schema.schema.required).toContain("evidenceLabels");
+    if(evidenceScoreCalls===1){
+     return new Response(JSON.stringify({error:{
+      message:"Generated JSON does not match the expected schema. Missing required property: evidenceLabels",
+      type:"invalid_request_error",
+      code:"json_validate_failed",
+      failed_generation:'{"evidenceGaps":["No verified audience evidence was supplied"],"confidence":0.5}'
+     }}),{status:400});
+    }
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  const result=await client.assess({evidence:{},sonicDna:null});
+  expect(evidenceScoreCalls).toBe(2);
+  expect(prompts[1]).toContain("json_validate_failed");
+  expect(prompts[1]).toContain("evidenceLabels");
+  expect(result.evidenceLabels).toHaveLength(1);
+ });
+ it("does not retry unrelated non-transient Groq HTTP 400 errors",async()=>{
+  let calls=0;
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="narrative"&&calls++===0)return new Response(JSON.stringify({error:{message:"Invalid API key",code:"invalid_api_key"}}),{status:400});
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("Groq narrative assessment failed with HTTP 400");
+  expect(calls).toBe(1);
+ });
  it("stops after one retry when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=body.response_format.json_schema.name.replace(/^ar_/,"");const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed Zod validation after one retry");expect(mock.mock.calls.filter(c=>JSON.parse(String(c[1]?.body)).response_format.json_schema.name==="ar_narrative")).toHaveLength(2);});
 
  it("keeps playlist category JSON-schema constraints permissive and retries short category text locally",async()=>{
