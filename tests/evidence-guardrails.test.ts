@@ -204,6 +204,24 @@ describe("Phillo evidence guardrails", () => {
     expect(Object.values(result.scorecard).every((dimension) => /overall assessment confidence is zero/i.test(dimension.rationale))).toBe(true);
   });
 
+  it("removes specific key and mode assertions from narrative when key confidence is below the reporting gate", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "The recording is in F-sharp major with a confident tonal center.",
+      creativeIdentity: "F# major gives the track a resolved, uplifting harmonic identity.",
+      strengths: ["The F-sharp major key creates a memorable harmonic color."],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      key: "F#",
+      mode: "major",
+      keyConfidence: 0.049,
+      keySegmentAgreement: 0.5,
+      harmonicFeatures: { status: "insufficient_evidence" },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/F-sharp major|F# major|tonal center|harmonic identity/i);
+  });
+
   it("withholds low-confidence tempo/key and unperformed-vocal claims from the evidence ledger", () => {
     const assessment = {
       ...baseAssessment,
