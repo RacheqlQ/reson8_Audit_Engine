@@ -127,7 +127,7 @@ function assessmentSafeCatalogMetadata(source: CatalogMetadata): CatalogMetadata
   };
 }
 
-function catalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetadata[]) {
+function assessmentCatalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetadata[]) {
   const sources: readonly CatalogMetadata[] = Array.isArray(metadata) ? metadata : [metadata as CatalogMetadata];
   const result: Record<string, unknown> = {};
   for (const original of sources) {
@@ -143,6 +143,30 @@ function catalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetada
       releaseDate: source.releaseDate,
       genres: source.genre ? [source.genre] : [],
     };
+    if (source.platform === "tidal") result.tidal = fields;
+    if (source.platform === "apple_music") result.apple_music = fields;
+    if (source.platform === "deezer") result.deezer = fields;
+    if (source.platform === "youtube_music") result.youtube_music = fields;
+    if (source.platform === "audiomack") result.audiomack = fields;
+  }
+  return result;
+}
+
+function catalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetadata[]) {
+  const sources: readonly CatalogMetadata[] = Array.isArray(metadata) ? metadata : [metadata as CatalogMetadata];
+  const result: Record<string, unknown> = {};
+  for (const source of sources) {
+    const fields = {
+      title: source.title,
+      artist: source.artist,
+      album: source.album,
+      isrc: source.isrc,
+      upc: source.upc,
+      label: source.label,
+      releaseDate: source.releaseDate,
+      genres: source.genre ? [source.genre] : [],
+    };
+    if (source.platform === "spotify") result.spotify = fields;
     if (source.platform === "tidal") result.tidal = fields;
     if (source.platform === "apple_music") result.apple_music = fields;
     if (source.platform === "deezer") result.deezer = fields;
@@ -400,7 +424,7 @@ export async function processAuditJob(
       .filter((source): source is CatalogMetadata => source !== null);
     const assessmentMetadata = assessmentMetadataSources[0] ?? undefined;
     const assessmentMetadataInput = {
-      ...catalogMetadataInput(metadataSources),
+      ...assessmentCatalogMetadataInput(metadataSources),
       ...(masterTags ? { id3: masterTags } : {}),
       ...(job.filename ? { filename: job.filename } : {}),
       audd: recognitionMetadataInput(recognition),
