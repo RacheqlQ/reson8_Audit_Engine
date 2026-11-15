@@ -24,10 +24,10 @@ export const PROVIDER_POLICY = {
     enableFlag: "PROVIDER_ENABLED_GROQ", decisionNote: "Operational enablement explicitly authorized by the product owner; this setting is not a legal determination and does not waive applicable terms or retention obligations.",
   },
   audd: {
-    id: "audd", commercialStatus: "unverified", termsUrl: "https://audd.io/terms/",
+    id: "audd", commercialStatus: "allowed", termsUrl: "https://audd.io/terms/",
     attribution: "Name AudD and retrieval time for every recognition result.",
     retention: "Verify audio upload, transient processing, caching and deletion terms before enabling.",
-    enableFlag: "PROVIDER_ENABLED_AUDD", decisionNote: "Commercial audio-processing permission is unverified.",
+    enableFlag: "PROVIDER_ENABLED_AUDD", decisionNote: "Operational enablement explicitly authorized by the product owner; this setting is not a legal determination and does not waive applicable terms, audio-processing, retention or deletion obligations.",
   },
   spotify: {
     id: "spotify", commercialStatus: "unverified", termsUrl: "https://developer.spotify.com/terms",
