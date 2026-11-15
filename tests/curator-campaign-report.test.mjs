@@ -15,6 +15,8 @@ describe("Full report curator campaign section", () => {
     expect(section).toBeDefined();
     expect(section.text.join(" ")).toContain("NO VERIFIED CURATOR OR PLAYLIST TARGETS");
     expect(section.text.join(" ")).toContain("playlist categories are discovery hypotheses");
+    expect(section.text.join(" ")).toContain("Pitch packet");
+    expect(section.text.join(" ")).toContain("Outreach log");
   });
 
   it("renders a target only when source, fit, route, requirements and verification date are present", () => {
