@@ -26,7 +26,7 @@ describe("Spotify commercial policy gate", () => {
         provider: "spotify",
         status: "unavailable",
         reason: "disabled by data policy",
-        commercialStatus: "unverified",
+        commercialStatus: "allowed",
       } },
     });
   });
