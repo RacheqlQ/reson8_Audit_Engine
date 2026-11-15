@@ -52,7 +52,7 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
     const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
       const hasTempoNumber = /\b(?:\d{2,3}\s*bpm|beats per minute)\b/i.test(sentence);
-      const cautionaryTempoContext = /\b(?:not|no|without|insufficient|unreliable|unverified|uncertain|abstain(?:ed)?|cannot|could not|unable|withheld|not reported|requires review)\b/i.test(sentence);
+      const cautionaryTempoContext = /\b(?:not|no|without|insufficient|unreliable|unverified|uncertain|abstain(?:ed)?|cannot|could not|unable|withheld|not reported|requires? review)\b/i.test(sentence);
       const hasTempoClaim = hasTempoNumber || /\bhigh[- ]energy\b/i.test(sentence)
         || (/\btempo\b/i.test(sentence) && !cautionaryTempoContext);
       const lower = sentence.toLocaleLowerCase();
