@@ -171,6 +171,9 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     result.aAndRPositioning.adjacentLanes = [];
     result.aAndRPositioning.rationale = GENRE_UNCONFIRMED_RATIONALE;
   }
+  const zeroConfidence = typeof assessment.confidence === "number"
+    && Number.isFinite(assessment.confidence)
+    && assessment.confidence <= 0;
   const mutable = result as Record<string, any>;
   if (Array.isArray(mutable.evidenceLabels)) {
     mutable.evidenceLabels = mutable.evidenceLabels.filter((entry: unknown) => {
@@ -193,9 +196,6 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       rationale: "No verified, source-attributed commercial-performance metrics are available for this release. Streams, listeners, saves, sales, revenue, playlist conversion and campaign outcomes cannot be inferred from audio features, genre metadata or general catalog context.",
     };
   }
-  const zeroConfidence = typeof assessment.confidence === "number"
-    && Number.isFinite(assessment.confidence)
-    && assessment.confidence <= 0;
   if (zeroConfidence) {
     const mutable = result as Record<string, any>;
     if (typeof mutable.creativeIdentity === "string") {
