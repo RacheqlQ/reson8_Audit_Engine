@@ -140,6 +140,12 @@ export async function collectCatalogMetadata(input:string, signal?:AbortSignal):
   const u=normalizeUrl(input);
   const platform=HOSTS[u.hostname.toLowerCase()];
   if (!platform || platform === "unknown") throw new Error("Unsupported DSP or catalog URL");
+  if (!idFromPath(u, platform)) {
+    if (platform === "tidal" && u.pathname.split("/").filter(Boolean).includes("playlist")) {
+      throw new Error("TIDAL playlist URLs are not supported for single-track audits. Submit a TIDAL track URL.");
+    }
+    throw new Error(`${platform} track ID could not be detected`);
+  }
   const provider=PROVIDER_BY_PLATFORM[platform];
   if (provider) {
     const decision=providerDecision(provider);
