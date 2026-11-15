@@ -262,7 +262,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  let pageNo=1,page=pdf.addPage([W,H]),y=TOP,rects:ReportRect[]=[];
  header(page,"Audit findings",pageNo,fonts,C.blue,input.evidence.fixture===true);
  const chromeRects=():ReportRect[]=>[{x:M,y:H-44,width:220,height:10,id:"header-brand"},{x:M,y:H-64,width:W-2*M,height:8,id:"header-title"},{x:M,y:H-68,width:W-2*M,height:0.7,id:"header-rule"},{x:M,y:43,width:W-2*M,height:0.7,id:"footer-rule"},{x:M,y:25,width:250,height:10,id:"footer-text"},{x:W-M-18,y:25,width:18,height:10,id:"footer-page-number"}];
- const validate=()=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));const density=checkPageDensity(rects);if(!density.ok)console.warn("[report-layout] Page "+pageNo+" density below 65% content occupancy ("+Math.round((1-density.emptyRatio)*100)+"%); warning only.");};
+ const validate=(checkDensity=true)=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));if(!checkDensity)return;const density=checkPageDensity(rects);if(!density.ok)console.warn("[report-layout] Page "+pageNo+" density below 65% content occupancy ("+Math.round((1-density.emptyRatio)*100)+"%); warning only.");};
  const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent,input.evidence.fixture===true);y=TOP;rects=[];};
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
@@ -375,7 +375,9 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
    markerLines.forEach((line,index)=>page.drawText(line,{x:M+12,y:markerY+29-index*11,size:8,font:fonts.regular,color:C.navy}));
    rects.push({x:M,y:markerY,width:W-2*M,height:46,id:"notes-continuation-marker"});
   }
-  validate();
+  // This final body page intentionally hands off to a dedicated notes section;
+  // the density heuristic is applied to the following notes pages instead.
+  validate(false);
   // Keep at most 42 summary lines on continuation pages and at most 16 on the final
   // notes page, leaving room for all prompts and a meaningful editable field.
   const summaryChunks:string[][]=[];let summaryOffset=0;
