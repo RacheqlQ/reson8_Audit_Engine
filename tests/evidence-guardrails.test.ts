@@ -161,4 +161,26 @@ describe("Phillo evidence guardrails", () => {
     expect(result.executionPlan.days30).toContain("Verify artist, title and release identity");
     expect(result.productionArrangementGuidance).toContain("No track-specific production changes are recommended");
   });
+  it("withholds every numeric score when overall assessment confidence is zero", () => {
+    const assessment = {
+      ...baseAssessment,
+      confidence: 0,
+      scorecard: {
+        ...baseAssessment.scorecard,
+        dynamicRangeLoudness: { score: 78, rationale: "A populated test score that must be withheld when the overall assessment has zero confidence." },
+        metadataCompleteness: { score: 65, rationale: "A populated test score that must be withheld when the overall assessment has zero confidence." },
+        releaseReadiness: { score: 72, rationale: "A populated test score that must be withheld when the overall assessment has zero confidence." },
+      },
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 95,
+      tempoConfidence: 0,
+      vocalFeatures: { status: "not_analyzed" },
+      genreClassification: { primaryGenre: null, abstained: true },
+    });
+    expect(Object.values(result.scorecard).every((dimension) => dimension.score === null)).toBe(true);
+    expect(Object.values(result.scorecard).every((dimension) => /overall assessment confidence is zero/i.test(dimension.rationale))).toBe(true);
+  });
+
 });
