@@ -327,6 +327,11 @@ function drawTension(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<
   text(p,summaryLines[0]??"No item recorded",x+9,panelTop-78,f,6.2,C.muted);
  }
 }
+export interface SpectrumScale { min:number; max:number; unit:string; }
+export function spectrumScaleForValue(label:string,value:ChartRow["value"]):SpectrumScale|null {
+ if(/TEMPO|BPM/.test(label)&&validNumber(value)===null)return null;
+ return /TEMPO|BPM/.test(label)?{min:60,max:180,unit:"BPM"}:/RMS|ENERGY/.test(label)?{min:0,max:1,unit:""}:{min:0,max:20,unit:"dB"};
+}
 function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const trackX=g.x+170,trackW=240,trackH=8;
  rows.slice(0,3).forEach((row,index)=>{
@@ -334,7 +339,11 @@ function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType
   tracked(p,label,g.x+14,labelY,b,6.5,color(index),.4);
   const raw=validNumber(row.value)??(typeof row.value==="string"?Number.parseFloat(row.value):NaN);
   const isTempo = /TEMPO|BPM/.test(label);
-  const range=isTempo?{min:60,max:180,unit:"BPM"}:/RMS|ENERGY/.test(label)?{min:0,max:1,unit:""}:{min:0,max:20,unit:"dB"};
+  const range=spectrumScaleForValue(label,row.value);
+  if(range===null){
+   text(p,"Tempo withheld — insufficient confidence",trackX,trackY+1,f,6.2,C.muted);
+   return;
+  }
   const known=Number.isFinite(raw),ratio=known?Math.max(0,Math.min(1,(raw-range.min)/(range.max-range.min))):null;
   if (isTempo && ratio === null) {
    text(p,"Tempo withheld — insufficient confidence",trackX,trackY+1,f,6.2,C.muted);
