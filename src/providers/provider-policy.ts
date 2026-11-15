@@ -18,10 +18,10 @@ export interface ProviderPolicy {
  */
 export const PROVIDER_POLICY = {
   groq: {
-    id: "groq", commercialStatus: "unverified", termsUrl: "https://groq.com/terms-of-use/",
+    id: "groq", commercialStatus: "allowed", termsUrl: "https://groq.com/terms-of-use/",
     attribution: "Identify Groq as the assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
     retention: "Verify current API retention, training and deletion terms before enabling.",
-    enableFlag: "PROVIDER_ENABLED_GROQ", decisionNote: "Commercial processing and retention review is outstanding.",
+    enableFlag: "PROVIDER_ENABLED_GROQ", decisionNote: "Operational enablement explicitly authorized by the product owner; this setting is not a legal determination and does not waive applicable terms or retention obligations.",
   },
   audd: {
     id: "audd", commercialStatus: "unverified", termsUrl: "https://audd.io/terms/",
