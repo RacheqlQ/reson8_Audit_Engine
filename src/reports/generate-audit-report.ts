@@ -212,6 +212,47 @@ function sections(i:AuditReportInput):Section[]{
  const primaryGenre=text(genreRecord.primaryGenre)||"No primary genre asserted — insufficient or conflicting provider evidence";
 
  const catalogStatusLine=catalogSources.map((source)=>[text(source.platform),text(source.status).toUpperCase(),text(source.catalogId),text(source.error)].filter(Boolean).join(" — ")).join("; ");
+ const verifiedCuratorTargets=Array.isArray(e.curatorTargets)?e.curatorTargets.filter((item):item is Record<string,unknown>=>{
+  if(!item||typeof item!=="object"||Array.isArray(item))return false;
+  const target=item as Record<string,unknown>;
+  return target.status==="verified"
+   && Boolean(text(target.name))
+   && Boolean(text(target.platform))
+   && typeof target.sourceUrl==="string"&&/^https?:\\/\\//i.test(target.sourceUrl)
+   && Boolean(text(target.fitRationale))
+   && Boolean(text(target.submissionRoute))
+   && Boolean(text(target.submissionRequirements))
+   && Boolean(text(target.verifiedAt));
+ }):[];
+ const unresolvedCuratorIdentity=(["artist","title","isrc"] as const).filter((field)=>!text(e[field]));
+ const curatorGenreConfirmed=Boolean(text(genreRecord.primaryGenre)&&genreRecord.abstained!==true);
+ const vocalFeatures=s?.vocalFeatures&&typeof s.vocalFeatures==="object"&&!Array.isArray(s.vocalFeatures)?s.vocalFeatures as Record<string,unknown>:null;
+ const curatorVocalAnalyzed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(String(vocalFeatures.status)));
+ const curatorCampaignBody=verifiedCuratorTargets.length
+  ?[
+   verifiedCuratorTargets.length+" curator/playlist target(s) passed the report's provenance completeness gate. This does not imply acceptance, placement, relationship or guaranteed reach.",
+   ...verifiedCuratorTargets.flatMap((target,index)=>[
+    "VERIFIED TARGET "+(index+1)+": "+text(target.name)+" — "+text(target.platform),
+    "Fit rationale: "+text(target.fitRationale),
+    "Official submission route: "+text(target.submissionRoute),
+    "Published requirements: "+text(target.submissionRequirements),
+    "Official source: "+text(target.sourceUrl),
+    "Verified on: "+text(target.verifiedAt)
+   ]),
+   "Before outreach, re-open each official source to confirm that the target remains active and its submission requirements have not changed."
+  ]
+  :[
+   "NO VERIFIED CURATOR OR PLAYLIST TARGETS — no named curator, playlist, contact or submission opportunity is recommended from this audit.",
+   "Evidence gaps blocking target selection: "+[
+    ...(unresolvedCuratorIdentity.length?["unresolved identity fields: "+unresolvedCuratorIdentity.join(", ")]:[]),
+    ...(!curatorGenreConfirmed?["no confirmed provider-backed genre classification"]:[]),
+    ...(!curatorVocalAnalyzed?["vocal analysis was not performed"]:[]),
+    ...(!catalogSources.length?["no usable DSP catalog lookup results"]:[])
+   ].join("; "),
+   "Playlist categories are discovery hypotheses, not named playlists, curator contacts, relationships or evidence of acceptance.",
+   "Target verification protocol: capture the official playlist or curator page, named curator or submission owner, recent programming activity, track-specific fit rationale, official submission route, current eligibility and published requirements, source URL and verification date.",
+   "Outreach decision: hold external curator pitching until identity, rights, genre and vocal status are verified. Then shortlist only active targets with documented fit and current official submission instructions."
+  ];
  const reconciliation=e.reconciliation&&typeof e.reconciliation==="object"?e.reconciliation as Record<string,unknown>:{};
  const conflictSummary=Array.isArray(reconciliation.conflicts)?reconciliation.conflicts.map((item)=>{const conflict=item&&typeof item==="object"?item as Record<string,unknown>:{};return text(conflict.field)+": "+(Array.isArray(conflict.values)?conflict.values.map(text).join(" vs "):"Conflicting values");}).join("; "):"No conflict details supplied";
  const score=(name:string,v:{score:number|null;rationale:string})=>name+" — "+(v.score===null?"NOT SCORED":v.score+"/100")+" — "+v.rationale;
@@ -240,6 +281,7 @@ function sections(i:AuditReportInput):Section[]{
  {title:"Production and arrangement guidance",accent:"teal",body:[a.productionArrangementGuidance,industryPractice("General lane craft knowledge, not track-specific evidence."),industryPractice(a.industryPractice),...a.listeningChecks]},
  {title:"Comparable lanes and listening references to verify",accent:"violet",body:["Analytical hypotheses — comparisons not independently verified",a.laneHypothesis,...a.referencesToVerify,a.verificationMethod]},
  {title:"Promotion plan",accent:"coral",body:[a.promotionPlan.preRelease,a.promotionPlan.releaseWindow,a.promotionPlan.postRelease,"Content concepts: "+a.promotionPlan.contentIdeas.join(" • "),"General pitching guidance — angles to adapt to verified track facts: "+a.promotionPlan.pitchingAngles.join(" • "),"Playlist categories to investigate only: "+a.promotionPlan.playlistCategories.join(", "),industryPractice(a.promotionPlan.industryPractice)]},
+ {title:"Curator campaign and target verification",accent:"coral",body:curatorCampaignBody},
  {title:"Label and partner fit",accent:"blue",body:[a.labelPartnerFit.partnerProfile,...a.labelPartnerFit.criteriaToDemonstrate,a.labelPartnerFit.diligenceBeforeContact,industryPractice(a.labelPartnerFit.industryPractice)]},
  {title:"30 / 60 / 90-day execution plan",accent:"violet",body:["DAYS 01–30 — "+a.executionPlan.days30,"DAYS 31–60 — "+a.executionPlan.days60,"DAYS 61–90 — "+a.executionPlan.days90]},
  {title:"Commercial evidence and measurement",accent:"blue",body:[a.commercialRead.rationale,"Catalog popularity: "+val(e.catalogPopularity),"Audience telemetry: "+val(e.audienceTelemetry)]},
@@ -416,6 +458,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
    const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes decision-context page falls below the 65% content-occupancy threshold");
   }
  }
+ if(tier==="full"&&pdf.getPageCount()<12)throw new Error("Full report must contain at least 12 pages of substantive content");
  if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");
  signal?.throwIfAborted();
  const bytes=await pdf.save();
