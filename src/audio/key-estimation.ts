@@ -141,15 +141,17 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
   }
 
   const tuningCents = tuningOffset(peaks);
-  const chroma = Array(12).fill(0);
+  const bassChroma = Array(12).fill(0);
+  const midChroma = Array(12).fill(0);
   for (const peak of peaks) {
     const correctedHz = peak.frequency / Math.pow(2, tuningCents / 1200);
     if (correctedHz < MIN_FREQUENCY_HZ || correctedHz > MAX_FREQUENCY_HZ) continue;
     const midi = 69 + 12 * Math.log2(correctedHz / 440);
     const pitchClass = (Math.round(midi) % 12 + 12) % 12;
-    const bandWeight = correctedHz < 250 ? 1.15 : correctedHz < 1000 ? 1 : 0.65;
+    const target = correctedHz < 250 ? bassChroma : midChroma;
+    const bandWeight = correctedHz < 1000 ? 1 : 0.65;
     const peakWeight = Math.pow(peak.magnitude, 0.8) * bandWeight;
-    chroma[pitchClass] += peakWeight;
+    target[pitchClass] += peakWeight;
 
     // A small subharmonic vote lets strong upper partials support a likely
     // fundamental without allowing harmonics to dominate the direct peak.
@@ -158,9 +160,11 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
       if (fundamental < MIN_FREQUENCY_HZ || fundamental > 1000) continue;
       const fundamentalMidi = 69 + 12 * Math.log2(fundamental / 440);
       const fundamentalClass = (Math.round(fundamentalMidi) % 12 + 12) % 12;
-      chroma[fundamentalClass] += peakWeight * (0.12 / harmonic);
+      const fundamentalTarget = fundamental < 250 ? bassChroma : midChroma;
+      fundamentalTarget[fundamentalClass] += peakWeight * (0.12 / harmonic);
     }
   }
+  const chroma = bassChroma.map((value, index) => value * 0.55 + midChroma[index] * 0.45);
   return { chroma, peaks, operations: operations + FRAME_SIZE * 4 };
 }
 
