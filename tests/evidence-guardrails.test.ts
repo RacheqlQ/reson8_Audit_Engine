@@ -58,6 +58,20 @@ describe("Phillo evidence guardrails", () => {
     expect(result.commercialRead.rationale).toContain("No verified, source-attributed commercial-performance metrics");
   });
 
+  it("retains a model marketability verdict only when verified source-attributed metrics and a reporting period exist", () => {
+    const result = sanitizeAssessmentForEvidence(baseAssessment, {
+      genreClassification: { primaryGenre: "Afrobeats", abstained: false },
+    }, {
+      commercialEvidence: {
+        verified: true,
+        source: "Spotify for Artists",
+        reportingPeriod: "2026-10",
+        streams: 1200,
+      },
+    });
+    expect(result.commercialRead.marketability).toBe("high");
+  });
+
   it("nulls tempo-derived scores and removes unsupported tempo claims when confidence is zero", () => {
     const result = sanitizeAssessmentForEvidence(baseAssessment, {
       provenance: "uploaded_audio_master",
