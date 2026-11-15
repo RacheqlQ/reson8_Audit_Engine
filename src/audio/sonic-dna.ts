@@ -105,14 +105,16 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
  if(confidence<0.1)
   return {...emptyTempoEstimate("Tempo candidate prominence is too weak to support a reliable result."),confidence,candidateBpms:selected.map(([bpm])=>bpm)};
- const related=Array.from({length:3},(_,index)=>index+1)
-  .map(multiplier=>({bpm:Math.round(bestBpm*multiplier),score:scores.get(Math.round(bestBpm*multiplier))??0}))
+ const related=[0.5,1/3,2,3]
+  .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
   .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=240&&candidate.bpm!==bestBpm&&candidate.score>=bestScore*0.25)
-  .sort((a,b)=>b.bpm-a.bpm);
- const alternateTempo=related[0]?.bpm??null;
- const bpm=alternateTempo!==null&&alternateTempo>bestBpm?alternateTempo:bestBpm;
+  .sort((a,b)=>b.score-a.score);
+ const relatedCandidate=related[0]??null;
+ const useRelated=Boolean(relatedCandidate&&relatedCandidate.score>bestScore*1.05);
+ const bpm=useRelated?relatedCandidate!.bpm:bestBpm;
+ const alternateTempo=relatedCandidate?(useRelated?bestBpm:relatedCandidate.bpm):null;
  const candidates=selected.map(([candidate])=>candidate);
- for(const candidate of [Math.round(bpm),Math.round(bpm)-1,Math.round(bpm)+1])if(candidate>=40&&candidate<=240&&!candidates.includes(candidate))candidates.push(candidate);
+ for(const candidate of [Math.round(bpm),Math.round(bpm)-1,Math.round(bpm)+1,...related.map(item=>item.bpm)])if(candidate>=40&&candidate<=240&&!candidates.includes(candidate))candidates.push(candidate);
  return {bpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),confidence,method,candidateBpms:candidates.slice(0,8),abstentionReason:null};
 }
 
