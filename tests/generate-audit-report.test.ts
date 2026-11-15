@@ -156,7 +156,7 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("withholds a low-confidence harmonic key from the report while retaining the diagnostic confidence",()=>{
   const input=structuredClone(fullAudioFixture) as any;
-  input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.0608,keySegmentAgreement:0.1667};
+  input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
