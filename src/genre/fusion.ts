@@ -87,11 +87,6 @@ export function fuseGenreEvidence(input: GenreFusionInput): GenreFusionResult {
         current.weight += weight;
       }
       votes.set(genre.id, current);
-      for (const region of genre.regionTags) {
-        const regionDefinition = findScene(region);
-        if (regionDefinition?.kind === "region") regionTags.add(regionDefinition.label);
-        else regionTags.add(region.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()));
-      }
     }
   }
 
