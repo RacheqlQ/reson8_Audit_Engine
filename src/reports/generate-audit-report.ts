@@ -320,23 +320,25 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  // only when the complete summary, all review prompts and a usable field fit above the footer.
  const form=pdf.getForm(),field=form.createTextField("ar_notes");field.enableMultiline();
  const decisionContext=buildArNotesDecisionContext(input);
- const drawDecisionContext=(target:PDFPage,topY:number):{rects:ReportRect[];bottom:number}=>{
+ const drawDecisionContext=(target:PDFPage,topY:number,shouldDraw=true):{rects:ReportRect[];bottom:number}=>{
   const summaryLines=wrap(decisionContext.summary,fonts.regular,8.2,W-2*M-28);
   const cardHeight=50+summaryLines.length*11,cardBottom=topY-cardHeight;
-  target.drawRectangle({x:M,y:cardBottom,width:W-2*M,height:cardHeight,color:C.paper,borderColor:C.line,borderWidth:.7});
-  target.drawText(decisionContext.heading,{x:M+14,y:topY-14,size:7,font:fonts.bold,color:C.violet});
-  target.drawText(decisionContext.verdict,{x:M+14,y:topY-36,size:12,font:fonts.bold,color:C.navy});
+  if(shouldDraw){
+   target.drawRectangle({x:M,y:cardBottom,width:W-2*M,height:cardHeight,color:C.paper,borderColor:C.line,borderWidth:.7});
+   target.drawText(decisionContext.heading,{x:M+14,y:topY-14,size:7,font:fonts.bold,color:C.violet});
+   target.drawText(decisionContext.verdict,{x:M+14,y:topY-36,size:12,font:fonts.bold,color:C.navy});
+  }
   let summaryY=topY-54;
-  for(const line of summaryLines){target.drawText(line,{x:M+14,y:summaryY,size:8.2,font:fonts.regular,color:C.ink});summaryY-=11;}
+  for(const line of summaryLines){if(shouldDraw)target.drawText(line,{x:M+14,y:summaryY,size:8.2,font:fonts.regular,color:C.ink});summaryY-=11;}
   const rects:ReportRect[]=[{x:M,y:cardBottom,width:W-2*M,height:cardHeight,id:"decision-context"}];
   const promptsTitleY=cardBottom-18;
-  target.drawText("REVIEW PROMPTS",{x:M,y:promptsTitleY,size:7,font:fonts.bold,color:C.violet});
+  if(shouldDraw)target.drawText("REVIEW PROMPTS",{x:M,y:promptsTitleY,size:7,font:fonts.bold,color:C.violet});
   rects.push({x:M,y:promptsTitleY-3,width:220,height:10,id:"review-prompts-title"});
   let promptY=promptsTitleY-17,bottom=promptY;
   for(let index=0;index<decisionContext.prompts.length;index++){
    const lines=wrap(decisionContext.prompts[index],fonts.regular,7.5,W-2*M-24);
    const height=lines.length*10;
-   for(let line=0;line<lines.length;line++)target.drawText((line===0?"- ":"  ")+lines[line],{x:M+8,y:promptY-line*10,size:7.5,font:fonts.regular,color:C.muted});
+   for(let line=0;line<lines.length;line++)if(shouldDraw)target.drawText((line===0?"- ":"  ")+lines[line],{x:M+8,y:promptY-line*10,size:7.5,font:fonts.regular,color:C.muted});
    rects.push({x:M+8,y:promptY-height+2,width:W-2*M-16,height:height,id:"review-prompt-"+index});
    bottom=Math.min(bottom,promptY-height+2);
    promptY-=height+4;
@@ -345,10 +347,11 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  };
  const notesFieldBottom=BOTTOM+12,notesTitleY=y-18,notesSubtitleY=notesTitleY-25;
  const inlineContextTop=notesSubtitleY-32;
- const inlineContext=drawDecisionContext(page,inlineContextTop);
- const inlineFieldTop=inlineContext.bottom-18;
+ const inlineLayout=drawDecisionContext(page,inlineContextTop,false);
+ const inlineFieldTop=inlineLayout.bottom-18;
  const inlineNotesHeight=inlineFieldTop-notesFieldBottom;
  if(inlineNotesHeight>=120){
+  const inlineContext=drawDecisionContext(page,inlineContextTop);
   page.drawText("A&R NOTES",{x:M,y:notesTitleY,size:16,font:fonts.bold,color:C.violet});
   page.drawText("Private working notes — editable field",{x:M,y:notesSubtitleY,size:8.5,font:fonts.regular,color:C.muted});
   field.addToPage(page,{x:M,y:notesFieldBottom,width:W-2*M,height:inlineNotesHeight,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
