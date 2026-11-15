@@ -2,7 +2,7 @@ import { mkdir, readdir, rm, writeFile, readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { PDFDocument } from "@cantoo/pdf-lib";
-import { generateAuditReport, buildArNotesDecisionContext } from "../dist/reports/generate-audit-report.js";
+import { generateAuditReport, buildArNotesDecisionContext, normalizeReportText } from "../dist/reports/generate-audit-report.js";
 import { sanitizeAssessmentForEvidence } from "../dist/reports/evidence-guardrails.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture } from "./fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "./fixtures/ambiguous-audio.mjs";
@@ -54,7 +54,7 @@ for(const [name,input] of variants){
   const chartLabels=[safeAssessment.aAndRPositioning.primaryLane,...safeAssessment.aAndRPositioning.adjacentLanes].filter(value=>typeof value==="string"&&value.trim());
   const normalizedExtracted=extracted.replace(/\s+/g," ");
   for(const label of chartLabels){
-   if(!normalizedExtracted.includes(label.replace(/\s+/g," ").trim()))throw new Error(filename+" is missing a complete lane-constellation label: "+label);
+   if(!normalizedExtracted.includes(normalizeReportText(label).replace(/\s+/g," ").trim()))throw new Error(filename+" is missing a complete lane-constellation label: "+label);
   }
   if(name==="long-form-audio"){
    const tokens=buildArNotesDecisionContext(input).summary.split(/\s+/).map(token=>token.replace(/[^\p{L}\p{N}#'-]/gu,"")).filter(Boolean);
