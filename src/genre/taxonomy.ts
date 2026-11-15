@@ -74,7 +74,7 @@ export const SCENE_TAXONOMY: readonly SceneDefinition[] = [
 
 export function normalizeGenreToken(value: string): string {
   return value.normalize("NFKC").toLowerCase().replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, " ").trim().replace(/\\s+/g, " ");
+    .replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 }
 
 const genreAliases = new Map<string, GenreDefinition>();
