@@ -271,7 +271,7 @@ export class GroqClient implements GroqAssessmentClient {
     }
     const combined=AssessmentSchema.safeParse(assembled);
     if(!combined.success)throw new Error("Combined Groq assessment failed Zod validation: "+combined.error.message);
-    return sanitizeAssessmentForEvidence(combined.data, dna as Record<string, unknown> | null, evidence);
+    return sanitizeAssessmentForEvidence(combined.data, dna as Record<string, unknown> | null, input.evidence);
   }
 }
 export { AssessmentSchema, EvidenceLabelSchema };
