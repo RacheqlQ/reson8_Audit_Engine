@@ -111,7 +111,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not reported — insufficient confidence");
-  expect(report).not.toMatch(/156\\s*BPM|high-energy/);
+  expect(report).not.toMatch(/156\s*BPM|high-energy/);
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
