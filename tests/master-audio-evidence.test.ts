@@ -56,4 +56,34 @@ describe("master audio submission evidence", () => {
       catalogUrl: "https://tidal.com/browse/track/example",
     })).toBeNull();
   });
+
+  it("fails an incomplete combined job before attempting DSP-only processing", async () => {
+    let failureMessage = "";
+    let catalogLookupAttempted = false;
+    const result = await processAuditJob("combined-incomplete", {
+      getJob: async () => ({
+        id: "combined-incomplete",
+        ownerId: "owner",
+        sourceAudioPath: null,
+        mimeType: null,
+        sourceType: "combined" as const,
+        catalogUrl: "https://tidal.com/browse/track/example",
+        status: "processing" as const,
+        claimToken: "11111111-1111-4111-8111-111111111111",
+        leaseExpiresAt: "2099-01-01T00:00:00.000Z",
+        workerId: "test-worker",
+      }),
+      markProcessing: async () => {},
+      markFailed: async (_jobId, _claimToken, message) => { failureMessage = message; },
+      stopHeartbeat: async () => {},
+      collectCatalogMetadata: async () => {
+        catalogLookupAttempted = true;
+        throw new Error("must not process as DSP-only");
+      },
+    } as unknown as AuditProcessorDependencies);
+
+    expect(result.status).toBe("failed");
+    expect(failureMessage).toContain("Combined audit is missing its uploaded master audio path");
+    expect(catalogLookupAttempted).toBe(false);
+  });
 });
