@@ -2,11 +2,11 @@ import { readFile } from "node:fs/promises";
 import { describe,expect,it } from "vitest";
 const root=new URL("../",import.meta.url);
 describe("sample-report command",()=>{
- it("generates five generic fixture pairs without external services",async()=>{
+ it("generates six generic fixture pairs without external services",async()=>{
   const script=await readFile(new URL("scripts/sample-report.mjs",root),"utf8");
   expect(script).toContain("../dist/reports/generate-audit-report.js");
   expect(script).toContain("./fixtures/sample-report-input.mjs");
-  for(const fixtureName of ["full-audio-based","partial-audio-low-confidence","metadata-only","long-form-audio","ambiguous-audio-low-confidence"])expect(script).toContain(fixtureName);
+  for(const fixtureName of ["full-audio-based","combined-master-and-dsp","partial-audio-low-confidence","metadata-only","long-form-audio","ambiguous-audio-low-confidence"])expect(script).toContain(fixtureName);
   expect(script).toContain('["sample","full"]');
   expect(script).toContain("FIXTURE");
   expect(script).toContain("generatedAt: new Date().toISOString()");
