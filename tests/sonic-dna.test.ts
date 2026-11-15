@@ -10,6 +10,19 @@ function pulse(bpm:number,seconds=12,sampleRate=8000):Float32Array {
  }
  return samples;
 }
+function syncopatedSwingPulse(bpm:number,seconds=12,sampleRate=8000):Float32Array {
+ const samples=new Float32Array(sampleRate*seconds),interval=60/bpm;
+ const add=(time:number,accent:number)=>{
+  const start=Math.round(time*sampleRate),length=Math.min(Math.round(sampleRate*0.025),samples.length-start);
+  for(let i=0;i<length;i++)samples[start+i]+=accent*Math.sin(2*Math.PI*220*i/sampleRate)*Math.exp(-i/(sampleRate*0.004));
+ };
+ for(let beat=0;beat<seconds*bpm/60;beat++){
+  const time=beat*interval+(beat%2?interval*0.08:0);
+  add(time,beat%2?0.55:1);
+  if(beat%3===1)add(beat*interval+interval*0.48,0.28);
+ }
+ return samples;
+}
 function chord(freqs:number[],seconds=6,sampleRate=8000):Float32Array {
  return Float32Array.from({length:sampleRate*seconds},(_,i)=>freqs.reduce((sum,f)=>sum+Math.sin(2*Math.PI*f*i/sampleRate),0)/freqs.length);
 }
@@ -45,6 +58,12 @@ describe("Sonic DNA",()=>{
   expect(result.bpm).toBeGreaterThanOrEqual(115);
   expect(result.bpm).toBeLessThanOrEqual(125);
   expect(result.confidence).not.toBeNull();
+ });
+ it("tracks a swung and syncopated 120 BPM pulse without locking to offbeat accents",()=>{
+  const result=estimateTempo(syncopatedSwingPulse(120),8000);
+  expect(result.bpm).toBeGreaterThanOrEqual(115);
+  expect(result.bpm).toBeLessThanOrEqual(125);
+  expect(result.abstentionReason).toBeNull();
  });
  it("includes the half-time tempo candidate when the beat pulse supports it",()=>{
   const result=estimateTempo(pulse(120),8000);
