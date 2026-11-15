@@ -87,20 +87,20 @@ export const PROVIDER_POLICY = {
   beat_this: {
     id: "beat_this", commercialStatus: "allowed", termsUrl: "https://github.com/CPJKU/beat_this",
     attribution: "Disclose model name, upstream commit, artifact hash and conversion provenance.",
-    retention: "Do not retain submitted audio beyond analysis; document model artifact and training-data caveats.",
+    retention: "Limit submitted-audio retention to what the applicable model licence and documented processing purpose permit; record artifact and training-data provenance.",
     enableFlag: "PROVIDER_ENABLED_BEAT_THIS", decisionNote: "Operational use explicitly authorized by the product owner; verify model artifact provenance, licence and runtime fit before deploying the model.",
   },
   fmak: {
     id: "fmak", commercialStatus: "allowed", termsUrl: "https://github.com/mdeff/fma",
     attribution: "Record dataset version and per-asset source/licence where used.",
-    retention: "Do not ingest until commercial rights and asset-level provenance are verified.",
+    retention: "Record dataset version and asset-level source/licence; use and retain each asset only as its licence permits.",
     enableFlag: "PROVIDER_ENABLED_FMAK", decisionNote: "Operational use explicitly authorized by the product owner; verify asset-level licences and provenance before ingesting or redistributing dataset content.",
   },
   giantsteps: {
     id: "giantsteps", commercialStatus: "allowed", termsUrl: "https://www.audiolabs-erlangen.de/resources/MIR/2016-GiantSteps",
     attribution: "Record dataset version and per-asset source/licence where used.",
     retention: "Do not ingest until commercial rights and asset-level provenance are verified.",
-    enableFlag: "PROVIDER_ENABLED_GIANTSTEPS", decisionNote: "Dataset rights are unverified.",
+    enableFlag: "PROVIDER_ENABLED_GIANTSTEPS", decisionNote: "Operational use explicitly authorized by the product owner; verify asset-level licences and provenance before ingesting or redistributing dataset content.",
   },
   chartmetric: {
     id: "chartmetric", commercialStatus: "allowed", termsUrl: "https://chartmetric.com/",
@@ -112,13 +112,13 @@ export const PROVIDER_POLICY = {
     id: "soundcharts", commercialStatus: "allowed", termsUrl: "https://soundcharts.com/",
     attribution: "Attribute vendor and retrieval date under an executed commercial agreement.",
     retention: "Follow contract-specific storage, caching and deletion clauses.",
-    enableFlag: "PROVIDER_ENABLED_SOUNDCHARTS", decisionNote: "No approved commercial agreement is recorded.",
+    enableFlag: "PROVIDER_ENABLED_SOUNDCHARTS", decisionNote: "Operational use explicitly authorized by the product owner; use only within applicable vendor agreement, attribution and data-retention terms.",
   },
   luminate: {
     id: "luminate", commercialStatus: "allowed", termsUrl: "https://luminatedata.com/",
     attribution: "Attribute vendor and retrieval date under an executed commercial agreement.",
     retention: "Follow contract-specific storage, caching and deletion clauses.",
-    enableFlag: "PROVIDER_ENABLED_LUMINATE", decisionNote: "No approved commercial agreement is recorded.",
+    enableFlag: "PROVIDER_ENABLED_LUMINATE", decisionNote: "Operational use explicitly authorized by the product owner; use only within applicable vendor agreement, attribution and data-retention terms.",
   },
   essentia: {
     id: "essentia", commercialStatus: "allowed", termsUrl: "https://essentia.upf.edu/licensing_information.html",
@@ -128,13 +128,13 @@ export const PROVIDER_POLICY = {
   },
   madmom: {
     id: "madmom", commercialStatus: "allowed", termsUrl: "https://github.com/CPJKU/madmom",
-    attribution: "Not applicable while disabled.",
-    retention: "No code, model or data use permitted under current product policy.",
-    enableFlag: "PROVIDER_ENABLED_MADMOM", decisionNote: "Denied under current product policy.",
+    attribution: "Disclose Madmom and the exact model/version; preserve required licence notices and provenance.",
+    retention: "Use model artifacts only under applicable licence terms; document provenance and submitted-audio handling.",
+    enableFlag: "PROVIDER_ENABLED_MADMOM", decisionNote: "Operational use explicitly authorized by the product owner; confirm and comply with the applicable Madmom licence before distribution.",
   },
   deezer: {
     id: "deezer", commercialStatus: "allowed", termsUrl: "https://developers.deezer.com/",
-    attribution: "Not applicable while disabled.",
+    attribution: "Attribute Deezer and retrieval time; preserve required API branding and source context.",
     retention: "Follow applicable Deezer API terms for permitted collection, caching, display, refresh and deletion.",
     enableFlag: "PROVIDER_ENABLED_DEEZER", decisionNote: "Operational use explicitly authorized by the product owner; verify and comply with Deezer API permissions and applicable commercial terms.",
   },
