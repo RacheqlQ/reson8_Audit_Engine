@@ -68,7 +68,7 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
         || /\binsufficient\s+(?:evidence|data|metrics?|support|reporting)\b/i.test(sentence);
       const actionableMonitoringInstruction = /\b(?:verify|measure|monitor|track|investigate)\s+(?:the\s+)?(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|market demand|commercial performance|marketability)\b/i.test(sentence);
       const hasCommercialClaim = suppressCommercial && commercialTerms.test(sentence) && !cautionaryCommercialContext && !actionableMonitoringInstruction;
-      const vocalClaim = /\b(?:instrumental(?:[- ]only)?|vocal[- ]free|no vocals?|without vocals?|without vocal content|no vocal content|vocals? (?:are )?(?:absent|not present|not detected))\b/i;
+      const vocalClaim = /\b(?:instrumental(?:[- ]only)?|vocal[- ]free|no vocals|without vocals?|without vocal content|no vocal content|vocals? (?:are )?(?:absent|not present|not detected))\b/i;
       const hasUnsupportedVocalClaim = suppressVocal && vocalClaim.test(sentence);
       return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim && !hasUnsupportedVocalClaim;
     });
