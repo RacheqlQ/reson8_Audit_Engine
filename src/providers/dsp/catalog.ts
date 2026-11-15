@@ -3,6 +3,7 @@ import { normalizeSpotifyTrack } from "../spotify/normalize.js";
 import { TidalClient } from "../tidal/client.js";
 import { normalizeTidalTrack } from "../tidal/normalize.js";
 import { AudiomackClient } from "../audiomack/client.js";
+import { providerDecision, type ProviderId } from "../provider-policy.js";
 
 export type DspPlatform = "spotify" | "apple_music" | "youtube_music" | "deezer" | "tidal" | "audiomack" | "unknown";
 
@@ -129,5 +130,25 @@ async function audiomack(u:URL, signal?:AbortSignal) {
 }
 async function youtube(u:URL, signal?:AbortSignal){const m=base("youtube_music",u);const r=await fetch("https://www.youtube.com/oembed?url="+encodeURIComponent(u.toString())+"&format=json", { signal, redirect: "error" });if(!r.ok)throw new Error("YouTube metadata request failed with HTTP "+r.status);const d=await r.json() as {title?:string;author_name?:string;thumbnail_url?:string};m.title=d.title??null;m.artist=d.author_name??null;m.artworkUrl=d.thumbnail_url??null;if(m.catalogId)m.externalIds.youtube=m.catalogId;m.raw=d;m.evidenceStatus=m.title&&m.artist?"recognized":"partial";return m;}
 
-export async function collectCatalogMetadata(input:string, signal?:AbortSignal):Promise<CatalogMetadata>{signal?.throwIfAborted();const u=normalizeUrl(input);switch(HOSTS[u.hostname.toLowerCase()]){case"spotify":return spotify(u,signal);case"apple_music":return apple(u,signal);case"deezer":return deezer(u,signal);case"youtube_music":return youtube(u,signal);case"tidal":return tidal(u,signal);case"audiomack":return audiomack(u,signal);default:throw new Error("Unsupported DSP or catalog URL");}}
+const PROVIDER_BY_PLATFORM: Partial<Record<DspPlatform, ProviderId>> = {
+  spotify: "spotify", apple_music: "apple_music", deezer: "deezer",
+  youtube_music: "youtube_music", tidal: "tidal", audiomack: "audiomack",
+};
+
+export async function collectCatalogMetadata(input:string, signal?:AbortSignal):Promise<CatalogMetadata>{
+  signal?.throwIfAborted();
+  const u=normalizeUrl(input);
+  const platform=HOSTS[u.hostname.toLowerCase()];
+  if (!platform || platform === "unknown") throw new Error("Unsupported DSP or catalog URL");
+  const provider=PROVIDER_BY_PLATFORM[platform];
+  if (provider) {
+    const decision=providerDecision(provider);
+    if (!decision.enabled) {
+      const metadata=base(platform,u);
+      metadata.raw={providerPolicy:{provider,status:"unavailable",reason:"disabled by data policy",commercialStatus:decision.commercialStatus}};
+      return metadata;
+    }
+  }
+  switch(platform){case"spotify":return spotify(u,signal);case"apple_music":return apple(u,signal);case"deezer":return deezer(u,signal);case"youtube_music":return youtube(u,signal);case"tidal":return tidal(u,signal);case"audiomack":return audiomack(u,signal);default:throw new Error("Unsupported DSP or catalog URL");}
+}
 export function detectDspPlatform(input:string):DspPlatform{try{return HOSTS[normalizeUrl(input).hostname.toLowerCase()]??"unknown";}catch{return"unknown";}}
