@@ -135,7 +135,7 @@ describe("Phillo evidence guardrails", () => {
   it("does not assert instrumental or vocal absence when vocal analysis was not performed", () => {
     const assessment = {
       ...baseAssessment,
-      executiveSummary: "This is an instrumental track with no vocals.",
+      executiveSummary: "This is an instrumental track with no vocals, although vocal analysis was not performed.",
       releaseStrategy: { recommendation: "Without vocal content, target instrumental playlists.", priorities: ["Pitch to instrumental playlists."] },
       promotionPlan: { pitchingAngles: ["Promote this vocal-free instrumental beat."], playlistCategories: ["Instrumental lo-fi playlists"] },
       evidenceGaps: ["Vocal analysis was not performed because no vocal-activity model is configured."],
