@@ -226,17 +226,17 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     const dimensionAbstentionRationale = (dimension: string): string => {
       switch (dimension) {
         case "tempoLaneFit":
-          return "Not scored: overall assessment confidence is zero. The available tempo evidence does not support a reliable lane-fit score.";
+          return "Not scored: overall assessment confidence is zero. Technical tempo measurements alone do not establish artistic positioning or a reliable lane-fit score.";
         case "rhythmicConsistency":
-          return "Not scored: overall assessment confidence is zero. BPM evidence alone cannot establish rhythmic consistency; human listening and segment-level review are required.";
+          return "Not scored: overall assessment confidence is zero. BPM and rhythm measurements, where present, are not sufficient for a final consistency rating without human listening and segment-level review.";
         case "dynamicRangeLoudness":
           return hasDynamicRangeMeasurement && (hasLoudnessMeasurement || hasRmsMeasurement)
             ? "Not scored: overall assessment confidence is zero. Direct loudness and dynamic-range measurements are reported separately and do not establish mastering quality or artistic merit."
             : "Not scored: overall assessment confidence is zero. Direct dynamic-range and loudness/RMS measurements are unavailable; no mastering-quality conclusion can be inferred.";
         case "metadataCompleteness":
-          return "Not scored: overall assessment confidence is zero. Reconcile missing or conflicting artist, title, album, ISRC, label and release-date fields before assigning a metadata-completeness score.";
+          return "Not scored: overall assessment confidence is zero. Identity fields and source conflicts are shown in the reconciliation section; no numeric metadata-completeness rating is issued at this confidence level.";
         case "releaseReadiness":
-          return "Not scored: overall assessment confidence is zero. Audience, market, campaign and release evidence is insufficient to rate release readiness.";
+          return "Not scored: overall assessment confidence is zero. No numeric release-readiness rating is issued; audience, market, campaign and release evidence must be reviewed separately.";
         default:
           return "Not scored: overall assessment confidence is zero. The available evidence cannot support a numeric rating for this dimension; complete the listed evidence and human-review steps before assigning a score.";
       }
