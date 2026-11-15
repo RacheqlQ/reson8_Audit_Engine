@@ -112,6 +112,19 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
 }
 interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string[];}
 function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"Insufficient evidence"};return m[v.toLowerCase()]??"Insufficient evidence";}
+export interface ArNotesDecisionContext { heading:string; verdict:string; summary:string; prompts:string[]; }
+export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecisionContext {
+ return {
+  heading:"DECISION CONTEXT",
+  verdict:coverVerdictLabel(input).toUpperCase(),
+  summary:val(input.assessment.executiveSummary,"No executive summary supplied."),
+  prompts:[
+   "What evidence would change the current decision?",
+   "Which identity, rights or source gaps remain unresolved?",
+   "What should be verified before any external pitch?",
+  ],
+ };
+}
 export function coverVerdictLabel(input:AuditReportInput):string {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
  return verdictLabel(val(safeAssessment.commercialRead?.marketability,"undetermined"));
@@ -320,15 +333,15 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   const notes=pdf.addPage([W,H]);pageNo++;header(notes,"A&R notes",pageNo,fonts,C.violet,input.evidence.fixture===true);
   notes.drawText("A&R NOTES",{x:M,y:TOP,size:20,font:fonts.bold,color:C.navy});
   notes.drawText("Private working notes — editable field",{x:M,y:TOP-27,size:9,font:fonts.regular,color:C.muted});
-  const decisionTitleY=TOP-92;
-  const summaryLines=wrap(val(input.assessment.executiveSummary,"No executive summary supplied."),fonts.regular,9,W-2*M-28).slice(0,5);
+  const decisionTitleY=TOP-92,decisionContext=buildArNotesDecisionContext(input);
+  const summaryLines=wrap(decisionContext.summary,fonts.regular,9,W-2*M-28).slice(0,5);
   notes.drawRectangle({x:M,y:decisionTitleY-92,width:W-2*M,height:112,color:C.paper,borderColor:C.line,borderWidth:.7});
-  notes.drawText("DECISION CONTEXT",{x:M+14,y:decisionTitleY,size:7,font:fonts.bold,color:C.violet});
-  notes.drawText(coverVerdictLabel(input).toUpperCase(),{x:M+14,y:decisionTitleY-23,size:12,font:fonts.bold,color:C.navy});
+  notes.drawText(decisionContext.heading,{x:M+14,y:decisionTitleY,size:7,font:fonts.bold,color:C.violet});
+  notes.drawText(decisionContext.verdict,{x:M+14,y:decisionTitleY-23,size:12,font:fonts.bold,color:C.navy});
   let summaryY=decisionTitleY-43;
   for(const line of summaryLines){notes.drawText(line,{x:M+14,y:summaryY,size:8.2,font:fonts.regular,color:C.ink});summaryY-=11;}
   notes.drawText("REVIEW PROMPTS",{x:M,y:decisionTitleY-119,size:7,font:fonts.bold,color:C.violet});
-  const prompts=["What evidence would change the current decision?","Which identity, rights or source gaps remain unresolved?","What should be verified before any external pitch?"];
+  const prompts=decisionContext.prompts;
   let promptY=decisionTitleY-139;
   for(const prompt of prompts){notes.drawText("- "+prompt,{x:M+8,y:promptY,size:8,font:fonts.regular,color:C.muted});promptY-=15;}
   const notesFieldY=145,notesFieldHeight=245;
