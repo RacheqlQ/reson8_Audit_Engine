@@ -108,6 +108,15 @@ function tuningOffset(peaks: Array<{ frequency: number; magnitude: number }>): n
   return Math.max(-50, Math.min(50, weightedMedian(offsets)));
 }
 
+function tuningDeviationCents(peaks: Array<{ frequency: number; magnitude: number }>, offsetCents: number): number {
+  const deviations = peaks.map((peak) => {
+    const midi = 69 + 12 * Math.log2(peak.frequency / 440);
+    const cents = (midi - Math.round(midi)) * 100;
+    return { value: Math.abs(cents - offsetCents), weight: peak.magnitude };
+  }).filter((entry) => Number.isFinite(entry.value) && entry.value <= 100);
+  return weightedMedian(deviations);
+}
+
 function profileForSegment(samples: Float32Array, start: number, sampleRate: number): {
   chroma: number[];
   peaks: Array<{ frequency: number; magnitude: number }>;
@@ -141,6 +150,12 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
   }
 
   const tuningCents = tuningOffset(peaks);
+  // A stable global tuning offset should explain the detected tonal peaks.
+  // Large residual pitch-class scatter is evidence of inharmonic/noise-like
+  // content; abstain rather than forcing unrelated partials into a key profile.
+  if (peaks.length >= 4 && tuningDeviationCents(peaks, tuningCents) > 30) {
+    return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
+  }
   const bassChroma = Array(12).fill(0);
   const midChroma = Array(12).fill(0);
   for (const peak of peaks) {
