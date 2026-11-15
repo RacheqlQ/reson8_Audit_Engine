@@ -6,6 +6,12 @@ export interface TempoEstimate {
  confidence:number|null;
  method:"high_frequency_transient_autocorrelation";
  candidateBpms:number[];
+ candidateScores:Array<{bpm:number;score:number}>;
+ onsetEnvelope:number[];
+ beatTimesSeconds:number[];
+ downbeatCandidateTimesSeconds:number[];
+ beatGridStatus:"tentative"|"not_determined";
+ downbeatGridAssumption:"four-beat grouping for diagnostics only"|null;
  abstentionReason:string|null;
 }
 export interface SonicDnaFeatures {
@@ -49,7 +55,47 @@ function prepareAnalysisPcm(samples:Float32Array,sampleRate:number,channels:numb
 
 
 function emptyTempoEstimate(reason:string):TempoEstimate {
- return {bpm:null,alternateTempo:null,confidence:null,method:"high_frequency_transient_autocorrelation",candidateBpms:[],abstentionReason:reason};
+ return {
+  bpm:null,alternateTempo:null,confidence:null,method:"high_frequency_transient_autocorrelation",
+  candidateBpms:[],candidateScores:[],onsetEnvelope:[],beatTimesSeconds:[],
+  downbeatCandidateTimesSeconds:[],beatGridStatus:"not_determined",
+  downbeatGridAssumption:null,abstentionReason:reason,
+ };
+}
+
+function downsampleOnsetEnvelope(values:number[],maxPoints=128):number[] {
+ if(!values.length)return [];
+ const count=Math.min(maxPoints,values.length),maximum=Math.max(EPSILON,...values);
+ const result:number[]=[];
+ for(let bucket=0;bucket<count;bucket++){
+  const start=Math.floor(bucket*values.length/count),end=Math.max(start+1,Math.floor((bucket+1)*values.length/count));
+  let peak=0;
+  for(let index=start;index<end;index++)peak=Math.max(peak,values[index]??0);
+  result.push(Number((peak/maximum).toFixed(6)));
+ }
+ return result;
+}
+
+function deriveBeatGrid(novelty:number[],bpm:number,framesPerSecond:number):{
+ beatTimesSeconds:number[];downbeatCandidateTimesSeconds:number[];
+} {
+ const periodFrames=60/bpm*framesPerSecond;
+ if(!Number.isFinite(periodFrames)||periodFrames<1||!novelty.length)return {beatTimesSeconds:[],downbeatCandidateTimesSeconds:[]};
+ let bestPhase=0,bestScore=-1;
+ for(let phase=0;phase<Math.ceil(periodFrames);phase++){
+  let score=0;
+  for(let frame=phase;frame<novelty.length;frame+=periodFrames){
+   const index=Math.round(frame);
+   score+=Math.max(novelty[index-1]??0,novelty[index]??0,novelty[index+1]??0);
+  }
+  if(score>bestScore){bestScore=score;bestPhase=phase;}
+ }
+ const beatTimesSeconds:number[]=[];
+ for(let frame=bestPhase;frame<novelty.length&&beatTimesSeconds.length<512;frame+=periodFrames){
+  beatTimesSeconds.push(Number((frame/framesPerSecond).toFixed(4)));
+ }
+ const downbeatCandidateTimesSeconds=beatTimesSeconds.filter((_time,index)=>index%4===0);
+ return {beatTimesSeconds,downbeatCandidateTimesSeconds};
 }
 
 /**
@@ -76,8 +122,9 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const variance=novelty.reduce((sum,value)=>sum+(value-mean)**2,0)/novelty.length;
  const sortedOnsets=[...onset].sort((a,b)=>a-b);
  const onsetPeakRatio=(sortedOnsets[Math.floor((sortedOnsets.length-1)*0.99)]??0)/Math.max(EPSILON,onset.reduce((sum,value)=>sum+value,0)/onset.length);
+ const onsetEnvelope=downsampleOnsetEnvelope(novelty);
  if(mean<=EPSILON||Math.sqrt(variance)/Math.max(mean,EPSILON)<0.08||onsetPeakRatio<2.5)
-  return emptyTempoEstimate("No sufficiently distinct transient activity was detected; sustained or noise-like signals are not assigned a tempo.");
+  return {...emptyTempoEstimate("No sufficiently distinct transient activity was detected; sustained or noise-like signals are not assigned a tempo."),onsetEnvelope};
  const scores=new Map<number,number>();
  for(let bpm=40;bpm<=240;bpm++){
   const lag=Math.max(1,Math.round(60/bpm*sampleRate/hop));
@@ -98,13 +145,14 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  }
  const bestBpm=selected[0]?.[0];
  const bestScore=selected[0]?.[1]??0;
+ const candidateScores=selected.map(([bpm,score])=>({bpm,score:Number(score.toFixed(6))}));
  if(bestBpm===undefined||bestScore<0.08)
-  return {...emptyTempoEstimate("Transient autocorrelation did not produce a sufficiently prominent tempo candidate."),candidateBpms:selected.map(([bpm])=>bpm)};
+  return {...emptyTempoEstimate("Transient autocorrelation did not produce a sufficiently prominent tempo candidate."),candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
  const sortedScores=[...scores.values()].sort((a,b)=>a-b);
  const median=sortedScores[Math.floor(sortedScores.length/2)]??0;
  const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
  if(confidence<0.1)
-  return {...emptyTempoEstimate("Tempo candidate prominence is too weak to support a reliable result."),confidence,candidateBpms:selected.map(([bpm])=>bpm)};
+  return {...emptyTempoEstimate("Tempo candidate prominence is too weak to support a reliable result."),confidence,candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
  const related=[0.5,1/3,2,3]
   .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
   .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=240&&candidate.bpm!==bestBpm&&candidate.score>=bestScore*0.25)
@@ -114,7 +162,16 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const alternateTempo=relatedCandidate?(bpm===bestBpm?relatedCandidate.bpm:bestBpm):null;
  const candidates=selected.map(([candidate])=>candidate);
  for(const candidate of [Math.round(bpm),Math.round(bpm)-1,Math.round(bpm)+1,...related.map(item=>item.bpm)])if(candidate>=40&&candidate<=240&&!candidates.includes(candidate))candidates.push(candidate);
- return {bpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),confidence,method,candidateBpms:candidates.slice(0,8),abstentionReason:null};
+ const beatGrid=deriveBeatGrid(novelty,bpm,sampleRate/hop);
+ return {
+  bpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),
+  confidence,method,candidateBpms:candidates.slice(0,8),candidateScores,onsetEnvelope,
+  beatTimesSeconds:beatGrid.beatTimesSeconds,
+  downbeatCandidateTimesSeconds:beatGrid.downbeatCandidateTimesSeconds,
+  beatGridStatus:beatGrid.beatTimesSeconds.length?"tentative":"not_determined",
+  downbeatGridAssumption:beatGrid.downbeatCandidateTimesSeconds.length?"four-beat grouping for diagnostics only":null,
+  abstentionReason:null,
+ };
 }
 
 export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):SonicDnaFeatures {
