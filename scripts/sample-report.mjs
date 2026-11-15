@@ -78,14 +78,15 @@ try{
   ...unsafeInput.assessment,
   executiveSummary:[
    "The recording is a 128 BPM high-energy Afrobeats release.",
-   "The release has 24000 streams, strong market demand and high commercial potential.",
+   "The track has 24000 streams, strong market demand and high commercial potential.",
+   "Verified 24000 monthly listeners prove the campaign is commercially successful.",
    "Further listening and source verification are required before any external decision."
   ].join(" ")
  };
  const unsafeBytes=await generateAuditReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
  await writeFile(evidenceCheckPath,unsafeBytes);
  const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
- if(/(?:128\s*BPM|high-energy|Afrobeats|24000 streams|market demand|commercial potential)/i.test(unsafeText)){
+ if(/(?:128\s*BPM|high-energy|Afrobeats|24000 streams|market demand|commercial potential|24000 monthly listeners|commercially successful)/i.test(unsafeText)){
   throw new Error("Generated PDF reintroduced an unsupported tempo, genre or commercial claim");
  }
  if(!unsafeText.includes("Further listening and source verification are required")){
