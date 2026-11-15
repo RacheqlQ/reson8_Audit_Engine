@@ -9,9 +9,10 @@ export interface ChartRow {
   group?: "strength" | "risk";
 }
 export type ChartKind = "bars" | "sonic" | "spectrum" | "constellation" | "layers" | "tension" | "timeline" | "chain" | "radar";
+export type ChartEvidenceClass = "measured" | "provider-recognized" | "inferred" | "assessment-derived" | "illustrative";
 export interface ChartPanelInput {
   title: string; rows: ChartRow[]; shows: string; cantShow: string;
-  kind?: ChartKind; inferred?: boolean; unavailable?: boolean; y?: number;
+  kind?: ChartKind; evidenceClass?: ChartEvidenceClass; inferred?: boolean; unavailable?: boolean; fixture?: boolean; y?: number; width?: number;
 }
 export interface ChartRect { x:number; y:number; width:number; height:number; id:string; }
 const C = {
@@ -54,41 +55,66 @@ function normalizeChartText(value:string):string{return value.normalize("NFKC").
 function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
  s=normalizeChartText(s);
  const out:string[]=[];let current="";
- for(const word of s.split(/\s+/).filter(Boolean)){const next=current?current+" "+word:word;if(font.widthOfTextAtSize(next,size)>width&&current){out.push(current);current=word;}else current=next;}
+ for(const word of s.split(/\s+/).filter(Boolean)){
+  if(font.widthOfTextAtSize(word,size)>width){
+   if(current){out.push(current);current="";}
+   let part="";
+   for(const character of word){
+    if(font.widthOfTextAtSize(part+character,size)>width&&part){out.push(part);part=character;}else part+=character;
+   }
+   current=part;
+   continue;
+  }
+  const next=current?current+" "+word:word;
+  if(font.widthOfTextAtSize(next,size)>width&&current){out.push(current);current=word;}else current=next;
+ }
  if(current)out.push(current);return out;
 }
 function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink){p.drawText(normalizeChartText(s),{x,y,font,size,color:c});}
 function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
-export function chartPanelHeight(kind:ChartKind="bars",rows:ChartRow[]=[]):number{
+function constellationLabelLineCount(row:ChartRow,width:number):number{
+ const label=shown(row.value),columnWidth=Math.max(42,(width-36)/2);
+ return Math.max(1,Math.ceil(label.length/Math.max(8,Math.floor(columnWidth/5.5))));
+}
+function constellationLabelRowHeights(rows:ChartRow[],width:number):number[]{
+ const heights:number[]=[];
+ for(let index=0;index<Math.min(5,rows.length);index+=2){
+  const lines=Math.max(constellationLabelLineCount(rows[index],width),rows[index+1]?constellationLabelLineCount(rows[index+1],width):1);
+  heights.push(lines*8+8);
+ }
+ return heights;
+}
+export function chartPanelHeight(kind:ChartKind="bars",rows:ChartRow[]=[],width=CARD_W):number{
+ if(kind==="constellation")return 218+constellationLabelRowHeights(rows,width).reduce((sum,height)=>sum+height,0);
  if(kind==="radar")return 345;
  if(kind==="layers")return 180;if(kind==="tension")return 205;
  if(kind==="sonic")return 230;
  if(kind==="spectrum")return 270;
- if(kind==="constellation"||kind==="timeline"||kind==="chain")return 202;
+ if(kind==="timeline"||kind==="chain")return 202;
  if(kind==="bars")return 205;
  return 190;
 }
-export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind,rows)):ChartRect[]{
+export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind,rows),width=CARD_W):ChartRect[]{
  const bottom=top-height,captionY=bottom+8,captionH=CAPTION_H-8;
  const contentTop=top-HEADER_H-8,contentBottom=captionY+captionH+3;
- const card:ChartRect={x,y:bottom,width:CARD_W,height,id:"card-bounds"};
+ const card:ChartRect={x,y:bottom,width,height,id:"card-bounds"};
  const result:ChartRect[]=[card,
-  {x:x+8,y:captionY,width:CARD_W-16,height:captionH,id:"caption-zone"},
-  {x:x+8,y:contentBottom,width:CARD_W-16,height:contentTop-contentBottom,id:"chart-content-zone"},
-  {x:x+CARD_W-3,y:bottom+3,width:2,height:height-6,id:"shape-card-shadow-right"},
-  {x:x+3,y:bottom+2,width:CARD_W-6,height:2,id:"shape-card-shadow-bottom"},
-  {x,y:bottom,width:CARD_W,height,id:"shape-card-background"},
-  {x:x+1,y:bottom+1,width:CARD_W-2,height:height-2,id:"shape-card-gradient"},
-  {x,y:top-HEADER_H,width:CARD_W,height:HEADER_H,id:"shape-header-band"},
+  {x:x+8,y:captionY,width:width-16,height:captionH,id:"caption-zone"},
+  {x:x+8,y:contentBottom,width:width-16,height:contentTop-contentBottom,id:"chart-content-zone"},
+  {x:x+width-3,y:bottom+3,width:2,height:height-6,id:"shape-card-shadow-right"},
+  {x:x+3,y:bottom+2,width:width-6,height:2,id:"shape-card-shadow-bottom"},
+  {x,y:bottom,width:width,height,id:"shape-card-background"},
+  {x:x+1,y:bottom+1,width:width-2,height:height-2,id:"shape-card-gradient"},
+  {x,y:top-HEADER_H,width:width,height:HEADER_H,id:"shape-header-band"},
   {x,y:top-HEADER_H,width:5,height:HEADER_H,id:"shape-header-accent"},
-  {x:x+13,y:top-24,width:230,height:12,id:"shape-header-title"},
-  {x:x+CARD_W-91,y:top-24,width:82,height:10,id:"shape-header-status"},
-  {x:x+9,y:captionY+captionH,width:CARD_W-18,height:1,id:"shape-caption-divider"},
-  {x:x+12,y:captionY+2,width:CARD_W-24,height:29,id:"shape-caption-text"}
+  {x:x+13,y:top-24,width:Math.max(24,width-Math.min(155,Math.max(78,width*.38))-42),height:12,id:"shape-header-title"},
+  {x:x+width-13-Math.min(155,Math.max(78,width*.38)),y:top-24,width:Math.min(155,Math.max(78,width*.38)),height:10,id:"shape-header-status"},
+  {x:x+9,y:captionY+captionH,width:width-18,height:1,id:"shape-caption-divider"},
+  {x:x+12,y:captionY+2,width:width-24,height:29,id:"shape-caption-text"}
  ];
  if(kind==="tension"){
   const panelTop=contentTop-4,panelBottom=contentBottom+7,panelH=panelTop-panelBottom;
-  const columns=[x+14,x+CARD_W/2+10],colW=220;
+  const columns=[x+14,x+width/2+10],colW=220;
   columns.forEach((cx,col)=>{
    result.push({x:cx+2,y:panelBottom+2,width:colW-4,height:panelH-4,id:"shape-tension-shadow-"+col});
    result.push({x:cx,y:panelBottom,width:colW,height:panelH,id:"shape-tension-column-"+col});
@@ -113,7 +139,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
    result.push({x:trackX+trackW+7,y:trackY-2,width:70,height:11,id:"label-spectrum-value-"+index});
   });
  }else if(kind==="radar"){
-  const cx=x+CARD_W/2,cy=top-178,radius=110,outer=110,n=Math.max(3,rows.slice(0,5).length);
+  const cx=x+width/2,cy=top-178,radius=110,outer=110,n=Math.max(3,rows.slice(0,5).length);
   result.push({x:cx-radius,y:cy-radius,width:radius*2,height:radius*2,id:"shape-radar-grid-and-polygon"});
   rows.slice(0,5).forEach((row,i)=>{
    const angle=-Math.PI/2+i*2*Math.PI/n,ax=cx+Math.cos(angle)*outer,ay=cy+Math.sin(angle)*outer;
@@ -124,7 +150,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
    result.push({x:left,y:base-13,width:w,height:21,id:"label-radar-axis-"+i});
   });
  }else if(kind==="layers"){
-  const stackX=x+16,stackY=contentTop-44,stackW=CARD_W-32,stackH=24;
+  const stackX=x+16,stackY=contentTop-44,stackW=width-32,stackH=24;
   result.push({x:stackX+3,y:stackY-3,width:stackW+5,height:stackH+7,id:"shape-evidence-stack-and-shadow"});
   const columns=[x+16,x+264];
   rows.slice(0,4).forEach((row,i)=>{
@@ -145,19 +171,22 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
    result.push({x:x+13,y:baseline-3,width:320,height:11,id:"label-bar-row-"+i});
   });
  }else if(kind==="constellation"){
-  const cx=x+CARD_W/2,cy=contentBottom+80;
+  const labelHeights=constellationLabelRowHeights(rows,width),labelTotal=labelHeights.reduce((sum,value)=>sum+value,0);
+  const cx=x+width/2,graphBottom=contentBottom+labelTotal+10,cy=graphBottom+56,radiusX=Math.min(width*.2,88),radiusY=38;
   result.push({x:cx-23,y:cy-23,width:46,height:46,id:"shape-constellation-core"});
   rows.slice(0,5).forEach((row,i)=>{
-   const angle=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(angle)*100,py=cy+Math.sin(angle)*30;
+   const angle=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(angle)*radiusX,py=cy+Math.sin(angle)*radiusY;
    result.push({x:Math.min(cx,px)-1,y:Math.min(cy,py)-1,width:Math.abs(px-cx)+2,height:Math.abs(py-cy)+2,id:"shape-constellation-link-"+i});
    result.push({x:px-15,y:py-15,width:30,height:30,id:"shape-constellation-node-"+i});
-   result.push({x:px-36,y:py-5,width:72,height:10,id:"label-constellation-value-"+i});
+   const labelWidth=(width-36)/2,rowIndex=Math.floor(i/2),column=i%2;
+   const rowTop=graphBottom-7-labelHeights.slice(0,rowIndex).reduce((sum,value)=>sum+value,0);
+   result.push({x:x+12+column*(labelWidth+12),y:rowTop-labelHeights[rowIndex]+2,width:labelWidth,height:labelHeights[rowIndex]-4,id:"label-constellation-value-"+i});
   });
  }else if(kind==="timeline"){
   const lineY=contentBottom+80;
-  result.push({x:x+42,y:lineY-1,width:CARD_W-84,height:2,id:"shape-timeline-line"});
+  result.push({x:x+42,y:lineY-1,width:width-84,height:2,id:"shape-timeline-line"});
   rows.slice(0,3).forEach((row,i)=>{
-   const px=i===0?x+58:i===1?x+CARD_W/2:x+CARD_W-90;
+   const px=i===0?x+58:i===1?x+width/2:x+width-90;
    result.push({x:px-7,y:lineY-7,width:14,height:14,id:"shape-timeline-node-"+i});
    result.push({x:px-28,y:lineY+14,width:80,height:10,id:"label-timeline-stage-"+i});
    result.push({x:px-36,y:lineY-35,width:118,height:18,id:"label-timeline-description-"+i});
@@ -177,8 +206,8 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
 export function chartShapeBoundsErrors(card:ChartRect,shapes:ChartRect[]):string[]{
  return shapes.filter(shape=>shape.id!=="card-bounds"&&(shape.x<card.x-.01||shape.y<card.y-.01||shape.x+shape.width>card.x+card.width+.01||shape.y+shape.height>card.y+card.height+.01)).map(shape=>"Chart shape outside card: "+shape.id);
 }
-export function chartPanelLayoutErrors(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind,rows)):string[]{
- const rects=chartPanelLayoutRects(kind,rows,x,top,height),card=rects.find(r=>r.id==="card-bounds"),caption=rects.find(r=>r.id==="caption-zone");
+export function chartPanelLayoutErrors(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind,rows),width=CARD_W):string[]{
+ const rects=chartPanelLayoutRects(kind,rows,x,top,height,width),card=rects.find(r=>r.id==="card-bounds"),caption=rects.find(r=>r.id==="caption-zone");
  if(!card||!caption)return ["Missing chart card or caption bounds"];
  const shapes=rects.filter(r=>r.id.startsWith("shape-")||r.id.startsWith("label-"));
  const errors=chartShapeBoundsErrors(card,shapes);
@@ -209,8 +238,34 @@ export function wrapChartSummary(value:string,font:PDFFont,size:number,width:num
  }
  return lines;
 }
+export function chartPanelStatus(input: Pick<ChartPanelInput, "fixture" | "inferred" | "unavailable" | "evidenceClass">): "SYNTHETIC FIXTURE" | "REQUIRES AUDIO" | "HYPOTHESIS" | "MEASURED" | "PROVIDER-RECOGNIZED" | "ASSESSMENT-DERIVED" | "ILLUSTRATIVE" | "UNCLASSIFIED" {
+ if(input.fixture)return "SYNTHETIC FIXTURE";
+ if(input.unavailable)return "REQUIRES AUDIO";
+ if(input.inferred||input.evidenceClass==="inferred")return "HYPOTHESIS";
+ switch(input.evidenceClass){
+  case "measured":return "MEASURED";
+  case "provider-recognized":return "PROVIDER-RECOGNIZED";
+  case "assessment-derived":return "ASSESSMENT-DERIVED";
+  case "illustrative":return "ILLUSTRATIVE";
+  default:return "UNCLASSIFIED";
+ }
+}
+export function chartPanelDisplayStatus(input: Pick<ChartPanelInput, "fixture" | "inferred" | "unavailable" | "evidenceClass">): string {
+ const status=chartPanelStatus(input);
+ const evidence=input.evidenceClass==="provider-recognized"?"PROVIDER-RECOGNIZED"
+  :input.evidenceClass==="assessment-derived"?"ASSESSMENT-DERIVED"
+  :input.evidenceClass==="illustrative"?"ILLUSTRATIVE"
+  :input.evidenceClass==="inferred"||input.inferred?"HYPOTHESIS"
+  :input.evidenceClass==="measured"?"MEASURED":"UNCLASSIFIED";
+ const labels:string[]=[];
+ if(input.fixture)labels.push("SYNTHETIC FIXTURE");
+ if(input.unavailable)labels.push("REQUIRES AUDIO");
+ if(status!=="SYNTHETIC FIXTURE"&&status!=="REQUIRES AUDIO")labels.push(status);
+ if(!labels.includes(evidence))labels.push(evidence);
+ return labels.join(" · ");
+}
 function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,height:number){
- const x=CARD_X,w=CARD_W,top=input.y??700,bottom=top-height;
+ const x=CARD_X,w=input.width??CARD_W,top=input.y??700,bottom=top-height;
  p.drawRectangle({x,y:bottom,width:w,height,color:C.paper,borderColor:C.line,borderWidth:.6});
  // Sixteen horizontal strips provide a restrained vertical gradient.
  for(let i=0;i<16;i++){const t=i/15;p.drawRectangle({x:x+1,y:bottom+1+(height-2)*i/16,width:w-2,height:(height-2)/16+.2,color:rgb(.985-.035*t,.99-.025*t,1-.015*t)});}
@@ -219,8 +274,8 @@ function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,hei
  p.drawRectangle({x,y:top-HEADER_H,width:w,height:HEADER_H,color:C.navy});
  p.drawRectangle({x,y:top-HEADER_H,width:5,height:HEADER_H,color:input.inferred?C.violet:input.unavailable?C.coral:C.teal});
  tracked(p,input.title.toUpperCase(),x+13,top-19,bold,8,C.white,.65);
- const status=input.unavailable?"REQUIRES AUDIO":input.inferred?"HYPOTHESIS":"MEASURED";
- tracked(p,status,x+w-90,top-19,bold,6.2,input.inferred?C.gold:C.teal,.45);
+ const status=chartPanelDisplayStatus(input),statusWidth=Math.min(155,Math.max(78,w*.38));
+ tracked(p,status,x+w-13-statusWidth,top-19,bold,5.2,input.fixture||input.inferred?C.gold:input.unavailable?C.coral:C.teal,.25);
  const captionTop=bottom+CAPTION_H;
  line(p,x+9,captionTop,x+w-9,captionTop,C.line,.65);
  let cy=bottom+CAPTION_H-12;
@@ -369,8 +424,19 @@ function drawBars(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typ
  rows.slice(0,6).forEach((r,i)=>{const y=g.contentTop-20-i*19,c=color(i);text(p,r.label.slice(0,25),g.x+13,y,b,7,c);text(p,shown(r.value).slice(0,48),g.x+178,y,f,7,C.ink);});
 }
 function drawConstellation(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
- const cx=g.x+g.width/2,cy=g.contentBottom+80;p.drawCircle({x:cx,y:cy,size:23,borderColor:C.violet,borderWidth:1.4,color:C.paper});
- rows.slice(0,5).forEach((r,i)=>{const a=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(a)*100,py=cy+Math.sin(a)*30;line(p,cx,cy,px,py,color(i),1);p.drawCircle({x:px,y:py,size:15,borderColor:color(i),borderWidth:1,color:C.white});text(p,shown(r.value).slice(0,18),px-34,py-2,f,5.6,C.ink);});
+ const labelHeights=constellationLabelRowHeights(rows,g.width),labelTotal=labelHeights.reduce((sum,value)=>sum+value,0);
+ const cx=g.x+g.width/2,graphBottom=g.contentBottom+labelTotal+10,cy=graphBottom+56,radiusX=Math.min(g.width*.2,88),radiusY=38;
+ p.drawCircle({x:cx,y:cy,size:23,borderColor:C.violet,borderWidth:1.4,color:C.paper});
+ rows.slice(0,5).forEach((row,i)=>{
+  const angle=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(angle)*radiusX,py=cy+Math.sin(angle)*radiusY;
+  line(p,cx,cy,px,py,color(i),1);p.drawCircle({x:px,y:py,size:15,borderColor:color(i),borderWidth:1,color:C.white});
+  const labelWidth=(g.width-36)/2,rowIndex=Math.floor(i/2),column=i%2;
+  const rowTop=graphBottom-7-labelHeights.slice(0,rowIndex).reduce((sum,value)=>sum+value,0);
+  const labelX=g.x+12+column*(labelWidth+12),labelBottom=rowTop-labelHeights[rowIndex]+2;
+  p.drawCircle({x:labelX+3,y:labelBottom+labelHeights[rowIndex]/2-2,size:2.2,color:color(i)});
+  const lines=wrap(shown(row.value),f,5.6,labelWidth-12);
+  lines.forEach((part,lineIndex)=>text(p,part,labelX+11,rowTop-9-lineIndex*8,f,5.6,C.ink));
+ });
 }
 function drawTimeline(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const y=g.contentBottom+80;line(p,g.x+42,y,g.x+g.width-42,y,C.line,1.4);
@@ -382,7 +448,7 @@ function drawChain(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<ty
  names.forEach((name,i)=>{const x=g.x+82+i*166,y=g.contentBottom+78;if(i<2)line(p,x+30,y,g.x+82+(i+1)*166-30,y,C.blue,1.5);p.drawCircle({x,y,size:25,borderColor:color(i),borderWidth:1.3,color:C.white});text(p,name,x-30,y-3,b,4.7,color(i));wrap(shown(rows[i]?.value),f,5.8,110).slice(0,2).forEach((s,j)=>text(p,s,x-54,y-39-j*8,f,5.8,C.ink));});
 }
 export function drawChartPanel(page:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont):void{
- const kind=input.kind??"bars",height=chartPanelHeight(kind,input.rows),g=drawFrame(page,input,font,bold,height);
+ const kind=input.kind??"bars",height=chartPanelHeight(kind,input.rows,input.width??CARD_W),g=drawFrame(page,input,font,bold,height);
  switch(kind){
   case "sonic":drawSonic(page,input.rows,font,bold,g);break;
   case "layers":drawLayers(page,input.rows,font,bold,g);break;

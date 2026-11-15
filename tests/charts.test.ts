@@ -1,11 +1,32 @@
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildStrengthRiskChartRows, compactChartItemSummary, strengthRiskItemsForColumn, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows, compactChartItemSummary, strengthRiskItemsForColumn, chartPanelStatus, chartPanelDisplayStatus, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
 import { checkLayout } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
-import { philloLowConfidenceFixture } from "../scripts/fixtures/phillo-low-confidence.mjs";
+import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 
 describe("native PDF chart helpers", () => {
+  it("renders fixture status and underlying evidence class independently", () => {
+    const classes = [
+      ["measured", "MEASURED"],
+      ["provider-recognized", "PROVIDER-RECOGNIZED"],
+      ["inferred", "HYPOTHESIS"],
+      ["assessment-derived", "ASSESSMENT-DERIVED"],
+      ["illustrative", "ILLUSTRATIVE"],
+    ] as const;
+    expect(chartPanelStatus({ fixture: false })).toBe("UNCLASSIFIED");
+    for (const [evidenceClass, label] of classes) {
+      expect(chartPanelStatus({ evidenceClass })).toBe(label);
+      const display = chartPanelDisplayStatus({ fixture: true, evidenceClass });
+      expect(display).toContain("SYNTHETIC FIXTURE");
+      expect(display).toContain(label);
+    }
+    expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" }))
+      .toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO · MEASURED");
+    expect(chartPanelDisplayStatus({ unavailable: true, evidenceClass: "provider-recognized" }))
+      .toBe("REQUIRES AUDIO · PROVIDER-RECOGNIZED");
+  });
+
   it("preserves full assessment text while supplying concise chart-only item summaries", () => {
     const strength = "The vocal performance carries a distinctive melodic contour and clear emotional intent across the central hook.";
     const risk = "The second verse repeats the same rhythmic pattern for too long and needs a deliberate arrangement contrast.";
@@ -17,14 +38,14 @@ describe("native PDF chart helpers", () => {
     expect(rows[3].summary!.length).toBeLessThan(risk.length);
   });
 
-  it("keeps the synthetic Phillo rhythm fixture aligned with the active abstaining estimator", () => {
-    expect(philloLowConfidenceFixture.evidence.fixture).toBe(true);
-    expect(philloLowConfidenceFixture.sonicDna.rhythmFeatures).toMatchObject({
+  it("keeps the generic ambiguous-audio fixture aligned with the abstaining estimator", () => {
+    expect(ambiguousAudioFixture.evidence.fixture).toBe(true);
+    expect(ambiguousAudioFixture.sonicDna.rhythmFeatures).toMatchObject({
       status: "insufficient_evidence",
       method: "high_frequency_transient_autocorrelation",
       confidence: 0,
     });
-    expect(philloLowConfidenceFixture.sonicDna.rhythmFeatures.abstentionReason).toContain("withheld");
+    expect(ambiguousAudioFixture.sonicDna.rhythmFeatures.abstentionReason).toContain("withheld");
   });
 
   it("does not draw a numeric BPM scale when the tempo value is withheld", () => {
@@ -116,6 +137,38 @@ describe("native PDF chart helpers", () => {
     }
   });
 
+
+  it("keeps complete constellation labels legible in narrow and boundary-aligned chart areas", async () => {
+    const rows: ChartRow[] = [
+      { label: "Primary lane", value: "A very long primary creative lane label that must remain complete without shortening or silent truncation" },
+      { label: "Adjacent lane", value: "A second extended adjacent lane label with several words and enough length to wrap across multiple lines" },
+      { label: "Adjacent lane", value: "A third boundary-case label with an exceptionallylongunbrokensegmentthatmustwrapwithoutlosinganycharacters" },
+      { label: "Adjacent lane", value: "A fourth adjacent lane label used to test the lower label row and chart footer clearance" },
+      { label: "Adjacent lane", value: "A fifth final label that must remain inside the rightmost narrow chart column" },
+    ];
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    for (const width of [240, 300, 499]) {
+      const height = chartPanelHeight("constellation", rows, width);
+      for (const x of [0, 48, 595.28 - width]) {
+        expect(chartPanelLayoutErrors("constellation", rows, x, 760, height, width)).toEqual([]);
+        const rects = chartPanelLayoutRects("constellation", rows, x, 760, height, width);
+        const card = rects.find((rect) => rect.id === "card-bounds");
+        expect(card).toBeDefined();
+        expect(card!.x).toBeGreaterThanOrEqual(0);
+        expect(card!.x + card!.width).toBeLessThanOrEqual(595.28 + 0.01);
+        expect(rects.filter((rect) => rect.id.startsWith("label-constellation-value-"))).toHaveLength(5);
+        const page = pdf.addPage([595.28, 841.89]);
+        expect(() => drawChartPanel(page, {
+          title: "Lane constellation", kind: "constellation", rows,
+          shows: "Primary and adjacent lane hypotheses", cantShow: "Verified market size or audience overlap",
+          width, y: 760,
+        }, font, bold)).not.toThrow();
+      }
+    }
+    expect(await pdf.save()).toBeInstanceOf(Uint8Array);
+  });
 
   it("keeps planned Strengths and Risks content in their own columns for every fixture, including four-item long-form lists", () => {
     for (const fixture of [fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture]) {

@@ -81,7 +81,7 @@ export function checkPageDensity(rects:ReportRect[]):{ok:boolean;emptyRatio:numb
  const ratio=Math.max(0,Math.min(1,1-occupied/AVAILABLE));
  return {ok:ratio<=.4,emptyRatio:ratio};
 }
-function header(page:PDFPage,title:string,n:number,f:{regular:PDFFont;bold:PDFFont},accent=C.blue){page.drawRectangle({x:0,y:H-7,width:W,height:7,color:accent});page.drawText("RESON8 / A&R INTELLIGENCE",{x:M,y:H-34,size:8,font:f.bold,color:C.navy});page.drawText(title.toUpperCase(),{x:M,y:H-58,size:7,font:f.bold,color:accent});page.drawLine({start:{x:M,y:H-68},end:{x:W-M,y:H-68},color:C.line,thickness:.7});page.drawLine({start:{x:M,y:43},end:{x:W-M,y:43},color:C.line,thickness:.7});page.drawText("CONFIDENTIAL • EVIDENCE-LED ASSESSMENT",{x:M,y:28,size:6.5,font:f.regular,color:C.muted});page.drawText(String(n).padStart(2,"0"),{x:W-M-18,y:27,size:8,font:f.bold,color:C.navy});}
+function header(page:PDFPage,title:string,n:number,f:{regular:PDFFont;bold:PDFFont},accent=C.blue,fixture=false){page.drawRectangle({x:0,y:H-7,width:W,height:7,color:accent});page.drawText("RESON8 / A&R INTELLIGENCE",{x:M,y:H-34,size:8,font:f.bold,color:C.navy});if(fixture)page.drawText("SYNTHETIC FIXTURE",{x:W-M-105,y:H-34,size:6.5,font:f.bold,color:C.coral});page.drawText(title.toUpperCase(),{x:M,y:H-58,size:7,font:f.bold,color:accent});page.drawLine({start:{x:M,y:H-68},end:{x:W-M,y:H-68},color:C.line,thickness:.7});page.drawLine({start:{x:M,y:43},end:{x:W-M,y:43},color:C.line,thickness:.7});page.drawText("CONFIDENTIAL • EVIDENCE-LED ASSESSMENT",{x:M,y:28,size:6.5,font:f.regular,color:C.muted});page.drawText(String(n).padStart(2,"0"),{x:W-M-18,y:27,size:8,font:f.bold,color:C.navy});}
 function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PDFFont}){
  const p=pdf.addPage([W,H]);p.drawRectangle({x:0,y:0,width:W,height:H,color:C.paper});p.drawRectangle({x:0,y:H-14,width:W,height:14,color:C.navy});
  const coverRects:ReportRect[]=[];
@@ -112,6 +112,30 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
 }
 interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string[];}
 function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"Insufficient evidence"};return m[v.toLowerCase()]??"Insufficient evidence";}
+export interface ArNotesDecisionContext { heading:string; verdict:string; summary:string; prompts:string[]; }
+export function paginateArNotesSummary(lines:string[]):string[][] {
+ const chunks:string[][]=[];let offset=0;
+ while(lines.length-offset>16){
+  const count=Math.min(42,lines.length-offset-16);
+  chunks.push(lines.slice(offset,offset+count));
+  offset+=count;
+ }
+ chunks.push(lines.slice(offset));
+ return chunks;
+}
+export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecisionContext {
+ const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
+ return {
+  heading:"DECISION CONTEXT",
+  verdict:coverVerdictLabel(input).toUpperCase(),
+  summary:val(safeAssessment.executiveSummary,"No executive summary supplied."),
+  prompts:[
+   "What evidence would change the current decision?",
+   "Which identity, rights or source gaps remain unresolved?",
+   "What should be verified before any external pitch?",
+  ],
+ };
+}
 export function coverVerdictLabel(input:AuditReportInput):string {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
  return verdictLabel(val(safeAssessment.commercialRead?.marketability,"undetermined"));
@@ -153,24 +177,24 @@ export function metadataFieldSource(e:Record<string,unknown>,field:string):strin
 }
 function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),counts=countEvidenceLayers(a.evidenceLabels);
- if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",rows:[{label:"Measured",value:counts.OBSERVED},{label:"Source matches",value:counts.RECOGNIZED},{label:"Cross-checked",value:counts.RECONCILED},{label:"Hypotheses",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful."}];
+ if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",evidenceClass:"assessment-derived",rows:[{label:"Measured",value:counts.OBSERVED},{label:"Source matches",value:counts.RECOGNIZED},{label:"Cross-checked",value:counts.RECONCILED},{label:"Hypotheses",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful."}];
  if(title==="Identity and source reconciliation"&&Array.isArray(e.catalogSources)&&e.catalogSources.length>0){
   const sources=e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"));
   const count=(status:string)=>sources.filter((item)=>item.status===status).length;
-  return [{title:"DSP platform coverage",kind:"bars",rows:[
+  return [{title:"DSP platform coverage",kind:"bars",evidenceClass:"provider-recognized",rows:[
    {label:"Recognized",value:count("recognized")},
    {label:"Partial",value:count("partial")},
    {label:"Unavailable",value:count("unavailable")},
   ],shows:"Provider lookup outcomes across the submitted track links.",cantShow:"Audience size, stream counts, playlist placement or listener demand."}];
  }
  if(title==="Sonic DNA and technical profile")return [
- {title:"Sonic DNA dashboard",kind:"sonic",unavailable:!hasAudio,rows:[{label:"BPM",value:hasAudio&&tempoReliable?chartValue(s?.bpm):null},{label:"KEY / MODE",value:hasAudio&&isReliableKey(s)?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},{label:"KEY CONFIDENCE",value:hasAudio&&typeof s?.keyConfidence==="number"?Math.round(s.keyConfidence*100)+"%":null},{label:"RMS LEVEL dBFS",value:hasAudio?chartValue(s?.rmsLevelDbfs):null},{label:"DYNAMIC RANGE",value:hasAudio?chartValue(s?.dynamicRangeDb):null},{label:"RMS ENERGY",value:hasAudio?chartValue(s?.rmsEnergy):null}],shows:"Confidence-qualified tempo and key plus master-derived RMS signal level, dynamic range and spectral fields when an uploaded master exists.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."},
- {title:"Tempo and energy spectrum",kind:"spectrum",unavailable:!hasAudio,rows:[{label:"TEMPO",value:hasAudio&&tempoReliable?chartValue(s?.bpm):null},{label:"RMS ENERGY",value:hasAudio?chartValue(s?.rmsEnergy):null},{label:"DYNAMIC RANGE",value:hasAudio?chartValue(s?.dynamicRangeDb):null}],shows:tempoReliable?"Confidence-qualified master-derived tempo and energy measurements.":"RMS energy and dynamic range; tempo withheld because confidence is insufficient.",cantShow:"A genre verdict or listener reaction from these measurements alone."}];
- if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
- if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"Dynamic / RMS level",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
- if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",rows:buildStrengthRiskChartRows(a.strengths.slice(0,10),a.risks.slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
- if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:a.promotionPlan.playlistCategories[0]??"Category to investigate"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
- if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
+ {title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,rows:[{label:"BPM",value:hasAudio&&tempoReliable?chartValue(s?.bpm):null},{label:"KEY / MODE",value:hasAudio&&isReliableKey(s)?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},{label:"KEY CONFIDENCE",value:hasAudio&&typeof s?.keyConfidence==="number"?Math.round(s.keyConfidence*100)+"%":null},{label:"RMS LEVEL dBFS",value:hasAudio?chartValue(s?.rmsLevelDbfs):null},{label:"DYNAMIC RANGE",value:hasAudio?chartValue(s?.dynamicRangeDb):null},{label:"RMS ENERGY",value:hasAudio?chartValue(s?.rmsEnergy):null}],shows:"Confidence-qualified tempo and key plus master-derived RMS signal level, dynamic range and spectral fields when an uploaded master exists.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."},
+ {title:"Tempo and energy spectrum",kind:"spectrum",evidenceClass:"measured",unavailable:!hasAudio,rows:[{label:"TEMPO",value:hasAudio&&tempoReliable?chartValue(s?.bpm):null},{label:"RMS ENERGY",value:hasAudio?chartValue(s?.rmsEnergy):null},{label:"DYNAMIC RANGE",value:hasAudio?chartValue(s?.dynamicRangeDb):null}],shows:tempoReliable?"Confidence-qualified master-derived tempo and energy measurements.":"RMS energy and dynamic range; tempo withheld because confidence is insufficient.",cantShow:"A genre verdict or listener reaction from these measurements alone."}];
+ if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
+ if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"Dynamic / RMS level",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
+ if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(a.strengths.slice(0,10),a.risks.slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
+ if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:a.promotionPlan.playlistCategories[0]??"Category to investigate"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
+ if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",evidenceClass:"illustrative",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
  return [];
 }
 
@@ -247,10 +271,10 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  const plannedPages=Math.max(1,Math.ceil(totalEstimatedHeight/(AVAILABLE*.9)));
  if(plannedPages>18)throw new Error("Estimated report body exceeds the 20-page cap");
  let pageNo=1,page=pdf.addPage([W,H]),y=TOP,rects:ReportRect[]=[];
- header(page,"Audit findings",pageNo,fonts);
+ header(page,"Audit findings",pageNo,fonts,C.blue,input.evidence.fixture===true);
  const chromeRects=():ReportRect[]=>[{x:M,y:H-44,width:220,height:10,id:"header-brand"},{x:M,y:H-64,width:W-2*M,height:8,id:"header-title"},{x:M,y:H-68,width:W-2*M,height:0.7,id:"header-rule"},{x:M,y:43,width:W-2*M,height:0.7,id:"footer-rule"},{x:M,y:25,width:250,height:10,id:"footer-text"},{x:W-M-18,y:25,width:18,height:10,id:"footer-page-number"}];
- const validate=()=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));const density=checkPageDensity(rects);if(!density.ok)console.warn("[report-layout] Page "+pageNo+" density below 65% content occupancy ("+Math.round((1-density.emptyRatio)*100)+"%); warning only.");};
- const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent);y=TOP;rects=[];};
+ const validate=(checkDensity=true)=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));if(!checkDensity)return;const density=checkPageDensity(rects);if(!density.ok)console.warn("[report-layout] Page "+pageNo+" density below 65% content occupancy ("+Math.round((1-density.emptyRatio)*100)+"%); warning only.");};
+ const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent,input.evidence.fixture===true);y=TOP;rects=[];};
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
   const sonicBlock=section.title==="Sonic DNA and technical profile";
@@ -297,34 +321,99 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
     y=TOP-20-visualHeading.length*18-35;
    }
    const panelTop=y-8;
-   drawChartPanel(page,{...panel,y:panelTop},fonts.regular,fonts.bold);
+   drawChartPanel(page,{...panel,fixture:input.evidence.fixture===true,y:panelTop},fonts.regular,fonts.bold);
    rects.push({x:M,y:panelTop-panelHeight,width:W-2*M,height:panelHeight,id:"chart-"+si+"-"+panel.title.replace(/\s+/g,"-")});
    y=panelTop-panelHeight-14;
   }
   y-=12;
  }
- // Place the editable A&R notes field in genuine remaining page space when possible.
- // Otherwise give it a dedicated form page. Both paths run the normal density gate.
+ // Render the same decision context on either notes path. Long summaries continue
+ // across context pages; the editable notes field remains a single widget on the final page.
  const form=pdf.getForm(),field=form.createTextField("ar_notes");field.enableMultiline();
- const notesFieldBottom=BOTTOM+12,notesTitleY=y-18,notesSubtitleY=notesTitleY-25,notesFieldTop=notesSubtitleY-16;
- const inlineNotesHeight=Math.min(470,notesFieldTop-notesFieldBottom);
- if(inlineNotesHeight>=120){
+ const decisionContext=buildArNotesDecisionContext(input);
+ const allSummaryLines=wrap(decisionContext.summary,fonts.regular,8.2,W-2*M-28);
+ const drawDecisionContext=(target:PDFPage,topY:number,shouldDraw=true,summaryLines=allSummaryLines,includePrompts=true):{rects:ReportRect[];bottom:number}=>{
+  const cardHeight=50+summaryLines.length*11,cardBottom=topY-cardHeight;
+  if(shouldDraw){
+   target.drawRectangle({x:M,y:cardBottom,width:W-2*M,height:cardHeight,color:C.paper,borderColor:C.line,borderWidth:.7});
+   target.drawText(decisionContext.heading,{x:M+14,y:topY-14,size:7,font:fonts.bold,color:C.violet});
+   target.drawText(decisionContext.verdict,{x:M+14,y:topY-36,size:12,font:fonts.bold,color:C.navy});
+  }
+  let summaryY=topY-54;
+  for(const line of summaryLines){if(shouldDraw)target.drawText(line,{x:M+14,y:summaryY,size:8.2,font:fonts.regular,color:C.ink});summaryY-=11;}
+  const rects:ReportRect[]=[{x:M,y:cardBottom,width:W-2*M,height:cardHeight,id:"decision-context"}];
+  if(!includePrompts)return {rects,bottom:cardBottom};
+  const promptsTitleY=cardBottom-18;
+  if(shouldDraw)target.drawText("REVIEW PROMPTS",{x:M,y:promptsTitleY,size:7,font:fonts.bold,color:C.violet});
+  rects.push({x:M,y:promptsTitleY-3,width:220,height:10,id:"review-prompts-title"});
+  let promptY=promptsTitleY-17,bottom=promptY;
+  for(let index=0;index<decisionContext.prompts.length;index++){
+   const lines=wrap(decisionContext.prompts[index],fonts.regular,7.5,W-2*M-24);
+   const height=lines.length*10;
+   for(let line=0;line<lines.length;line++)if(shouldDraw)target.drawText((line===0?"- ":"  ")+lines[line],{x:M+8,y:promptY-line*10,size:7.5,font:fonts.regular,color:C.muted});
+   rects.push({x:M+8,y:promptY-height+2,width:W-2*M-16,height:height,id:"review-prompt-"+index});
+   bottom=Math.min(bottom,promptY-height+2);
+   promptY-=height+4;
+  }
+  return {rects,bottom};
+ };
+ const notesFieldBottom=BOTTOM+12,notesTitleY=y-18,notesSubtitleY=notesTitleY-25;
+ const inlineContextTop=notesSubtitleY-32;
+ const inlineLayout=drawDecisionContext(page,inlineContextTop,false,allSummaryLines,true);
+ const inlineFieldTop=inlineLayout.bottom-18;
+ const inlineNotesHeight=inlineFieldTop-notesFieldBottom;
+ if(inlineNotesHeight>=180){
+  const inlineContext=drawDecisionContext(page,inlineContextTop,true,allSummaryLines,true);
   page.drawText("A&R NOTES",{x:M,y:notesTitleY,size:16,font:fonts.bold,color:C.violet});
   page.drawText("Private working notes — editable field",{x:M,y:notesSubtitleY,size:8.5,font:fonts.regular,color:C.muted});
   field.addToPage(page,{x:M,y:notesFieldBottom,width:W-2*M,height:inlineNotesHeight,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
   field.setFontSize(9);field.updateAppearances(fonts.regular);
-  rects.push({x:M,y:notesTitleY-4,width:220,height:20,id:"notes-title"},{x:M,y:notesSubtitleY-3,width:300,height:12,id:"notes-subtitle"},{x:M,y:notesFieldBottom,width:W-2*M,height:inlineNotesHeight,id:"A&R notes field"});
+  rects.push(
+   {x:M,y:notesTitleY-4,width:220,height:20,id:"notes-title"},
+   {x:M,y:notesSubtitleY-3,width:300,height:12,id:"notes-subtitle"},
+   ...inlineContext.rects,
+   {x:M,y:notesFieldBottom,width:W-2*M,height:inlineNotesHeight,id:"A&R notes field"}
+  );
   validate();
  }else{
-  validate();
-  const notes=pdf.addPage([W,H]);pageNo++;header(notes,"A&R notes",pageNo,fonts,C.violet);
-  notes.drawText("A&R NOTES",{x:M,y:TOP,size:20,font:fonts.bold,color:C.navy});
-  notes.drawText("Private working notes — editable field",{x:M,y:TOP-27,size:9,font:fonts.regular,color:C.muted});
-  field.addToPage(notes,{x:M,y:145,width:W-2*M,height:470,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
-  field.setFontSize(10);field.updateAppearances(fonts.regular);
-  const noteRects=[{x:M,y:TOP-4,width:220,height:24,id:"notes-title"},{x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},{x:M,y:145,width:W-2*M,height:470,id:"A&R notes field"}];
-  const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; "));
-  const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes page falls below the 65% content-occupancy threshold");
+  // A compact continuation marker fills the intentional transition space and tells readers
+  // exactly where the complete decision context and editable notes field continue.
+  if(y-BOTTOM>=70){
+   const markerText="A&R NOTES CONTINUE — decision context, review prompts and editable working field follow on the next page.";
+   const markerY=y-58;
+   page.drawRectangle({x:M,y:markerY,width:W-2*M,height:46,color:C.paper,borderColor:C.line,borderWidth:.7});
+   const markerLines=wrap(markerText,fonts.regular,8,W-2*M-24);
+   markerLines.forEach((line,index)=>page.drawText(line,{x:M+12,y:markerY+29-index*11,size:8,font:fonts.regular,color:C.navy}));
+   rects.push({x:M,y:markerY,width:W-2*M,height:46,id:"notes-continuation-marker"});
+  }
+  // This final body page intentionally hands off to a dedicated notes section;
+  // the density heuristic is applied to the following notes pages instead.
+  validate(false);
+  // Keep at most 42 summary lines on continuation pages and at most 16 on the final
+  // notes page, leaving room for all prompts and a meaningful editable field.
+  const summaryChunks=paginateArNotesSummary(allSummaryLines);
+  for(let chunkIndex=0;chunkIndex<summaryChunks.length;chunkIndex++){
+   const isLast=chunkIndex===summaryChunks.length-1;
+   const notes=pdf.addPage([W,H]);pageNo++;
+   header(notes,chunkIndex===0?"A&R notes":"A&R notes continued",pageNo,fonts,C.violet,input.evidence.fixture===true);
+   notes.drawText("A&R NOTES",{x:M,y:TOP,size:20,font:fonts.bold,color:C.navy});
+   notes.drawText(chunkIndex===0?"Private working notes — editable field":"DECISION CONTEXT — CONTINUED",{x:M,y:TOP-27,size:9,font:fonts.regular,color:C.muted});
+   const notesContext=drawDecisionContext(notes,TOP-105,true,summaryChunks[chunkIndex],isLast);
+   const noteRects:ReportRect[]=[
+    {x:M,y:TOP-4,width:220,height:24,id:"notes-title"},
+    {x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},
+    ...notesContext.rects
+   ];
+   if(isLast){
+    const notesFieldY=145,notesFieldTop=notesContext.bottom-18,notesFieldHeight=notesFieldTop-notesFieldY;
+    if(notesFieldHeight<160)throw new Error("A&R Notes final page cannot safely fit the complete context, review prompts and editable field");
+    field.addToPage(notes,{x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
+    field.setFontSize(9);field.updateAppearances(fonts.regular);
+    noteRects.push({x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,id:"A&R notes field"});
+   }
+   const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; "));
+   const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes decision-context page falls below the 65% content-occupancy threshold");
+  }
  }
  if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");
  signal?.throwIfAborted();
