@@ -22,7 +22,7 @@ const baseAssessment = {
     days90: "Scale the campaign based on playlist response.",
   },
   productionArrangementGuidance: "Add a new instrumental bridge and strengthen the bass arrangement.",
-  confidence: 0,
+  confidence: 0.75,
   scorecard: {
     tempoLaneFit: { score: 80, rationale: "Tempo supports the lane." },
     rhythmicConsistency: { score: 75, rationale: "The rhythm is consistent." },
@@ -149,7 +149,7 @@ describe("Phillo evidence guardrails", () => {
   });
 
   it("withholds track-specific release and partner recommendations when overall assessment confidence is zero", () => {
-    const result = sanitizeAssessmentForEvidence(baseAssessment, {
+    const result = sanitizeAssessmentForEvidence({ ...baseAssessment, confidence: 0 }, {
       provenance: "uploaded_audio_master",
       bpm: 95,
       tempoConfidence: 0,
