@@ -126,11 +126,13 @@ describe("GroqClient section groups",()=>{
  it("retries Groq provider-side JSON schema validation failures with the failed generation as correction context",async()=>{
   let evidenceScoreCalls=0;
   const prompts:string[]=[];
+  const systemPrompts:string[]=[];
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
    const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
    if(group==="evidence-score"){
     evidenceScoreCalls++;
     prompts.push(body.messages[1].content);
+    systemPrompts.push(body.messages[0].content);
     expect(body.response_format.json_schema.strict).toBe(true);
     expect(body.response_format.json_schema.schema.required).toContain("evidenceLabels");
     if(evidenceScoreCalls===1){
@@ -149,6 +151,7 @@ describe("GroqClient section groups",()=>{
   expect(evidenceScoreCalls).toBe(2);
   expect(prompts[1]).toContain("json_validate_failed");
   expect(prompts[1]).toContain("evidenceLabels");
+  expect(systemPrompts[0]).toContain("Always include the evidenceLabels array");
   expect(result.evidenceLabels).toHaveLength(1);
  });
  it("does not retry unrelated non-transient Groq HTTP 400 errors",async()=>{
