@@ -90,8 +90,9 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     result.aAndRPositioning.adjacentLanes = [];
     result.aAndRPositioning.rationale = GENRE_UNCONFIRMED_RATIONALE;
   }
-  if (!hasProviderGenre && typeof result.laneHypothesis === "string") {
-    result.laneHypothesis = GENRE_UNCONFIRMED_RATIONALE;
+  const mutable = result as Record<string, any>;
+  if (!hasProviderGenre && typeof mutable.laneHypothesis === "string") {
+    mutable.laneHypothesis = GENRE_UNCONFIRMED_RATIONALE;
   }
   return result;
 }
