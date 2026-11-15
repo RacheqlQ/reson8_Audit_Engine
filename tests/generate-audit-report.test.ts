@@ -160,7 +160,6 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
  });
-});
  it("checks generated-output pagination, chart-bearing pages, continuation pages, footer clearance, disclosures and the 20-page cap",async()=>{
   const longInput=structuredClone(longFormAudioFixture) as AuditReportInput;
   longInput.evidence={...longInput.evidence,fixture:true};
@@ -181,4 +180,4 @@ describe("A4 report layout and fixture coverage",()=>{
    expect(pdf.getPageCount()).toBeLessThanOrEqual(20);
   }
  });
-
+});
