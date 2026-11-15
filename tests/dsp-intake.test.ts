@@ -38,13 +38,22 @@ describe("multi-DSP track-link intake", () => {
     ])).toThrow("Only one distinct track per DSP platform is allowed in a single audit");
   });
 
-  it("preserves case-sensitive Spotify and YouTube identifiers during deduplication", () => {
+  it("preserves case-sensitive Spotify and YouTube Music identifiers during deduplication", () => {
     const spotifyUpper = normalizeDspTrackLinks(["https://open.spotify.com/track/AbCd"])[0];
     const spotifyLower = normalizeDspTrackLinks(["https://open.spotify.com/track/abcd"])[0];
-    const youtubeUpper = normalizeDspTrackLinks(["https://www.youtube.com/watch?v=AbCd"])[0];
-    const youtubeLower = normalizeDspTrackLinks(["https://www.youtube.com/watch?v=abcd"])[0];
+    const youtubeUpper = normalizeDspTrackLinks(["https://music.youtube.com/watch?v=AbCd"])[0];
+    const youtubeLower = normalizeDspTrackLinks(["https://music.youtube.com/watch?v=abcd"])[0];
     expect(spotifyUpper?.catalogId).not.toBe(spotifyLower?.catalogId);
     expect(youtubeUpper?.catalogId).not.toBe(youtubeLower?.catalogId);
+  });
+
+  it.each([
+    "https://www.youtube.com/watch?v=generic-video",
+    "https://youtube.com/watch?v=generic-video",
+    "https://youtu.be/generic-video",
+    "https://www.youtube.com/shorts/generic-video",
+  ])("rejects generic YouTube video URL at intake: %s", (url) => {
+    expect(() => normalizeDspTrackLinks([url])).toThrow("Unsupported DSP or catalog URL");
   });
 
   it("rejects more than eight submitted links before provider work", () => {
