@@ -5,10 +5,19 @@ describe("DSP catalog URL detection", () => {
   it("detects supported track hosts", () => {
     expect(detectDspPlatform("https://open.spotify.com/track/123")).toBe("spotify");
     expect(detectDspPlatform("https://music.apple.com/us/album/x/1?i=2")).toBe("apple_music");
-    expect(detectDspPlatform("https://www.youtube.com/watch?v=abc")).toBe("youtube_music");
+    expect(detectDspPlatform("https://music.youtube.com/watch?v=abc")).toBe("youtube_music");
+    expect(detectDspPlatform("https://www.youtube.com/watch?v=abc")).toBe("unknown");
+    expect(detectDspPlatform("https://youtu.be/abc")).toBe("unknown");
     expect(detectDspPlatform("https://www.deezer.com/track/123")).toBe("deezer");
     expect(detectDspPlatform("https://tidal.com/browse/track/123")).toBe("tidal");
     expect(detectDspPlatform("https://audiomack.com/artist/song/track-title")).toBe("audiomack");
+  });
+
+  it("does not misclassify generic YouTube video links as YouTube Music catalogue links", async () => {
+    await expect(collectCatalogMetadata("https://www.youtube.com/watch?v=abc"))
+      .rejects.toThrow("Unsupported DSP or catalog URL");
+    await expect(collectCatalogMetadata("https://youtu.be/abc"))
+      .rejects.toThrow("Unsupported DSP or catalog URL");
   });
 
   it("rejects unsupported or unsafe URLs", () => {
