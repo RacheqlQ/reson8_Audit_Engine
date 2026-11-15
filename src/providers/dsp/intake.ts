@@ -16,9 +16,6 @@ const TRACK_HOSTS: Readonly<Record<string, DspTrackPlatform>> = Object.freeze({
   "tidal.com": "tidal",
   "listen.tidal.com": "tidal",
   "music.youtube.com": "youtube_music",
-  "youtube.com": "youtube_music",
-  "www.youtube.com": "youtube_music",
-  "youtu.be": "youtube_music",
   "audiomack.com": "audiomack",
   "www.audiomack.com": "audiomack",
 });
