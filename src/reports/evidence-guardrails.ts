@@ -47,7 +47,7 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
     && agreement >= 0.8 && agreement <= 1;
 }
 
-function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean): unknown {
+function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean): unknown {
   if (typeof value === "string") {
     const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
@@ -59,11 +59,14 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
       const hasGenreClaim = suppressGenre && GENRE_TAXONOMY.some((genre) =>
         genre.label.length >= 4 && lower.includes(genre.label.toLocaleLowerCase()),
       );
-      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim;
+      const commercialTerms = /\\b(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|marketability|commercial performance|commercial potential|commercial success|commercially (?:promising|viable|strong|successful|attractive|competitive)|demand|traction|market fit)\\b/i;
+      const cautionaryCommercialContext = /\\b(?:not|no|without|insufficient|unverified|unavailable|unknown|cannot|can't|could not|unable|withheld|requires? review|verify|verified|source-attributed|measure|monitor|track|investigate|evidence|reported)\\b/i.test(sentence);
+      const hasCommercialClaim = suppressCommercial && commercialTerms.test(sentence) && !cautionaryCommercialContext;
+      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim;
     });
     return kept.join(" ").trim() || "Not asserted: the supporting measurement confidence is insufficient.";
   }
-  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre));
+  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial));
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>)
       .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre)]));
@@ -128,7 +131,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     genre && typeof genre.primaryGenre === "string" && genre.primaryGenre.trim()
       && genre.abstained !== true,
   );
-  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre) as T;
+  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence)) as T;
 
   if (hasAlbumConflict(evidence)) {
     result = sanitizeAlbumConflictClaims(result) as T;
