@@ -29,7 +29,7 @@ jobs:
           node-version: "22.12.0"
       - name: Install dependencies
         run: npm install
-      - name: Run isolated PostgreSQL worker-fencing regressions
+      - name: Run focused report-quality regressions\n        run: npx vitest run tests/charts.test.ts tests/generate-audit-report.test.ts tests/sample-report-script.test.ts\n      - name: Run isolated PostgreSQL worker-fencing regressions
         env:
           WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
         run: bash .github/scripts/worker-fencing-postgres.sh
