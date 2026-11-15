@@ -60,7 +60,9 @@ describe("combined master and DSP processing", () => {
     });
 
     expect(result.status).toBe("completed");
-    expect(assessmentInput.evidence).toMatchObject({ sourceCombination: "master_and_dsp", platform: "spotify" });
+    expect(assessmentInput.evidence).toMatchObject({ sourceCombination: "master_and_dsp" });
+    expect(assessmentInput.evidence).not.toHaveProperty("platform");
+    expect(assessmentInput.catalogMetadata).toBeNull();
     expect(assessmentInput.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
     expect(events).toContain("catalog-saved");
     expect(events).toContain("master-downloaded");
