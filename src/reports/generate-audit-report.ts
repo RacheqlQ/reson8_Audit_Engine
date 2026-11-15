@@ -230,7 +230,7 @@ function sections(i:AuditReportInput):Section[]{
  const vocalStatus=String(vocalFeatures?.status??"not_recorded");
  const curatorVocalAnalyzed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
  const vocalAnalysisDisclosure=!vocalFeatures||["not_analyzed","not_recorded","unavailable","not_configured"].includes(vocalStatus)
-  ? "Vocal analysis: Not performed — "+(text(vocalFeatures?.reason)||"no vocal-analysis result is recorded")+". Vocal presence/absence is unknown and is not inferred."
+  ? "Vocal analysis: Not performed — "+(text(vocalFeatures?.reason)||"no vocal-analysis result is recorded")+"; vocal presence/absence is unknown and is not inferred."
   : curatorVocalAnalyzed
    ? "Vocal analysis: Performed (status: "+vocalStatus+"). Only explicitly returned vocal measurements may be reported; unmeasured vocal attributes remain unknown."
    : "Vocal analysis: Status "+vocalStatus+"; no conclusion about vocal presence or absence is established.";
