@@ -109,6 +109,32 @@ describe("createAuditJob", () => {
 
     expect(calls).toEqual(["upload", "path", "delete-master", "delete-job"]);
   });
+  it("normalizes and stores multiple DSP links on one combined master job", async () => {
+    let created: any;
+    await createAuditJob({
+      ownerId: null,
+      filename: "combined.wav",
+      mimeType: "audio/wav",
+      bytes: new Uint8Array([1, 2, 3]),
+      catalogUrls: [
+        "https://open.spotify.com/track/abc?si=tracking",
+        "https://www.deezer.com/track/123?utm_source=campaign",
+      ],
+    }, {
+      createJob: async (input) => { created = input; return "combined-multi-job"; },
+      createCatalogJob: async () => { throw new Error("must not create a second job"); },
+      uploadMaster: async () => {},
+      setSourcePath: async () => {},
+      deleteMaster: async () => {},
+    });
+
+    expect(created).toMatchObject({
+      sourceType: "combined",
+      catalogUrl: "https://open.spotify.com/track/abc",
+      catalogUrls: ["https://open.spotify.com/track/abc", "https://www.deezer.com/track/123"],
+    });
+  });
+
   it("creates one combined job when both master audio and a DSP link are supplied", async () => {
     let created: any;
     const result = await createAuditJob({

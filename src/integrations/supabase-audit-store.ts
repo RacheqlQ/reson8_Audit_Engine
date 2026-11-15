@@ -4,6 +4,7 @@ import type { CreateAuditJobDependencies } from "../jobs/create-audit-job.js";
 import type { AuditJobRecord } from "../jobs/process-audit-job.js";
 import type { AuditRecognition } from "../providers/audd/normalize.js";
 import { type CatalogMetadata } from "../providers/dsp/catalog.js";
+import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import type { MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
 import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment } from "../providers/groq/client.js";
@@ -24,8 +25,15 @@ export interface SupabaseAuditStore {
   markProcessing(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   downloadMaster(path: string, signal?: AbortSignal): Promise<Uint8Array>;
   saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition, signal?: AbortSignal): Promise<void>;
-  saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata, signal?: AbortSignal): Promise<void>;
+  saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata, signal?: AbortSignal, metadataSources?: readonly CatalogMetadata[]): Promise<void>;
   saveCatalogMetadata(jobId: string, claimToken: string, metadata: CatalogMetadata, signal?: AbortSignal): Promise<void>;
+  saveCatalogFailure(
+    jobId: string,
+    claimToken: string,
+    link: { platform: string; catalogId: string; canonicalUrl: string },
+    error: string,
+    signal?: AbortSignal,
+  ): Promise<void>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment, signal?: AbortSignal): Promise<void>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
@@ -37,6 +45,8 @@ export interface SupabaseAuditStore {
     currentStepIndex: number;
     errorMessage?: string | null;
     full: { available: boolean; version?: number };
+    catalogUrlsSubmitted?: string[];
+    catalogSources?: Array<{ platform: string; catalogId: string; status: string; error: string | null }>;
   }>;
   getAuditReport(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<{
     bytes: Uint8Array;
@@ -74,6 +84,19 @@ export function createSupabaseAuditStore(
     }
     return data as Record<string, unknown> | null;
   };
+  const recordSubmittedCatalogLinks = async (jobId: string, links: string[]) => {
+    if (!links.length) return;
+    const { error } = await admin.from("audit_events").insert({
+      audit_job_id: jobId,
+      event_type: "catalog_links_submitted",
+      status: "submitted",
+      payload: { submittedLinks: links },
+    });
+    if (error) {
+      await admin.from("audit_jobs").delete().eq("id", jobId);
+      throw new Error(`Unable to persist submitted DSP links: ${error.message}`);
+    }
+  };
   const readAuditReportPayload = async (jobId: string): Promise<unknown | null> => {
     const { data, error } = await admin.from("audit_events")
       .select("payload")
@@ -99,18 +122,22 @@ export function createSupabaseAuditStore(
             owner_id: input.ownerId, status: "queued", original_filename: input.filename,
             mime_type: input.mimeType, size_bytes: input.sizeBytes, sha256: input.sha256,
             source_type: input.sourceType, catalog_url: input.catalogUrl,
+            catalog_metadata: input.catalogUrls?.length ? { submittedLinks: input.catalogUrls } : null,
             report_access_token_hash: input.reportAccessTokenHash,
           }).select("id").single();
           if (error || !data) throw new Error(`Unable to create audit job: ${error?.message ?? "unknown error"}`);
+          if (input.catalogUrls?.length) await recordSubmittedCatalogLinks(data.id as string, input.catalogUrls);
           return data.id as string;
         },
         createCatalogJob: async (input) => {
           const { data, error } = await admin.from("audit_jobs").insert({
             owner_id: input.ownerId, status: "queued", source_type: "dsp_link",
-            catalog_url: input.catalogUrl, sha256: input.sha256,
-            report_access_token_hash: input.reportAccessTokenHash,
+            catalog_url: input.catalogUrl,
+            catalog_metadata: { submittedLinks: input.catalogUrls ?? [input.catalogUrl] },
+            sha256: input.sha256, report_access_token_hash: input.reportAccessTokenHash,
           }).select("id").single();
           if (error || !data) throw new Error(`Unable to create catalog audit job: ${error?.message ?? "unknown error"}`);
+          await recordSubmittedCatalogLinks(data.id as string, input.catalogUrls ?? [input.catalogUrl]);
           return data.id as string;
         },
         uploadMaster: async (path, bytes, mimeType) => {
@@ -146,6 +173,25 @@ export function createSupabaseAuditStore(
       if (!claimed.claim_token || !claimed.lease_expires_at) {
         throw new Error("Atomic claim RPC returned a job without a lease token");
       }
+      const claimedMetadata = claimed.catalog_metadata && typeof claimed.catalog_metadata === "object"
+        ? claimed.catalog_metadata as Record<string, unknown> : {};
+      let catalogUrls = Array.isArray(claimedMetadata.submittedLinks)
+        ? claimedMetadata.submittedLinks.filter((value): value is string => typeof value === "string")
+        : undefined;
+      if (!catalogUrls?.length) {
+        const { data: linksEvent, error: linksError } = await admin.from("audit_events")
+          .select("payload")
+          .eq("audit_job_id", claimed.id)
+          .eq("event_type", "catalog_links_submitted")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (linksError) throw new Error(`Unable to load submitted DSP links: ${linksError.message}`);
+        const linksPayload = linksEvent?.payload as Record<string, unknown> | null;
+        catalogUrls = Array.isArray(linksPayload?.submittedLinks)
+          ? linksPayload.submittedLinks.filter((value): value is string => typeof value === "string")
+          : undefined;
+      }
       return {
         id: claimed.id as string,
         ownerId: claimed.owner_id as string | null,
@@ -154,6 +200,7 @@ export function createSupabaseAuditStore(
         filename: claimed.original_filename as string | null,
         sourceType: (claimed.source_type ?? "master") as "master" | "dsp_link" | "combined",
         catalogUrl: claimed.catalog_url as string | null,
+        catalogUrls,
         status: "processing" as const,
         claimToken: claimed.claim_token as string,
         leaseExpiresAt: claimed.lease_expires_at as string,
@@ -190,10 +237,55 @@ export function createSupabaseAuditStore(
       return new Uint8Array(await response.arrayBuffer());
     },
     async saveCatalogMetadata(jobId, claimToken, metadata, signal) {
+      const spotifyFailure = metadata.raw?.spotifyEnrichment;
+      const spotifyUnavailable = Boolean(
+        spotifyFailure && typeof spotifyFailure === "object"
+        && (spotifyFailure as Record<string, unknown>).status === "unavailable",
+      );
+      const providerError = spotifyUnavailable
+        ? typeof (spotifyFailure as Record<string, unknown>).error === "string"
+          ? ((spotifyFailure as Record<string, unknown>).error as string).slice(0, 240)
+          : "Spotify API enrichment is unavailable"
+        : null;
       await fencedStep(jobId, claimToken, "catalog_metadata", {
-        platform: metadata.platform, catalogId: metadata.catalogId, raw: metadata.raw,
+        platform: metadata.platform,
+        catalogId: metadata.catalogId,
+        raw: metadata.raw,
         evidenceStatus: metadata.evidenceStatus,
-        eventPayload: { platform: metadata.platform, catalogId: metadata.catalogId, hasPreview: Boolean(metadata.previewUrl), evidenceClass: "RECOGNIZED" },
+        eventPayload: {
+          platform: metadata.platform,
+          catalogId: metadata.catalogId,
+          canonicalUrl: metadata.sourceUrl,
+          resolvedCanonicalUrl: metadata.canonicalUrl,
+          sourceUrl: metadata.sourceUrl,
+          status: spotifyUnavailable ? "unavailable" : metadata.evidenceStatus,
+          error: providerError,
+          fields: {
+            artist: metadata.artist, title: metadata.title, album: metadata.album,
+            releaseDate: metadata.releaseDate, isrc: metadata.isrc, upc: metadata.upc,
+            label: metadata.label, genre: metadata.genre,
+          },
+          raw: metadata.raw,
+          hasPreview: Boolean(metadata.previewUrl),
+          evidenceClass: spotifyUnavailable ? null : metadata.evidenceStatus === "recognized" ? "RECOGNIZED" : "PARTIAL",
+        },
+      }, signal);
+    },
+    async saveCatalogFailure(jobId, claimToken, link, error, signal) {
+      await fencedStep(jobId, claimToken, "catalog_metadata", {
+        platform: link.platform,
+        catalogId: link.catalogId,
+        raw: { providerStatus: "unavailable" },
+        evidenceStatus: "unavailable",
+        eventPayload: {
+          platform: link.platform,
+          catalogId: link.catalogId,
+          canonicalUrl: link.canonicalUrl,
+          sourceUrl: link.canonicalUrl,
+          status: "unavailable",
+          error: error.slice(0, 240),
+          evidenceClass: null,
+        },
       }, signal);
     },
     async saveRecognition(jobId, claimToken, recognition, signal) {
@@ -211,27 +303,34 @@ export function createSupabaseAuditStore(
         eventPayload: { evidenceClass: recognition.matched ? "RECOGNIZED" : null, rawResponsePreserved: Boolean(recognition.rawResponse) },
       }, signal);
     },
-    async saveEvidence(jobId, claimToken, recognition, reconciliation, metadata, signal) {
+    async saveEvidence(jobId, claimToken, recognition, reconciliation, metadata, signal, additionalMetadataSources) {
       const identity = reconciliation.identity;
       const hasIdentity = Boolean(identity.artist || identity.title || identity.album || identity.isrc || identity.label || identity.releaseDate);
       const evidenceStatus = reconciliation.status === "reconciled" ? "verified" : hasIdentity ? "partial" : "unresolved";
-      const sources: Array<Record<string, unknown>> = [];
-      if (metadata) sources.push({
-        provider: metadata.platform, url: metadata.canonicalUrl, catalogId: metadata.catalogId,
-        evidenceClass: identity.sourceProviders.some((provider) => provider === metadata.platform) ? "RECOGNIZED" : null,
-      });
+      const metadataSources: readonly CatalogMetadata[] = additionalMetadataSources?.length
+        ? additionalMetadataSources
+        : metadata ? [metadata] : [];
+      const sources: Array<Record<string, unknown>> = metadataSources.map((source) => ({
+        provider: source.platform,
+        url: source.canonicalUrl,
+        sourceUrl: source.sourceUrl,
+        catalogId: source.catalogId,
+        evidenceClass: identity.sourceProviders.some((provider) => provider === source.platform) ? "RECOGNIZED" : null,
+      }));
       for (const provider of identity.sourceProviders) {
-        if (provider !== metadata?.platform && !sources.some((source) => source.provider === provider)) {
+        if (!sources.some((source) => source.provider === provider)) {
           sources.push({ provider, evidenceClass: "RECOGNIZED" });
         }
       }
       if (recognition.matched && !sources.some((source) => source.provider === "audd")) sources.push({ provider: "audd", evidenceClass: "RECOGNIZED" });
+      const spotifyId = metadataSources.find((source) => source.externalIds.spotify)?.externalIds.spotify;
+      const appleMusicId = metadataSources.find((source) => source.externalIds.apple_music)?.externalIds.apple_music;
       await fencedStep(jobId, claimToken, "evidence", {
         canonicalArtist: identity.artist, canonicalTitle: identity.title, album: identity.album,
         releaseDate: identity.releaseDate, label: identity.label, isrc: identity.isrc,
-        upc: metadata?.upc ?? null,
-        spotifyId: metadata?.externalIds.spotify ?? (recognition.matched ? recognition.spotifyId ?? null : null),
-        appleMusicId: metadata?.externalIds.apple_music ?? (recognition.matched ? recognition.appleMusicId ?? null : null),
+        upc: metadataSources.find((source) => source.upc)?.upc ?? null,
+        spotifyId: spotifyId ?? (recognition.matched ? recognition.spotifyId ?? null : null),
+        appleMusicId: appleMusicId ?? (recognition.matched ? recognition.appleMusicId ?? null : null),
         musicbrainzId: recognition.matched ? recognition.musicbrainzId ?? null : null,
         evidenceStatus, reconciliationStatus: reconciliation.status, sources,
         eventPayload: {
@@ -373,7 +472,7 @@ export function createSupabaseAuditStore(
     async getAuditStatus(jobId) {
       const { data: job, error: jobError } = await admin
         .from("audit_jobs")
-        .select("id,status,error_message")
+        .select("id,status,error_message,catalog_metadata")
         .eq("id", jobId)
         .maybeSingle();
       if (jobError) throw new Error(`Unable to read audit status: ${jobError.message}`);
@@ -387,6 +486,48 @@ export function createSupabaseAuditStore(
         .order("created_at", { ascending: false })
         .limit(1);
       if (eventError) throw new Error(`Unable to read audit events: ${eventError.message}`);
+
+      const { data: catalogEvents, error: catalogEventError } = await admin
+        .from("audit_events")
+        .select("payload")
+        .eq("audit_job_id", jobId)
+        .eq("event_type", "catalog_ingestion")
+        .order("created_at", { ascending: true });
+      if (catalogEventError) throw new Error(`Unable to read DSP source statuses: ${catalogEventError.message}`);
+      const { data: submittedEvent, error: submittedError } = await admin.from("audit_events")
+        .select("payload")
+        .eq("audit_job_id", jobId)
+        .eq("event_type", "catalog_links_submitted")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (submittedError) throw new Error(`Unable to read submitted DSP links: ${submittedError.message}`);
+      const submittedPayload = submittedEvent?.payload as Record<string, unknown> | null;
+      const catalogUrlsSubmitted = Array.isArray(submittedPayload?.submittedLinks)
+        ? submittedPayload.submittedLinks.filter((value): value is string => typeof value === "string")
+        : [];
+      const catalogStatusMap = new Map<string, { platform: string; catalogId: string; canonicalUrl: string; status: string; error: string | null }>();
+      for (const event of catalogEvents ?? []) {
+        const payload = event.payload as Record<string, unknown> | null;
+        if (typeof payload?.platform !== "string" || typeof payload?.canonicalUrl !== "string") continue;
+        const key = `${payload.platform}:${payload.canonicalUrl}`;
+        catalogStatusMap.set(key, {
+          platform: payload.platform,
+          catalogId: typeof payload.catalogId === "string" ? payload.catalogId : "",
+          canonicalUrl: payload.canonicalUrl,
+          status: typeof payload.status === "string" ? payload.status : "recognized",
+          error: typeof payload.error === "string" ? payload.error : null,
+        });
+      }
+      const catalogSources = catalogUrlsSubmitted.length ? normalizeDspTrackLinks(catalogUrlsSubmitted).map((link) =>
+        catalogStatusMap.get(`${link.platform}:${link.canonicalUrl}`) ?? {
+          platform: link.platform,
+          catalogId: link.catalogId,
+          canonicalUrl: link.canonicalUrl,
+          status: job.status === "completed" || job.status === "failed" ? "unavailable" : "pending",
+          error: null,
+        },
+      ) : [];
 
       const latestEvent = events?.[0];
       const eventStep: Record<string, number> = {
@@ -427,6 +568,8 @@ export function createSupabaseAuditStore(
         currentStepIndex,
         errorMessage: job.error_message as string | null,
         full: full ? { available: true, version: full.version } : { available: false },
+        catalogUrlsSubmitted,
+        catalogSources,
       };
     },
     async getAuditReport(jobId, tier, ownerId) {

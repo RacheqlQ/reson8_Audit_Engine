@@ -54,6 +54,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       mimeType: job.mimeType,
       sourceType: job.sourceType,
       catalogUrl: job.catalogUrl,
+      catalogUrls: job.catalogUrls,
       status: "processing",
       claimToken: job.claimToken,
       leaseExpiresAt: job.leaseExpiresAt,
@@ -69,9 +70,11 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     collectCatalogMetadata: (url, signal) => collectCatalogMetadata(url, signal),
     saveRecognition: async (jobId, _claimToken, recognition, signal) => store.saveRecognition(jobId, _claimToken, recognition, signal),
     saveSonicDna: async (jobId, _claimToken, dna, signal) => store.saveSonicDna(jobId, _claimToken, dna, signal),
-    saveEvidence: async (jobId, _claimToken, recognition, reconciliation, metadata, signal) =>
-      store.saveEvidence(jobId, _claimToken, recognition, reconciliation, metadata, signal),
+    saveEvidence: async (jobId, _claimToken, recognition, reconciliation, metadata, signal, metadataSources) =>
+      store.saveEvidence(jobId, _claimToken, recognition, reconciliation, metadata, signal, metadataSources),
     saveCatalogMetadata: async (jobId, _claimToken, metadata, signal) => store.saveCatalogMetadata(jobId, _claimToken, metadata, signal),
+    saveCatalogFailure: async (jobId, _claimToken, link, error, signal) =>
+      store.saveCatalogFailure(jobId, _claimToken, link, error, signal),
     decode: async (bytes, _mimeType, signal) => decoder.decode(bytes, signal),
     generateAssessment: (input, signal) => groq.assess(input, signal),
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),

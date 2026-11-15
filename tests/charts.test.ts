@@ -1,10 +1,21 @@
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildStrengthRiskChartRows, strengthRiskItemsForColumn, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows, compactChartItemSummary, strengthRiskItemsForColumn, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
 import { checkLayout } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("native PDF chart helpers", () => {
+  it("preserves full assessment text while supplying concise chart-only item summaries", () => {
+    const strength = "The vocal performance carries a distinctive melodic contour and clear emotional intent across the central hook.";
+    const risk = "The second verse repeats the same rhythmic pattern for too long and needs a deliberate arrangement contrast.";
+    const rows = buildStrengthRiskChartRows([strength], [risk]);
+    expect(rows[2].label).toBe(strength);
+    expect(rows[2].summary).toBe(compactChartItemSummary(strength));
+    expect(rows[2].summary!.length).toBeLessThan(strength.length);
+    expect(rows[3].label).toBe(risk);
+    expect(rows[3].summary!.length).toBeLessThan(risk.length);
+  });
+
   it("renders complete, partial and null data without throwing", async () => {
     const pdf = await PDFDocument.create();
     const font = await pdf.embedFont(StandardFonts.Helvetica);

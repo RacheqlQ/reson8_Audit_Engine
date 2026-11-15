@@ -1,4 +1,4 @@
-export type MetadataProvider = "spotify" | "tidal" | "apple_music" | "deezer" | "youtube_music" | "audd" | "id3";
+export type MetadataProvider = "spotify" | "tidal" | "apple_music" | "deezer" | "youtube_music" | "audiomack" | "audd" | "id3";
 
 export type MetadataIdentityField = "title" | "artist" | "album" | "isrc" | "upc" | "label" | "releaseDate";
 
@@ -47,6 +47,7 @@ export interface MetadataEngineInput {
   apple_music?: StructuredMetadata | null;
   deezer?: StructuredMetadata | null;
   youtube_music?: StructuredMetadata | null;
+  audiomack?: StructuredMetadata | null;
   audd?: AuddMetadata | null;
   id3?: Id3Metadata | null;
   filename?: string | null;
@@ -58,6 +59,7 @@ const PROVIDER_PRIORITY: readonly MetadataProvider[] = [
   "apple_music",
   "deezer",
   "youtube_music",
+  "audiomack",
   "audd",
   "id3",
 ];
@@ -149,6 +151,7 @@ export class MetadataEngine {
       apple_music: input.apple_music ?? null,
       deezer: input.deezer ?? null,
       youtube_music: input.youtube_music ?? null,
+      audiomack: input.audiomack ?? null,
       audd: auddMetadata(input.audd),
       id3: input.id3 ?? null,
     };

@@ -49,11 +49,28 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(longFormAudioFixture.assessment.executiveSummary.split(/\s+/).length).toBeGreaterThan(70);
   expect(longFormAudioFixture.assessment.strengths.length).toBeGreaterThanOrEqual(4);
  });
+ it("renders DSP source coverage and explicit conflict values in identity reconciliation",()=>{
+  const input=structuredClone(fullAudioFixture) as AuditReportInput;
+  input.evidence.catalogSources=[
+   {platform:"spotify",catalogId:"sp-1",canonicalUrl:"https://open.spotify.com/track/sp-1",status:"recognized",error:null},
+   {platform:"apple_music",catalogId:"am-1",canonicalUrl:"https://music.apple.com/us/album/song/1?i=2",status:"recognized",error:null},
+   {platform:"deezer",catalogId:"dz-1",canonicalUrl:"https://www.deezer.com/track/dz-1",status:"recognized",error:null},
+   {platform:"tidal",catalogId:"td-1",canonicalUrl:"https://tidal.com/browse/track/td-1",status:"partial",error:null},
+   {platform:"youtube_music",catalogId:"yt-1",canonicalUrl:"https://www.youtube.com/watch?v=yt-1",status:"unavailable",error:"Provider lookup timed out"},
+  ];
+  input.evidence.reconciliation={conflicts:[{field:"artist",values:["Tems","Wrong Artist"]}]};
+  const pages=planAuditReportPages(input,"full");
+  const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Platform presence and consistency");
+  expect(report).toContain("Conflict details: artist: Tems vs Wrong Artist");
+  expect(report).toContain("Confidence definition");
+  expect(chartLayoutIssuesForReport(input)).toEqual([]);
+ });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
   const pages=planAuditReportPages(fixtures[0],"full");
   const report=pages.flatMap(p=>[p.title,...p.text]).join(" ");
   expect(report).toContain("Tempo and lane fit");expect(report).toContain("Rhythmic consistency");
-  expect(report).toContain("Dynamic range and loudness readiness");expect(report).toContain("Human listening checklist");
+  expect(report).toContain("Dynamic range and RMS signal level");expect(report).toContain("Human listening checklist");
   expect(report).toContain("General industry guidance");expect(report).toContain("references to verify");
  });
  it("prints field-level source attribution and leaves absent provenance explicitly unavailable",()=>{
@@ -68,9 +85,12 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(identity?.text.join(" ")).toContain("Field source: Spotify");
   expect(identity?.text.join(" ")).toContain("Field source: Embedded audio tags");
  });
- it("collapses all missing audio measurements into one empty state",()=>{
+ it("collapses all missing audio measurements into one empty state without master-derived provenance claims",()=>{
   const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");
   expect(report).toContain("Not measured: no master audio supplied.");
   expect(report).not.toContain("Key / mode: Not measured");
+  expect(report).not.toContain("Measured from the uploaded master");
+  expect(report).not.toContain("fixture.sonicDna.bpm");
+  expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
  });
 });

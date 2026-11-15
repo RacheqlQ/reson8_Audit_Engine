@@ -126,7 +126,7 @@ describe("TIDAL deep catalog ingestion", () => {
     });
   });
 
-  it("cross-references TIDAL ISRC against Spotify when TIDAL lacks genre", async () => {
+  it("does not enrich TIDAL records with Spotify-derived catalogue fields", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         access_token: "tidal-access-token",
@@ -179,21 +179,11 @@ describe("TIDAL deep catalog ingestion", () => {
 
     const result = await collectCatalogMetadata("https://tidal.com/browse/track/12345");
 
-    expect(result.genre).toBe("R&B");
-    expect(result.catalogPopularity).toBe(74);
-    expect(result.externalIds).toMatchObject({
-      tidal: "12345",
-      spotify: "spotify-track-123",
-    });
-    expect(fetchMock.mock.calls[2]?.[0]).toBe(
-      "https://accounts.spotify.com/api/token",
-    );
-    expect(fetchMock.mock.calls[3]?.[0]).toContain(
-      "https://api.spotify.com/v1/search?q=isrc%3AUSAT26600001",
-    );
-    expect(fetchMock.mock.calls[4]?.[0]).toBe(
-      "https://api.spotify.com/v1/artists/spotify-artist-123",
-    );
+    expect(result.genre).toBeNull();
+    expect(result.catalogPopularity).toBeNull();
+    expect(result.externalIds).toEqual({ tidal: "12345" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("spotify.com"))).toBe(false);
   });
 
   it("fails closed when TIDAL credentials are not configured", async () => {

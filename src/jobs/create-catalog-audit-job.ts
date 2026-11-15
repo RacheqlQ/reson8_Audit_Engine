@@ -1,6 +1,39 @@
 import { randomBytes } from "node:crypto";
-import { detectDspPlatform } from "../providers/dsp/catalog.js";
+import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { sha256 } from "./content-hash.js";
-export interface CreateCatalogAuditJobInput { ownerId:string | null; catalogUrl:string; }
-export interface CreateCatalogAuditJobDependencies { createCatalogJob:(input:{ownerId:string | null;catalogUrl:string;sha256:string;reportAccessTokenHash:string})=>Promise<string>; }
-export async function createCatalogAuditJob(input:CreateCatalogAuditJobInput,deps:CreateCatalogAuditJobDependencies){const url=new URL(input.catalogUrl.trim());if(url.protocol!=="https:")throw new Error("DSP URL must use HTTPS");if(url.username||url.password)throw new Error("DSP URL must not contain credentials");if(detectDspPlatform(url.toString())==="unknown")throw new Error("Unsupported DSP or catalog URL");const digest=await sha256(new TextEncoder().encode(url.toString()));const reportAccessToken=randomBytes(32).toString("hex");const reportAccessTokenHash=await sha256(new TextEncoder().encode(reportAccessToken));const jobId=await deps.createCatalogJob({ownerId:input.ownerId,catalogUrl:url.toString(),sha256:digest,reportAccessTokenHash});return{jobId,sha256:digest,reportAccessToken};}
+
+export interface CreateCatalogAuditJobInput {
+  ownerId: string | null;
+  catalogUrl: string;
+  catalogUrls?: readonly string[];
+}
+
+export interface CreateCatalogAuditJobDependencies {
+  createCatalogJob: (input: {
+    ownerId: string | null;
+    catalogUrl: string;
+    catalogUrls: string[];
+    sha256: string;
+    reportAccessTokenHash: string;
+  }) => Promise<string>;
+}
+
+export async function createCatalogAuditJob(
+  input: CreateCatalogAuditJobInput,
+  deps: CreateCatalogAuditJobDependencies,
+) {
+  const links = normalizeDspTrackLinks(input.catalogUrls?.length ? input.catalogUrls : [input.catalogUrl]);
+  const catalogUrls = links.map((link) => link.canonicalUrl);
+  const catalogUrl = catalogUrls[0]!;
+  const digest = await sha256(new TextEncoder().encode(catalogUrls.join("\n")));
+  const reportAccessToken = randomBytes(32).toString("hex");
+  const reportAccessTokenHash = await sha256(new TextEncoder().encode(reportAccessToken));
+  const jobId = await deps.createCatalogJob({
+    ownerId: input.ownerId,
+    catalogUrl,
+    catalogUrls,
+    sha256: digest,
+    reportAccessTokenHash,
+  });
+  return { jobId, sha256: digest, reportAccessToken, catalogUrls };
+}

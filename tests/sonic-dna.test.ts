@@ -50,6 +50,16 @@ describe("Sonic DNA",()=>{
   expect(result.key).toBe("A");
   expect(result.mode).toBe("minor");
  });
+ it("withholds a single key when sustained sections disagree tonally",()=>{
+  const first=chord([261.6256,329.6276,391.9954],6);
+  const second=chord([369.9944,466.1638,554.3653],6);
+  const combined=new Float32Array(first.length+second.length);
+  combined.set(first);combined.set(second,first.length);
+  const result=analyzePcm(combined,8000);
+  expect(result.key).toBeNull();
+  expect(result.mode).toBeNull();
+  expect(result.limitations.some((item)=>item.includes("varied across audio segments"))).toBe(true);
+ });
  it("returns null key and tempo with limitation notes for silence",()=>{
   const result=analyzePcm(new Float32Array(48000),8000);
   expect(result.key).toBeNull();
@@ -114,6 +124,14 @@ describe("Sonic DNA",()=>{
   expect(classifyGenreFromBpm(999)).toEqual([]);
  });
 
+ it("labels the RMS-derived signal level as dBFS and does not claim integrated LUFS",()=>{
+  const sampleRate=8000;
+  const samples=Float32Array.from({length:sampleRate*2},(_,i)=>0.25*Math.sin(2*Math.PI*440*i/sampleRate));
+  const result=analyzePcm(samples,sampleRate);
+  expect(result.loudnessLufs).toBeNull();
+  expect((result as unknown as {rmsLevelDbfs:number}).rmsLevelDbfs)
+   .toBeCloseTo(20*Math.log10(result.rmsEnergy),5);
+ });
  it("returns explicit rhythm and harmonic measurements while marking vocal analysis unavailable",()=>{
   const sampleRate=8000;
   const rhythm=analyzePcm(pulse(120,12,sampleRate),sampleRate);
