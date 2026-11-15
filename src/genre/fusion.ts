@@ -1,4 +1,5 @@
 import { findGenre, findScene, GENRE_TAXONOMY_VERSION, type GenreDefinition } from "./taxonomy.js";
+import type { GenreModelResult } from "./model.js";
 
 export interface ProviderGenreTags {
   provider: string;
@@ -22,6 +23,7 @@ export interface GenreFusionResult {
   regionTags: string[];
   sceneTags: string[];
   unmappedTags: Array<{ provider: string; tag: string }>;
+  model?: GenreModelResult;
   evidence: {
     providerWeightShare: number;
     tempoContributionCap: number;
