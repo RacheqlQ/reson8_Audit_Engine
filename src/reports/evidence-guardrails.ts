@@ -172,6 +172,18 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     result.aAndRPositioning.rationale = GENRE_UNCONFIRMED_RATIONALE;
   }
   const mutable = result as Record<string, any>;
+  if (Array.isArray(mutable.evidenceLabels)) {
+    mutable.evidenceLabels = mutable.evidenceLabels.filter((entry: unknown) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+      const record = entry as Record<string, unknown>;
+      const claim = typeof record.claim === "string" ? record.claim : "";
+      if (!reliableTempo && /\\b(?:tempo|bpm|beats per minute)\\b/i.test(claim)) return false;
+      if (!isReliableKey(sonicDna as KeyEvidence) && /\\b(?:key|mode|major|minor|tonic)\\b/i.test(claim)) return false;
+      if (!hasVocalAnalysis(sonicDna) && /\\b(?:vocal|instrumental|singing|singer|voice)\\b/i.test(claim)) return false;
+      if (zeroConfidence && record.label === "INFERRED") return false;
+      return true;
+    });
+  }
   if (!hasProviderGenre && typeof mutable.laneHypothesis === "string") {
     mutable.laneHypothesis = GENRE_UNCONFIRMED_RATIONALE;
   }
@@ -197,11 +209,6 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     }
     if (Array.isArray(mutable.referencesToVerify)) {
       mutable.referencesToVerify = ["No comparable recording is selected. After identity and musical lane are verified, choose references and document the exact musical dimension being compared."];
-    }
-    if (Array.isArray(mutable.evidenceLabels)) {
-      mutable.evidenceLabels = mutable.evidenceLabels.filter((entry: unknown) =>
-        Boolean(entry && typeof entry === "object" && (entry as Record<string, unknown>).label !== "INFERRED")
-      );
     }
     const abstentionRationale = "Not scored: overall assessment confidence is zero. The available evidence cannot support a numeric rating for this dimension; complete the listed evidence and human-review steps before assigning a score.";
     if (mutable.scorecard && typeof mutable.scorecard === "object" && !Array.isArray(mutable.scorecard)) {
