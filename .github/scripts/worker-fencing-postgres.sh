@@ -190,9 +190,11 @@ test "$ROLLBACK_RECONCILED" = "f"
 echo "PASS: reconciliation observes committed rows and rejects rolled-back rows after acquiring the job lock"
 
 
-echo "Regression 10/10: combined jobs are not claimable until both source uploads are finalized"
+echo "Regression 10/12: combined jobs are not claimable until both source uploads are finalized"
 JOB_COMBINED_AUDIO_PENDING="99999999-9999-4999-8999-999999999991"
 JOB_COMBINED_DSP_PENDING="99999999-9999-4999-8999-999999999992"
+JOB_COMBINED_METADATA_LINK="99999999-9999-4999-8999-999999999993"
+JOB_COMBINED_EVENT_LINK="99999999-9999-4999-8999-999999999994"
 psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_jobs(id,source_type,catalog_url,status) values ('$JOB_COMBINED_AUDIO_PENDING','combined','https://open.spotify.com/track/combined-audio','queued')"
 AUDIO_PENDING_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('ci-combined-audio-pending',180) where id='$JOB_COMBINED_AUDIO_PENDING'")"
 test -z "$AUDIO_PENDING_TOKEN"
@@ -206,5 +208,18 @@ psql "$DB" -v ON_ERROR_STOP=1 -c "update public.audit_jobs set catalog_url='http
 DSP_READY_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('ci-combined-dsp-ready',180) where id='$JOB_COMBINED_DSP_PENDING'")"
 test -n "$DSP_READY_TOKEN"
 echo "PASS: neither partially finalized combined job was claimable; both became claimable after both inputs existed"
+
+echo "Regression 11/12: combined jobs can claim a DSP link stored in catalog_metadata.submittedLinks"
+psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_jobs(id,source_type,source_audio_path,mime_type,catalog_metadata,status) values ('$JOB_COMBINED_METADATA_LINK','combined','ci/combined-metadata-master.wav','audio/wav','{\\"submittedLinks\\":[\\"https://music.apple.com/ng/album/fixture/123?i=456\\"]}'::jsonb,'queued')"
+METADATA_LINK_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('ci-combined-metadata-link',180) where id='$JOB_COMBINED_METADATA_LINK')"
+test -n "$METADATA_LINK_TOKEN"
+echo "PASS: JSONB submitted DSP link satisfies combined-source claim readiness"
+
+echo "Regression 12/12: combined jobs can claim a DSP link recorded in catalog_links_submitted event"
+psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_jobs(id,source_type,source_audio_path,mime_type,status) values ('$JOB_COMBINED_EVENT_LINK','combined','ci/combined-event-master.wav','audio/wav','queued')"
+psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_events(audit_job_id,event_type,status,payload) values ('$JOB_COMBINED_EVENT_LINK','catalog_links_submitted','submitted','{\\"submittedLinks\\":[\\"https://music.apple.com/ng/album/fixture/123?i=456\\"]}'::jsonb)"
+EVENT_LINK_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('ci-combined-event-link',180) where id='$JOB_COMBINED_EVENT_LINK')"
+test -n "$EVENT_LINK_TOKEN"
+echo "PASS: catalog_links_submitted event satisfies combined-source claim readiness"
 
 echo "All full-schema PostgreSQL 17 worker-fencing and report-persistence regressions passed."
