@@ -319,6 +319,7 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
     vocalFeatures: dna.vocalFeatures,
     moodTags: dna.moodTags,
     genreContext: dna.genreContext,
+    ...(dna.genreClassification ? { genreClassification: dna.genreClassification } : {}),
   };
 }
 
