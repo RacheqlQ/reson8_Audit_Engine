@@ -1,3 +1,12 @@
+export interface KeySegmentDiagnostic {
+  startSeconds: number;
+  endSeconds: number;
+  chroma: number[];
+  winningKey: string | null;
+  winningMode: "major" | "minor" | null;
+  winningScore: number | null;
+}
+
 export interface KeyEstimate {
   key: string | null;
   mode: "major" | "minor" | null;
@@ -7,6 +16,7 @@ export interface KeyEstimate {
   method: "fft_harmonic_chroma_ensemble";
   analysisWindows: number;
   fftButterflyCount: number;
+  segmentChroma: KeySegmentDiagnostic[];
   limitation: string | null;
 }
 
@@ -268,7 +278,7 @@ function emptyEstimate(limitation: string): KeyEstimate {
   return {
     key: null, mode: null, confidence: null, tuningCents: null,
     segmentAgreement: null, method: "fft_harmonic_chroma_ensemble",
-    analysisWindows: 0, fftButterflyCount: 0, limitation,
+    analysisWindows: 0, fftButterflyCount: 0, segmentChroma: [], limitation,
   };
 }
 
@@ -286,6 +296,7 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   const aggregate = Array(12).fill(0);
   const segmentProfiles: number[][] = [];
   const segmentWinners: Candidate[] = [];
+  const segmentChroma: KeySegmentDiagnostic[] = [];
   const tuningValues: Array<{ value: number; weight: number }> = [];
   let fftButterflyCount = 0;
 
@@ -303,6 +314,14 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     segmentProfiles.push(normalized);
     const best = rankCandidates(normalized)[0];
     if (best) segmentWinners.push(best);
+    segmentChroma.push({
+      startSeconds: Number((start / sampleRate).toFixed(4)),
+      endSeconds: Number(((start + FRAME_SIZE) / sampleRate).toFixed(4)),
+      chroma: normalized.map((value) => Number(value.toFixed(6))),
+      winningKey: best ? NOTES[best.key] : null,
+      winningMode: best?.mode ?? null,
+      winningScore: best ? Number(best.score.toFixed(6)) : null,
+    });
     if (result.peaks.length) {
       const offset = tuningOffset(result.peaks);
       tuningValues.push({ value: offset, weight: result.peaks.reduce((sum, peak) => sum + peak.magnitude, 0) });
@@ -325,19 +344,19 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      fftButterflyCount, limitation: "Key estimates varied across audio segments; no single key is asserted.",
+      fftButterflyCount, segmentChroma, limitation: "Key estimates varied across audio segments; no single key is asserted.",
     };
   }
   if (confidence < 0.12 || margin < 0.015) {
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      fftButterflyCount, limitation: "Key and mode confidence was below threshold; no key is asserted.",
+      fftButterflyCount, segmentChroma, limitation: "Key and mode confidence was below threshold; no key is asserted.",
     };
   }
   return {
     key: NOTES[best.key], mode: best.mode, confidence, tuningCents,
     segmentAgreement: agreement, method: "fft_harmonic_chroma_ensemble",
-    analysisWindows: segmentProfiles.length, fftButterflyCount, limitation: null,
+    analysisWindows: segmentProfiles.length, fftButterflyCount, segmentChroma, limitation: null,
   };
 }
