@@ -92,9 +92,6 @@ try{
   throw new Error("Generated PDF lost the supported A&R Notes decision-context sentence");
  }
 
- const chartPdf=await PDFDocument.create();
- const regular=await chartPdf.embedFont(StandardFonts.Helvetica),bold=await chartPdf.embedFont(StandardFonts.HelveticaBold);
- const chartPage=chartPdf.addPage([595.28,841.89]);
  const longLabels=[
   "A very long primary creative lane label that must remain complete without shortening or silent truncation",
   "A second extended adjacent lane label with several words and enough length to wrap across multiple lines",
@@ -102,16 +99,19 @@ try{
   "A fourth adjacent lane label used to test the lower label row and chart footer clearance",
   "A fifth final label that must remain inside the rightmost narrow chart column"
  ];
- drawChartPanel(chartPage,{
-  title:"Lane constellation",kind:"constellation",
-  rows:longLabels.map(value=>({label:"Lane",value})),
-  shows:"Primary and adjacent lane hypotheses",
-  cantShow:"Verified market size or audience overlap",
-  width:240,y:760
- },regular,bold);
- await writeFile(chartCheckPath,await chartPdf.save());
- const chartText=execFileSync("pdftotext",["-layout",chartCheckPath,"-"],{encoding:"utf8"}).replace(/\s+/g,"");
  for(const label of longLabels){
+  const chartPdf=await PDFDocument.create();
+  const regular=await chartPdf.embedFont(StandardFonts.Helvetica),bold=await chartPdf.embedFont(StandardFonts.HelveticaBold);
+  const chartPage=chartPdf.addPage([595.28,841.89]);
+  drawChartPanel(chartPage,{
+   title:"Lane constellation",kind:"constellation",
+   rows:[{label:"Lane",value:label}],
+   shows:"Primary and adjacent lane hypotheses",
+   cantShow:"Verified market size or audience overlap",
+   width:240,y:760
+  },regular,bold);
+  await writeFile(chartCheckPath,await chartPdf.save());
+  const chartText=execFileSync("pdftotext",["-layout",chartCheckPath,"-"],{encoding:"utf8"}).replace(/\s+/g,"");
   if(!chartText.includes(label.replace(/\s+/g,"")))throw new Error("Generated chart PDF clipped a complete lane label: "+label);
  }
  process.stdout.write("Additional PDF regressions: unsupported claims absent from extracted PDF text; all five long constellation labels extracted completely.\n");
