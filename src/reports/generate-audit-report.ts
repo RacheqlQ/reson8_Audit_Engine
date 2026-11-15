@@ -268,9 +268,21 @@ function sections(i:AuditReportInput):Section[]{
    hasMasterAudio ? "Master audio submitted; master-derived Sonic DNA measurements unavailable." : "Not measured: no master audio supplied."
   );
  } else if (hasMasterAudio) {
-  sonicDnaBody.push("Master audio submitted; master-derived Sonic DNA measurements unavailable.");
+  sonicDnaBody.push(
+   "Master audio submitted; master-derived Sonic DNA measurements unavailable.",
+   "Processing status: no completed master analysis is available; do not substitute provider tags for measurements.",
+   "Required action: retry the audio decode and Sonic DNA worker path while preserving the combined-source job and its submitted DSP link.",
+   "Until measurements are present, BPM, key/mode, rhythm, integrated loudness, dynamic range and vocal presence remain unconfirmed."
+  );
  } else {
-  sonicDnaBody.push("Requires audio upload", "Not measured: no master audio supplied.");
+  sonicDnaBody.push(
+   "Requires audio upload",
+   "Not measured: no master audio supplied.",
+   "Required next input: upload the actual master audio file in WAV, FLAC or a high-quality MP3 so the worker can inspect the recording rather than relying on catalogue metadata.",
+   "Analysis plan: after ingestion, estimate BPM with confidence and segment stability, estimate key/mode with confidence and agreement, measure integrated loudness and dynamic range, and run vocal-activity analysis.",
+   "Evidence boundary: DSP metadata can support artist, title, album and release reconciliation, but cannot establish sonic attributes, production quality or mastering readiness.",
+   "Do not infer genre, vocal presence, production quality or mastering readiness from DSP metadata alone."
+  );
  }
  sonicDnaBody.push(vocalAnalysisDisclosure);
  if (Object.keys(genreRecord).length) {
