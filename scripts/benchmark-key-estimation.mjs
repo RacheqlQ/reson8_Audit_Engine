@@ -24,4 +24,4 @@ console.log("[key-estimator:synthetic-benchmark]", JSON.stringify({
   method: result.method,
   realWorldAccuracyClaim: false,
 }));
-if (result.fftButterflyCount > 500_000) process.exitCode = 1;
+if (result.fftButterflyCount > 12 * 24_576) process.exitCode = 1;
