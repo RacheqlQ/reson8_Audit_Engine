@@ -152,7 +152,6 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       && genre.abstained !== true,
   );
   let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence), !hasVocalAnalysis(sonicDna), !isReliableKey(sonicDna)) as T;
-  const mutable = result as Record<string, any>;
 
   if (hasAlbumConflict(evidence)) {
     result = sanitizeAlbumConflictClaims(result) as T;
@@ -167,6 +166,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     }
   }
 
+  const mutable = result as Record<string, any>;
   if (!reliableTempo && result.scorecard) {
     if (result.scorecard.tempoLaneFit) result.scorecard.tempoLaneFit = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
     if (result.scorecard.rhythmicConsistency) result.scorecard.rhythmicConsistency = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
