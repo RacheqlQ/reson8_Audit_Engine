@@ -123,7 +123,7 @@ describe("GroqClient section groups",()=>{
   const result=await client.assess({evidence:{},sonicDna:null});
   expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);expect(sleeps).toContain(13973);
  });
- it("retries Groq provider-side JSON schema validation failures with the failed generation as correction context",async()=>{
+ it("retries Groq provider-side JSON schema validation failures with provider error details as correction context",async()=>{
   let evidenceScoreCalls=0;
   const prompts:string[]=[];
   const systemPrompts:string[]=[];
