@@ -22,6 +22,21 @@ function percussionOnly(seconds = 8): Float32Array {
   return samples;
 }
 
+
+function harmonicChord(fundamentals: number[], seconds = 8): Float32Array {
+  const partials = fundamentals.flatMap((fundamental) =>
+    [1, 2, 3, 4, 5].map((harmonic) => ({
+      frequency: fundamental * harmonic,
+      amplitude: harmonic === 1 ? 0.35 : 1 / (harmonic * 0.8),
+    })),
+  );
+  return Float32Array.from({ length: RATE * seconds }, (_, i) =>
+    partials.reduce((sum, partial) =>
+      sum + partial.amplitude * Math.sin(2 * Math.PI * partial.frequency * i / RATE), 0,
+    ) / partials.length,
+  );
+}
+
 describe("DSP key estimator — robustness and abstention", () => {
   it("keeps the same key under moderate global tuning offsets", () => {
     for (const cents of [-35, -20, 0, 20, 35]) {
