@@ -121,8 +121,9 @@ function analyzeFundamentalPeaks(peaks: Array<{ frequency: number; magnitude: nu
   // A weak fundamental below the 8% voting floor can still explain a coherent
   // series of stronger upper partials. It is not itself admitted as a key vote.
   const supportedWeakRoots = peaks.filter((lower) =>
-    lower.magnitude < strongest * 0.08
-      && peaks.filter((upper) => isHarmonicOf(upper, lower)).length >= 2,
+    lower.frequency < 250
+      && lower.magnitude < strongest * 0.08
+      && peaks.filter((upper) => isHarmonicOf(upper, lower)).length >= 3,
   );
   const harmonicAnchors = [...crediblePeaks, ...supportedWeakRoots];
   const fundamentals = crediblePeaks.filter((peak) =>
