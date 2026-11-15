@@ -6,6 +6,7 @@ type TempoEvidence = {
   bpm?: unknown;
   tempoConfidence?: unknown;
   rhythmFeatures?: unknown;
+  abstentionReason?: unknown;
 } | null | undefined;
 
 /**
@@ -20,6 +21,7 @@ export function isReliableTempo(value: TempoEvidence): boolean {
   if (typeof bpm !== "number" || !Number.isFinite(bpm) || bpm < 40 || bpm > 240) return false;
   if (typeof confidence !== "number" || !Number.isFinite(confidence)) return false;
   if (confidence < MIN_RELIABLE_TEMPO_CONFIDENCE || confidence > 1) return false;
+  if (typeof value.abstentionReason === "string" && value.abstentionReason.trim()) return false;
   const rhythm = value.rhythmFeatures;
   if (rhythm && typeof rhythm === "object" && (rhythm as Record<string, unknown>).status === "insufficient_evidence") return false;
   return true;
