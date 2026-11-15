@@ -99,7 +99,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
-  expect(report).toContain("KEY CONFIDENCE");
+  expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).not.toContain("Key / mode: C major");
  });
  it("withholds zero-confidence BPM and tempo-derived A&R assertions from the rendered report",()=>{
@@ -111,6 +111,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not reported — insufficient confidence");
+  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
   expect(report).not.toMatch(/156\s*BPM|high-energy/);
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
