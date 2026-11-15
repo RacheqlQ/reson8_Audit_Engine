@@ -115,7 +115,10 @@ function assessmentSafeCatalogMetadata(source: CatalogMetadata): CatalogMetadata
   const crossReferences = raw.crossReferences && typeof raw.crossReferences === "object"
     ? raw.crossReferences as Record<string, unknown>
     : {};
-  const hasSpotifyCrossReference = Object.prototype.hasOwnProperty.call(crossReferences, "spotify");
+  const hasSpotifyCrossReference =
+    Object.prototype.hasOwnProperty.call(crossReferences, "spotify")
+    || Boolean(source.externalIds?.spotify)
+    || Object.keys(raw).some((key) => /spotify/i.test(key));
   if (!hasSpotifyCrossReference) return source;
 
   const safeCrossReferences = { ...crossReferences };
