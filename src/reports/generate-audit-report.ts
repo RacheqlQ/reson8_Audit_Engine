@@ -171,7 +171,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
 }
 
 function sections(i:AuditReportInput):Section[]{
- const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s);
+ const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s);
  const catalogSources=Array.isArray(e.catalogSources)?e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
  const genreRecord=(s?.genreClassification??e.genreClassification)&&typeof (s?.genreClassification??e.genreClassification)==="object"?(s?.genreClassification??e.genreClassification) as Record<string,unknown>:{};
  const genreCandidates=Array.isArray(genreRecord.genres)?genreRecord.genres.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
