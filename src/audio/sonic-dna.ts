@@ -1,6 +1,13 @@
 import { estimateKey } from "./key-estimation.js";
 import type { GenreFusionResult } from "../genre/fusion.js";
-export interface TempoEstimate { bpm: number | null; alternateTempo: number | null; confidence: number | null; }
+export interface TempoEstimate {
+ bpm:number|null;
+ alternateTempo:number|null;
+ confidence:number|null;
+ method:"high_frequency_transient_autocorrelation";
+ candidateBpms:number[];
+ abstentionReason:string|null;
+}
 export interface SonicDnaFeatures {
  sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
  key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; keyTuningCents:number|null; keySegmentAgreement:number|null; keyAnalysisFftButterflyCount:number; limitations:string[];
@@ -41,34 +48,67 @@ function prepareAnalysisPcm(samples:Float32Array,sampleRate:number,channels:numb
 }
 
 
+function emptyTempoEstimate(reason:string):TempoEstimate {
+ return {bpm:null,alternateTempo:null,confidence:null,method:"high_frequency_transient_autocorrelation",candidateBpms:[],abstentionReason:reason};
+}
+
+/**
+ * Estimate tempo from high-frequency transient flux rather than raw block
+ * loudness. The short-time absolute derivative emphasizes attacks and
+ * de-emphasizes sustained tones. Confidence is a signal-prominence diagnostic,
+ * not a calibrated probability of BPM accuracy.
+ */
 export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstimate {
- if(sampleRate<=0||samples.length<sampleRate*4||rms(samples)<1e-5)return {bpm:null,alternateTempo:null,confidence:null};
- const hop=Math.max(1,Math.floor(sampleRate/100)),env:number[]=[];
- for(let s=0;s+hop<=samples.length;s+=hop){let sum=0;for(let i=s;i<s+hop;i++)sum+=Math.abs(samples[i]);env.push(sum/hop);}
- const meanEnvelope=env.reduce((sum,value)=>sum+value,0)/Math.max(1,env.length);
- const envelopeVariance=env.reduce((sum,value)=>sum+(value-meanEnvelope)**2,0)/Math.max(1,env.length);
- // A steady sine can create tiny block-boundary fluctuations that correlate
- // at arbitrary lags. Require meaningful amplitude-envelope movement first.
- if(meanEnvelope<=EPSILON||Math.sqrt(envelopeVariance)/meanEnvelope<0.03)return {bpm:null,alternateTempo:null,confidence:null};
- const novelty=env.map((v,i)=>Math.max(0,v-(env[i-1]??v))),scores=new Map<number,number>();
- for(let bpm=60;bpm<=180;bpm++){
-  const lag=Math.max(1,Math.round(60/bpm*sampleRate/hop));let c=0,l=0,r=0;
-  for(let i=lag;i<novelty.length;i++){c+=novelty[i]*novelty[i-lag];l+=novelty[i]**2;r+=novelty[i-lag]**2;}
-  scores.set(bpm,c/Math.sqrt(Math.max(EPSILON,l*r)));
+ const method="high_frequency_transient_autocorrelation" as const;
+ if(sampleRate<=0||samples.length<sampleRate*4||rms(samples)<1e-5)
+  return emptyTempoEstimate("Insufficient duration or signal energy for tempo analysis.");
+ const hop=Math.max(1,Math.floor(sampleRate/100));
+ const onset:number[]=[];
+ for(let start=0;start+hop<samples.length;start+=hop){
+  let flux=0;
+  const end=start+hop;
+  for(let i=start+1;i<end;i++)flux+=Math.abs(samples[i]-samples[i-1]);
+  onset.push(flux/hop);
  }
- const sorted=[...scores.entries()].sort((a,b)=>b[1]-a[1]),rawBest=sorted[0]?.[1]??0;
- // A steady/non-rhythmic signal has no onset autocorrelation. Do not turn
- // an all-zero score array into an arbitrary 60 BPM result.
- if(rawBest<0.05)return {bpm:null,alternateTempo:null,confidence:null};
- let measured=sorted[0][0];
- const fast=Math.round(measured*2),slow=Math.round(measured/2);
- let alternate:number|null=fast<=180&&fast>=60?fast:slow>=60?slow:null;
- if(alternate!==null){
-  const f=Math.max(measured,alternate),s=Math.min(measured,alternate),fs=scores.get(f)??0,ss=scores.get(s)??0;
-  measured=fs>=ss*0.25?f:s;alternate=measured===f?s:f;
+ if(onset.length<400)return emptyTempoEstimate("Insufficient onset frames for tempo analysis.");
+ const novelty=onset.map((value,index)=>Math.max(0,value-(onset[index-1]??value)));
+ const mean=novelty.reduce((sum,value)=>sum+value,0)/novelty.length;
+ const variance=novelty.reduce((sum,value)=>sum+(value-mean)**2,0)/novelty.length;
+ if(mean<=EPSILON||Math.sqrt(variance)/Math.max(mean,EPSILON)<0.08)
+  return emptyTempoEstimate("No sufficiently distinct transient activity was detected.");
+ const scores=new Map<number,number>();
+ for(let bpm=40;bpm<=240;bpm++){
+  const lag=Math.max(1,Math.round(60/bpm*sampleRate/hop));
+  let cross=0,left=0,right=0;
+  for(let i=lag;i<novelty.length;i++){
+   const x=novelty[i],y=novelty[i-lag];
+   cross+=x*y;left+=x*x;right+=y*y;
+  }
+  scores.set(bpm,cross/Math.sqrt(Math.max(EPSILON,left*right)));
  }
- const best=scores.get(measured)??0,runner=sorted.find(([b])=>b!==measured&&b!==alternate)?.[1]??0;
- return {bpm:measured,alternateTempo:alternate,confidence:clamp((best-runner)/Math.max(best,0.01)*2)};
+ const localPeaks=[...scores.entries()].filter(([bpm,score])=>
+  score>=(scores.get(bpm-1)??-1)&&score>=(scores.get(bpm+1)??-1),
+ ).sort((a,b)=>b[1]-a[1]);
+ const selected:Array<[number,number]>=[];
+ for(const candidate of localPeaks){
+  if(selected.every(([bpm])=>Math.abs(bpm-candidate[0])>=4))selected.push(candidate);
+  if(selected.length===5)break;
+ }
+ const bestBpm=selected[0]?.[0];
+ const bestScore=selected[0]?.[1]??0;
+ if(bestBpm===undefined||bestScore<0.08)
+  return {...emptyTempoEstimate("Transient autocorrelation did not produce a sufficiently prominent tempo candidate."),candidateBpms:selected.map(([bpm])=>bpm)};
+ const sortedScores=[...scores.values()].sort((a,b)=>a-b);
+ const median=sortedScores[Math.floor(sortedScores.length/2)]??0;
+ const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
+ if(confidence<0.1)
+  return {...emptyTempoEstimate("Tempo candidate prominence is too weak to support a reliable result."),confidence,candidateBpms:selected.map(([bpm])=>bpm)};
+ const double=bestBpm*2,half=bestBpm/2;
+ const octaveCandidate=double<=240?double:half>=40?half:null;
+ const octaveScore=octaveCandidate===null?0:(scores.get(Math.round(octaveCandidate))??0);
+ const alternateTempo=octaveCandidate!==null&&octaveScore>=bestScore*0.35?Math.round(octaveCandidate):null;
+ const bpm=alternateTempo!==null&&octaveScore>bestScore*1.05?alternateTempo:bestBpm;
+ return {bpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),confidence,method,candidateBpms:selected.map(([candidate])=>candidate),abstentionReason:null};
 }
 
 export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):SonicDnaFeatures {
@@ -111,7 +151,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  if(tempo.bpm===null)limitations.push("Tempo could not be determined reliably from the supplied audio.");
  return {
   sampleRate,channels:Number.isInteger(channels)&&channels>0?channels:1,durationSeconds:prepared.durationSeconds,
-  rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:"amplitude_envelope_autocorrelation"},
+  rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:tempo.method,candidateBpms:tempo.candidateBpms,abstentionReason:tempo.abstentionReason},
   harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:key.method,tuningCents:key.tuningCents,segmentAgreement:key.segmentAgreement,analysisWindows:key.analysisWindows,fftButterflyCount:key.fftButterflyCount},
   vocalFeatures:{status:"not_analyzed",reason:"No vocal separation or vocal-activity model is configured; vocal attributes are not inferred."},
   bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
