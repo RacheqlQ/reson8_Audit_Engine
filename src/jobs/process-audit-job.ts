@@ -380,7 +380,7 @@ export async function processAuditJob(
           );
         }
       }
-      if (!metadataSources.length) {
+      if (!metadataSources.length && !hasMaster) {
         const failures = catalogResults.map((result) => result.error).filter(Boolean).join("; ");
         throw new Error(failures || "No DSP provider returned usable track metadata");
       }
