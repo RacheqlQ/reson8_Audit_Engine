@@ -147,7 +147,7 @@ describe("Sonic DNA",()=>{
   const sampleRate=8000;
   const rhythm=analyzePcm(pulse(120,12,sampleRate),sampleRate);
   const harmonic=analyzePcm(chord([261.6256,329.6276,391.9954],12,sampleRate),sampleRate);
-  expect(rhythm.rhythmFeatures).toMatchObject({status:"measured",method:"amplitude_envelope_autocorrelation"});
+  expect(rhythm.rhythmFeatures).toMatchObject({status:"measured",method:"high_frequency_transient_autocorrelation"});
   expect(rhythm.rhythmFeatures.bpm).toBeGreaterThanOrEqual(115);
   expect(rhythm.rhythmFeatures.bpm).toBeLessThanOrEqual(125);
   expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:"C",mode:"major",method:"fft_harmonic_chroma_ensemble"});
