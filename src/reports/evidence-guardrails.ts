@@ -47,7 +47,7 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
     && agreement >= 0.8 && agreement <= 1;
 }
 
-function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean): unknown {
+function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean, suppressVocal: boolean, suppressKey: boolean): unknown {
   if (typeof value === "string") {
     const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
@@ -68,14 +68,20 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
         || /\binsufficient\s+(?:evidence|data|metrics?|support|reporting)\b/i.test(sentence);
       const actionableMonitoringInstruction = /\b(?:verify|measure|monitor|track|investigate)\s+(?:the\s+)?(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|market demand|commercial performance|marketability)\b/i.test(sentence);
       const hasCommercialClaim = suppressCommercial && commercialTerms.test(sentence) && !cautionaryCommercialContext && !actionableMonitoringInstruction;
-      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim;
+      const vocalClaim = /\b(?:instrumental(?:[- ]only)?|vocal[- ]free|no vocals|without vocals?|without vocal content|no vocal content|vocals? (?:are )?(?:absent|not present|not detected))\b/i;
+      const hasUnsupportedVocalClaim = suppressVocal && vocalClaim.test(sentence);
+      const keyClaim = /\b[A-G](?:#|b|♯|♭)\s*(?:major|minor)\b|\b[A-G]-(?:sharp|flat)\s*(?:major|minor)\b/i.test(sentence)
+        || /\b(?:key|mode|tonic)\s*(?:is|of|:|at|centered on)\s+[A-G]\s*(?:major|minor)\b/i.test(sentence)
+        || /\bin\s+[A-G]\s*(?:major|minor)\b/.test(sentence);
+      const hasUnsupportedKeyClaim = suppressKey && keyClaim;
+      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim && !hasUnsupportedVocalClaim && !hasUnsupportedKeyClaim;
     });
     return kept.join(" ").trim() || "Not asserted: the supporting measurement confidence is insufficient.";
   }
-  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial));
+  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial, suppressVocal, suppressKey));
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-      .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial)]));
+      .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial, suppressVocal, suppressKey)]));
   }
   return value;
 }
@@ -123,6 +129,14 @@ function hasVerifiedCommercialMetrics(evidence:Record<string,unknown>|null|undef
  });
 }
 
+function hasVocalAnalysis(value: Record<string, unknown> | null | undefined): boolean {
+  if (!value) return false;
+  const features = value.vocalFeatures;
+  if (!features || typeof features !== "object" || Array.isArray(features)) return false;
+  const status = (features as Record<string, unknown>).status;
+  return status === "analyzed" || status === "measured" || status === "completed";
+}
+
 export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   assessment: T,
   sonicDna: Record<string, unknown> | null | undefined,
@@ -137,7 +151,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     genre && typeof genre.primaryGenre === "string" && genre.primaryGenre.trim()
       && genre.abstained !== true,
   );
-  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence)) as T;
+  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence), !hasVocalAnalysis(sonicDna), !isReliableKey(sonicDna)) as T;
 
   if (hasAlbumConflict(evidence)) {
     result = sanitizeAlbumConflictClaims(result) as T;
@@ -152,6 +166,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     }
   }
 
+  const mutable = result as Record<string, any>;
   if (!reliableTempo && result.scorecard) {
     if (result.scorecard.tempoLaneFit) result.scorecard.tempoLaneFit = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
     if (result.scorecard.rhythmicConsistency) result.scorecard.rhythmicConsistency = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
@@ -161,7 +176,31 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     result.aAndRPositioning.adjacentLanes = [];
     result.aAndRPositioning.rationale = GENRE_UNCONFIRMED_RATIONALE;
   }
-  const mutable = result as Record<string, any>;
+  const hasDynamicRangeMeasurement = typeof sonicDna?.dynamicRangeDb === "number" && Number.isFinite(sonicDna.dynamicRangeDb);
+  const hasLoudnessMeasurement = typeof sonicDna?.loudnessLufs === "number" && Number.isFinite(sonicDna.loudnessLufs);
+  const hasRmsMeasurement = typeof sonicDna?.rmsLevelDbfs === "number" && Number.isFinite(sonicDna.rmsLevelDbfs);
+  if (!hasDynamicRangeMeasurement || (!hasLoudnessMeasurement && !hasRmsMeasurement)) {
+    const dynamicRangeDimension = mutable.scorecard?.dynamicRangeLoudness;
+    if (dynamicRangeDimension && typeof dynamicRangeDimension === "object") {
+      dynamicRangeDimension.score = null;
+      dynamicRangeDimension.rationale = "Not scored: direct dynamic-range and loudness/RMS measurements are unavailable from the uploaded master. No mastering-quality conclusion can be inferred.";
+    }
+  }
+  const zeroConfidence = typeof assessment.confidence === "number"
+    && Number.isFinite(assessment.confidence)
+    && assessment.confidence <= 0;
+  if (Array.isArray(mutable.evidenceLabels)) {
+    mutable.evidenceLabels = mutable.evidenceLabels.filter((entry: unknown) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+      const record = entry as Record<string, unknown>;
+      const claim = typeof record.claim === "string" ? record.claim : "";
+      if (!reliableTempo && /\b(?:tempo|bpm|beats per minute)\b/i.test(claim)) return false;
+      if (!isReliableKey(sonicDna as Record<string, unknown> | null | undefined) && /\b(?:key|mode|major|minor|tonic)\b/i.test(claim)) return false;
+      if (!hasVocalAnalysis(sonicDna) && /\b(?:vocal|instrumental|singing|singer|voice)\b/i.test(claim)) return false;
+      if (zeroConfidence && record.label === "INFERRED") return false;
+      return true;
+    });
+  }
   if (!hasProviderGenre && typeof mutable.laneHypothesis === "string") {
     mutable.laneHypothesis = GENRE_UNCONFIRMED_RATIONALE;
   }
@@ -170,6 +209,110 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       marketability: "undetermined",
       rationale: "No verified, source-attributed commercial-performance metrics are available for this release. Streams, listeners, saves, sales, revenue, playlist conversion and campaign outcomes cannot be inferred from audio features, genre metadata or general catalog context.",
     };
+  }
+  if (zeroConfidence) {
+    if (typeof mutable.creativeIdentity === "string") {
+      mutable.creativeIdentity = "Creative identity is unconfirmed because overall A&R assessment confidence is zero. Do not assign a genre, mood, vocal identity or audience position until source reconciliation and a human listening review are complete.";
+    }
+    mutable.strengths = [];
+    if (Array.isArray(mutable.risks)) {
+      mutable.risks = [...mutable.risks, "Overall A&R assessment confidence is zero; track-specific creative strengths, positioning and commercial conclusions are withheld."];
+    }
+    if (Array.isArray(mutable.referencesToVerify)) {
+      mutable.referencesToVerify = ["No comparable recording is selected. After identity and musical lane are verified, choose references and document the exact musical dimension being compared."];
+    }
+    const dimensionAbstentionRationale = (dimension: string): string => {
+      switch (dimension) {
+        case "tempoLaneFit":
+          return "Not scored: overall assessment confidence is zero. Technical tempo measurements alone do not establish artistic positioning or a reliable lane-fit score.";
+        case "rhythmicConsistency":
+          return "Not scored: overall assessment confidence is zero. BPM and rhythm measurements, where present, are not sufficient for a final consistency rating without human listening and segment-level review.";
+        case "dynamicRangeLoudness":
+          return hasDynamicRangeMeasurement && (hasLoudnessMeasurement || hasRmsMeasurement)
+            ? "Not scored: overall assessment confidence is zero. Direct loudness and dynamic-range measurements are reported separately and do not establish mastering quality or artistic merit."
+            : "Not scored: overall assessment confidence is zero. Direct dynamic-range and loudness/RMS measurements are unavailable; no mastering-quality conclusion can be inferred.";
+        case "metadataCompleteness":
+          return "Not scored: overall assessment confidence is zero. Identity fields and source conflicts are shown in the reconciliation section; no numeric metadata-completeness rating is issued at this confidence level.";
+        case "releaseReadiness":
+          return "Not scored: overall assessment confidence is zero. No numeric release-readiness rating is issued; audience, market, campaign and release evidence must be reviewed separately.";
+        default:
+          return "Not scored: overall assessment confidence is zero. The available evidence cannot support a numeric rating for this dimension; complete the listed evidence and human-review steps before assigning a score.";
+      }
+    };
+    if (!mutable.scorecard || typeof mutable.scorecard !== "object" || Array.isArray(mutable.scorecard)) {
+      mutable.scorecard = {};
+    }
+    for (const [dimension, value] of Object.entries(mutable.scorecard as Record<string, unknown>)) {
+      const existing = value && typeof value === "object" && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : {};
+      mutable.scorecard[dimension] = {
+        ...existing,
+        score: null,
+        rationale: dimensionAbstentionRationale(dimension),
+      };
+    }
+    for (const dimension of ["tempoLaneFit", "rhythmicConsistency", "dynamicRangeLoudness", "metadataCompleteness", "releaseReadiness"]) {
+      const existing = mutable.scorecard[dimension] && typeof mutable.scorecard[dimension] === "object"
+        ? mutable.scorecard[dimension] as Record<string, unknown>
+        : {};
+      mutable.scorecard[dimension] = {
+        ...existing,
+        score: null,
+        rationale: dimensionAbstentionRationale(dimension),
+      };
+    }
+    if (mutable.commercialRead) {
+      mutable.commercialRead = {
+        marketability: "undetermined",
+        rationale: hasVerifiedCommercialMetrics(evidence)
+          ? "Verified commercial metrics are present, but overall A&R assessment confidence is zero. They remain source evidence and do not establish a reliable track-specific commercial verdict."
+          : "No verified, source-attributed commercial-performance metrics are available. Overall A&R assessment confidence is zero, so no commercial verdict can be issued.",
+      };
+    }
+    if (mutable.aAndRPositioning) {
+      mutable.aAndRPositioning.primaryLane = "Unconfirmed — overall assessment confidence is zero";
+      mutable.aAndRPositioning.adjacentLanes = [];
+      mutable.aAndRPositioning.rationale = "No track-specific genre or lane verdict is issued because the overall assessment confidence is zero. Complete source reconciliation and a human listening review before assigning positioning.";
+    }
+    if (typeof mutable.laneHypothesis === "string") {
+      mutable.laneHypothesis = "No comparable-lane hypothesis is issued because overall assessment confidence is zero. Verify identity and complete a human listening review before selecting references.";
+    }
+    if (mutable.releaseStrategy) {
+      mutable.releaseStrategy.recommendation = "No track-specific release recommendation is issued because assessment confidence is zero. Verify the recording identity, complete a human listening review, and obtain source-attributed release and audience evidence before selecting a release lane or campaign.";
+      mutable.releaseStrategy.priorities = [
+        "Verify artist, title, release version and ISRC against an authoritative DSP or distributor source.",
+        "Complete a human listening review covering hook recall, arrangement, vocal presence, mix translation and creative differentiation.",
+        "Confirm rights ownership, release status, master approval and distributor delivery with the rights holder.",
+        "Collect source-attributed audience and campaign baselines with a defined reporting period before recommending spend."
+      ];
+    }
+    if (mutable.promotionPlan) {
+      mutable.promotionPlan.preRelease = "No track-specific pre-release campaign is recommended until identity, genre, vocal status and release readiness have been verified.";
+      mutable.promotionPlan.releaseWindow = "No release window is recommended from the current evidence. Confirm the release date, distributor lead time, rights clearance and campaign capacity first.";
+      mutable.promotionPlan.postRelease = "No track-specific post-release sequence is recommended until the release is live and source-attributed performance data can establish a baseline.";
+      mutable.promotionPlan.pitchingAngles = ["No track-specific pitching angle is approved until a human listening review and verified identity record are available."];
+      mutable.promotionPlan.playlistCategories = ["No target playlist assigned pending verified genre and vocal analysis."];
+      mutable.promotionPlan.contentIdeas = ["Prepare a visual asset only after the artist confirms the creative identity and intended audience."];
+    }
+    if (mutable.labelPartnerFit) {
+      mutable.labelPartnerFit.partnerProfile = "No label or partner fit can be established from the current zero-confidence assessment. Verify the artist, release identity, genre and vocal profile before shortlisting any company or curator.";
+      mutable.labelPartnerFit.criteriaToDemonstrate = [
+        "A verified artist and release identity supported by an authoritative source.",
+        "A human-reviewed genre and vocal profile supported by the submitted master.",
+        "Documented rights ownership, release status and approved distribution materials.",
+        "Source-attributed audience and campaign performance with a defined reporting period."
+      ];
+      mutable.labelPartnerFit.diligenceBeforeContact = "Do not contact a label or curator on the basis of this assessment. First reconcile identity metadata, complete the listening review, confirm rights and delivery, and research current submission requirements from each target's official source.";
+    }
+    if (mutable.executionPlan) {
+      mutable.executionPlan.days30 = "Verify artist, title and release identity against authoritative DSP and distributor records. Complete a human listening review covering hook recall, arrangement, vocal presence, production choices and lane clarity. Confirm rights ownership, master approval and delivery status before making release recommendations.";
+      mutable.executionPlan.days60 = "Repeat the technical assessment with validated audio analysis, document its methods and confidence, and reconcile metadata across independent providers. Build a shortlist of actual labels and curators only after the musical lane and submission eligibility are supported by evidence.";
+      mutable.executionPlan.days90 = "Create a release and promotion plan from verified release dates, confirmed partner requirements and source-attributed audience baselines. Record outreach, responses and campaign outcomes; do not assume placements, demand or commercial conversion.";
+    }
+    if (typeof mutable.productionArrangementGuidance === "string") {
+      mutable.productionArrangementGuidance = "No track-specific production changes are recommended because the overall assessment confidence is zero. A qualified listener or mix engineer should review the full recording, identify audible arrangement or mix issues, and document time-coded observations before proposing edits. Preserve measured technical values as measurements only; they do not establish musical quality or justify adding instruments, changing the arrangement or altering loudness.";
+    }
   }
   return result;
 }

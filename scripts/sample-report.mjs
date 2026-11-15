@@ -11,8 +11,35 @@ import { ambiguousAudioFixture } from "./fixtures/ambiguous-audio.mjs";
 const out=new URL("../artifacts/",import.meta.url);
 await mkdir(out,{recursive:true});
 for(const file of await readdir(out)){if(file.endsWith("-audit-report.pdf"))await rm(new URL(file,out));}
+const combinedFixture=structuredClone(fullAudioFixture);
+combinedFixture.auditId="fixture-combined-master-and-dsp";
+combinedFixture.evidence={
+ ...combinedFixture.evidence,
+ sourceCombination:"master_and_dsp",
+ masterAudio:{evidenceClass:"OBSERVED",provenance:"uploaded_audio_master"},
+ catalogSources:[{platform:"apple_music",status:"recognized",error:null}],
+ artist:"Fixture Artist",
+ title:"Fixture Track",
+ album:"Fixture Album",
+ releaseDate:"2026-01-15",
+};
+const zeroConfidenceCombinedFixture=structuredClone(ambiguousAudioFixture);
+zeroConfidenceCombinedFixture.auditId="fixture-zero-confidence-combined";
+zeroConfidenceCombinedFixture.assessment={
+ ...zeroConfidenceCombinedFixture.assessment,
+ confidence:0,
+ commercialRead:{marketability:"high",rationale:"Synthetic fixture intentionally supplies an unsupported high commercial verdict to test zero-confidence suppression."},
+};
+zeroConfidenceCombinedFixture.evidence={
+ ...zeroConfidenceCombinedFixture.evidence,
+ sourceCombination:"master_and_dsp",
+ masterAudio:{evidenceClass:"OBSERVED",provenance:"uploaded_audio_master"},
+ catalogSources:[{platform:"apple_music",status:"recognized",error:null}],
+};
 const variants=[
  ["full-audio-based",fullAudioFixture],
+ ["combined-master-and-dsp",combinedFixture],
+ ["zero-confidence-combined",zeroConfidenceCombinedFixture],
  ["partial-audio-low-confidence",partialAudioFixture],
  ["metadata-only",metadataOnlyFixture],
  ["long-form-audio",longFormAudioFixture],

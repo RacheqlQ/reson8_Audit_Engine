@@ -11,6 +11,18 @@ const baseAssessment = {
   laneHypothesis: "The 156 BPM tempo points to Afrobeats.",
   releaseStrategy: { recommendation: "Pitch the 156 BPM track to high-energy playlists.", priorities: ["Verify rights and delivery."] },
   promotionPlan: { pitchingAngles: ["Lead with the 156 BPM energy."], playlistCategories: ["High-energy Afrobeats party mixes"] },
+  labelPartnerFit: {
+    partnerProfile: "An instrumental-focused boutique label is a strong fit for this recording.",
+    criteriaToDemonstrate: ["Demonstrate instrumental production quality and playlist fit."],
+    diligenceBeforeContact: "Prepare an instrumental pitch for the label.",
+  },
+  executionPlan: {
+    days30: "Prepare the instrumental campaign and pitch to suitable labels.",
+    days60: "Release the instrumental edit and begin playlist outreach.",
+    days90: "Scale the campaign based on playlist response.",
+  },
+  productionArrangementGuidance: "Add a new instrumental bridge and strengthen the bass arrangement.",
+  confidence: 0.75,
   scorecard: {
     tempoLaneFit: { score: 80, rationale: "Tempo supports the lane." },
     rhythmicConsistency: { score: 75, rationale: "The rhythm is consistent." },
@@ -119,4 +131,177 @@ describe("Phillo evidence guardrails", () => {
     expect(result.scorecard.tempoLaneFit.score).toBe(80);
     expect(result.aAndRPositioning.primaryLane).toBe("Afrobeats");
   });
+
+  it("does not assert instrumental or vocal absence when vocal analysis was not performed", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "This is an instrumental track with no vocals, although vocal analysis was not performed.",
+      releaseStrategy: { recommendation: "Without vocal content, target instrumental playlists.", priorities: ["Pitch to instrumental playlists."] },
+      promotionPlan: { pitchingAngles: ["Promote this vocal-free instrumental beat."], playlistCategories: ["Instrumental lo-fi playlists"] },
+      evidenceGaps: ["Vocal analysis was not performed because no vocal-activity model is configured."],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      vocalFeatures: { status: "not_analyzed", reason: "No vocal analysis model is configured." },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/instrumental|vocal-free|no vocals|without vocal content/i);
+    expect(JSON.stringify(result)).toContain("Vocal analysis was not performed");
+  });
+
+  it("withholds track-specific release and partner recommendations when overall assessment confidence is zero", () => {
+    const result = sanitizeAssessmentForEvidence({ ...baseAssessment, confidence: 0 }, {
+      provenance: "uploaded_audio_master",
+      bpm: 95,
+      tempoConfidence: 0,
+      vocalFeatures: { status: "not_analyzed" },
+      genreClassification: { primaryGenre: null, abstained: true },
+    });
+    expect(result.releaseStrategy.recommendation).toContain("No track-specific release recommendation is issued");
+    expect(result.labelPartnerFit.partnerProfile).toContain("No label or partner fit can be established");
+    expect(result.executionPlan.days30).toContain("Verify artist, title and release identity");
+    expect(result.productionArrangementGuidance).toContain("No track-specific production changes are recommended");
+  });
+  it("withholds creative positioning and inferred evidence when overall confidence is zero even if individual signals are reliable", () => {
+    const assessment = {
+      ...baseAssessment,
+      confidence: 0,
+      creativeIdentity: "A reliable tempo and provider genre establish a definitive Afrobeats identity.",
+      strengths: ["The track has a strong Afrobeats identity and a clear audience lane."],
+      evidenceLabels: [{ label: "INFERRED", claim: "This track is Afrobeats.", source: "groq_assessment" }],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 120,
+      tempoConfidence: 0.95,
+      rhythmFeatures: { status: "measured" },
+      genreClassification: { primaryGenre: "Afrobeats", abstained: false },
+    });
+    expect(result.creativeIdentity).toContain("Creative identity is unconfirmed");
+    expect(result.strengths.join(" ")).not.toMatch(/Afrobeats|strong audience lane/i);
+    expect(JSON.stringify(result.evidenceLabels)).not.toContain("This track is Afrobeats");
+    expect(result.aAndRPositioning.primaryLane).toContain("Unconfirmed");
+  });
+
+  it("does not use key confidence as a rationale for an unmeasured dynamic-range dimension", () => {
+    const assessment = {
+      ...baseAssessment,
+      confidence: 0.75,
+      scorecard: {
+        ...baseAssessment.scorecard,
+        dynamicRangeLoudness: {
+          score: 74,
+          rationale: "Key confidence is low in this partial fixture; this null score is intentional.",
+        },
+      },
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      keyConfidence: 0.06,
+      dynamicRangeDb: null,
+      loudnessLufs: null,
+      rmsLevelDbfs: null,
+    });
+    expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("dynamic-range and loudness/RMS measurements are unavailable");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("Key confidence");
+  });
+
+  it("withholds every numeric score when overall assessment confidence is zero", () => {
+    const assessment = {
+      ...baseAssessment,
+      confidence: 0,
+      scorecard: {
+        ...baseAssessment.scorecard,
+        dynamicRangeLoudness: { score: 78, rationale: "Key confidence is low; this does not justify a dynamic-range score." },
+        metadataCompleteness: { score: 65, rationale: "A populated test score that must be withheld when the overall assessment has zero confidence." },
+        releaseReadiness: { score: 72, rationale: "A populated test score that must be withheld when the overall assessment has zero confidence." },
+      },
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 95,
+      tempoConfidence: 0,
+      vocalFeatures: { status: "not_analyzed" },
+      genreClassification: { primaryGenre: null, abstained: true },
+    });
+    expect(Object.values(result.scorecard).every((dimension) => dimension.score === null)).toBe(true);
+    expect(Object.values(result.scorecard).every((dimension) => /overall assessment confidence is zero/i.test(dimension.rationale))).toBe(true);
+    expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("Key confidence");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("Direct dynamic-range and loudness/RMS measurements are unavailable");
+  });
+
+  it("removes specific key and mode assertions from narrative when key confidence is below the reporting gate", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "The recording is in F-sharp major with a confident tonal center.",
+      creativeIdentity: "F# major gives the track a resolved, uplifting harmonic identity.",
+      strengths: ["The F-sharp major key creates a memorable harmonic color."],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      key: "F#",
+      mode: "major",
+      keyConfidence: 0.049,
+      keySegmentAgreement: 0.5,
+      harmonicFeatures: { status: "insufficient_evidence" },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/F-sharp major|F# major|tonal center|harmonic identity/i);
+  });
+
+  it("withholds low-confidence tempo/key and unperformed-vocal claims from the evidence ledger", () => {
+    const assessment = {
+      ...baseAssessment,
+      evidenceLabels: [
+        { label: "OBSERVED", claim: "Tempo estimate: 95 BPM.", source: "uploaded_audio_master" },
+        { label: "OBSERVED", claim: "Key and mode: F-sharp major.", source: "uploaded_audio_master" },
+        { label: "OBSERVED", claim: "Vocal analysis confirms an instrumental recording.", source: "uploaded_audio_master" },
+        { label: "OBSERVED", claim: "RMS loudness level: -11.32 dBFS.", source: "uploaded_audio_master" },
+        { label: "OBSERVED", claim: "Measured dynamic range: 13.11 dB.", source: "uploaded_audio_master" },
+      ],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 95,
+      tempoConfidence: 0,
+      key: "F#",
+      mode: "major",
+      keyConfidence: 0.049,
+      keySegmentAgreement: 0.5,
+      rmsLevelDbfs: -11.32,
+      dynamicRangeDb: 13.11,
+      vocalFeatures: { status: "not_analyzed" },
+    });
+    const claims = result.evidenceLabels.map((entry) => entry.claim).join(" ");
+    expect(claims).not.toMatch(/tempo|BPM|key and mode|major|vocal|instrumental/i);
+    expect(claims).toContain("RMS loudness level: -11.32 dBFS");
+    expect(claims).toContain("Measured dynamic range: 13.11 dB");
+  });
+
+  it("fills all five scorecard dimensions when a zero-confidence assessment is incomplete", () => {
+    const assessment = {
+      ...baseAssessment,
+      confidence: 0,
+      scorecard: {
+        tempoLaneFit: { score: 88, rationale: "Unsupported populated fixture score." },
+      },
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 95,
+      tempoConfidence: 0,
+      vocalFeatures: { status: "not_analyzed" },
+    });
+    const required = [
+      "tempoLaneFit",
+      "rhythmicConsistency",
+      "dynamicRangeLoudness",
+      "metadataCompleteness",
+      "releaseReadiness",
+    ];
+    expect(Object.keys(result.scorecard).sort()).toEqual(required.sort());
+    expect(Object.values(result.scorecard).every((dimension) => dimension.score === null)).toBe(true);
+    expect(Object.values(result.scorecard).every((dimension) => /overall assessment confidence is zero/i.test(dimension.rationale))).toBe(true);
+    expect(result.strengths).toEqual([]);
+  });
+
 });

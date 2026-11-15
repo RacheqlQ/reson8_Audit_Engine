@@ -49,6 +49,25 @@ describe("DSP provider registry", () => {
     });
   });
 
+
+  it("distinguishes a partial provider response from an unavailable lookup failure", async () => {
+    const partial = {
+      ...metadata("spotify", "one"),
+      artist: null,
+      title: null,
+      evidenceStatus: "partial" as const,
+    };
+    const results = await collectDspMetadata([link("spotify", "one")], {
+      collect: async () => partial,
+    });
+
+    expect(results[0]).toMatchObject({
+      status: "partial",
+      error: null,
+      metadata: { evidenceStatus: "partial", artist: null, title: null },
+    });
+  });
+
   it("isolates provider failures and continues with the remaining providers", async () => {
     const results = await collectDspMetadata([link("spotify", "one"), link("tidal", "two")], {
       collect: async (url) => {

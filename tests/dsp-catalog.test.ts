@@ -59,6 +59,40 @@ describe("catalogue policy gate coverage", () => {
       { provider: "deezer", reason: "disabled by data policy", commercialStatus: "allowed" },
     ]);
   });
+
+  it("extracts Apple Music track identity fields when the exact provider opt-in is enabled", async () => {
+    process.env.PROVIDER_ENABLED_APPLE_MUSIC = "true";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toContain("itunes.apple.com/lookup?id=67890&entity=song&country=ng");
+      return new Response(JSON.stringify({
+      resultCount: 1,
+      results: [{
+        kind: "song",
+        trackId: 67890,
+        trackName: "Test Track",
+        artistName: "Test Artist",
+        collectionName: "Test Album",
+        releaseDate: "2025-08-27T00:00:00Z",
+        primaryGenreName: "R&B",
+        trackViewUrl: "https://music.apple.com/us/album/test-track/12345?i=67890",
+      }],
+    }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await collectCatalogMetadata("https://music.apple.com/ng/album/test-album/12345?i=67890");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      platform: "apple_music",
+      catalogId: "67890",
+      artist: "Test Artist",
+      title: "Test Track",
+      album: "Test Album",
+      releaseDate: "2025-08-27",
+      evidenceStatus: "recognized",
+    });
+  });
 });
 
 describe("Audiomack commercial policy gate", () => {

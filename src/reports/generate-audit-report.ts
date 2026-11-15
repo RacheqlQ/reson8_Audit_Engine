@@ -25,6 +25,15 @@ export function normalizeReportText(value: string): string {
   .replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"?");
 }
 const text=(v:unknown):string=>v===null||v===undefined||v===""?"":Array.isArray(v)?v.map(text).filter(Boolean).join(", "):typeof v==="object"?"":typeof v==="number"&&Number.isFinite(v)?String(Number(v.toFixed(2))):normalizeReportText(String(v));
+const isHttpsUrl=(value:unknown):boolean=>{
+ if(typeof value!=="string")return false;
+ try{const parsed=new URL(value);return parsed.protocol==="https:"&&Boolean(parsed.hostname);}
+ catch{return false;}
+};
+const isValidVerificationDate=(value:unknown):boolean=>
+ typeof value==="string"
+ && /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})?)?$/.test(value)
+ && Number.isFinite(Date.parse(value));
 const val=(v:unknown,fallback="Not supplied")=>text(v)||fallback;
 const EXTERNAL_ID_LABELS:Record<string,string>={spotify:"Spotify",apple_music:"Apple Music",tidal:"TIDAL",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",audd:"AudD",musicbrainz:"MusicBrainz"};
 function externalIdentifierValue(value:unknown):string[]{
@@ -202,6 +211,10 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
 function sections(i:AuditReportInput):Section[]{
  const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),hasMasterAudio=hasSubmittedMasterAudio(e,s),tempoReliable=isReliableTempo(s);
  const catalogSources=Array.isArray(e.catalogSources)?e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
+ const sourceCombinationLabel=String(e.sourceCombination??"")==="master_and_dsp"?"Combined — uploaded master audio + submitted DSP catalog link.":String(e.sourceCombination??"")==="master_only"?"Master audio only.":String(e.sourceCombination??"")==="dsp_only"?"DSP catalog link only.":hasMasterAudio?"Master audio submitted; DSP source combination not recorded.":"DSP source combination not recorded.";
+ const providerName=(value:unknown)=>(({apple_music:"Apple Music",spotify:"Spotify",tidal:"TIDAL",youtube_music:"YouTube Music",deezer:"Deezer",audiomack:"Audiomack"} as Record<string,string>)[String(value)]??text(value))||"DSP provider";
+ const providerLookupSummary=catalogSources.length?catalogSources.map((item)=>providerName(item.platform)+" — "+text(item.status||"unknown")+(text(item.error)?" — "+text(item.error):"")).join("; "):String(e.sourceCombination??"")==="master_and_dsp"?"No DSP provider lookup result was recorded; the submitted link requires retry or manual verification.":"No DSP provider lookup result was recorded.";
+ const platformPresenceSummary=catalogSources.length?catalogSources.map((item)=>providerName(item.platform)+": "+text(item.status||"unknown")+(text(item.canonicalUrl)?" ("+text(item.canonicalUrl)+")":"")).join("; "):"Not supplied — no platform presence results were recorded.";
  const genreRecord=(s?.genreClassification??e.genreClassification)&&typeof (s?.genreClassification??e.genreClassification)==="object"?(s?.genreClassification??e.genreClassification) as Record<string,unknown>:{};
  const genreCandidates=Array.isArray(genreRecord.genres)?genreRecord.genres.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
  const genreLabels=genreCandidates.map((item)=>text(item.label)).filter(Boolean);
@@ -211,18 +224,117 @@ function sections(i:AuditReportInput):Section[]{
  const genreUnmapped=Array.isArray(genreRecord.unmappedTags)?genreRecord.unmappedTags.length:0;
  const primaryGenre=text(genreRecord.primaryGenre)||"No primary genre asserted — insufficient or conflicting provider evidence";
 
- const catalogStatusLine=catalogSources.map((source)=>[text(source.platform),text(source.status).toUpperCase(),text(source.catalogId),text(source.error)].filter(Boolean).join(" — ")).join("; ");
+ const verifiedCuratorTargets=Array.isArray(e.curatorTargets)?e.curatorTargets.filter((item):item is Record<string,unknown>=>{
+  if(!item||typeof item!=="object"||Array.isArray(item))return false;
+  const target=item as Record<string,unknown>;
+  return target.status==="verified"
+   && Boolean(text(target.name))
+   && Boolean(text(target.platform))
+   && isHttpsUrl(target.sourceUrl)
+   && Boolean(text(target.fitRationale))
+   && isHttpsUrl(target.submissionRoute)
+   && Boolean(text(target.submissionRequirements))
+   && isValidVerificationDate(target.verifiedAt);
+ }):[];
+ const unresolvedCuratorIdentity=(["artist","title","isrc"] as const).filter((field)=>!text(e[field]));
+ const curatorGenreConfirmed=Boolean(text(genreRecord.primaryGenre)&&genreRecord.abstained!==true);
+ const vocalFeatures=s?.vocalFeatures&&typeof s.vocalFeatures==="object"&&!Array.isArray(s.vocalFeatures)?s.vocalFeatures as Record<string,unknown>:null;
+ const vocalStatus=String(vocalFeatures?.status??"not_recorded");
+ const curatorVocalAnalyzed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
+ const vocalAnalysisDisclosure=!vocalFeatures||["not_analyzed","not_recorded","unavailable","not_configured"].includes(vocalStatus)
+  ? "Vocal analysis: Not performed — "+(text(vocalFeatures?.reason)||"no vocal-analysis result is recorded")+"; vocal presence/absence is unknown and is not inferred."
+  : curatorVocalAnalyzed
+   ? "Vocal analysis: Performed (status: "+vocalStatus+"). Only explicitly returned vocal measurements may be reported; unmeasured vocal attributes remain unknown."
+   : "Vocal analysis: Status "+vocalStatus+"; no conclusion about vocal presence or absence is established.";
+ const sonicDnaBody: string[] = [];
+ if (hasAudio) {
+  sonicDnaBody.push(
+   e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
+   "Tempo: " + (tempoReliable ? val(s?.bpm) : "Not reported — insufficient confidence"),
+   "Tempo confidence score (not calibrated accuracy): " + val(s?.tempoConfidence),
+   "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not reported — confidence below 80% reporting target"),
+   "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
+   "Integrated loudness: " + val(s?.loudnessLufs) + " LUFS (direct signal measurement; not a mastering verdict)",
+   "Dynamic range: " + val(s?.dynamicRangeDb) + " dB (direct signal measurement; not a quality verdict)",
+   "RMS level dBFS: " + val(s?.rmsLevelDbfs),
+   "RMS energy: " + val(s?.rmsEnergy),
+   "Confidence note: integrated loudness, RMS level and dynamic range are direct signal measurements; this analysis version does not assign them model-confidence scores or infer mastering quality from them."
+  );
+ } else if (s) {
+  sonicDnaBody.push(
+   "Provider-supplied sonic context (not master-measured)",
+   "Provider BPM: " + val(s.bpm),
+   "Provider key / mode: " + [text(s.key), text(s.mode)].filter(Boolean).join(" "),
+   "Provider mood tags: " + val(s.moodTags),
+   hasMasterAudio ? "Master audio submitted; master-derived Sonic DNA measurements unavailable." : "Not measured: no master audio supplied."
+  );
+ } else if (hasMasterAudio) {
+  sonicDnaBody.push(
+   "Master audio submitted; master-derived Sonic DNA measurements unavailable.",
+   "Processing status: no completed master analysis is available; do not substitute provider tags for measurements.",
+   "Required action: retry the audio decode and Sonic DNA worker path while preserving the combined-source job and its submitted DSP link.",
+   "Until measurements are present, BPM, key/mode, rhythm, integrated loudness, dynamic range and vocal presence remain unconfirmed."
+  );
+ } else {
+  sonicDnaBody.push(
+   "Requires audio upload",
+   "Not measured: no master audio supplied.",
+   "Required next input: upload the actual master audio file in WAV, FLAC or a high-quality MP3 so the worker can inspect the recording rather than relying on catalogue metadata.",
+   "Analysis plan: after ingestion, estimate BPM with confidence and segment stability, estimate key/mode with confidence and agreement, measure integrated loudness and dynamic range, and run vocal-activity analysis.",
+   "Evidence boundary: DSP metadata can support artist, title, album and release reconciliation, but cannot establish sonic attributes, production quality or mastering readiness.",
+   "Do not infer genre, vocal presence, production quality or mastering readiness from DSP metadata alone."
+  );
+ }
+ sonicDnaBody.push(vocalAnalysisDisclosure);
+ if (Object.keys(genreRecord).length) {
+  sonicDnaBody.push(
+   "Genre evidence: " + primaryGenre
+   + "; candidates: " + (genreLabels.join(", ") || "none")
+   + (genreSources.length ? "; sources: " + genreSources.join(", ") : "")
+   + (genreRegions.length ? "; regions: " + genreRegions.join(", ") : "")
+   + (genreScenes.length ? "; scenes: " + genreScenes.join(", ") : "")
+   + "; unmapped tags: " + String(genreUnmapped ?? "none")
+  );
+ }
+ const curatorCampaignBody=verifiedCuratorTargets.length
+  ?[
+   verifiedCuratorTargets.length+" curator/playlist target(s) passed the report's provenance completeness gate. This does not imply acceptance, placement, relationship or guaranteed reach.",
+   ...verifiedCuratorTargets.flatMap((target,index)=>[
+    "VERIFIED TARGET "+(index+1)+": "+text(target.name)+" — "+text(target.platform),
+    "Fit rationale: "+text(target.fitRationale),
+    "Official submission route: "+text(target.submissionRoute),
+    "Published requirements: "+text(target.submissionRequirements),
+    "Official source: "+text(target.sourceUrl),
+    "Verified on: "+text(target.verifiedAt)
+   ]),
+   "Before outreach, re-open each official source to confirm that the target remains active and its submission requirements have not changed."
+  ]
+  :[
+   "NO VERIFIED CURATOR OR PLAYLIST TARGETS — no named curator, playlist, contact or submission opportunity is recommended from this audit.",
+   "Evidence gaps blocking target selection: "+[
+    ...(unresolvedCuratorIdentity.length?["unresolved identity fields: "+unresolvedCuratorIdentity.join(", ")]:[]),
+    ...(!curatorGenreConfirmed?["no confirmed provider-backed genre classification"]:[]),
+    ...(!curatorVocalAnalyzed?["vocal analysis was not performed"]:[]),
+    ...(!catalogSources.length?["no usable DSP catalog lookup results"]:[])
+   ].join("; "),
+   "Playlist categories are discovery hypotheses, not named playlists, curator contacts, relationships or evidence of acceptance.",
+   "Target verification protocol: capture the official playlist or curator page, named curator or submission owner, recent programming activity, track-specific fit rationale, official submission route, current eligibility and published requirements, source URL and verification date.",
+   "Target qualification: compare the actual master with the curator's recent selections and stated programming remit. Check format, language, region, clean or explicit requirements, release stage and whether the target is currently accepting submissions; do not infer fit from a broad genre label alone.",
+   "Pitch packet: prepare an approved master, clean or explicit version where relevant, verified artist biography, one-sentence track description grounded in human listening, confirmed release date, ISRC/UPC when assigned, approved artwork, rights and contributor credits, and official DSP links.",
+   "Outreach log: record the target name, platform, official source URL, named owner or submission route, date checked, fit rationale, eligibility, fee or paid-promotion terms, submission date, response, follow-up date and final outcome.",
+   "Campaign control: use a small, evidence-matched shortlist and personalize each submission. Do not imply prior relationships, editorial support, guaranteed placement or audience outcomes; disclose any paid promotion separately from editorial consideration.",
+   "Outreach decision: hold external curator pitching until identity, rights, genre and vocal status are verified. Then shortlist only active targets with documented fit and current official submission instructions."
+  ];
  const reconciliation=e.reconciliation&&typeof e.reconciliation==="object"?e.reconciliation as Record<string,unknown>:{};
  const conflictSummary=Array.isArray(reconciliation.conflicts)?reconciliation.conflicts.map((item)=>{const conflict=item&&typeof item==="object"?item as Record<string,unknown>:{};return text(conflict.field)+": "+(Array.isArray(conflict.values)?conflict.values.map(text).join(" vs "):"Conflicting values");}).join("; "):"No conflict details supplied";
  const score=(name:string,v:{score:number|null;rationale:string})=>name+" — "+(v.score===null?"NOT SCORED":v.score+"/100")+" — "+v.rationale;
  const output:Section[]=[
  {title:"Executive assessment",accent:"blue",body:[...(e.fixture?["FIXTURE — synthetic renderer test data; not a real analysis."]:[]),a.executiveSummary,"Verdict: "+verdictLabel(a.commercialRead.marketability),"Verdict rule: "+verdictRule(a.commercialRead.marketability),"Reason: "+a.commercialRead.rationale,"Confidence: "+Math.round(a.confidence*100)+"%",
- "Confidence definition: a model-generated evidence-quality estimate informed by source coverage, agreement and stated limitations; it is not a calibrated probability or a commercial-success forecast.","Assessment basis: "+(e.fixture?"Synthetic renderer fixture — no real master or identity evidence.":hasMasterAudio?"Uploaded master submitted; master-derived measurements are reported separately.":"Metadata/provider evidence only; no uploaded master.") ]},
+ "Confidence definition: a model-generated evidence-quality estimate informed by source coverage, agreement and stated limitations; it is not a calibrated probability or a commercial-success forecast.","Assessment basis: "+(e.fixture?"Synthetic renderer fixture — no real master or identity evidence.":hasMasterAudio?"Uploaded master submitted; master-derived measurements are reported separately.":"Metadata/provider evidence only; no uploaded master."),"Submitted source combination: "+sourceCombinationLabel ]},
  {title:"Identity and source reconciliation",accent:"violet",body:[
  ...(["artist","title","album","genre","isrc","upc","label","releaseDate"] as const).map((field)=>({artist:"Artist",title:"Track",album:"Album",genre:"Genre",isrc:"ISRC",upc:"UPC",label:"Label",releaseDate:"Release date"}[field])+": "+metadataFieldStatus(e,field)+" — "+(text(field==="genre"?(e.genre??e.genres):e[field])||"No value returned by the supplied or queried sources")+" — "+metadataFieldSource(e,field)),
- "DSP / platform: "+val(e.platform),
- "Submitted DSP links: "+String(Array.isArray(e.catalogSources)?e.catalogSources.length:Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked.length:0),
- "Platform presence and consistency: "+(catalogStatusLine||"No per-platform lookup results supplied"),
+ "DSP provider lookup outcomes: "+providerLookupSummary,
+ "Platform presence and consistency: "+platformPresenceSummary,
  "Conflict policy: values that disagree across providers remain visible as conflicts; a preferred identity value is not treated as proof that the other provider was wrong.",
  "Conflict details: "+conflictSummary,
  "External identifiers: "+(externalIdentifiers(e.externalIds)?(e.fixture?"Synthetic test identifiers — ":"Available — ")+externalIdentifiers(e.externalIds):"Unavailable — no external identifiers returned"),
@@ -231,19 +343,19 @@ function sections(i:AuditReportInput):Section[]{
  "Verification note: unavailable fields are not inferred or fabricated. Analytical recommendations remain hypotheses and are never presented as verified identity metadata."
 ]},
  {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>(({OBSERVED:"Measured from the uploaded master",RECOGNIZED:"Returned by an external identification source",RECONCILED:"Cross-checked across independent sources",INFERRED:"Analytical hypothesis — not independently verified","INDUSTRY PRACTICE":"General industry guidance"} as Record<string,string>)[x.label]??"Evidence item")+" — "+x.claim+" [Source: "+x.source+"]")},
- {title:"Sonic DNA and technical profile",accent:"blue",body:[...(hasAudio?[e.fixture?"FIXTURE VALUES — synthetic audio-profile test data":"Measured from the uploaded master","Tempo: "+(tempoReliable?val(s?.bpm):"Not reported — insufficient confidence"),"Tempo confidence score (not calibrated accuracy): "+val(s?.tempoConfidence),"Key / mode: "+(isReliableKey(s)?[text(s?.key),text(s?.mode)].filter(Boolean).join(" "):"Not reported — confidence below 80% reporting target"),"Key confidence estimator score (not calibrated accuracy): "+val(s?.keyConfidence),"RMS level dBFS: "+val(s?.rmsLevelDbfs),"Dynamic range dB: "+val(s?.dynamicRangeDb),"RMS energy: "+val(s?.rmsEnergy)]:s?["Provider-supplied sonic context (not master-measured)","Provider BPM: "+val(s.bpm),"Provider key / mode: "+[text(s.key),text(s.mode)].filter(Boolean).join(" "),"Provider mood tags: "+val(s.moodTags),hasMasterAudio?"Master audio submitted; master-derived Sonic DNA measurements unavailable.":"Not measured: no master audio supplied."]:hasMasterAudio?["Master audio submitted; master-derived Sonic DNA measurements unavailable."]:["Requires audio upload","Not measured: no master audio supplied."]),...(Object.keys(genreRecord).length?["Genre evidence: "+primaryGenre+"; candidates: "+(genreLabels.join(", ")||"none")+(genreSources.length?"; sources: "+genreSources.join(", "):"")+(genreRegions.length?"; regions: "+genreRegions.join(", "):"")+(genreScenes.length?"; scenes: "+genreScenes.join(", "):"")+"; unmapped tags: "+genreUnmapped]:[])]},
+ {title:"Sonic DNA and technical profile",accent:"blue",body:sonicDnaBody},
  {title:"Creative identity and A&R positioning",accent:"violet",body:[a.creativeIdentity,"Primary lane: "+a.aAndRPositioning.primaryLane,"Adjacent lanes: "+a.aAndRPositioning.adjacentLanes.join(", "),a.aAndRPositioning.rationale]},
- {title:"Strengths and creative leverage",accent:"teal",body:a.strengths},
+ {title:"Strengths and creative leverage",accent:"teal",body:a.strengths.length?a.strengths:["No track-specific creative strengths are asserted because overall A&R assessment confidence is zero."]},
  {title:"Risks and diligence",accent:"coral",body:a.risks},
  {title:"Evidence-derived scorecard",accent:"blue",body:[score("Tempo and lane fit",a.scorecard.tempoLaneFit),score("Rhythmic consistency",a.scorecard.rhythmicConsistency),score("Dynamic range and RMS signal level",a.scorecard.dynamicRangeLoudness),score("Metadata completeness",a.scorecard.metadataCompleteness),score("Release readiness",a.scorecard.releaseReadiness)]},
  {title:"Human listening checklist (unscored)",accent:"violet",body:a.humanListeningChecklist},
  {title:"Production and arrangement guidance",accent:"teal",body:[a.productionArrangementGuidance,industryPractice("General lane craft knowledge, not track-specific evidence."),industryPractice(a.industryPractice),...a.listeningChecks]},
  {title:"Comparable lanes and listening references to verify",accent:"violet",body:["Analytical hypotheses — comparisons not independently verified",a.laneHypothesis,...a.referencesToVerify,a.verificationMethod]},
  {title:"Promotion plan",accent:"coral",body:[a.promotionPlan.preRelease,a.promotionPlan.releaseWindow,a.promotionPlan.postRelease,"Content concepts: "+a.promotionPlan.contentIdeas.join(" • "),"General pitching guidance — angles to adapt to verified track facts: "+a.promotionPlan.pitchingAngles.join(" • "),"Playlist categories to investigate only: "+a.promotionPlan.playlistCategories.join(", "),industryPractice(a.promotionPlan.industryPractice)]},
+ {title:"Curator campaign and target verification",accent:"coral",body:curatorCampaignBody},
  {title:"Label and partner fit",accent:"blue",body:[a.labelPartnerFit.partnerProfile,...a.labelPartnerFit.criteriaToDemonstrate,a.labelPartnerFit.diligenceBeforeContact,industryPractice(a.labelPartnerFit.industryPractice)]},
  {title:"30 / 60 / 90-day execution plan",accent:"violet",body:["DAYS 01–30 — "+a.executionPlan.days30,"DAYS 31–60 — "+a.executionPlan.days60,"DAYS 61–90 — "+a.executionPlan.days90]},
- {title:"Commercial evidence and measurement",accent:"blue",body:[a.commercialRead.rationale,"Catalog popularity: "+val(e.catalogPopularity),"Audience telemetry: "+val(e.audienceTelemetry)]},
- {title:"Decision record and evidence gates",accent:"coral",body:[a.releaseStrategy.recommendation,...a.releaseStrategy.priorities.map((p,n)=>"Priority "+(n+1)+": "+p),"Evidence gaps: "+a.evidenceGaps.join(" "),"Limitations: "+a.limitations.join(" ")]}
+ {title:"Commercial evidence, measurement and decision gates",accent:"blue",body:[a.commercialRead.rationale,"Catalog popularity: "+val(e.catalogPopularity),"Audience telemetry: "+val(e.audienceTelemetry),"DECISION RECORD",a.releaseStrategy.recommendation,...a.releaseStrategy.priorities.map((p,n)=>"Priority "+(n+1)+": "+p),"Evidence gaps: "+a.evidenceGaps.join(" "),"Limitations: "+a.limitations.join(" ")]}
  ];
  return output.map((section)=>({...section,body:section.body.map(professionalEvidenceLanguage)}));
 }
@@ -274,12 +386,12 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  let pageNo=1,page=pdf.addPage([W,H]),y=TOP,rects:ReportRect[]=[];
  header(page,"Audit findings",pageNo,fonts,C.blue,input.evidence.fixture===true);
  const chromeRects=():ReportRect[]=>[{x:M,y:H-44,width:220,height:10,id:"header-brand"},{x:M,y:H-64,width:W-2*M,height:8,id:"header-title"},{x:M,y:H-68,width:W-2*M,height:0.7,id:"header-rule"},{x:M,y:43,width:W-2*M,height:0.7,id:"footer-rule"},{x:M,y:25,width:250,height:10,id:"footer-text"},{x:W-M-18,y:25,width:18,height:10,id:"footer-page-number"}];
- const validate=(checkDensity=true)=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));if(!checkDensity)return;const density=checkPageDensity(rects);if(!density.ok)console.warn("[report-layout] Page "+pageNo+" density below 65% content occupancy ("+Math.round((1-density.emptyRatio)*100)+"%); warning only.");};
+ const validate=(checkDensity=true)=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));if(!checkDensity)return;const density=checkPageDensity(rects);if(!density.ok)throw new Error("[report-layout] Page "+pageNo+" falls below the 60% minimum content-occupancy gate ("+Math.round((1-density.emptyRatio)*100)+"%).");if(1-density.emptyRatio<.6)console.warn("[report-layout] Page "+pageNo+" content occupancy is below the 60% minimum target ("+Math.round((1-density.emptyRatio)*100)+"%).");};
  const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent,input.evidence.fixture===true);y=TOP;rects=[];};
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
   const sonicBlock=section.title==="Sonic DNA and technical profile";
-  const keepTogetherCount=chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
+  const keepTogetherCount=section.title==="Curator campaign and target verification"?Math.min(3,section.body.length):chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
   const openingHeight=section.body.slice(0,keepTogetherCount).reduce((sum,para)=>{
    const size=para===para.toUpperCase()&&para.length<100?8:9.7;
    return sum+wrap(para,fonts.regular,size,W-2*M-16).length*size*1.4+8;
@@ -416,6 +528,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
    const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes decision-context page falls below the 65% content-occupancy threshold");
   }
  }
+ if(tier==="full"&&pdf.getPageCount()<12)throw new Error("Full report must contain at least 12 pages of substantive content");
  if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");
  signal?.throwIfAborted();
  const bytes=await pdf.save();
