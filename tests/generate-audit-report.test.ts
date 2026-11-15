@@ -113,7 +113,8 @@ describe("A4 report layout and fixture coverage",()=>{
   const context=buildArNotesDecisionContext(ambiguousAudioFixture as any);
   expect(context.heading).toBe("DECISION CONTEXT");
   expect(context.verdict).toBe("INSUFFICIENT EVIDENCE");
-  expect(context.summary).toContain("zero-confidence tempo candidate");
+  expect(context.summary).not.toContain("zero-confidence tempo candidate");
+  expect(context.summary).not.toMatch(/\\b(?:128\\s*BPM|Afrobeats|streams?)\\b/i);
   expect(context.prompts).toHaveLength(3);
   expect(context.prompts[0]).toContain("change the current decision");
   expect(context.prompts[1]).toContain("identity, rights or source gaps");
@@ -128,6 +129,25 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(chunks.slice(0,-1).every(chunk=>chunk.length<=42)).toBe(true);
   expect(chunks[chunks.length-1].length).toBeLessThanOrEqual(16);
  });
+ it("uses the same evidence-sanitized assessment for A&R Notes and the report body",async()=>{
+  const input=structuredClone(ambiguousAudioFixture) as AuditReportInput;
+  input.assessment.executiveSummary=[
+   "The recording is a 128 BPM high-energy Afrobeats release.",
+   "The release has 24000 streams, strong market demand and high commercial potential.",
+   "Further listening and source verification are required before any external decision."
+  ].join(" ");
+  const context=buildArNotesDecisionContext(input);
+  const forbidden=/\\b(?:128\\s*BPM|high-energy|Afrobeats|24000 streams|market demand|commercial potential)\\b/i;
+  expect(context.summary).not.toMatch(forbidden);
+  expect(context.summary).toContain("Further listening and source verification are required");
+  const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).not.toMatch(forbidden);
+  const pdf=await generateAuditReport(input,"full");
+  const generated=await PDFDocument.load(pdf);
+  expect(generated.getPageCount()).toBeLessThanOrEqual(20);
+  expect(generated.getForm().getTextField("ar_notes").acroField.getWidgets()).toHaveLength(1);
+ });
+
  it("preserves the complete executive summary in the shared A&R Notes decision context",()=>{
   const context=buildArNotesDecisionContext(longFormAudioFixture as any);
   expect(context.summary).toBe(longFormAudioFixture.assessment.executiveSummary);
