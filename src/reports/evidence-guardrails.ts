@@ -51,7 +51,10 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
   if (typeof value === "string") {
     const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
-      const hasTempoClaim = /\b(?:\d{2,3}\s*bpm|beats per minute|tempo|high[- ]energy)\b/i.test(sentence);
+      const hasTempoNumber = /\\b(?:\\d{2,3}\\s*bpm|beats per minute)\\b/i.test(sentence);
+      const cautionaryTempoContext = /\\b(?:not|no|without|insufficient|unreliable|unverified|uncertain|abstain(?:ed)?|cannot|could not|unable|withheld|not reported|requires review)\\b/i.test(sentence);
+      const hasTempoClaim = hasTempoNumber || /\\bhigh[- ]energy\\b/i.test(sentence)
+        || (/\\btempo\\b/i.test(sentence) && !cautionaryTempoContext);
       const lower = sentence.toLocaleLowerCase();
       const hasGenreClaim = suppressGenre && GENRE_TAXONOMY.some((genre) =>
         genre.label.length >= 4 && lower.includes(genre.label.toLocaleLowerCase()),
