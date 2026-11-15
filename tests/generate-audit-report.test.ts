@@ -85,9 +85,12 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(identity?.text.join(" ")).toContain("Field source: Spotify");
   expect(identity?.text.join(" ")).toContain("Field source: Embedded audio tags");
  });
- it("collapses all missing audio measurements into one empty state",()=>{
+ it("collapses all missing audio measurements into one empty state without master-derived provenance claims",()=>{
   const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");
   expect(report).toContain("Not measured: no master audio supplied.");
   expect(report).not.toContain("Key / mode: Not measured");
+  expect(report).not.toContain("Measured from the uploaded master");
+  expect(report).not.toContain("fixture.sonicDna.bpm");
+  expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
  });
 });
