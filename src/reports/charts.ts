@@ -74,7 +74,7 @@ function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.
 function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
 function constellationLabelLineCount(row:ChartRow,width:number):number{
  const label=shown(row.value),columnWidth=Math.max(42,(width-36)/2);
- return Math.max(1,Math.ceil(label.length/Math.max(8,Math.floor(columnWidth/4))));
+ return Math.max(1,Math.ceil(label.length/Math.max(8,Math.floor(columnWidth/5.5))));
 }
 function constellationLabelRowHeights(rows:ChartRow[],width:number):number[]{
  const heights:number[]=[];
@@ -94,7 +94,7 @@ export function chartPanelHeight(kind:ChartKind="bars",rows:ChartRow[]=[],width=
  if(kind==="bars")return 205;
  return 190;
 }
-export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind,rows),width=width):ChartRect[]{
+export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,top=700,height=chartPanelHeight(kind,rows),width=CARD_W):ChartRect[]{
  const bottom=top-height,captionY=bottom+8,captionH=CAPTION_H-8;
  const contentTop=top-HEADER_H-8,contentBottom=captionY+captionH+3;
  const card:ChartRect={x,y:bottom,width,height,id:"card-bounds"};
@@ -107,8 +107,8 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
   {x:x+1,y:bottom+1,width:width-2,height:height-2,id:"shape-card-gradient"},
   {x,y:top-HEADER_H,width:width,height:HEADER_H,id:"shape-header-band"},
   {x,y:top-HEADER_H,width:5,height:HEADER_H,id:"shape-header-accent"},
-  {x:x+13,y:top-24,width:230,height:12,id:"shape-header-title"},
-  {x:x+width-164,y:top-24,width:155,height:10,id:"shape-header-status"},
+  {x:x+13,y:top-24,width:Math.max(24,width-Math.min(155,Math.max(78,width*.38))-42),height:12,id:"shape-header-title"},
+  {x:x+width-13-Math.min(155,Math.max(78,width*.38)),y:top-24,width:Math.min(155,Math.max(78,width*.38)),height:10,id:"shape-header-status"},
   {x:x+9,y:captionY+captionH,width:width-18,height:1,id:"shape-caption-divider"},
   {x:x+12,y:captionY+2,width:width-24,height:29,id:"shape-caption-text"}
  ];
@@ -274,8 +274,8 @@ function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,hei
  p.drawRectangle({x,y:top-HEADER_H,width:w,height:HEADER_H,color:C.navy});
  p.drawRectangle({x,y:top-HEADER_H,width:5,height:HEADER_H,color:input.inferred?C.violet:input.unavailable?C.coral:C.teal});
  tracked(p,input.title.toUpperCase(),x+13,top-19,bold,8,C.white,.65);
- const status=chartPanelDisplayStatus(input);
- tracked(p,status,x+w-164,top-19,bold,5.2,input.fixture||input.inferred?C.gold:input.unavailable?C.coral:C.teal,.25);
+ const status=chartPanelDisplayStatus(input),statusWidth=Math.min(155,Math.max(78,w*.38));
+ tracked(p,status,x+w-13-statusWidth,top-19,bold,5.2,input.fixture||input.inferred?C.gold:input.unavailable?C.coral:C.teal,.25);
  const captionTop=bottom+CAPTION_H;
  line(p,x+9,captionTop,x+w-9,captionTop,C.line,.65);
  let cy=bottom+CAPTION_H-12;
