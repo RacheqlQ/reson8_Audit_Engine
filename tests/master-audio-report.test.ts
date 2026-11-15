@@ -8,6 +8,7 @@ describe("uploaded master provenance in reports", () => {
     input.sonicDna = null;
     input.evidence = {
       ...input.evidence,
+      fixture: false,
       masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" },
       sourceCombination: "master_and_dsp",
     };
