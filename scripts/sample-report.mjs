@@ -1,9 +1,10 @@
 import { mkdir, readdir, rm, writeFile, readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { PDFDocument } from "@cantoo/pdf-lib";
+import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { generateAuditReport, buildArNotesDecisionContext, normalizeReportText } from "../dist/reports/generate-audit-report.js";
 import { sanitizeAssessmentForEvidence } from "../dist/reports/evidence-guardrails.js";
+import { drawChartPanel } from "../dist/reports/charts.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture } from "./fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "./fixtures/ambiguous-audio.mjs";
 
@@ -68,4 +69,54 @@ for(const [name,input] of variants){
   const checksum=createHash("sha256").update(await readFile(fileUrl)).digest("hex");
   process.stdout.write(filename+": "+pdf.getPageCount()+" pages; A4; disclosure, text continuity, sequential numbering, footer clearance, chart labels and editable field verified; SHA256 "+checksum+"\n");
  }
+
+const evidenceCheckPath=new URL("evidence-sanitization-regression.pdf",out).pathname;
+const chartCheckPath=new URL("constellation-long-label-regression.pdf",out).pathname;
+try{
+ const unsafeInput=structuredClone(ambiguousAudioFixture);
+ unsafeInput.assessment={
+  ...unsafeInput.assessment,
+  executiveSummary:[
+   "The recording is a 128 BPM high-energy Afrobeats release.",
+   "The release has 24000 streams, strong market demand and high commercial potential.",
+   "Further listening and source verification are required before any external decision."
+  ].join(" ")
+ };
+ const unsafeBytes=await generateAuditReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
+ await writeFile(evidenceCheckPath,unsafeBytes);
+ const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
+ if(/(?:128\s*BPM|high-energy|Afrobeats|24000 streams|market demand|commercial potential)/i.test(unsafeText)){
+  throw new Error("Generated PDF reintroduced an unsupported tempo, genre or commercial claim");
+ }
+ if(!unsafeText.includes("Further listening and source verification are required")){
+  throw new Error("Generated PDF lost the supported A&R Notes decision-context sentence");
+ }
+
+ const chartPdf=await PDFDocument.create();
+ const regular=await chartPdf.embedFont(StandardFonts.Helvetica),bold=await chartPdf.embedFont(StandardFonts.HelveticaBold);
+ const chartPage=chartPdf.addPage([595.28,841.89]);
+ const longLabels=[
+  "A very long primary creative lane label that must remain complete without shortening or silent truncation",
+  "A second extended adjacent lane label with several words and enough length to wrap across multiple lines",
+  "A third boundary-case label with an exceptionallylongunbrokensegmentthatmustwrapwithoutlosinganycharacters",
+  "A fourth adjacent lane label used to test the lower label row and chart footer clearance",
+  "A fifth final label that must remain inside the rightmost narrow chart column"
+ ];
+ drawChartPanel(chartPage,{
+  title:"Lane constellation",kind:"constellation",
+  rows:longLabels.map(value=>({label:"Lane",value})),
+  shows:"Primary and adjacent lane hypotheses",
+  cantShow:"Verified market size or audience overlap",
+  width:240,y:760
+ },regular,bold);
+ await writeFile(chartCheckPath,await chartPdf.save());
+ const chartText=execFileSync("pdftotext",["-layout",chartCheckPath,"-"],{encoding:"utf8"}).replace(/\s+/g,"");
+ for(const label of longLabels){
+  if(!chartText.includes(label.replace(/\s+/g,"")))throw new Error("Generated chart PDF clipped a complete lane label: "+label);
+ }
+ process.stdout.write("Additional PDF regressions: unsupported claims absent from extracted PDF text; all five long constellation labels extracted completely.\n");
+}finally{
+ await rm(evidenceCheckPath,{force:true});
+ await rm(chartCheckPath,{force:true});
+}
 }
