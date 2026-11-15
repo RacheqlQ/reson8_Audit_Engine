@@ -230,6 +230,16 @@ export function createSupabaseAuditStore(
       return new Uint8Array(await response.arrayBuffer());
     },
     async saveCatalogMetadata(jobId, claimToken, metadata, signal) {
+      const spotifyFailure = metadata.raw?.spotifyEnrichment;
+      const spotifyUnavailable = Boolean(
+        spotifyFailure && typeof spotifyFailure === "object"
+        && (spotifyFailure as Record<string, unknown>).status === "unavailable",
+      );
+      const providerError = spotifyUnavailable
+        ? typeof (spotifyFailure as Record<string, unknown>).error === "string"
+          ? ((spotifyFailure as Record<string, unknown>).error as string).slice(0, 240)
+          : "Spotify API enrichment is unavailable"
+        : null;
       await fencedStep(jobId, claimToken, "catalog_metadata", {
         platform: metadata.platform,
         catalogId: metadata.catalogId,
@@ -241,8 +251,8 @@ export function createSupabaseAuditStore(
           canonicalUrl: metadata.sourceUrl,
           resolvedCanonicalUrl: metadata.canonicalUrl,
           sourceUrl: metadata.sourceUrl,
-          status: metadata.evidenceStatus,
-          error: null,
+          status: spotifyUnavailable ? "unavailable" : metadata.evidenceStatus,
+          error: providerError,
           fields: {
             artist: metadata.artist, title: metadata.title, album: metadata.album,
             releaseDate: metadata.releaseDate, isrc: metadata.isrc, upc: metadata.upc,
@@ -250,7 +260,7 @@ export function createSupabaseAuditStore(
           },
           raw: metadata.raw,
           hasPreview: Boolean(metadata.previewUrl),
-          evidenceClass: "RECOGNIZED",
+          evidenceClass: spotifyUnavailable ? null : metadata.evidenceStatus === "recognized" ? "RECOGNIZED" : "PARTIAL",
         },
       }, signal);
     },
