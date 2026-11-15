@@ -16,6 +16,18 @@ describe("native PDF chart helpers", () => {
     expect(rows[3].summary!.length).toBeLessThan(risk.length);
   });
 
+  it("does not draw a numeric BPM scale when the tempo value is withheld", () => {
+    const rows: ChartRow[] = [
+      { label: "TEMPO", value: null },
+      { label: "RMS ENERGY", value: 0.42 },
+      { label: "DYNAMIC RANGE", value: 8.5 },
+    ];
+    const rects = chartPanelLayoutRects("spectrum", rows, 48, 700, chartPanelHeight("spectrum", rows));
+    expect(rects.some((rect) => rect.id === "label-spectrum-scale-0")).toBe(false);
+    expect(rects.some((rect) => rect.id === "shape-spectrum-gradient-track-0")).toBe(false);
+    expect(rects.some((rect) => rect.id === "label-spectrum-value-0")).toBe(true);
+  });
+
   it("renders complete, partial and null data without throwing", async () => {
     const pdf = await PDFDocument.create();
     const font = await pdf.embedFont(StandardFonts.Helvetica);
