@@ -25,6 +25,15 @@ export function normalizeReportText(value: string): string {
   .replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"?");
 }
 const text=(v:unknown):string=>v===null||v===undefined||v===""?"":Array.isArray(v)?v.map(text).filter(Boolean).join(", "):typeof v==="object"?"":typeof v==="number"&&Number.isFinite(v)?String(Number(v.toFixed(2))):normalizeReportText(String(v));
+const isHttpsUrl=(value:unknown):boolean=>{
+ if(typeof value!=="string")return false;
+ try{const parsed=new URL(value);return parsed.protocol==="https:"&&Boolean(parsed.hostname);}
+ catch{return false;}
+};
+const isValidVerificationDate=(value:unknown):boolean=>
+ typeof value==="string"
+ && /^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})?)?$/.test(value)
+ && Number.isFinite(Date.parse(value));
 const val=(v:unknown,fallback="Not supplied")=>text(v)||fallback;
 const EXTERNAL_ID_LABELS:Record<string,string>={spotify:"Spotify",apple_music:"Apple Music",tidal:"TIDAL",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",audd:"AudD",musicbrainz:"MusicBrainz"};
 function externalIdentifierValue(value:unknown):string[]{
@@ -218,11 +227,11 @@ function sections(i:AuditReportInput):Section[]{
   return target.status==="verified"
    && Boolean(text(target.name))
    && Boolean(text(target.platform))
-   && typeof target.sourceUrl==="string"&&/^https?:\/\//i.test(target.sourceUrl)
+   && isHttpsUrl(target.sourceUrl)
    && Boolean(text(target.fitRationale))
-   && Boolean(text(target.submissionRoute))
+   && isHttpsUrl(target.submissionRoute)
    && Boolean(text(target.submissionRequirements))
-   && Boolean(text(target.verifiedAt));
+   && isValidVerificationDate(target.verifiedAt);
  }):[];
  const unresolvedCuratorIdentity=(["artist","title","isrc"] as const).filter((field)=>!text(e[field]));
  const curatorGenreConfirmed=Boolean(text(genreRecord.primaryGenre)&&genreRecord.abstained!==true);
