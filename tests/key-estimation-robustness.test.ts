@@ -23,10 +23,9 @@ function percussionOnly(seconds = 8): Float32Array {
 }
 
 
-function harmonicChord(fundamentals: number[], seconds = 8): Float32Array {
+function harmonicChord(fundamentals: number[], seconds = 8, amplitudes = [0.15, 0.3, 0.5, 0.75, 1]): Float32Array {
   // Upper partials are deliberately stronger than the fundamentals. This
   // fixture must exercise the estimator's stated harmonic-weighting claim.
-  const amplitudes = [0.15, 0.3, 0.5, 0.75, 1];
   const partials = fundamentals.flatMap((fundamental) =>
     [1, 2, 3, 4, 5].map((harmonic) => ({
       frequency: fundamental * harmonic,
@@ -82,6 +81,12 @@ describe("DSP key estimator — robustness and abstention", () => {
 
   it("does not turn one harmonic series into a global musical key via false subharmonic votes", () => {
     const result = estimateKey(harmonicChord([220]).map((sample) => sample), RATE);
+    expect(result.key).toBeNull();
+    expect(result.mode).toBeNull();
+  });
+
+  it("does not promote a weak fundamental's stronger upper partials into false independent roots", () => {
+    const result = estimateKey(harmonicChord([220], 8, [0.05, 0.3, 0.5, 0.75, 1]), RATE);
     expect(result.key).toBeNull();
     expect(result.mode).toBeNull();
   });
