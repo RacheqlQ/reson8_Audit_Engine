@@ -32,7 +32,7 @@ const isHttpsUrl=(value:unknown):boolean=>{
 };
 const isValidVerificationDate=(value:unknown):boolean=>
  typeof value==="string"
- && /^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})?)?$/.test(value)
+ && /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})?)?$/.test(value)
  && Number.isFinite(Date.parse(value));
 const val=(v:unknown,fallback="Not supplied")=>text(v)||fallback;
 const EXTERNAL_ID_LABELS:Record<string,string>={spotify:"Spotify",apple_music:"Apple Music",tidal:"TIDAL",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",audd:"AudD",musicbrainz:"MusicBrainz"};
