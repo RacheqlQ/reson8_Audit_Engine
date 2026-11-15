@@ -351,7 +351,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  const inlineLayout=drawDecisionContext(page,inlineContextTop,false,allSummaryLines,true);
  const inlineFieldTop=inlineLayout.bottom-18;
  const inlineNotesHeight=inlineFieldTop-notesFieldBottom;
- if(inlineNotesHeight>=120){
+ if(inlineNotesHeight>=180){
   const inlineContext=drawDecisionContext(page,inlineContextTop,true,allSummaryLines,true);
   page.drawText("A&R NOTES",{x:M,y:notesTitleY,size:16,font:fonts.bold,color:C.violet});
   page.drawText("Private working notes — editable field",{x:M,y:notesSubtitleY,size:8.5,font:fonts.regular,color:C.muted});
