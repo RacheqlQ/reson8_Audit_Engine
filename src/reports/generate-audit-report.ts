@@ -223,7 +223,6 @@ function sections(i:AuditReportInput):Section[]{
  const genreUnmapped=Array.isArray(genreRecord.unmappedTags)?genreRecord.unmappedTags.length:0;
  const primaryGenre=text(genreRecord.primaryGenre)||"No primary genre asserted — insufficient or conflicting provider evidence";
 
- const catalogStatusLine=catalogSources.map((source)=>[text(source.platform),text(source.status).toUpperCase(),text(source.catalogId),text(source.error)].filter(Boolean).join(" — ")).join("; ");
  const verifiedCuratorTargets=Array.isArray(e.curatorTargets)?e.curatorTargets.filter((item):item is Record<string,unknown>=>{
   if(!item||typeof item!=="object"||Array.isArray(item))return false;
   const target=item as Record<string,unknown>;
