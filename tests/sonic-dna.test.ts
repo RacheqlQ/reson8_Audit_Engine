@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzePcm, classifyGenreFromBpm, estimateTempo } from "../src/audio/sonic-dna.js";
+import { analyzePcm, estimateTempo } from "../src/audio/sonic-dna.js";
 
 function pulse(bpm:number,seconds=12,sampleRate=8000):Float32Array {
  const samples=new Float32Array(sampleRate*seconds);
@@ -117,11 +117,9 @@ describe("Sonic DNA",()=>{
   expect(estimateTempo(dc,8000).bpm).toBeNull();
   expect(estimateTempo(tone,8000).bpm).toBeNull();
  });
- it("maps tempo to broad genre context without asserting genre as fact",()=>{
-  expect(classifyGenreFromBpm(75)).toContain("R&B");
-  expect(classifyGenreFromBpm(112)).toContain("Amapiano");
-  expect(classifyGenreFromBpm(128)).toContain("Pop");
-  expect(classifyGenreFromBpm(999)).toEqual([]);
+ it("does not assert genre from tempo alone",()=>{
+  const result=analyzePcm(pulse(112),8000);
+  expect(result.genreContext).toEqual([]);
  });
 
  it("labels the RMS-derived signal level as dBFS and does not claim integrated LUFS",()=>{
