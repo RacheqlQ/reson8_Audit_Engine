@@ -3,7 +3,7 @@ import type { GenreFusionResult } from "../genre/fusion.js";
 export interface TempoEstimate { bpm: number | null; alternateTempo: number | null; confidence: number | null; }
 export interface SonicDnaFeatures {
  sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
- key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; keyTuningCents:number|null; keySegmentAgreement:number|null; keyAnalysisOperations:number; limitations:string[];
+ key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; keyTuningCents:number|null; keySegmentAgreement:number|null; keyAnalysisFftButterflyCount:number; limitations:string[];
  loudnessLufs:number|null; rmsLevelDbfs:number; rmsEnergy:number; dynamicRangeDb:number; spectralCentroidHz:number; spectralBandwidthHz:number;
  spectralRolloffHz:number; zeroCrossingRate:number; moodTags:string[]; genreContext:string[]; genreClassification?: GenreFusionResult;
 }
@@ -112,10 +112,10 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  return {
   sampleRate,channels:Number.isInteger(channels)&&channels>0?channels:1,durationSeconds:prepared.durationSeconds,
   rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:"amplitude_envelope_autocorrelation"},
-  harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:key.method,tuningCents:key.tuningCents,segmentAgreement:key.segmentAgreement,analysisWindows:key.analysisWindows,operationCount:key.operationCount},
+  harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:key.method,tuningCents:key.tuningCents,segmentAgreement:key.segmentAgreement,analysisWindows:key.analysisWindows,fftButterflyCount:key.fftButterflyCount},
   vocalFeatures:{status:"not_analyzed",reason:"No vocal separation or vocal-activity model is configured; vocal attributes are not inferred."},
   bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
-  key:key.key,mode:key.mode,keyConfidence:key.confidence,keyTuningCents:key.tuningCents,keySegmentAgreement:key.segmentAgreement,keyAnalysisOperations:key.operationCount,limitations,
+  key:key.key,mode:key.mode,keyConfidence:key.confidence,keyTuningCents:key.tuningCents,keySegmentAgreement:key.segmentAgreement,keyAnalysisFftButterflyCount:key.fftButterflyCount,limitations,
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
   dynamicRangeDb:20*Math.log10(p95/p10),spectralCentroidHz:centroid,spectralBandwidthHz:bandwidth,
   spectralRolloffHz:rolloff,zeroCrossingRate:crossings/Math.max(1,a.length-1),
