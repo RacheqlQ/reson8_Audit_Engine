@@ -96,11 +96,12 @@ describe("A4 report layout and fixture coverage",()=>{
  it("reports a present-but-conflicting album instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.evidence.fixture=false;
+  input.evidence.sources=[];
   input.evidence.album="Hole-Hearted";
   input.evidence.fieldProvenance={...input.evidence.fieldProvenance,album:"id3"};
   input.evidence.reconciliation={conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]};
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Album: Conflict — multiple sources disagree");
+  expect(report).toContain("Album: Conflicting source values");
   expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
   expect(report).not.toContain("Album: Unavailable — no source result");
  });
