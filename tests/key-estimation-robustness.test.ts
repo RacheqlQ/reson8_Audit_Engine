@@ -55,4 +55,28 @@ describe("DSP key estimator — robustness and abstention", () => {
     expect(result.mode).toBeNull();
     expect(result.segmentAgreement).toBeLessThan(0.6);
   });
+
+  it("retains the chord root when upper harmonics are stronger than the fundamentals", () => {
+    const result = estimateKey(harmonicChord([130.8128, 164.8138, 195.9977]), RATE);
+    expect(result.key).toBe("C");
+    expect(result.mode).toBe("major");
+  });
+
+  it("does not turn one harmonic series into a global musical key via false subharmonic votes", () => {
+    const result = estimateKey(harmonicChord([220]).map((sample) => sample), RATE);
+    expect(result.key).toBeNull();
+    expect(result.mode).toBeNull();
+  });
+
+  it("rejects broadband spectral clutter even when it contains many local peaks", () => {
+    let seed = 991;
+    const noise = Float32Array.from({ length: RATE * 8 }, () => {
+      seed = (seed * 16807) % 2147483647;
+      return ((seed / 2147483647) * 2 - 1) * 0.12;
+    });
+    const result = estimateKey(noise, RATE);
+    expect(result.key).toBeNull();
+    expect(result.mode).toBeNull();
+  });
+
 });
