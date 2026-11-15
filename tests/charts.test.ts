@@ -18,11 +18,11 @@ describe("native PDF chart helpers", () => {
     for (const [evidenceClass, label] of classes) {
       expect(chartPanelStatus({ evidenceClass })).toBe(label);
       const display = chartPanelDisplayStatus({ fixture: true, evidenceClass });
-      expect(display).toContain("SYNTHETIC");
+      expect(display).toContain("SYNTHETIC FIXTURE");
       expect(display).toContain(label);
     }
     expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" }))
-      .toBe("SYNTHETIC · REQUIRES AUDIO · MEASURED");
+      .toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO · MEASURED");
     expect(chartPanelDisplayStatus({ unavailable: true, evidenceClass: "provider-recognized" }))
       .toBe("REQUIRES AUDIO · PROVIDER-RECOGNIZED");
   });
