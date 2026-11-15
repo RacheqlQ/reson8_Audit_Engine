@@ -46,6 +46,10 @@ describe("Sonic DNA",()=>{
   expect(result.bpm).toBeLessThanOrEqual(125);
   expect(result.confidence).not.toBeNull();
  });
+ it("includes the half-time tempo candidate when the beat pulse supports it",()=>{
+  const result=estimateTempo(pulse(120),8000);
+  expect(result.candidateBpms).toContain(60);
+ });
  it("reports 126 BPM with 63 BPM as its half-time alternative",()=>{
   const result=estimateTempo(pulse(126),8000);
   expect(result.bpm).toBeGreaterThanOrEqual(122);
