@@ -99,7 +99,7 @@ export const PROVIDER_POLICY = {
   giantsteps: {
     id: "giantsteps", commercialStatus: "allowed", termsUrl: "https://www.audiolabs-erlangen.de/resources/MIR/2016-GiantSteps",
     attribution: "Record dataset version and per-asset source/licence where used.",
-    retention: "Do not ingest until commercial rights and asset-level provenance are verified.",
+    retention: "Record dataset version and asset-level source/licence; use and retain each asset only as its licence permits.",
     enableFlag: "PROVIDER_ENABLED_GIANTSTEPS", decisionNote: "Operational use explicitly authorized by the product owner; verify asset-level licences and provenance before ingesting or redistributing dataset content.",
   },
   chartmetric: {
