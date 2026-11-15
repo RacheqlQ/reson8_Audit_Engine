@@ -36,6 +36,7 @@ export interface GenreFusionInput {
   tempoConfidence?: number | null;
   regionTags?: readonly string[];
   sceneTags?: readonly string[];
+  providerWeights?: Readonly<Record<string, number>>;
 }
 
 const PROVIDER_WEIGHTS: Readonly<Record<string, number>> = Object.freeze({
@@ -46,7 +47,9 @@ const TEMPO_WEIGHT_CAP = 0.15;
 const MIN_PRIMARY_CONFIDENCE = 0.38;
 const MIN_PRIMARY_MARGIN = 0.055;
 
-function providerWeight(provider: string): number {
+function providerWeight(provider: string, overrides?: Readonly<Record<string, number>>): number {
+  const configured = overrides?.[provider.toLowerCase()];
+  if (typeof configured === "number" && Number.isFinite(configured) && configured >= 0) return configured;
   return PROVIDER_WEIGHTS[provider.toLowerCase()] ?? 0.65;
 }
 
@@ -67,7 +70,7 @@ export function fuseGenreEvidence(input: GenreFusionInput): GenreFusionResult {
 
   for (const source of input.providerTags) {
     const provider = source.provider.toLowerCase();
-    const weight = providerWeight(provider);
+    const weight = providerWeight(provider, input.providerWeights);
     const normalizedTags = new Set(source.tags.map((tag) => tag.trim()).filter(Boolean));
     for (const tag of normalizedTags) {
       const genre = findGenre(tag);
