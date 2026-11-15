@@ -29,6 +29,7 @@ describe("multi-DSP audit processing", () => {
     const collected: string[] = [];
     const saved: string[] = [];
     let assessmentEvidence: Record<string, unknown> | null = null;
+    let assessmentCatalogMetadata: Record<string, unknown> | null = null;
     let reportEvidence: Record<string, unknown> | null = null;
     const result = await processAuditJob("multi-dsp-job", {
       getJob: async () => ({
@@ -62,6 +63,7 @@ describe("multi-DSP audit processing", () => {
       saveSonicDna: async () => {},
       generateAssessment: async (input) => {
         assessmentEvidence = input.evidence;
+        assessmentCatalogMetadata = input.catalogMetadata ?? null;
         return assessment;
       },
       saveAssessment: async () => {},
@@ -78,12 +80,14 @@ describe("multi-DSP audit processing", () => {
     expect(collected).toEqual(links);
     expect(saved).toEqual(["spotify", "apple_music", "deezer", "tidal", "youtube_music"]);
     expect(assessmentEvidence).toMatchObject({
-      artist: "Tems",
+      artist: null,
       reconciliation: { status: "conflict", conflicts: [{ field: "artist", values: ["Wrong Artist", "Tems"] }] },
       metadataSourcesChecked: ["apple_music", "deezer", "tidal", "youtube_music"],
 
     });
     expect(assessmentEvidence?.catalogSources).toHaveLength(4);
+    expect(assessmentCatalogMetadata?.artist).toBeNull();
+    expect(assessmentCatalogMetadata?.identity).toMatchObject({ artist: null });
     expect(assessmentEvidence?.sourceProviders).not.toContain("spotify");
     expect(JSON.stringify(assessmentEvidence)).not.toContain("spotify-1");
     expect(reportEvidence).toMatchObject({
