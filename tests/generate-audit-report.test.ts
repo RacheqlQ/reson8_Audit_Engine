@@ -93,4 +93,18 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
  });
+ it("withholds zero-confidence BPM and tempo-derived A&R assertions from the rendered report",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.sonicDna={...input.sonicDna,bpm:156,tempoConfidence:0,rhythmFeatures:{status:"measured"},genreClassification:{primaryGenre:null,abstained:true}};
+  input.assessment.executiveSummary="The recording is a 156 BPM high-energy release with a strong rhythmic lane.";
+  input.assessment.aAndRPositioning.primaryLane="Afrobeats";
+  input.assessment.aAndRPositioning.adjacentLanes=["Afro Soul"];
+  const pages=planAuditReportPages(input,"full");
+  const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Tempo: Not reported — insufficient confidence");
+  expect(report).not.toMatch(/156\\s*BPM|high-energy/);
+  expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
+  expect(report).toContain("Tempo and lane fit — NOT SCORED");
+  expect(report).toContain("Rhythmic consistency — NOT SCORED");
+ });
 });
