@@ -82,6 +82,7 @@ describe("audit worker catalog failure adapter", () => {
       claimToken,
       link,
       "TIDAL returned HTTP 503",
+      undefined,
     );
   });
 });
