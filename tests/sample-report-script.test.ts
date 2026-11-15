@@ -2,14 +2,16 @@ import { readFile } from "node:fs/promises";
 import { describe,expect,it } from "vitest";
 const root=new URL("../",import.meta.url);
 describe("sample-report command",()=>{
- it("generates three explicitly labelled fixture pairs without external services",async()=>{
+ it("generates all explicitly labelled fixture pairs, including the Phillo low-confidence regression, without external services",async()=>{
   const script=await readFile(new URL("scripts/sample-report.mjs",root),"utf8");
   expect(script).toContain("../dist/reports/generate-audit-report.js");
   expect(script).toContain("./fixtures/sample-report-input.mjs");
-  expect(script).toContain("full-audio-based");expect(script).toContain("partial-audio-low-confidence");expect(script).toContain("metadata-only");
+  expect(script).toContain("full-audio-based");expect(script).toContain("partial-audio-low-confidence");expect(script).toContain("metadata-only");expect(script).toContain("phillo-low-confidence");
   expect(script).toContain('["sample","full"]');
   expect(script).toContain("FIXTURE");
   expect(script).not.toContain("fetch(");
+  const phillo=await readFile(new URL("scripts/fixtures/phillo-low-confidence.mjs",root),"utf8");
+  expect(phillo).toContain("156");expect(phillo).toContain("0.0608");expect(phillo).toContain("Hole-Hearted - EP");
   const fixture=await readFile(new URL("scripts/fixtures/sample-report-input.mjs",root),"utf8");
   expect(fixture).toContain("Fixture Artist");expect(fixture).toContain("provenance:\"uploaded_audio_master\"");
   expect(fixture).toContain("synthetic fixture");expect(fixture).toContain("sonicDna:null");
