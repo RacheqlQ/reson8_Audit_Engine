@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fuseGenreEvidence } from "../src/genre/fusion.js";
 import { findGenre, findScene, GENRE_TAXONOMY, GENRE_TAXONOMY_VERSION } from "../src/genre/taxonomy.js";
+import { DEFAULT_GENRE_MODEL, NullGenreModel } from "../src/genre/model.js";
 
 describe("versioned genre taxonomy", () => {
   it("includes African and Afro-diaspora genre depth", () => {
@@ -9,6 +10,13 @@ describe("versioned genre taxonomy", () => {
       expect(labels.has(label), label).toBe(true);
     }
     expect(GENRE_TAXONOMY_VERSION).toMatch(/^\d{4}\.\d+$/);
+  });
+
+  it("keeps the learned-model path disabled by default", async () => {
+    expect(DEFAULT_GENRE_MODEL).toBeInstanceOf(NullGenreModel);
+    await expect(DEFAULT_GENRE_MODEL.classify({
+      bpm: 110, tempoConfidence: 0.8, key: "A", mode: "minor", providerGenreIds: ["amapiano"],
+    })).resolves.toEqual({ status: "disabled", predictions: [] });
   });
 
   it("normalizes provider aliases without fuzzy guessing", () => {
