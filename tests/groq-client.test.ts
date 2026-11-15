@@ -41,8 +41,31 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{},sonicDna:null});
-  expect(evidenceScoreBudgets).toEqual([2500,1500]);
+  expect(evidenceScoreBudgets).toEqual([2500,1811]);
   expect(evidenceScoreCalls).toBe(2);
+  expect(result.evidenceLabels).toHaveLength(1);
+ });
+ it("adapts an 8,853-token TPM rejection while preserving the complete evidence payload",async()=>{
+  const budgets:number[]=[];
+  const userPayloads:string[]=[];
+  let evidenceScoreCalls=0;
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="evidence-score"){
+    budgets.push(body.max_completion_tokens);
+    userPayloads.push(body.messages[1].content);
+    evidenceScoreCalls++;
+    if(evidenceScoreCalls===1)return new Response(JSON.stringify({error:{message:"Request too large for model in organization on tokens per minute (TPM): Limit 8000, Requested 8853."}}),{status:413});
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const input={evidence:{artist:"Fixture Artist",catalogSources:[{platform:"apple_music",status:"recognized",canonicalUrl:"https://music.example/track/1"}],reconciliation:{status:"reconciled",conflicts:[]}},sonicDna:{provenance:"uploaded_audio_master",bpm:96,tempoConfidence:0.82,rhythmFeatures:{onsetStability:0.91}},catalogMetadata:{apple_music:{artist:"Fixture Artist",title:"Fixture Track",isrc:"USAAA2600001"}}};
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  const result=await client.assess(input);
+  expect(budgets).toEqual([2500,1247]);
+  expect(evidenceScoreCalls).toBe(2);
+  expect(JSON.parse(userPayloads[1])).toEqual(JSON.parse(userPayloads[0]));
+  expect(JSON.parse(userPayloads[1]).evidence.catalogSources).toHaveLength(1);
   expect(result.evidenceLabels).toHaveLength(1);
  });
  it("requests and validates all nine Zod section groups with evidence guardrails",async()=>{
