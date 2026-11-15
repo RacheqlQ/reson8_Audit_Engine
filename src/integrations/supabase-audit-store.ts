@@ -275,6 +275,7 @@ export function createSupabaseAuditStore(
       await fencedStep(jobId, claimToken, "catalog_metadata", {
         platform: link.platform,
         catalogId: link.catalogId,
+        raw: { providerStatus: "unavailable" },
         evidenceStatus: "unavailable",
         eventPayload: {
           platform: link.platform,
