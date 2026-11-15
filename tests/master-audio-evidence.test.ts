@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getAuditSourceReadinessError, hasSubmittedMasterAudio } from "../src/audio/master-audio-evidence.js";
+import { processAuditJob, type AuditProcessorDependencies } from "../src/jobs/process-audit-job.js";
 
 describe("master audio submission evidence", () => {
   it("recognizes a submitted master independently of whether Sonic DNA measurements exist", () => {
