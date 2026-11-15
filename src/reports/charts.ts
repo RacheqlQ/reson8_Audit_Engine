@@ -83,7 +83,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
   {x,y:top-HEADER_H,width:CARD_W,height:HEADER_H,id:"shape-header-band"},
   {x,y:top-HEADER_H,width:5,height:HEADER_H,id:"shape-header-accent"},
   {x:x+13,y:top-24,width:230,height:12,id:"shape-header-title"},
-  {x:x+CARD_W-91,y:top-24,width:82,height:10,id:"shape-header-status"},
+  {x:x+CARD_W-164,y:top-24,width:155,height:10,id:"shape-header-status"},
   {x:x+9,y:captionY+captionH,width:CARD_W-18,height:1,id:"shape-caption-divider"},
   {x:x+12,y:captionY+2,width:CARD_W-24,height:29,id:"shape-caption-text"}
  ];
