@@ -9,7 +9,6 @@ Potentially permitted with conditions / pending implementation gates
 - MusicBrainz: public database/API use subject to its applicable licence, attribution and API policy. https://musicbrainz.org/doc/MusicBrainz_Database/License
 - ListenBrainz: use subject to current project/API terms, rate limits and attribution. https://listenbrainz.org/
 - YouTube Data API: use subject to YouTube API Services Terms and Developer Policies. https://developers.google.com/youtube/terms/api-services-terms-of-service
-- Beat This!: upstream repository states MIT licensing for its code/weights. Verify the exact artifact, commit and conversion provenance; MIT status does not independently resolve training-data rights. https://github.com/CPJKU/beat_this
 
 Unverified — disabled by data policy until commercial terms are confirmed
 - Groq API assessment processing: https://groq.com/terms-of-use/
