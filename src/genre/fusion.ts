@@ -69,7 +69,6 @@ export function fuseGenreEvidence(input: GenreFusionInput): GenreFusionResult {
     const provider = source.provider.toLowerCase();
     const weight = providerWeight(provider);
     const normalizedTags = new Set(source.tags.map((tag) => tag.trim()).filter(Boolean));
-    if (normalizedTags.size) providerWeights.set(provider, weight);
     for (const tag of normalizedTags) {
       const genre = findGenre(tag);
       const scene = findScene(tag);
@@ -81,6 +80,7 @@ export function fuseGenreEvidence(input: GenreFusionInput): GenreFusionResult {
         if (!scene) unmappedTags.push({ provider, tag });
         continue;
       }
+      if (!providerWeights.has(provider)) providerWeights.set(provider, weight);
       const current = votes.get(genre.id) ?? { genre, providers: new Set<string>(), weight: 0 };
       if (!current.providers.has(provider)) {
         current.providers.add(provider);
