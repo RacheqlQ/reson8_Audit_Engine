@@ -74,8 +74,10 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const novelty=onset.map((value,index)=>Math.max(0,value-(onset[index-1]??value)));
  const mean=novelty.reduce((sum,value)=>sum+value,0)/novelty.length;
  const variance=novelty.reduce((sum,value)=>sum+(value-mean)**2,0)/novelty.length;
- if(mean<=EPSILON||Math.sqrt(variance)/Math.max(mean,EPSILON)<0.08)
-  return emptyTempoEstimate("No sufficiently distinct transient activity was detected.");
+ const sortedOnsets=[...onset].sort((a,b)=>a-b);
+ const onsetPeakRatio=(sortedOnsets[Math.floor((sortedOnsets.length-1)*0.99)]??0)/Math.max(EPSILON,onset.reduce((sum,value)=>sum+value,0)/onset.length);
+ if(mean<=EPSILON||Math.sqrt(variance)/Math.max(mean,EPSILON)<0.08||onsetPeakRatio<2.5)
+  return emptyTempoEstimate("No sufficiently distinct transient activity was detected; sustained or noise-like signals are not assigned a tempo.");
  const scores=new Map<number,number>();
  for(let bpm=40;bpm<=240;bpm++){
   const lag=Math.max(1,Math.round(60/bpm*sampleRate/hop));
@@ -103,12 +105,15 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
  if(confidence<0.1)
   return {...emptyTempoEstimate("Tempo candidate prominence is too weak to support a reliable result."),confidence,candidateBpms:selected.map(([bpm])=>bpm)};
- const double=bestBpm*2,half=bestBpm/2;
- const octaveCandidate=double<=240?double:half>=40?half:null;
- const octaveScore=octaveCandidate===null?0:(scores.get(Math.round(octaveCandidate))??0);
- const alternateTempo=octaveCandidate!==null&&octaveScore>=bestScore*0.35?Math.round(octaveCandidate):null;
- const bpm=alternateTempo!==null&&octaveScore>bestScore*1.05?alternateTempo:bestBpm;
- return {bpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),confidence,method,candidateBpms:selected.map(([candidate])=>candidate),abstentionReason:null};
+ const related=Array.from({length:3},(_,index)=>index+1)
+  .map(multiplier=>({bpm:Math.round(bestBpm*multiplier),score:scores.get(Math.round(bestBpm*multiplier))??0}))
+  .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=240&&candidate.bpm!==bestBpm&&candidate.score>=bestScore*0.25)
+  .sort((a,b)=>b.bpm-a.bpm);
+ const alternateTempo=related[0]?.bpm??null;
+ const bpm=alternateTempo!==null&&alternateTempo>bestBpm?alternateTempo:bestBpm;
+ const candidates=selected.map(([candidate])=>candidate);
+ for(const candidate of [Math.round(bpm),Math.round(bpm)-1,Math.round(bpm)+1])if(candidate>=40&&candidate<=240&&!candidates.includes(candidate))candidates.push(candidate);
+ return {bpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),confidence,method,candidateBpms:candidates.slice(0,8),abstentionReason:null};
 }
 
 export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):SonicDnaFeatures {
