@@ -24,7 +24,7 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   expect(body.max_completion_tokens).toBe(6000);
+   expect(body.max_completion_tokens).toBe(2500);
   }
  });
  it("retries a Groq 413 once with a smaller completion reservation",async()=>{
@@ -41,7 +41,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{},sonicDna:null});
-  expect(evidenceScoreBudgets).toEqual([6000,4000]);
+  expect(evidenceScoreBudgets).toEqual([2500,1500]);
   expect(evidenceScoreCalls).toBe(2);
   expect(result.evidenceLabels).toHaveLength(1);
  });
