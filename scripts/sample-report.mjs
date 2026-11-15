@@ -16,7 +16,8 @@ const variants=[
 ];
 for(const [name,input] of variants){
  for(const tier of ["sample","full"]){
-  const bytes=await generateAuditReport(input,tier);
+  const reportInput={...input,generatedAt: new Date().toISOString()};
+  const bytes=await generateAuditReport(reportInput,tier);
   const pdf=await PDFDocument.load(bytes);
   if(pdf.getPageCount()>20)throw new Error(name+" "+tier+" exceeded 20 pages");
   const filename=name+"-"+tier+"-audit-report.pdf";
