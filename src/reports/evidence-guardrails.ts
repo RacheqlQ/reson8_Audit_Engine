@@ -90,8 +90,8 @@ function hasAlbumConflict(evidence:Record<string,unknown>|null|undefined):boolea
 
 function sanitizeAlbumConflictClaims(value:unknown):unknown {
  if(typeof value==="string"){
-  const sentences=value.split(/(?<=[.!?])\\s+(?=[A-Z])/);
-  const kept=sentences.filter(sentence=>!(/\\balbum\\b/i.test(sentence)&&/\\b(?:missing|unavailable|not supplied|not provided|absent|not present)\\b/i.test(sentence)));
+  const sentences=value.split(/(?<=[.!?])\s+(?=[A-Z])/);
+  const kept=sentences.filter(sentence=>!(/\balbum\b/i.test(sentence)&&/\b(?:missing|unavailable|not supplied|not provided|absent|not present)\b/i.test(sentence)));
   return kept.join(" ").trim()||ALBUM_CONFLICT_RATIONALE;
  }
  if(Array.isArray(value))return value.map(sanitizeAlbumConflictClaims);
