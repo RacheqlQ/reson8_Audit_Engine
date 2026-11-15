@@ -93,6 +93,16 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
  });
+ it("reports a present-but-conflicting album instead of calling it missing",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.evidence.album="Hole-Hearted";
+  input.evidence.fieldProvenance={...input.evidence.fieldProvenance,album:"id3"};
+  input.evidence.reconciliation={conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]};
+  const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Album: Conflict — multiple sources disagree");
+  expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+  expect(report).not.toContain("Album: Unavailable — no source result");
+ });
  it("withholds a low-confidence harmonic key from the report while retaining the diagnostic confidence",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.0608,keySegmentAgreement:0.1667};
