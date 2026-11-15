@@ -44,6 +44,7 @@ describe("bounded audio diagnostics", () => {
 
   it("captures normalized per-segment chroma and tuning without storing PCM", () => {
     const result = analyzePcm(chord([261.6256, 329.6276, 391.9954]), RATE);
+    const rhythm = result.rhythmFeatures;
     const harmonic = result.harmonicFeatures;
     const segments = harmonic.segmentChroma as Array<{
       startSeconds: number; endSeconds: number; chroma: number[];
