@@ -2,7 +2,7 @@ import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
 import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
-import { philloLowConfidenceFixture } from "../scripts/fixtures/phillo-low-confidence.mjs";
+import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
 describe("A4 report layout and fixture coverage",()=>{
@@ -27,7 +27,7 @@ describe("A4 report layout and fixture coverage",()=>{
  it("does not emit low-density warnings across all sample and full fixture variants",async()=>{
   const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
   try{
-   for(const input of [...fixtures,philloLowConfidenceFixture as unknown as AuditReportInput])for(const tier of ["sample","full"] as const)await generateAuditReport(input,tier);
+   for(const input of [...fixtures,ambiguousAudioFixture as unknown as AuditReportInput])for(const tier of ["sample","full"] as const)await generateAuditReport(input,tier);
    expect(warning.mock.calls.filter(([message])=>String(message).includes("[report-layout]"))).toEqual([]);
   }finally{warning.mockRestore();}
  });
@@ -102,7 +102,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
  });
  it("uses the evidence-sanitized commercial verdict on the PDF cover",()=>{
-  expect(coverVerdictLabel(philloLowConfidenceFixture as any)).toBe("Insufficient evidence");
+  expect(coverVerdictLabel(ambiguousAudioFixture as any)).toBe("Insufficient evidence");
  });
  it("renders the Phillo regression fixture with tempo, key, genre and commercial claims withheld",()=>{
   const pages=planAuditReportPages(philloLowConfidenceFixture as any,"full");
@@ -111,7 +111,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
   expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
-  expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+  expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Verdict: Insufficient evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
@@ -120,21 +120,21 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Album metadata is present but conflicting");
   expect(report).not.toMatch(/156\\s*BPM|high-energy|album title is missing/i);
  });
- it("reports a present-but-conflicting album instead of calling it missing",()=>{
+ it("reports present-but-conflicting generic release metadata instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.evidence.fixture=true;
-  input.evidence.album="Hole-Hearted";
+  input.evidence.album="Sample Release";
   input.evidence.fieldProvenance={...input.evidence.fieldProvenance,album:"id3"};
-  input.evidence.reconciliation={conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]};
+  input.evidence.reconciliation={conflicts:[{field:"album",values:["Sample Release - EP","Sample Release"]}]};
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Album: Synthetic test value — not a real identity match");
-  expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+  expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).not.toContain("Album: Unavailable — no source result");
   input.evidence.fixture=false;
   input.evidence.sources=[];
   const sourceBackedReport=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
   expect(sourceBackedReport).toContain("Album: Conflicting source values");
-  expect(sourceBackedReport).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+  expect(sourceBackedReport).toContain("album: Sample Release - EP vs Sample Release");
  });
  it("withholds a low-confidence harmonic key from the report while retaining the diagnostic confidence",()=>{
   const input=structuredClone(fullAudioFixture) as any;
@@ -161,3 +161,24 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
  });
 });
+ it("checks generated-output pagination, chart-bearing pages, continuation pages, footer clearance, disclosures and the 20-page cap",async()=>{
+  const longInput=structuredClone(longFormAudioFixture) as AuditReportInput;
+  longInput.evidence={...longInput.evidence,fixture:true};
+  longInput.assessment={...longInput.assessment,executiveSummary:Array(180).fill("A long-form evidence paragraph must wrap at word boundaries and continue without clipping or overlapping the footer.").join(" ")};
+  for(const tier of ["sample","full"] as const){
+   const bytes=await generateAuditReport(longInput,tier),pdf=await PDFDocument.load(bytes);
+   const pages=pdf.getPages();
+   expect(pages.length).toBeGreaterThan(2);
+   expect(pages.length).toBeLessThanOrEqual(20);
+   for(const page of pages){
+    const size=page.getSize();
+    expect(size.width).toBeCloseTo(595.28,0);
+    expect(size.height).toBeCloseTo(841.89,0);
+    const contents=page.node.Contents();
+    expect(contents).toBeTruthy();
+   }
+   expect(pdf.getForm().getTextField("ar_notes").acroField.getWidgets()).toHaveLength(1);
+   expect(pdf.getPageCount()).toBeLessThanOrEqual(20);
+  }
+ });
+
