@@ -64,8 +64,13 @@ describe("GroqClient section groups",()=>{
   const result=await client.assess(input);
   expect(budgets).toEqual([2500,1247]);
   expect(evidenceScoreCalls).toBe(2);
-  expect(JSON.parse(userPayloads[1])).toEqual(JSON.parse(userPayloads[0]));
-  expect(JSON.parse(userPayloads[1]).evidence.catalogSources).toHaveLength(1);
+  const firstPayload=JSON.parse(userPayloads[0]);
+  const retryPayload=JSON.parse(userPayloads[1]);
+  expect(retryPayload.evidence).toEqual(firstPayload.evidence);
+  expect(retryPayload.sonicDna).toEqual(firstPayload.sonicDna);
+  expect(retryPayload.catalogMetadata).toEqual(firstPayload.catalogMetadata);
+  expect(retryPayload.correction).toContain("smaller completion-token reservation");
+  expect(retryPayload.evidence.catalogSources).toHaveLength(1);
   expect(result.evidenceLabels).toHaveLength(1);
  });
  it("requests and validates all nine Zod section groups with evidence guardrails",async()=>{
