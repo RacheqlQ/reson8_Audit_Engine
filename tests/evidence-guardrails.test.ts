@@ -161,6 +161,27 @@ describe("Phillo evidence guardrails", () => {
     expect(result.executionPlan.days30).toContain("Verify artist, title and release identity");
     expect(result.productionArrangementGuidance).toContain("No track-specific production changes are recommended");
   });
+  it("withholds creative positioning and inferred evidence when overall confidence is zero even if individual signals are reliable", () => {
+    const assessment = {
+      ...baseAssessment,
+      confidence: 0,
+      creativeIdentity: "A reliable tempo and provider genre establish a definitive Afrobeats identity.",
+      strengths: ["The track has a strong Afrobeats identity and a clear audience lane."],
+      evidenceLabels: [{ label: "INFERRED", claim: "This track is Afrobeats.", source: "groq_assessment" }],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 120,
+      tempoConfidence: 0.95,
+      rhythmFeatures: { status: "measured" },
+      genreClassification: { primaryGenre: "Afrobeats", abstained: false },
+    });
+    expect(result.creativeIdentity).toContain("Creative identity is unconfirmed");
+    expect(result.strengths.join(" ")).not.toMatch(/Afrobeats|strong audience lane/i);
+    expect(JSON.stringify(result.evidenceLabels)).not.toContain("This track is Afrobeats");
+    expect(result.aAndRPositioning.primaryLane).toContain("Unconfirmed");
+  });
+
   it("withholds every numeric score when overall assessment confidence is zero", () => {
     const assessment = {
       ...baseAssessment,
