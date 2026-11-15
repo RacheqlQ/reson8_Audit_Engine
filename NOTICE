@@ -1,0 +1,30 @@
+Reson8 Audit Engine — Third-party notices
+
+This file records the current engineering policy position. It is not a complete bill of materials and does not itself grant rights. Re-check each upstream licence and the applicable commercial/API terms before release.
+
+First-party code
+- Reson8-owned analysis and report-generation code: repository owner-controlled; verify ownership and any contributor obligations before commercial distribution.
+
+Permitted with conditions / pending implementation gates
+- MusicBrainz: public database/API use subject to its applicable licence, attribution and API policy. https://musicbrainz.org/doc/MusicBrainz_Database/License
+- ListenBrainz: use subject to current project/API terms, rate limits and attribution. https://listenbrainz.org/
+- YouTube Data API: use subject to YouTube API Services Terms and Developer Policies. https://developers.google.com/youtube/terms/api-services-terms-of-service
+- Beat This!: upstream repository states MIT licensing for its code/weights. Verify the exact artifact, commit and conversion provenance; MIT status does not independently resolve training-data rights. https://github.com/CPJKU/beat_this
+
+Unverified — disabled by data policy until commercial terms are confirmed
+- Spotify: https://developer.spotify.com/terms
+- Apple Music / MusicKit: https://developer.apple.com/musickit/
+- TIDAL: https://developer.tidal.com/
+- Audiomack Data API: https://api.audiomack.com/
+- AudD: https://audd.io/
+- Last.fm: https://www.last.fm/api/tos
+- FMA / FMAK datasets: https://github.com/mdeff/fma
+- GiantSteps datasets: https://www.audiolabs-erlangen.de/resources/MIR/2016-GiantSteps
+- Chartmetric, Soundcharts and Luminate: vendor contracts required.
+
+Denied under the current product policy
+- Essentia: do not use. https://essentia.upf.edu/licensing_information.html
+- madmom / DBN: do not use. https://github.com/CPJKU/madmom
+- Deezer: do not use absent a new written commercial grant. https://developers.deezer.com/
+
+See docs/data-and-licence-policy.md for the operational controls and review checklist. This notice is not legal advice.
