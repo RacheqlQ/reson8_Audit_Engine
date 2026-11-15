@@ -231,7 +231,7 @@ export function chartPanelDisplayStatus(input: Pick<ChartPanelInput, "fixture" |
   :input.evidenceClass==="measured"?"MEASURED":"UNCLASSIFIED";
  const labels:string[]=[];
  if(input.fixture)labels.push("SYNTHETIC");
- else if(input.unavailable)labels.push("REQUIRES AUDIO");
+ if(input.unavailable)labels.push("REQUIRES AUDIO");
  if(status!=="SYNTHETIC FIXTURE"&&status!=="REQUIRES AUDIO")labels.push(status);
  if(!labels.includes(evidence))labels.push(evidence);
  return labels.join(" · ");
