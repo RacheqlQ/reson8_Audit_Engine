@@ -95,8 +95,7 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("reports a present-but-conflicting album instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
-  input.evidence.fixture=false;
-  input.evidence.sources=[];
+  input.evidence.fixture=true;
   input.evidence.album="Hole-Hearted";
   input.evidence.fieldProvenance={...input.evidence.fieldProvenance,album:"id3"};
   input.evidence.reconciliation={conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]};
