@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PROVIDER_POLICY, providerDecision } from "../src/providers/provider-policy.js";
+import { collectDspMetadata } from "../src/providers/dsp/registry.js";
+import { normalizeDspTrackLinks } from "../src/providers/dsp/intake.js";
 
 describe("commercial provider policy registry", () => {
   it("records commercial status, terms, attribution, retention and a default-off flag for every provider", () => {
@@ -55,6 +57,17 @@ describe("commercial provider policy registry", () => {
     });
     expect(decision.enabled).toBe(false);
     expect(decision.reason).toBe("disabled by data policy");
+  });
+
+  it("surfaces a policy-disabled DSP as unavailable instead of usable metadata", async () => {
+    const links = normalizeDspTrackLinks(["https://open.spotify.com/track/spotify-123"]);
+    const [result] = await collectDspMetadata(links);
+    expect(result?.status).toBe("unavailable");
+    expect(result?.error).toBe("disabled by data policy");
+    expect(result?.metadata?.raw.providerPolicy).toMatchObject({
+      provider: "spotify",
+      reason: "disabled by data policy",
+    });
   });
 
   it("allows only a reviewed provider with an exact true opt-in flag", () => {
