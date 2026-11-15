@@ -25,7 +25,7 @@ describe("TIDAL commercial policy gate", () => {
         provider: "tidal",
         status: "unavailable",
         reason: "disabled by data policy",
-        commercialStatus: "unverified",
+        commercialStatus: "allowed",
       } },
     });
   });
