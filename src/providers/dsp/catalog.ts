@@ -90,7 +90,41 @@ async function spotify(u:URL, signal?:AbortSignal){
   }
 }
 
-async function apple(u:URL, signal?:AbortSignal){const m=base("apple_music",u);if(!m.catalogId)throw new Error("Apple Music track ID could not be detected");const r=await fetch("https://itunes.apple.com/lookup?id="+encodeURIComponent(m.catalogId)+"&entity=song", { signal, redirect: "error" });if(!r.ok)throw new Error("Apple Music metadata request failed with HTTP "+r.status);const d=await r.json() as {results?:Array<Record<string,unknown>>};const x=d.results?.find(v=>v.kind==="song")??d.results?.[0];if(!x)throw new Error("Apple Music track was not found");m.canonicalUrl=String(x.trackViewUrl??u);m.artist=String(x.artistName??"")||null;m.title=String(x.trackName??"")||null;m.album=String(x.collectionName??"")||null;m.releaseDate=String(x.releaseDate??"").slice(0,10)||null;m.genre=String(x.primaryGenreName??"")||null;m.artworkUrl=String(x.artworkUrl100??"")||null;m.previewUrl=String(x.previewUrl??"")||null;m.isrc=String(x.isrc??"")||null;if(x.trackId)m.externalIds.apple_music=String(x.trackId);m.raw=x;m.evidenceStatus=m.title&&m.artist?"recognized":"partial";return m;}
+async function apple(u: URL, signal?: AbortSignal) {
+  const metadata = base("apple_music", u);
+  if (!metadata.catalogId) throw new Error("Apple Music track ID could not be detected");
+
+  // Apple Music share URLs are storefront-specific. Querying the US default
+  // for a track shared from another storefront can return no result even
+  // when the track is available in that storefront.
+  const storefront = u.pathname.split("/").filter(Boolean)[0]?.toLowerCase();
+  const lookup = new URL("https://itunes.apple.com/lookup");
+  lookup.searchParams.set("id", metadata.catalogId);
+  lookup.searchParams.set("entity", "song");
+  if (storefront && /^[a-z]{2}$/.test(storefront)) {
+    lookup.searchParams.set("country", storefront);
+  }
+
+  const response = await fetch(lookup.toString(), { signal, redirect: "error" });
+  if (!response.ok) throw new Error("Apple Music metadata request failed with HTTP " + response.status);
+  const data = await response.json() as { results?: Array<Record<string, unknown>> };
+  const track = data.results?.find((item) => item.kind === "song") ?? data.results?.[0];
+  if (!track) throw new Error("Apple Music track was not found");
+
+  metadata.canonicalUrl = String(track.trackViewUrl ?? u);
+  metadata.artist = String(track.artistName ?? "") || null;
+  metadata.title = String(track.trackName ?? "") || null;
+  metadata.album = String(track.collectionName ?? "") || null;
+  metadata.releaseDate = String(track.releaseDate ?? "").slice(0, 10) || null;
+  metadata.genre = String(track.primaryGenreName ?? "") || null;
+  metadata.artworkUrl = String(track.artworkUrl100 ?? "") || null;
+  metadata.previewUrl = String(track.previewUrl ?? "") || null;
+  metadata.isrc = String(track.isrc ?? "") || null;
+  if (track.trackId) metadata.externalIds.apple_music = String(track.trackId);
+  metadata.raw = track;
+  metadata.evidenceStatus = metadata.title && metadata.artist ? "recognized" : "partial";
+  return metadata;
+}
 async function tidal(u:URL, signal?:AbortSignal){
   const id=idFromPath(u,"tidal");
   if(!id){
