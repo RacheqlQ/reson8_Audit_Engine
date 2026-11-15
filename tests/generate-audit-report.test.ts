@@ -93,6 +93,15 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
  });
+ it("withholds a low-confidence harmonic key from the report while retaining the diagnostic confidence",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.0608,keySegmentAgreement:0.1667};
+  const pages=planAuditReportPages(input,"full");
+  const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
+  expect(report).toContain("KEY CONFIDENCE");
+  expect(report).not.toContain("Key / mode: C major");
+ });
  it("withholds zero-confidence BPM and tempo-derived A&R assertions from the rendered report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.sonicDna={...input.sonicDna,bpm:156,tempoConfidence:0,rhythmFeatures:{status:"measured"},genreClassification:{primaryGenre:null,abstained:true}};
