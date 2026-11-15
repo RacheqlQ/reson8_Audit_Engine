@@ -119,6 +119,11 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(context.prompts[1]).toContain("identity, rights or source gaps");
   expect(context.prompts[2]).toContain("before any external pitch");
  });
+ it("preserves the complete executive summary in the shared A&R Notes decision context",()=>{
+  const context=buildArNotesDecisionContext(longFormAudioFixture as any);
+  expect(context.summary).toBe(longFormAudioFixture.assessment.executiveSummary);
+  expect(context.prompts).toHaveLength(3);
+ });
  it("uses the evidence-sanitized commercial verdict on the PDF cover",()=>{
   expect(coverVerdictLabel(ambiguousAudioFixture as any)).toBe("Insufficient evidence");
  });
