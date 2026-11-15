@@ -338,7 +338,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
    {x:M,y:TOP-4,width:220,height:24,id:"notes-title"},
    {x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},
    {x:M,y:decisionTitleY-95,width:W-2*M,height:112,id:"decision-context"},
-   {x:M,y:decisionTitleY-143,width:220,height:10,id:"review-prompts-title"},
+   {x:M,y:decisionTitleY-119,width:220,height:10,id:"review-prompts-title"},
    {x:M+8,y:promptY+15,width:W-2*M-16,height:48,id:"review-prompts"},
    {x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,id:"A&R notes field"}
   ];
