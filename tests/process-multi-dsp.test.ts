@@ -143,4 +143,43 @@ describe("multi-DSP audit processing", () => {
     }]);
   });
 
+
+  it("persists provider failures even when every submitted DSP source is unavailable", async () => {
+    const failed: string[] = [];
+    const url = "https://tidal.com/browse/track/tidal-unavailable";
+    let failureMessage = "";
+    const result = await processAuditJob("all-providers-failed-job", {
+      getJob: async () => ({
+        id: "all-providers-failed-job", ownerId: null, sourceAudioPath: null, mimeType: null,
+        sourceType: "dsp_link" as const, catalogUrl: url, catalogUrls: [url],
+        status: "processing" as const, claimToken, leaseExpiresAt: "2099-01-01T00:00:00.000Z",
+        workerId: "provider-failure-test",
+      }),
+      markProcessing: async () => {},
+      collectCatalogMetadata: async () => { throw new Error("TIDAL credentials unavailable"); },
+      saveCatalogFailure: async (_jobId, _claimToken, link, error) => {
+        failed.push(link.platform + ":" + link.catalogId + ":" + error);
+      },
+      recognizeUrl: async () => ({ matched: false as const }),
+      downloadMaster: async () => new Uint8Array(),
+      createRecognitionSample: async () => new Uint8Array(),
+      recognize: async () => ({ matched: false as const }),
+      saveRecognition: async () => {},
+      saveEvidence: async () => {},
+      saveCatalogMetadata: async () => {},
+      decode: async () => ({ samples: new Float32Array(), sampleRate: 44100, channels: 1 }),
+      saveSonicDna: async () => {},
+      generateAssessment: async () => assessment,
+      saveAssessment: async () => {},
+      generateReport: async () => new Uint8Array([37, 80, 68, 70, 45]),
+      saveReport: async () => {},
+      markCompleted: async () => {},
+      markFailed: async (_jobId, _claimToken, message) => { failureMessage = message; },
+    });
+
+    expect(result.status).toBe("failed");
+    expect(failed).toEqual(["tidal:tidal-unavailable:TIDAL credentials unavailable"]);
+    expect(failureMessage).toContain("TIDAL credentials unavailable");
+  });
+
 });
