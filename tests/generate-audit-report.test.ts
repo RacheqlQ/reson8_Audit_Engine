@@ -24,15 +24,15 @@ describe("A4 report layout and fixture coverage",()=>{
  it("checks chart-caption separation for every chart in all four fixtures",()=>{
   for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
- it("does not emit low-density warnings across the eight report variants",async()=>{
+ it("does not emit low-density warnings across all sample and full fixture variants",async()=>{
   const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
   try{
-   for(const input of fixtures)for(const tier of ["sample","full"] as const)await generateAuditReport(input,tier);
+   for(const input of [...fixtures,philloLowConfidenceFixture as unknown as AuditReportInput])for(const tier of ["sample","full"] as const)await generateAuditReport(input,tier);
    expect(warning.mock.calls.filter(([message])=>String(message).includes("[report-layout]"))).toEqual([]);
   }finally{warning.mockRestore();}
  });
  it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
-  for(const input of fixtures)for(const tier of ["sample","full"] as const){
+  for(const input of [...fixtures,philloLowConfidenceFixture as unknown as AuditReportInput])for(const tier of ["sample","full"] as const){
    const bytes=await generateAuditReport(input,tier),pdf=await PDFDocument.load(bytes);
    for(const page of pdf.getPages()){const size=page.getSize();expect(size.width).toBeCloseTo(595.28,0);expect(size.height).toBeCloseTo(841.89,0);}
    const fields=pdf.getForm().getFields();
