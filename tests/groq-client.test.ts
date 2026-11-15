@@ -24,7 +24,7 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   expect(body.max_completion_tokens).toBe(8192);
+   expect(body.max_completion_tokens).toBe(6000);
   }
  });
  it("requests and validates all nine Zod section groups with evidence guardrails",async()=>{
