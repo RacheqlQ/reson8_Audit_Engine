@@ -2,6 +2,7 @@ import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { generateAuditReport } from "../dist/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture } from "./fixtures/sample-report-input.mjs";
+import { philloLowConfidenceFixture } from "./fixtures/phillo-low-confidence.mjs";
 
 const out=new URL("../artifacts/",import.meta.url);
 await mkdir(out,{recursive:true});
@@ -11,6 +12,7 @@ const variants=[
  ["partial-audio-low-confidence",partialAudioFixture],
  ["metadata-only",metadataOnlyFixture],
  ["long-form-audio",longFormAudioFixture],
+ ["phillo-low-confidence",philloLowConfidenceFixture],
 ];
 for(const [name,input] of variants){
  for(const tier of ["sample","full"]){

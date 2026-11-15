@@ -32,19 +32,26 @@ export async function collectDspMetadata(
     try {
       const metadata = await collect(link.canonicalUrl, providerSignal);
       signal?.throwIfAborted();
+      const policyFailure = metadata.raw?.providerPolicy;
+      const policyUnavailable = Boolean(
+        policyFailure && typeof policyFailure === "object"
+        && (policyFailure as Record<string, unknown>).reason === "disabled by data policy",
+      );
       const spotifyFailure = metadata.raw?.spotifyEnrichment;
       const spotifyUnavailable = Boolean(
         spotifyFailure && typeof spotifyFailure === "object"
         && (spotifyFailure as Record<string, unknown>).status === "unavailable",
       );
-      const providerError = spotifyUnavailable
-        ? typeof (spotifyFailure as Record<string, unknown>).error === "string"
-          ? (spotifyFailure as Record<string, unknown>).error as string
-          : "Spotify API enrichment is unavailable"
-        : null;
+      const providerError = policyUnavailable
+        ? "disabled by data policy"
+        : spotifyUnavailable
+          ? typeof (spotifyFailure as Record<string, unknown>).error === "string"
+            ? (spotifyFailure as Record<string, unknown>).error as string
+            : "Spotify API enrichment is unavailable"
+          : null;
       results.push({
         link,
-        status: spotifyUnavailable ? "unavailable" : metadata.evidenceStatus,
+        status: policyUnavailable || spotifyUnavailable ? "unavailable" : metadata.evidenceStatus,
         metadata,
         error: providerError,
       });

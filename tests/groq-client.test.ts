@@ -105,7 +105,7 @@ describe("GroqClient section groups",()=>{
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
-  const result=await client.assess({evidence:{},sonicDna:{provenance:"uploaded_audio_master"}});
+  const result=await client.assess({evidence:{},sonicDna:{provenance:"uploaded_audio_master",bpm:120,tempoConfidence:0.8}});
   expect(evidenceScoreCalls).toBe(2);
   expect(prompts[0]).toContain("scorecard.rhythmicConsistency.rationale");
   expect(prompts[0]).toContain("at least 25 words");

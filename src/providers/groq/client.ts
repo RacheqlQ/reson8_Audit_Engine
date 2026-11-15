@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails.js";
 
-export const GROQ_PROMPT_VERSION = "audit-ar-v4";
+export const GROQ_PROMPT_VERSION = "audit-ar-v5";
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 
 const EvidenceLabelSchema = z.object({
@@ -94,6 +95,8 @@ const SYSTEM_PROMPT = [
   "INDUSTRY PRACTICE must be explicitly separated from facts about this track. It may describe typical lane arrangement conventions, release sequencing norms, pitching angles, playlist categories only, content ideas, and label criteria. Never imply those practices were observed in this recording.",
   "Every evidence label must name its actual source. For INFERRED use source groq_assessment to identify an A&R hypothesis, including genre or lane positioning; for INDUSTRY PRACTICE use source industry_practice. Do not label recommendations as observed facts or hypotheses as measurements.",
   "When sonicDna.genreClassification is supplied, treat its provider-backed genres as source-weighted evidence, keep region and city-scene tags separate from genre labels, and retain unmapped provider tags as unresolved. If primaryGenre is null or abstained is true, do not state a definitive genre. Tempo is only a weak prior capped at fifteen percent of the genre score; never infer a genre from BPM alone. Describe genre and lane interpretations as INFERRED hypotheses, not OBSERVED facts.",
+  "When tempoConfidence is missing, null, zero, or below 0.5, treat any BPM value as an unverified candidate: do not repeat the number, describe the track as fast/slow/high-energy on that basis, score tempoLaneFit or rhythmicConsistency, or use it in playlist/release recommendations. Abstain and state that confidence is insufficient. A confidence threshold is a conservative reporting gate, not a calibrated accuracy claim.",
+  "If genreClassification.primaryGenre is null or genreClassification.abstained is true, A&R lane positioning must remain unconfirmed; do not fill the gap with tempo, mood, or generic genre stereotypes.",
   "When commercial-performance evidence is absent, marketability must be undetermined. Never infer demand from genre, tempo, catalog popularity or metadata.",
   "A null score means insufficient evidence. Dynamic range/RMS signal-level readiness must be null unless an uploaded audio master supplies numeric dynamic-range and RMS dBFS measurements.",
   "scorecard.rhythmicConsistency.rationale must contain at least 25 words, including when its score is null; explain the specific missing timing evidence in a complete sentence rather than using a short label.",
@@ -268,7 +271,7 @@ export class GroqClient implements GroqAssessmentClient {
     }
     const combined=AssessmentSchema.safeParse(assembled);
     if(!combined.success)throw new Error("Combined Groq assessment failed Zod validation: "+combined.error.message);
-    return combined.data;
+    return sanitizeAssessmentForEvidence(combined.data, dna as Record<string, unknown> | null, input.evidence);
   }
 }
 export { AssessmentSchema, EvidenceLabelSchema };

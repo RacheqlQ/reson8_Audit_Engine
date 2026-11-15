@@ -1,3 +1,12 @@
+export interface KeySegmentDiagnostic {
+  startSeconds: number;
+  endSeconds: number;
+  chroma: number[];
+  winningKey: string | null;
+  winningMode: "major" | "minor" | null;
+  winningScore: number | null;
+}
+
 export interface KeyEstimate {
   key: string | null;
   mode: "major" | "minor" | null;
@@ -7,6 +16,7 @@ export interface KeyEstimate {
   method: "fft_harmonic_chroma_ensemble";
   analysisWindows: number;
   fftButterflyCount: number;
+  segmentChroma: KeySegmentDiagnostic[];
   limitation: string | null;
 }
 
@@ -100,12 +110,53 @@ function weightedMedian(values: Array<{ value: number; weight: number }>): numbe
   return values[values.length - 1].value;
 }
 
+
+function isHarmonicOf(
+  upper: { frequency: number; magnitude: number },
+  lower: { frequency: number; magnitude: number },
+): boolean {
+  if (lower.frequency >= upper.frequency) return false;
+  const ratio = upper.frequency / lower.frequency;
+  const harmonic = Math.round(ratio);
+  return harmonic >= 2 && harmonic <= 8 && Math.abs(ratio - harmonic) / harmonic <= 0.03;
+}
+
+function analyzeFundamentalPeaks(peaks: Array<{ frequency: number; magnitude: number }>): {
+  fundamentals: Array<{ frequency: number; magnitude: number }>;
+  supportedWeakRoots: Array<{ frequency: number; magnitude: number }>;
+} {
+  const strongest = peaks.reduce((maximum, peak) => Math.max(maximum, peak.magnitude), 0);
+  const crediblePeaks = peaks.filter((peak) => peak.magnitude >= strongest * 0.08);
+
+  // A weak fundamental below the 8% voting floor can still explain a coherent
+  // series of stronger upper partials. It is not itself admitted as a key vote.
+  const supportedWeakRoots = peaks.filter((lower) =>
+    lower.frequency < 250
+      && lower.magnitude < strongest * 0.08
+      && peaks.filter((upper) => isHarmonicOf(upper, lower)).length >= 3,
+  );
+  const harmonicAnchors = [...crediblePeaks, ...supportedWeakRoots];
+  const fundamentals = crediblePeaks.filter((peak) =>
+    !harmonicAnchors.some((lower) => isHarmonicOf(peak, lower)),
+  );
+  return { fundamentals, supportedWeakRoots };
+}
+
 function tuningOffset(peaks: Array<{ frequency: number; magnitude: number }>): number {
   const offsets = peaks.map((peak) => {
     const midi = 69 + 12 * Math.log2(peak.frequency / 440);
     return { value: (midi - Math.round(midi)) * 100, weight: peak.magnitude };
   }).filter((entry) => Math.abs(entry.value) <= 50);
   return Math.max(-50, Math.min(50, weightedMedian(offsets)));
+}
+
+function tuningDeviationCents(peaks: Array<{ frequency: number; magnitude: number }>, offsetCents: number): number {
+  const deviations = peaks.map((peak) => {
+    const midi = 69 + 12 * Math.log2(peak.frequency / 440);
+    const cents = (midi - Math.round(midi)) * 100;
+    return { value: Math.abs(cents - offsetCents), weight: peak.magnitude };
+  }).filter((entry) => Number.isFinite(entry.value) && entry.value <= 100);
+  return weightedMedian(deviations);
 }
 
 function profileForSegment(samples: Float32Array, start: number, sampleRate: number): {
@@ -140,28 +191,49 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
     });
   }
 
+  const { fundamentals, supportedWeakRoots } = analyzeFundamentalPeaks(peaks);
+  // A single harmonic series is evidence of a pitched note, not a musical key.
+  // Count independent spectral roots before harmonic-aware chroma voting.
+  if (fundamentals.length < 2) {
+    return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
+  }
   const tuningCents = tuningOffset(peaks);
+  // A stable global tuning offset should explain independent tonal roots.
+  // Do not compare upper harmonics as if each were an independent note.
+  if (peaks.length >= 4 && tuningDeviationCents(peaks, tuningCents) > 30) {
+    return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
+  }
   const bassChroma = Array(12).fill(0);
   const midChroma = Array(12).fill(0);
   for (const peak of peaks) {
+    // A weak fundamental below the root-voting floor may explain several
+    // stronger partials. Those partials must not become independent notes.
+    if (supportedWeakRoots.some((lower) => isHarmonicOf(peak, lower))) continue;
+
+    const supportingRoot = fundamentals.find((lower) => isHarmonicOf(peak, lower));
+    const harmonicNumber = supportingRoot
+      ? Math.round(peak.frequency / supportingRoot.frequency)
+      : 1;
+    const harmonicWeight = supportingRoot ? 0.12 / harmonicNumber : 1;
     const correctedHz = peak.frequency / Math.pow(2, tuningCents / 1200);
     if (correctedHz < MIN_FREQUENCY_HZ || correctedHz > MAX_FREQUENCY_HZ) continue;
     const midi = 69 + 12 * Math.log2(correctedHz / 440);
     const pitchClass = (Math.round(midi) % 12 + 12) % 12;
     const target = correctedHz < 250 ? bassChroma : midChroma;
     const bandWeight = correctedHz < 1000 ? 1 : 0.65;
-    const peakWeight = Math.pow(peak.magnitude, 0.8) * bandWeight;
+    const peakWeight = Math.pow(peak.magnitude, 0.8) * bandWeight * harmonicWeight;
     target[pitchClass] += peakWeight;
 
-    // A small subharmonic vote lets strong upper partials support a likely
-    // fundamental without allowing harmonics to dominate the direct peak.
+    // Retain a small subharmonic contribution to help distinguish sparse
+    // segmental tonal profiles; its source peak's harmonic weight is applied
+    // first so strong partials cannot overwhelm independent roots.
     for (let harmonic = 2; harmonic <= 4; harmonic++) {
-      const fundamental = correctedHz / harmonic;
-      if (fundamental < MIN_FREQUENCY_HZ || fundamental > 1000) continue;
-      const fundamentalMidi = 69 + 12 * Math.log2(fundamental / 440);
-      const fundamentalClass = (Math.round(fundamentalMidi) % 12 + 12) % 12;
-      const fundamentalTarget = fundamental < 250 ? bassChroma : midChroma;
-      fundamentalTarget[fundamentalClass] += peakWeight * (0.12 / harmonic);
+      const subharmonicHz = correctedHz / harmonic;
+      if (subharmonicHz < MIN_FREQUENCY_HZ || subharmonicHz > 1000) continue;
+      const subharmonicMidi = 69 + 12 * Math.log2(subharmonicHz / 440);
+      const subharmonicClass = (Math.round(subharmonicMidi) % 12 + 12) % 12;
+      const subharmonicTarget = subharmonicHz < 250 ? bassChroma : midChroma;
+      subharmonicTarget[subharmonicClass] += peakWeight * (0.12 / harmonic);
     }
   }
   const chroma = bassChroma.map((value, index) => value * 0.55 + midChroma[index] * 0.45);
@@ -206,7 +278,7 @@ function emptyEstimate(limitation: string): KeyEstimate {
   return {
     key: null, mode: null, confidence: null, tuningCents: null,
     segmentAgreement: null, method: "fft_harmonic_chroma_ensemble",
-    analysisWindows: 0, fftButterflyCount: 0, limitation,
+    analysisWindows: 0, fftButterflyCount: 0, segmentChroma: [], limitation,
   };
 }
 
@@ -224,6 +296,7 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   const aggregate = Array(12).fill(0);
   const segmentProfiles: number[][] = [];
   const segmentWinners: Candidate[] = [];
+  const segmentChroma: KeySegmentDiagnostic[] = [];
   const tuningValues: Array<{ value: number; weight: number }> = [];
   let fftButterflyCount = 0;
 
@@ -241,6 +314,14 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     segmentProfiles.push(normalized);
     const best = rankCandidates(normalized)[0];
     if (best) segmentWinners.push(best);
+    segmentChroma.push({
+      startSeconds: Number((start / sampleRate).toFixed(4)),
+      endSeconds: Number(((start + FRAME_SIZE) / sampleRate).toFixed(4)),
+      chroma: normalized.map((value) => Number(value.toFixed(6))),
+      winningKey: best ? NOTES[best.key] : null,
+      winningMode: best?.mode ?? null,
+      winningScore: best ? Number(best.score.toFixed(6)) : null,
+    });
     if (result.peaks.length) {
       const offset = tuningOffset(result.peaks);
       tuningValues.push({ value: offset, weight: result.peaks.reduce((sum, peak) => sum + peak.magnitude, 0) });
@@ -263,19 +344,19 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      fftButterflyCount, limitation: "Key estimates varied across audio segments; no single key is asserted.",
+      fftButterflyCount, segmentChroma, limitation: "Key estimates varied across audio segments; no single key is asserted.",
     };
   }
   if (confidence < 0.12 || margin < 0.015) {
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      fftButterflyCount, limitation: "Key and mode confidence was below threshold; no key is asserted.",
+      fftButterflyCount, segmentChroma, limitation: "Key and mode confidence was below threshold; no key is asserted.",
     };
   }
   return {
     key: NOTES[best.key], mode: best.mode, confidence, tuningCents,
     segmentAgreement: agreement, method: "fft_harmonic_chroma_ensemble",
-    analysisWindows: segmentProfiles.length, fftButterflyCount, limitation: null,
+    analysisWindows: segmentProfiles.length, fftButterflyCount, segmentChroma, limitation: null,
   };
 }

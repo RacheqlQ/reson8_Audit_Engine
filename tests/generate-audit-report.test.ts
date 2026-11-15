@@ -1,7 +1,8 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,generateAuditReport,metadataFieldSource,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
+import { philloLowConfidenceFixture } from "../scripts/fixtures/phillo-low-confidence.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
 describe("A4 report layout and fixture coverage",()=>{
@@ -92,5 +93,64 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).not.toContain("Measured from the uploaded master");
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
+ });
+ it("uses the evidence-sanitized commercial verdict on the PDF cover",()=>{
+  expect(coverVerdictLabel(philloLowConfidenceFixture as any)).toBe("Insufficient evidence");
+ });
+ it("renders the Phillo regression fixture with tempo, key, genre and commercial claims withheld",()=>{
+  const pages=planAuditReportPages(philloLowConfidenceFixture as any,"full");
+  const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Tempo: Not reported — insufficient confidence");
+  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
+  expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
+  expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
+  expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+  expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
+  expect(report).toContain("Verdict: Insufficient evidence");
+  expect(report).toContain("Tempo and lane fit — NOT SCORED");
+  expect(report).toContain("Rhythmic consistency — NOT SCORED");
+  expect(report).toContain("Metadata completeness — NOT SCORED");
+  expect(report).toContain("Album metadata is present but conflicting");
+  expect(report).not.toMatch(/156\\s*BPM|high-energy|album title is missing/i);
+ });
+ it("reports a present-but-conflicting album instead of calling it missing",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.evidence.fixture=true;
+  input.evidence.album="Hole-Hearted";
+  input.evidence.fieldProvenance={...input.evidence.fieldProvenance,album:"id3"};
+  input.evidence.reconciliation={conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]};
+  const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Album: Synthetic test value — not a real identity match");
+  expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+  expect(report).not.toContain("Album: Unavailable — no source result");
+  input.evidence.fixture=false;
+  input.evidence.sources=[];
+  const sourceBackedReport=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(sourceBackedReport).toContain("Album: Conflicting source values");
+  expect(sourceBackedReport).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
+ });
+ it("withholds a low-confidence harmonic key from the report while retaining the diagnostic confidence",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.0608,keySegmentAgreement:0.1667};
+  const pages=planAuditReportPages(input,"full");
+  const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
+  expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
+  expect(report).not.toContain("Key / mode: C major");
+ });
+ it("withholds zero-confidence BPM and tempo-derived A&R assertions from the rendered report",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.sonicDna={...input.sonicDna,bpm:156,tempoConfidence:0,rhythmFeatures:{status:"measured"},genreClassification:{primaryGenre:null,abstained:true}};
+  input.assessment.executiveSummary="The recording is a 156 BPM high-energy release with a strong rhythmic lane.";
+  input.assessment.aAndRPositioning.primaryLane="Afrobeats";
+  input.assessment.aAndRPositioning.adjacentLanes=["Afro Soul"];
+  const pages=planAuditReportPages(input,"full");
+  const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Tempo: Not reported — insufficient confidence");
+  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
+  expect(report).not.toMatch(/156\s*BPM|high-energy/);
+  expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
+  expect(report).toContain("Tempo and lane fit — NOT SCORED");
+  expect(report).toContain("Rhythmic consistency — NOT SCORED");
  });
 });

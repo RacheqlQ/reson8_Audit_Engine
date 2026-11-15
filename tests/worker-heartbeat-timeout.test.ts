@@ -16,6 +16,16 @@ const { claimNextQueuedJob, renewLease, observedSignal, observedHeartbeatSignal,
   }),
 }));
 
+vi.mock("../src/providers/provider-policy.js", () => ({
+  providerDecision: (provider: string) => ({
+    provider,
+    enabled: provider === "groq",
+    reason: provider === "groq" ? null : "disabled by data policy",
+    commercialStatus: provider === "groq" ? "allowed" : "unverified",
+    enableFlag: "PROVIDER_ENABLED_GROQ",
+  }),
+}));
+
 vi.mock("../src/integrations/supabase-audit-store.js", () => ({
   createSupabaseAuditStore: () => ({ claimNextQueuedJob, renewLease }),
 }));

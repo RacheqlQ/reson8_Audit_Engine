@@ -25,6 +25,16 @@ vi.mock("../src/integrations/supabase-audit-store.js", () => ({
   }),
 }));
 
+vi.mock("../src/providers/provider-policy.js", () => ({
+  providerDecision: (id: string) => ({
+    provider: id,
+    enabled: id === "groq",
+    reason: id === "groq" ? null : "disabled by data policy",
+    commercialStatus: id === "groq" ? "allowed" : "unverified",
+    enableFlag: "PROVIDER_ENABLED_GROQ",
+  }),
+}));
+
 vi.mock("../src/providers/groq/client.js", () => ({
   GroqClient: class {
     assess = vi.fn();

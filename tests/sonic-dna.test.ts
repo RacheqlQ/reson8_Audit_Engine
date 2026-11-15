@@ -10,6 +10,19 @@ function pulse(bpm:number,seconds=12,sampleRate=8000):Float32Array {
  }
  return samples;
 }
+function syncopatedSwingPulse(bpm:number,seconds=12,sampleRate=8000):Float32Array {
+ const samples=new Float32Array(sampleRate*seconds),interval=60/bpm;
+ const add=(time:number,accent:number)=>{
+  const start=Math.round(time*sampleRate),length=Math.min(Math.round(sampleRate*0.025),samples.length-start);
+  for(let i=0;i<length;i++)samples[start+i]+=accent*Math.sin(2*Math.PI*220*i/sampleRate)*Math.exp(-i/(sampleRate*0.004));
+ };
+ for(let beat=0;beat<seconds*bpm/60;beat++){
+  const time=beat*interval+(beat%2?interval*0.03:0);
+  add(time,beat%2?0.55:1);
+  if(beat%3===1)add(beat*interval+interval*0.48,0.12);
+ }
+ return samples;
+}
 function chord(freqs:number[],seconds=6,sampleRate=8000):Float32Array {
  return Float32Array.from({length:sampleRate*seconds},(_,i)=>freqs.reduce((sum,f)=>sum+Math.sin(2*Math.PI*f*i/sampleRate),0)/freqs.length);
 }
@@ -27,11 +40,34 @@ describe("Sonic DNA",()=>{
   expect(result.spectralCentroidHz).toBeLessThan(500);
   expect(result.zeroCrossingRate).toBeGreaterThan(0.05);
  });
+ it("uses transient-onset evidence and exposes ranked tempo candidates with an abstention diagnostic",()=>{
+  const result=estimateTempo(pulse(120),8000);
+  expect(result.method).toBe("high_frequency_transient_autocorrelation");
+  expect(result.candidateBpms).toContain(120);
+  expect(result.abstentionReason).toBeNull();
+ });
+ it("abstains on sustained non-rhythmic noise instead of reporting an arbitrary tempo",()=>{
+  let seed=17;
+  const noise=Float32Array.from({length:8000*8},()=>{seed=(seed*16807)%2147483647;return ((seed/2147483647)*2-1)*0.08;});
+  const result=estimateTempo(noise,8000);
+  expect(result.bpm).toBeNull();
+  expect(result.abstentionReason).not.toBeNull();
+ });
  it("estimates a regular 120 BPM pulse",()=>{
   const result=estimateTempo(pulse(120),8000);
   expect(result.bpm).toBeGreaterThanOrEqual(115);
   expect(result.bpm).toBeLessThanOrEqual(125);
   expect(result.confidence).not.toBeNull();
+ });
+ it("tracks a swung and syncopated 120 BPM pulse without locking to offbeat accents",()=>{
+  const result=estimateTempo(syncopatedSwingPulse(120),8000);
+  expect(result.bpm===60||(result.bpm!==null&&result.bpm>=115&&result.bpm<=125)).toBe(true);
+  expect(result.candidateBpms.some(candidate=>candidate>=115&&candidate<=125)).toBe(true);
+  expect(result.abstentionReason).toBeNull();
+ });
+ it("includes the half-time tempo candidate when the beat pulse supports it",()=>{
+  const result=estimateTempo(pulse(120),8000);
+  expect(result.candidateBpms).toContain(60);
  });
  it("reports 126 BPM with 63 BPM as its half-time alternative",()=>{
   const result=estimateTempo(pulse(126),8000);
@@ -134,7 +170,7 @@ describe("Sonic DNA",()=>{
   const sampleRate=8000;
   const rhythm=analyzePcm(pulse(120,12,sampleRate),sampleRate);
   const harmonic=analyzePcm(chord([261.6256,329.6276,391.9954],12,sampleRate),sampleRate);
-  expect(rhythm.rhythmFeatures).toMatchObject({status:"measured",method:"amplitude_envelope_autocorrelation"});
+  expect(rhythm.rhythmFeatures).toMatchObject({status:"measured",method:"high_frequency_transient_autocorrelation"});
   expect(rhythm.rhythmFeatures.bpm).toBeGreaterThanOrEqual(115);
   expect(rhythm.rhythmFeatures.bpm).toBeLessThanOrEqual(125);
   expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:"C",mode:"major",method:"fft_harmonic_chroma_ensemble"});
