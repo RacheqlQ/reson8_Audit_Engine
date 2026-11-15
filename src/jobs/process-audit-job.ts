@@ -190,13 +190,14 @@ function catalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetada
 function genreProviderTags(metadataSources: readonly CatalogMetadata[], masterTags: ReturnType<typeof readAudioTags> | null): ProviderGenreTags[] {
   const result: ProviderGenreTags[] = [];
   for (const source of metadataSources) {
-    // Spotify-derived content is excluded from Groq inputs by the existing
-    // assessment policy; it is also excluded from this AI-facing genre fusion.
-    if (source.platform === "spotify") continue;
-    const rawArtistGenres = Array.isArray(source.raw?.artistGenres)
-      ? source.raw.artistGenres.filter((value): value is string => typeof value === "string")
-      : [];
-    const tags = [...new Set([source.genre, ...rawArtistGenres].filter((value): value is string => typeof value === "string" && value.trim().length > 0))];
+    // Reuse the existing fail-closed Spotify provenance filter. TIDAL's
+    // provider-reported sonic profile remains a separate source.
+    const safe = assessmentSafeCatalogMetadata(source);
+    if (!safe) continue;
+    const tags = [...new Set([
+      safe.genre,
+      ...(safe.sonicProfile?.genreContext ?? []),
+    ].filter((value): value is string => typeof value === "string" && value.trim().length > 0))];
     if (tags.length) result.push({ provider: source.platform, tags });
   }
   if (masterTags?.genres.length) result.push({ provider: "id3", tags: masterTags.genres });
