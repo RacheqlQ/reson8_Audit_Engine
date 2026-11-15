@@ -12,15 +12,19 @@ Permitted with conditions / pending implementation gates
 - Beat This!: upstream repository states MIT licensing for its code/weights. Verify the exact artifact, commit and conversion provenance; MIT status does not independently resolve training-data rights. https://github.com/CPJKU/beat_this
 
 Unverified — disabled by data policy until commercial terms are confirmed
+- Groq API assessment processing: https://groq.com/terms-of-use/
 - Spotify: https://developer.spotify.com/terms
+- Apple Music / iTunes lookup: https://developer.apple.com/musickit/
+- YouTube Music oEmbed: https://developers.google.com/youtube/terms/api-services-terms-of-service
 - Apple Music / MusicKit: https://developer.apple.com/musickit/
 - TIDAL: https://developer.tidal.com/
 - Audiomack Data API: https://api.audiomack.com/
-- AudD: https://audd.io/
+- AudD: https://audd.io/terms/
 - Last.fm: https://www.last.fm/api/tos
 - FMA / FMAK datasets: https://github.com/mdeff/fma
 - GiantSteps datasets: https://www.audiolabs-erlangen.de/resources/MIR/2016-GiantSteps
 - Chartmetric, Soundcharts and Luminate: vendor contracts required.
+- Beat This!: model artifact, conversion provenance, training-data caveat and runtime fit remain unverified: https://github.com/CPJKU/beat_this
 
 Denied under the current product policy
 - Essentia: do not use. https://essentia.upf.edu/licensing_information.html
