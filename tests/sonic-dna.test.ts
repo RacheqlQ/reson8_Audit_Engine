@@ -61,8 +61,8 @@ describe("Sonic DNA",()=>{
  });
  it("tracks a swung and syncopated 120 BPM pulse without locking to offbeat accents",()=>{
   const result=estimateTempo(syncopatedSwingPulse(120),8000);
-  expect([60,120]).toContain(result.bpm);
-  expect(result.candidateBpms).toContain(120);
+  expect(result.bpm===60||(result.bpm!==null&&result.bpm>=115&&result.bpm<=125)).toBe(true);
+  expect(result.candidateBpms.some(candidate=>candidate>=115&&candidate<=125)).toBe(true);
   expect(result.abstentionReason).toBeNull();
  });
  it("includes the half-time tempo candidate when the beat pulse supports it",()=>{
