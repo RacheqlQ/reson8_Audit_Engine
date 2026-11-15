@@ -341,6 +341,15 @@ export function createSupabaseAuditStore(
       }, signal);
     },
     async saveSonicDna(jobId, claimToken, dna, signal) {
+      const genreEvidenceAudit = dna.genreClassification
+        ? {
+            taxonomyVersion: dna.genreClassification.taxonomyVersion,
+            primaryGenre: dna.genreClassification.primaryGenre,
+            confidence: dna.genreClassification.confidence,
+            abstained: dna.genreClassification.abstained,
+            unmappedTags: dna.genreClassification.unmappedTags,
+          }
+        : undefined;
       const genreFeatureCapture = process.env.GENRE_FEATURE_CAPTURE_ENABLED === "true" && dna.genreClassification
         ? {
             taxonomyVersion: dna.genreClassification.taxonomyVersion,
@@ -362,6 +371,7 @@ export function createSupabaseAuditStore(
         eventPayload: {
           analysisVersion: "audit-engine-0.2.0",
           evidenceClass: "OBSERVED",
+          ...(genreEvidenceAudit ? { genreEvidenceAudit } : {}),
           ...(genreFeatureCapture ? { genreFeatureCapture } : {}),
         },
       }, signal);
