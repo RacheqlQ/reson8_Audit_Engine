@@ -28,6 +28,27 @@ describe("DSP provider registry", () => {
     expect(results.every((result) => result.status === "recognized")).toBe(true);
   });
 
+  it("reports optional Spotify API failures as unavailable instead of partial metadata", async () => {
+    const unavailable = {
+      ...metadata("spotify", "one"),
+      raw: {
+        spotifyEnrichment: {
+          status: "unavailable",
+          error: "Spotify API request failed with HTTP 401",
+        },
+      },
+    };
+    const results = await collectDspMetadata([link("spotify", "one")], {
+      collect: async () => unavailable,
+    });
+
+    expect(results[0]).toMatchObject({
+      status: "unavailable",
+      error: "Spotify API request failed with HTTP 401",
+      metadata: { platform: "spotify" },
+    });
+  });
+
   it("isolates provider failures and continues with the remaining providers", async () => {
     const results = await collectDspMetadata([link("spotify", "one"), link("tidal", "two")], {
       collect: async (url) => {
