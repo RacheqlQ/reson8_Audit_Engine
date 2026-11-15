@@ -182,14 +182,14 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
 
   const { fundamentals, supportedWeakRoots } = analyzeFundamentalPeaks(peaks);
   // A single harmonic series is evidence of a pitched note, not a musical key.
-  // Count independent spectral roots before harmonic/subharmonic chroma voting.
+  // Count independent spectral roots before harmonic-aware chroma voting.
   if (fundamentals.length < 2) {
     return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
   }
-  const tuningCents = tuningOffset(fundamentals);
+  const tuningCents = tuningOffset(peaks);
   // A stable global tuning offset should explain independent tonal roots.
   // Do not compare upper harmonics as if each were an independent note.
-  if (fundamentals.length >= 4 && tuningDeviationCents(fundamentals, tuningCents) > 30) {
+  if (peaks.length >= 4 && tuningDeviationCents(peaks, tuningCents) > 30) {
     return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
   }
   const bassChroma = Array(12).fill(0);
@@ -214,7 +214,7 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
     target[pitchClass] += peakWeight;
   }
   const chroma = bassChroma.map((value, index) => value * 0.55 + midChroma[index] * 0.45);
-  return { chroma, peaks: fundamentals, fftButterflyCount: operations };
+  return { chroma, peaks, fftButterflyCount: operations };
 }
 
 function correlation(profile: readonly number[], template: readonly number[]): number {
