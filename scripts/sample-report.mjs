@@ -23,9 +23,23 @@ combinedFixture.evidence={
  album:"Fixture Album",
  releaseDate:"2026-01-15",
 };
+const zeroConfidenceCombinedFixture=structuredClone(ambiguousAudioFixture);
+zeroConfidenceCombinedFixture.auditId="fixture-zero-confidence-combined";
+zeroConfidenceCombinedFixture.assessment={
+ ...zeroConfidenceCombinedFixture.assessment,
+ confidence:0,
+ commercialRead:{marketability:"high",rationale:"Synthetic fixture intentionally supplies an unsupported high commercial verdict to test zero-confidence suppression."},
+};
+zeroConfidenceCombinedFixture.evidence={
+ ...zeroConfidenceCombinedFixture.evidence,
+ sourceCombination:"master_and_dsp",
+ masterAudio:{evidenceClass:"OBSERVED",provenance:"uploaded_audio_master"},
+ catalogSources:[{platform:"apple_music",status:"recognized",error:null}],
+};
 const variants=[
  ["full-audio-based",fullAudioFixture],
  ["combined-master-and-dsp",combinedFixture],
+ ["zero-confidence-combined",zeroConfidenceCombinedFixture],
  ["partial-audio-low-confidence",partialAudioFixture],
  ["metadata-only",metadataOnlyFixture],
  ["long-form-audio",longFormAudioFixture],
