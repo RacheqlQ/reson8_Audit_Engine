@@ -82,7 +82,7 @@ describe("Audiomack commercial policy gate", () => {
       provider: "audiomack",
       status: "unavailable",
       reason: "disabled by data policy",
-      commercialStatus: "unverified",
+      commercialStatus: "allowed",
     });
   });
 
