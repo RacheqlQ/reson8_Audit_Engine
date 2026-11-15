@@ -218,7 +218,7 @@ function sections(i:AuditReportInput):Section[]{
   return target.status==="verified"
    && Boolean(text(target.name))
    && Boolean(text(target.platform))
-   && typeof target.sourceUrl==="string"&&/^https?:\\/\\//i.test(target.sourceUrl)
+   && typeof target.sourceUrl==="string"&&/^https?:\/\//i.test(target.sourceUrl)
    && Boolean(text(target.fitRationale))
    && Boolean(text(target.submissionRoute))
    && Boolean(text(target.submissionRequirements))
