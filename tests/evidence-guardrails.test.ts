@@ -7,6 +7,7 @@ const baseAssessment = {
   strengths: ["The 156 BPM pulse makes this a high-energy dance-floor record."],
   risks: ["Tempo and groove consistency require review."],
   aAndRPositioning: { primaryLane: "Afrobeats", adjacentLanes: ["Afro Soul"], rationale: "A fast tempo confirms this lane." },
+  commercialRead: { marketability: "high", rationale: "The track is commercially attractive and should perform strongly." },
   laneHypothesis: "The 156 BPM tempo points to Afrobeats.",
   releaseStrategy: { recommendation: "Pitch the 156 BPM track to high-energy playlists.", priorities: ["Verify rights and delivery."] },
   promotionPlan: { pitchingAngles: ["Lead with the 156 BPM energy."], playlistCategories: ["High-energy Afrobeats party mixes"] },
@@ -44,6 +45,14 @@ describe("Phillo evidence guardrails", () => {
     });
     expect(JSON.stringify(result)).not.toMatch(/Afrobeats|Afro Soul/i);
     expect(result.aAndRPositioning.primaryLane).toContain("Unconfirmed");
+  });
+
+  it("forces marketability to undetermined without verified source-attributed commercial metrics", () => {
+    const result = sanitizeAssessmentForEvidence(baseAssessment, {
+      genreClassification: { primaryGenre: "Afrobeats", abstained: false },
+    });
+    expect(result.commercialRead.marketability).toBe("undetermined");
+    expect(result.commercialRead.rationale).toContain("No verified, source-attributed commercial-performance metrics");
   });
 
   it("nulls tempo-derived scores and removes unsupported tempo claims when confidence is zero", () => {
