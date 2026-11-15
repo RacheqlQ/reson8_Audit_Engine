@@ -59,9 +59,12 @@ philloLowConfidenceFixture.assessment = {
     marketability: "high",
     rationale: "This deliberately unsupported commercial verdict exists to verify deterministic correction when verified audience and campaign metrics are absent.",
   },
+  evidenceGaps: ["Album title is missing from the available release metadata."],
+  risks: ["The album title is missing and the release identity is incomplete."],
   scorecard: {
     ...philloLowConfidenceFixture.assessment.scorecard,
     tempoLaneFit: { score: 80, rationale: "The intentionally populated score tests whether an unsupported tempo candidate is removed from the report." },
     rhythmicConsistency: { score: 75, rationale: "The intentionally populated score tests whether a zero-confidence tempo candidate is prevented from supporting rhythmic consistency." },
+    metadataCompleteness: { score: 35, rationale: "The album title is missing from all available metadata sources." },
   },
 };
