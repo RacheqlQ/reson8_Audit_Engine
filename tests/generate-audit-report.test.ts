@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
@@ -108,6 +108,16 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).not.toContain("Measured from the uploaded master");
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
+ });
+ it("builds the A&R Notes decision-context structure used by the generated PDF",()=>{
+  const context=buildArNotesDecisionContext(ambiguousAudioFixture as any);
+  expect(context.heading).toBe("DECISION CONTEXT");
+  expect(context.verdict).toBe("INSUFFICIENT EVIDENCE");
+  expect(context.summary).toContain("zero-confidence tempo candidate");
+  expect(context.prompts).toHaveLength(3);
+  expect(context.prompts[0]).toContain("change the current decision");
+  expect(context.prompts[1]).toContain("identity, rights or source gaps");
+  expect(context.prompts[2]).toContain("before any external pitch");
  });
  it("uses the evidence-sanitized commercial verdict on the PDF cover",()=>{
   expect(coverVerdictLabel(ambiguousAudioFixture as any)).toBe("Insufficient evidence");
