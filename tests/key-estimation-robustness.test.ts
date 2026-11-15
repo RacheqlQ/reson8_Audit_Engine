@@ -24,10 +24,13 @@ function percussionOnly(seconds = 8): Float32Array {
 
 
 function harmonicChord(fundamentals: number[], seconds = 8): Float32Array {
+  // Upper partials are deliberately stronger than the fundamentals. This
+  // fixture must exercise the estimator's stated harmonic-weighting claim.
+  const amplitudes = [0.15, 0.3, 0.5, 0.75, 1];
   const partials = fundamentals.flatMap((fundamental) =>
     [1, 2, 3, 4, 5].map((harmonic) => ({
       frequency: fundamental * harmonic,
-      amplitude: harmonic === 1 ? 1 : 0.35 / harmonic,
+      amplitude: amplitudes[harmonic - 1],
     })),
   );
   return Float32Array.from({ length: RATE * seconds }, (_, i) =>
