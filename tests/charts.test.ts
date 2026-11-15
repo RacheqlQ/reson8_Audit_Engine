@@ -8,8 +8,14 @@ import { philloLowConfidenceFixture } from "../scripts/fixtures/phillo-low-confi
 describe("native PDF chart helpers", () => {
   it("labels synthetic fixture charts as fixtures rather than measured results", () => {
     expect(chartPanelStatus({ fixture: true })).toBe("SYNTHETIC FIXTURE");
-    expect(chartPanelStatus({ fixture: false })).toBe("MEASURED");
+    expect(chartPanelStatus({ fixture: false })).toBe("UNCLASSIFIED");
     expect(chartPanelStatus({ unavailable: true, fixture: true })).toBe("SYNTHETIC FIXTURE");
+    expect(chartPanelStatus({ evidenceClass: "provider-recognized" })).toBe("PROVIDER-RECOGNIZED");
+    expect(chartPanelStatus({ evidenceClass: "assessment-derived" })).toBe("ASSESSMENT-DERIVED");
+    expect(chartPanelStatus({ evidenceClass: "illustrative" })).toBe("ILLUSTRATIVE");
+    expect(chartPanelStatus({ evidenceClass: "inferred" })).toBe("HYPOTHESIS");
+    expect(chartPanelStatus({ evidenceClass: "measured" })).toBe("MEASURED");
+    expect(chartPanelStatus({ unavailable: true, evidenceClass: "measured" })).toBe("REQUIRES AUDIO");
   });
 
   it("preserves full assessment text while supplying concise chart-only item summaries", () => {
