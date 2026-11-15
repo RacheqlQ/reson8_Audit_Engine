@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Only the newest five-pass acceptance run for this ref should consume CI minutes.
+concurrency:
+  group: audit-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Acceptance verification pass ${{ matrix.pass }}/5
