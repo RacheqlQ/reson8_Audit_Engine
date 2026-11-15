@@ -30,7 +30,7 @@ describe("Full report curator campaign section", () => {
           platform: "Spotify",
           sourceUrl: "https://example.com/curator",
           fitRationale: "Fixture-only rationale for testing the source-backed target layout.",
-          submissionRoute: "Official submission page",
+          submissionRoute: "https://example.com/submit",
           submissionRequirements: "Fixture-only requirement list",
           verifiedAt: "2026-11-15",
         }],
@@ -43,6 +43,33 @@ describe("Full report curator campaign section", () => {
     expect(section).toBeDefined();
     expect(section.text.join(" ")).toContain("Fixture Curator");
     expect(section.text.join(" ")).toContain("https://example.com/curator");
+  });
+
+
+  it("rejects non-HTTPS source or submission links and invalid verification dates", () => {
+    const input = {
+      ...fullAudioFixture,
+      evidence: {
+        ...fullAudioFixture.evidence,
+        curatorTargets: [{
+          status: "verified",
+          name: "Unsafe Fixture Target",
+          platform: "Spotify",
+          sourceUrl: "http://example.com/target",
+          fitRationale: "Fixture rationale",
+          submissionRoute: "Email the curator",
+          submissionRequirements: "Fixture requirements",
+          verifiedAt: "not-a-date",
+        }],
+      },
+    };
+    const section = planAuditReportPages(input, "full").find(
+      (page) => page.title === "Curator campaign and target verification",
+    );
+
+    expect(section).toBeDefined();
+    expect(section.text.join(" ")).not.toContain("Unsafe Fixture Target");
+    expect(section.text.join(" ")).toContain("NO VERIFIED CURATOR OR PLAYLIST TARGETS");
   });
 
   it("does not render incomplete target records as verified curator recommendations", () => {
