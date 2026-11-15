@@ -114,7 +114,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(context.heading).toBe("DECISION CONTEXT");
   expect(context.verdict).toBe("INSUFFICIENT EVIDENCE");
   expect(context.summary).not.toContain("zero-confidence tempo candidate");
-  expect(context.summary).not.toMatch(/\\b(?:128\\s*BPM|Afrobeats|streams?)\\b/i);
+  expect(context.summary).not.toMatch(/\b(?:128\s*BPM|Afrobeats|streams?)\b/i);
   expect(context.prompts).toHaveLength(3);
   expect(context.prompts[0]).toContain("change the current decision");
   expect(context.prompts[1]).toContain("identity, rights or source gaps");
@@ -137,7 +137,7 @@ describe("A4 report layout and fixture coverage",()=>{
    "Further listening and source verification are required before any external decision."
   ].join(" ");
   const context=buildArNotesDecisionContext(input);
-  const forbidden=/\\b(?:128\\s*BPM|high-energy|Afrobeats|24000 streams|market demand|commercial potential)\\b/i;
+  const forbidden=/\b(?:128\s*BPM|high-energy|Afrobeats|24000 streams|market demand|commercial potential)\b/i;
   expect(context.summary).not.toMatch(forbidden);
   expect(context.summary).toContain("Further listening and source verification are required");
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
