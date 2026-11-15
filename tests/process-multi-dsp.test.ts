@@ -79,7 +79,7 @@ describe("multi-DSP audit processing", () => {
     expect(saved).toEqual(["spotify", "apple_music", "deezer", "tidal", "youtube_music"]);
     expect(assessmentEvidence).toMatchObject({
       artist: "Tems",
-      reconciliation: { status: "conflict", conflicts: [{ field: "artist", values: ["Tems", "Wrong Artist"] }] },
+      reconciliation: { status: "conflict", conflicts: [{ field: "artist", values: ["Wrong Artist", "Tems"] }] },
       metadataSourcesChecked: ["apple_music", "deezer", "tidal", "youtube_music"],
 
     });
