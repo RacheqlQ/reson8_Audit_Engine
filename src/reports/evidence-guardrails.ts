@@ -1,4 +1,6 @@
+import { GENRE_TAXONOMY } from "../genre/taxonomy.js";
 export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.5;
+export const MIN_RELIABLE_KEY_CONFIDENCE = 0.8;
 
 type TempoEvidence = {
   bpm?: unknown;
@@ -23,18 +25,37 @@ export function isReliableTempo(value: TempoEvidence): boolean {
   return true;
 }
 
-function stripUnsupportedTempoClaims(value: unknown): unknown {
+export function isReliableKey(value: Record<string, unknown> | null | undefined): boolean {
+  if (!value) return false;
+  const key = value.key;
+  const mode = value.mode;
+  const confidence = value.keyConfidence;
+  const agreement = value.keySegmentAgreement;
+  return typeof key === "string" && key.trim().length > 0
+    && (mode === "major" || mode === "minor")
+    && typeof confidence === "number" && Number.isFinite(confidence)
+    && confidence >= MIN_RELIABLE_KEY_CONFIDENCE && confidence <= 1
+    && typeof agreement === "number" && Number.isFinite(agreement)
+    && agreement >= 0.8 && agreement <= 1;
+}
+
+function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean): unknown {
   if (typeof value === "string") {
     const sentences = value.match(/[^.!?]+[.!?]?/g) ?? [value];
-    const kept = sentences.filter((sentence) =>
-      !/\b(?:\d{2,3}\s*bpm|beats per minute|tempo|high[- ]energy)\b/i.test(sentence),
-    );
+    const kept = sentences.filter((sentence) => {
+      const hasTempoClaim = /\b(?:\d{2,3}\s*bpm|beats per minute|tempo|high[- ]energy)\b/i.test(sentence);
+      const lower = sentence.toLocaleLowerCase();
+      const hasGenreClaim = suppressGenre && GENRE_TAXONOMY.some((genre) =>
+        genre.label.length >= 4 && lower.includes(genre.label.toLocaleLowerCase()),
+      );
+      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim;
+    });
     return kept.join(" ").trim() || "Not asserted: the supporting measurement confidence is insufficient.";
   }
-  if (Array.isArray(value)) return value.map(stripUnsupportedTempoClaims);
+  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre));
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-      .map(([key, item]) => [key, stripUnsupportedTempoClaims(item)]));
+      .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre)]));
   }
   return value;
 }
@@ -58,7 +79,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     genre && typeof genre.primaryGenre === "string" && genre.primaryGenre.trim()
       && genre.abstained !== true,
   );
-  const result = (reliableTempo ? structuredClone(assessment) : stripUnsupportedTempoClaims(assessment)) as T;
+  const result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre) as T;
 
   if (!reliableTempo && result.scorecard) {
     if (result.scorecard.tempoLaneFit) result.scorecard.tempoLaneFit = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
