@@ -29,7 +29,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(chartLayoutIssuesForReport(fullAudioFixture as any)).toEqual([]);
  });
  it("checks chart-caption separation for every chart in all four fixtures",()=>{
-  for(const input of fixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
+  for(const input of allFixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
  it("does not emit low-density warnings across all sample and full fixture variants",async()=>{
   const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
@@ -181,14 +181,18 @@ describe("A4 report layout and fixture coverage",()=>{
  it("checks generated-output pagination, chart-bearing pages, continuation pages, footer clearance, disclosures and the 20-page cap",async()=>{
   const longInput=structuredClone(longFormAudioFixture) as AuditReportInput;
   longInput.evidence={...longInput.evidence,fixture:true};
-  longInput.assessment={...longInput.assessment,executiveSummary:Array(24).fill("A long-form evidence paragraph must wrap at word boundaries and continue without clipping or overlapping the footer.").join(" ")};
+  longInput.assessment={...longInput.assessment,executiveSummary:Array(100).fill("A long-form evidence paragraph must wrap at word boundaries and continue without clipping or overlapping the footer.").join(" ")};
   expect(longInput.evidence.fixture).toBe(true);
-  expect(planAuditReportPages(longInput,"full").some(section=>section.title==="Sonic DNA and technical profile")).toBe(true);
+  const planned=planAuditReportPages(longInput,"full");
+  expect(planned.some(section=>section.title==="Sonic DNA and technical profile")).toBe(true);
+  expect(planned.flatMap(section=>section.text).join(" ")).toContain("FIXTURE — synthetic renderer test data; not a real analysis.");
   expect(chartLayoutIssuesForReport(longInput)).toEqual([]);
   for(const tier of ["sample","full"] as const){
+   const baseline=await generateAuditReport(longFormAudioFixture,tier);
+   const baselinePages=(await PDFDocument.load(baseline)).getPageCount();
    const bytes=await generateAuditReport(longInput,tier),pdf=await PDFDocument.load(bytes);
    const pages=pdf.getPages();
-   expect(pages.length).toBeGreaterThan(2);
+   expect(pages.length).toBeGreaterThan(baselinePages);
    expect(pages.length).toBeLessThanOrEqual(20);
    for(const page of pages){
     const size=page.getSize();
