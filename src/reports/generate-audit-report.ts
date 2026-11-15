@@ -98,7 +98,7 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
  if(titleY<365)throw new Error("Cover identity text exceeds its allocated area");
  p.drawRectangle({x:M,y:250,width:W-2*M,height:104,color:C.navy});
  p.drawText("ASSESSMENT VERDICT",{x:M+18,y:326,size:7,font:f.bold,color:C.teal});add("cover-verdict-label",M+18,323,130,9);
- p.drawText(verdictLabel(val(input.assessment.commercialRead.marketability,"undetermined")).toUpperCase(),{x:M+18,y:292,size:15,font:f.bold,color:C.white});add("cover-verdict",M+18,289,180,22);
+ p.drawText(coverVerdictLabel(input).toUpperCase(),{x:M+18,y:292,size:15,font:f.bold,color:C.white});add("cover-verdict",M+18,289,180,22);
  p.drawText("CONFIDENCE",{x:W-M-116,y:326,size:7,font:f.bold,color:C.teal});add("cover-confidence-label",W-M-116,323,80,9);
  const cx=W-M-72,cy=290;p.drawCircle({x:cx,y:cy,size:25,borderColor:C.muted,borderWidth:5});p.drawCircle({x:cx,y:cy,size:20,borderColor:C.teal,borderWidth:2});
  p.drawText(Math.round(input.assessment.confidence*100)+"%",{x:cx-13,y:cy-3,size:9,font:f.bold,color:C.white});add("cover-confidence-value",cx-14,cy-6,30,12);
@@ -112,6 +112,10 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
 }
 interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string[];}
 function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"Insufficient evidence"};return m[v.toLowerCase()]??"Insufficient evidence";}
+export function coverVerdictLabel(input:AuditReportInput):string {
+ const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
+ return verdictLabel(val(safeAssessment.commercialRead?.marketability,"undetermined"));
+}
 function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready to pitch requires verified commercial-performance evidence, a defined reporting period and a supportable release proposition.",moderate:"Develop applies when evidence supports a credible direction but important execution or positioning work remains.",low:"Needs work applies when supplied evidence identifies material gaps that should be addressed before pitching.",undetermined:"Insufficient evidence applies when source-attributed commercial or release evidence is missing; no demand or partner interest is inferred."};return m[v.toLowerCase()]??m.undetermined;}
 function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
 function professionalEvidenceLanguage(value:string):string {
