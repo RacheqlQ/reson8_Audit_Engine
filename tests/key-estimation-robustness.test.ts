@@ -27,7 +27,7 @@ function harmonicChord(fundamentals: number[], seconds = 8): Float32Array {
   const partials = fundamentals.flatMap((fundamental) =>
     [1, 2, 3, 4, 5].map((harmonic) => ({
       frequency: fundamental * harmonic,
-      amplitude: harmonic === 1 ? 0.35 : 1 / (harmonic * 0.8),
+      amplitude: harmonic === 1 ? 1 : 0.35 / harmonic,
     })),
   );
   return Float32Array.from({ length: RATE * seconds }, (_, i) =>
