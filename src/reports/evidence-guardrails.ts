@@ -223,19 +223,31 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     if (Array.isArray(mutable.referencesToVerify)) {
       mutable.referencesToVerify = ["No comparable recording is selected. After identity and musical lane are verified, choose references and document the exact musical dimension being compared."];
     }
-    const abstentionRationale = "Not scored: overall assessment confidence is zero. The available evidence cannot support a numeric rating for this dimension; complete the listed evidence and human-review steps before assigning a score.";
+    const dimensionAbstentionRationale = (dimension: string): string => {
+      switch (dimension) {
+        case "tempoLaneFit":
+          return "Not scored: overall assessment confidence is zero. The available tempo evidence does not support a reliable lane-fit score.";
+        case "rhythmicConsistency":
+          return "Not scored: overall assessment confidence is zero. BPM evidence alone cannot establish rhythmic consistency; human listening and segment-level review are required.";
+        case "dynamicRangeLoudness":
+          return hasDynamicRangeMeasurement && (hasLoudnessMeasurement || hasRmsMeasurement)
+            ? "Not scored: overall assessment confidence is zero. Direct loudness and dynamic-range measurements are reported separately and do not establish mastering quality or artistic merit."
+            : "Not scored: overall assessment confidence is zero. Direct dynamic-range and loudness/RMS measurements are unavailable; no mastering-quality conclusion can be inferred.";
+        case "metadataCompleteness":
+          return "Not scored: overall assessment confidence is zero. Reconcile missing or conflicting artist, title, album, ISRC, label and release-date fields before assigning a metadata-completeness score.";
+        case "releaseReadiness":
+          return "Not scored: overall assessment confidence is zero. Audience, market, campaign and release evidence is insufficient to rate release readiness.";
+        default:
+          return "Not scored: overall assessment confidence is zero. The available evidence cannot support a numeric rating for this dimension; complete the listed evidence and human-review steps before assigning a score.";
+      }
+    };
     if (mutable.scorecard && typeof mutable.scorecard === "object" && !Array.isArray(mutable.scorecard)) {
       for (const [dimension, value] of Object.entries(mutable.scorecard as Record<string, unknown>)) {
         if (value && typeof value === "object" && !Array.isArray(value)) {
           mutable.scorecard[dimension] = {
             ...(value as Record<string, unknown>),
             score: null,
-            rationale: [
-              typeof (value as Record<string, unknown>).rationale === "string"
-                ? ((value as Record<string, unknown>).rationale as string).trim()
-                : "",
-              abstentionRationale,
-            ].filter(Boolean).join(" "),
+            rationale: dimensionAbstentionRationale(dimension),
           };
         }
       }
