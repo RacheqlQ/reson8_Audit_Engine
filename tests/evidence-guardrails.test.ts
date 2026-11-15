@@ -58,6 +58,27 @@ describe("Phillo evidence guardrails", () => {
     expect(result.commercialRead.rationale).toContain("No verified, source-attributed commercial-performance metrics");
   });
 
+  it("reconciles present-but-conflicting album metadata instead of calling it missing", () => {
+    const assessment = {
+      ...baseAssessment,
+      evidenceGaps: ["Album title is missing from the release metadata."],
+      limitations: ["The album field is unavailable."],
+      risks: ["The album is missing and identity context is incomplete."],
+      scorecard: {
+        ...baseAssessment.scorecard,
+        metadataCompleteness: { score: 35, rationale: "Album title is missing from all available metadata sources." },
+      },
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, null, {
+      album: "Hole-Hearted",
+      reconciliation: { conflicts: [{ field: "album", values: ["Hole-Hearted - EP", "Hole-Hearted"] }] },
+    });
+    expect(result.scorecard.metadataCompleteness.score).toBeNull();
+    expect(result.scorecard.metadataCompleteness.rationale).toContain("present but conflicting");
+    expect(result.evidenceGaps.join(" ")).toContain("Album metadata is present but conflicting");
+    expect(JSON.stringify(result)).not.toMatch(/album (?:title )?(?:is )?(?:missing|unavailable)/i);
+  });
+
   it("retains a model marketability verdict only when verified source-attributed metrics and a reporting period exist", () => {
     const result = sanitizeAssessmentForEvidence(baseAssessment, {
       genreClassification: { primaryGenre: "Afrobeats", abstained: false },
