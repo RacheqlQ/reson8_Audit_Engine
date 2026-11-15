@@ -175,6 +175,16 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     result.aAndRPositioning.adjacentLanes = [];
     result.aAndRPositioning.rationale = GENRE_UNCONFIRMED_RATIONALE;
   }
+  const hasDynamicRangeMeasurement = typeof sonicDna?.dynamicRangeDb === "number" && Number.isFinite(sonicDna.dynamicRangeDb);
+  const hasLoudnessMeasurement = typeof sonicDna?.loudnessLufs === "number" && Number.isFinite(sonicDna.loudnessLufs);
+  const hasRmsMeasurement = typeof sonicDna?.rmsLevelDbfs === "number" && Number.isFinite(sonicDna.rmsLevelDbfs);
+  if (!hasDynamicRangeMeasurement || (!hasLoudnessMeasurement && !hasRmsMeasurement)) {
+    const dynamicRangeDimension = mutable.scorecard?.dynamicRangeLoudness;
+    if (dynamicRangeDimension && typeof dynamicRangeDimension === "object") {
+      dynamicRangeDimension.score = null;
+      dynamicRangeDimension.rationale = "Not scored: direct dynamic-range and loudness/RMS measurements are unavailable from the uploaded master. Key confidence does not establish this dimension, and no mastering-quality conclusion can be inferred.";
+    }
+  }
   const zeroConfidence = typeof assessment.confidence === "number"
     && Number.isFinite(assessment.confidence)
     && assessment.confidence <= 0;
