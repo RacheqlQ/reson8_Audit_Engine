@@ -152,6 +152,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       && genre.abstained !== true,
   );
   let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence), !hasVocalAnalysis(sonicDna), !isReliableKey(sonicDna)) as T;
+  const mutable = result as Record<string, any>;
 
   if (hasAlbumConflict(evidence)) {
     result = sanitizeAlbumConflictClaims(result) as T;
@@ -188,7 +189,6 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   const zeroConfidence = typeof assessment.confidence === "number"
     && Number.isFinite(assessment.confidence)
     && assessment.confidence <= 0;
-  const mutable = result as Record<string, any>;
   if (Array.isArray(mutable.evidenceLabels)) {
     mutable.evidenceLabels = mutable.evidenceLabels.filter((entry: unknown) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
@@ -211,7 +211,6 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     };
   }
   if (zeroConfidence) {
-    const mutable = result as Record<string, any>;
     if (typeof mutable.creativeIdentity === "string") {
       mutable.creativeIdentity = "Creative identity is unconfirmed because overall A&R assessment confidence is zero. Do not assign a genre, mood, vocal identity or audience position until source reconciliation and a human listening review are complete.";
     }
