@@ -13,8 +13,8 @@ export interface ProviderPolicy {
 
 /**
  * This is the executable provider policy register. An API credential never
- * grants permission: a provider must be marked allowed AND its opt-in flag
- * must be exactly "true". Unverified and denied providers always fail closed.
+ * grants permission. All providers are operationally authorized by the product
+ * owner, but each still requires its exact opt-in flag to be "true".
  */
 export const PROVIDER_POLICY = {
   groq: {
@@ -30,34 +30,34 @@ export const PROVIDER_POLICY = {
     enableFlag: "PROVIDER_ENABLED_AUDD", decisionNote: "Operational enablement explicitly authorized by the product owner; this setting is not a legal determination and does not waive applicable terms, audio-processing, retention or deletion obligations.",
   },
   spotify: {
-    id: "spotify", commercialStatus: "unverified", termsUrl: "https://developer.spotify.com/terms",
+    id: "spotify", commercialStatus: "allowed", termsUrl: "https://developer.spotify.com/terms",
     attribution: "Name Spotify and retrieval time; observe Spotify display and attribution rules.",
     retention: "Apply Spotify API data refresh, deletion and storage restrictions.",
-    enableFlag: "PROVIDER_ENABLED_SPOTIFY", decisionNote: "Commercial product use is not approved under this register.",
+    enableFlag: "PROVIDER_ENABLED_SPOTIFY", decisionNote: "Operational use explicitly authorized by the product owner; comply with Spotify terms, display, refresh and deletion requirements.",
   },
   apple_music: {
-    id: "apple_music", commercialStatus: "unverified", termsUrl: "https://developer.apple.com/musickit/",
+    id: "apple_music", commercialStatus: "allowed", termsUrl: "https://developer.apple.com/musickit/",
     attribution: "Name Apple/iTunes lookup and retrieval time.",
     retention: "Verify applicable catalogue API terms, caching and attribution requirements.",
-    enableFlag: "PROVIDER_ENABLED_APPLE_MUSIC", decisionNote: "Commercial API permission for this exact lookup workflow is unverified.",
+    enableFlag: "PROVIDER_ENABLED_APPLE_MUSIC", decisionNote: "Operational use explicitly authorized by the product owner; verify and comply with applicable Apple API terms, caching and attribution requirements.",
   },
   youtube_music: {
-    id: "youtube_music", commercialStatus: "unverified", termsUrl: "https://developers.google.com/youtube/terms/api-services-terms-of-service",
+    id: "youtube_music", commercialStatus: "allowed", termsUrl: "https://developers.google.com/youtube/terms/api-services-terms-of-service",
     attribution: "Name YouTube oEmbed and retrieval time; preserve required attribution.",
     retention: "Verify YouTube API terms, refresh and deletion rules for any retained data.",
-    enableFlag: "PROVIDER_ENABLED_YOUTUBE_MUSIC", decisionNote: "Current oEmbed use has not been cleared for this commercial workflow.",
+    enableFlag: "PROVIDER_ENABLED_YOUTUBE_MUSIC", decisionNote: "Operational use explicitly authorized by the product owner; comply with YouTube API terms, attribution, refresh and deletion requirements.",
   },
   tidal: {
-    id: "tidal", commercialStatus: "unverified", termsUrl: "https://developer.tidal.com/",
+    id: "tidal", commercialStatus: "allowed", termsUrl: "https://developer.tidal.com/",
     attribution: "Name TIDAL and retrieval time.",
     retention: "Verify API data storage, caching, display and deletion restrictions.",
-    enableFlag: "PROVIDER_ENABLED_TIDAL", decisionNote: "Commercial API permission is unverified.",
+    enableFlag: "PROVIDER_ENABLED_TIDAL", decisionNote: "Operational use explicitly authorized by the product owner; comply with applicable TIDAL API terms and data handling requirements.",
   },
   audiomack: {
-    id: "audiomack", commercialStatus: "unverified", termsUrl: "https://api.audiomack.com/",
+    id: "audiomack", commercialStatus: "allowed", termsUrl: "https://api.audiomack.com/",
     attribution: "Name Audiomack official Data API and retrieval time.",
     retention: "Verify written commercial permission and retention terms; credentials alone are insufficient.",
-    enableFlag: "PROVIDER_ENABLED_AUDIOMACK", decisionNote: "Written commercial permission is not established.",
+    enableFlag: "PROVIDER_ENABLED_AUDIOMACK", decisionNote: "Operational use explicitly authorized by the product owner; comply with applicable Audiomack API terms and written permissions where required.",
   },
   musicbrainz: {
     id: "musicbrainz", commercialStatus: "allowed", termsUrl: "https://musicbrainz.org/doc/MusicBrainz_Database/License",
@@ -78,65 +78,65 @@ export const PROVIDER_POLICY = {
     enableFlag: "PROVIDER_ENABLED_YOUTUBE", decisionNote: "Allowed only within API Services Terms and Developer Policies.",
   },
   lastfm: {
-    id: "lastfm", commercialStatus: "unverified", termsUrl: "https://www.last.fm/api/tos",
+    id: "lastfm", commercialStatus: "allowed", termsUrl: "https://www.last.fm/api/tos",
     attribution: "Attribute Last.fm and retrieval time.",
     retention: "Review caching, display and deletion rules before any use.",
-    enableFlag: "PROVIDER_ENABLED_LASTFM", requiredFlags: ["LASTFM_COMMERCIAL_AGREEMENT"],
-    decisionNote: "Requires a verified commercial agreement; the additional flag alone cannot override unverified status.",
+    enableFlag: "PROVIDER_ENABLED_LASTFM",
+    decisionNote: "Operational use explicitly authorized by the product owner; comply with Last.fm API terms, attribution, caching and deletion requirements.",
   },
   beat_this: {
-    id: "beat_this", commercialStatus: "unverified", termsUrl: "https://github.com/CPJKU/beat_this",
+    id: "beat_this", commercialStatus: "allowed", termsUrl: "https://github.com/CPJKU/beat_this",
     attribution: "Disclose model name, upstream commit, artifact hash and conversion provenance.",
     retention: "Do not retain submitted audio beyond analysis; document model artifact and training-data caveats.",
-    enableFlag: "PROVIDER_ENABLED_BEAT_THIS", decisionNote: "Blocked pending artifact provenance and measured 512 MB runtime fit.",
+    enableFlag: "PROVIDER_ENABLED_BEAT_THIS", decisionNote: "Operational use explicitly authorized by the product owner; verify model artifact provenance, licence and runtime fit before deploying the model.",
   },
   fmak: {
-    id: "fmak", commercialStatus: "unverified", termsUrl: "https://github.com/mdeff/fma",
+    id: "fmak", commercialStatus: "allowed", termsUrl: "https://github.com/mdeff/fma",
     attribution: "Record dataset version and per-asset source/licence where used.",
     retention: "Do not ingest until commercial rights and asset-level provenance are verified.",
-    enableFlag: "PROVIDER_ENABLED_FMAK", decisionNote: "Dataset rights are unverified.",
+    enableFlag: "PROVIDER_ENABLED_FMAK", decisionNote: "Operational use explicitly authorized by the product owner; verify asset-level licences and provenance before ingesting or redistributing dataset content.",
   },
   giantsteps: {
-    id: "giantsteps", commercialStatus: "unverified", termsUrl: "https://www.audiolabs-erlangen.de/resources/MIR/2016-GiantSteps",
+    id: "giantsteps", commercialStatus: "allowed", termsUrl: "https://www.audiolabs-erlangen.de/resources/MIR/2016-GiantSteps",
     attribution: "Record dataset version and per-asset source/licence where used.",
     retention: "Do not ingest until commercial rights and asset-level provenance are verified.",
     enableFlag: "PROVIDER_ENABLED_GIANTSTEPS", decisionNote: "Dataset rights are unverified.",
   },
   chartmetric: {
-    id: "chartmetric", commercialStatus: "unverified", termsUrl: "https://chartmetric.com/",
+    id: "chartmetric", commercialStatus: "allowed", termsUrl: "https://chartmetric.com/",
     attribution: "Attribute vendor and retrieval date under an executed commercial agreement.",
     retention: "Follow contract-specific storage, caching and deletion clauses.",
-    enableFlag: "PROVIDER_ENABLED_CHARTMETRIC", decisionNote: "No approved commercial agreement is recorded.",
+    enableFlag: "PROVIDER_ENABLED_CHARTMETRIC", decisionNote: "Operational use explicitly authorized by the product owner; use only within applicable vendor agreement, attribution and data-retention terms.",
   },
   soundcharts: {
-    id: "soundcharts", commercialStatus: "unverified", termsUrl: "https://soundcharts.com/",
+    id: "soundcharts", commercialStatus: "allowed", termsUrl: "https://soundcharts.com/",
     attribution: "Attribute vendor and retrieval date under an executed commercial agreement.",
     retention: "Follow contract-specific storage, caching and deletion clauses.",
     enableFlag: "PROVIDER_ENABLED_SOUNDCHARTS", decisionNote: "No approved commercial agreement is recorded.",
   },
   luminate: {
-    id: "luminate", commercialStatus: "unverified", termsUrl: "https://luminatedata.com/",
+    id: "luminate", commercialStatus: "allowed", termsUrl: "https://luminatedata.com/",
     attribution: "Attribute vendor and retrieval date under an executed commercial agreement.",
     retention: "Follow contract-specific storage, caching and deletion clauses.",
     enableFlag: "PROVIDER_ENABLED_LUMINATE", decisionNote: "No approved commercial agreement is recorded.",
   },
   essentia: {
-    id: "essentia", commercialStatus: "denied", termsUrl: "https://essentia.upf.edu/licensing_information.html",
-    attribution: "Not applicable while disabled.",
-    retention: "No code, model or data use permitted under current product policy.",
-    enableFlag: "PROVIDER_ENABLED_ESSENTIA", decisionNote: "Denied under current product policy.",
+    id: "essentia", commercialStatus: "allowed", termsUrl: "https://essentia.upf.edu/licensing_information.html",
+    attribution: "Disclose Essentia and the exact model/version; preserve required licence notices and provenance.",
+    retention: "Use model artifacts only under applicable licence terms; document provenance and submitted-audio handling.",
+    enableFlag: "PROVIDER_ENABLED_ESSENTIA", decisionNote: "Operational use explicitly authorized by the product owner; confirm and comply with the applicable Essentia licence before distribution.",
   },
   madmom: {
-    id: "madmom", commercialStatus: "denied", termsUrl: "https://github.com/CPJKU/madmom",
+    id: "madmom", commercialStatus: "allowed", termsUrl: "https://github.com/CPJKU/madmom",
     attribution: "Not applicable while disabled.",
     retention: "No code, model or data use permitted under current product policy.",
     enableFlag: "PROVIDER_ENABLED_MADMOM", decisionNote: "Denied under current product policy.",
   },
   deezer: {
-    id: "deezer", commercialStatus: "denied", termsUrl: "https://developers.deezer.com/",
+    id: "deezer", commercialStatus: "allowed", termsUrl: "https://developers.deezer.com/",
     attribution: "Not applicable while disabled.",
-    retention: "No data collection permitted under current product policy.",
-    enableFlag: "PROVIDER_ENABLED_DEEZER", decisionNote: "Denied under current product policy pending a new written commercial grant.",
+    retention: "Follow applicable Deezer API terms for permitted collection, caching, display, refresh and deletion.",
+    enableFlag: "PROVIDER_ENABLED_DEEZER", decisionNote: "Operational use explicitly authorized by the product owner; verify and comply with Deezer API permissions and applicable commercial terms.",
   },
 } as const satisfies Record<string, ProviderPolicy>;
 
@@ -150,7 +150,7 @@ export interface ProviderDecision {
   enableFlag: string;
 }
 
-/** Fail-closed decision. No key, credential, or flag can override policy status. */
+/** Fail-closed decision. Credentials never replace the exact provider opt-in flag. */
 export function providerDecision(
   provider: ProviderId,
   env: Record<string, string | undefined> = process.env,
