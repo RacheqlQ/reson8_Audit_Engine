@@ -11,6 +11,7 @@ import { reconcileMetadata, type MetadataReconciliation } from "../metadata/Reco
 import { readAudioTags } from "../metadata/audio-tags.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
+import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
 
 export interface AuditJobRecord {
   id: string;
@@ -351,8 +352,10 @@ export async function processAuditJob(
   try {
     await awaitWithLease(deps, (signal) => deps.markProcessing(jobId, job.claimToken, signal));
 
+    const sourceReadinessError = getAuditSourceReadinessError(job);
+    if (sourceReadinessError) throw new Error(sourceReadinessError);
     const hasMaster = Boolean(job.sourceAudioPath && job.mimeType);
-    const hasCatalog = Boolean(job.catalogUrls?.length || job.catalogUrl);
+    const hasCatalog = Boolean(job.catalogUrls?.some((url) => url.trim()) || job.catalogUrl?.trim());
     if (!hasMaster && !hasCatalog) throw new Error("Audit job has no usable source");
 
     let metadata: CatalogMetadata | undefined;
