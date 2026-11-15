@@ -181,8 +181,37 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       rationale: "No verified, source-attributed commercial-performance metrics are available for this release. Streams, listeners, saves, sales, revenue, playlist conversion and campaign outcomes cannot be inferred from audio features, genre metadata or general catalog context.",
     };
   }
-  if (typeof assessment.confidence === "number" && assessment.confidence <= 0) {
+  const zeroConfidence = typeof assessment.confidence === "number"
+    && Number.isFinite(assessment.confidence)
+    && assessment.confidence <= 0;
+  if (zeroConfidence) {
     const mutable = result as Record<string, any>;
+    const abstentionRationale = "Not scored: overall assessment confidence is zero. The available evidence cannot support a numeric rating for this dimension; complete the listed evidence and human-review steps before assigning a score.";
+    if (mutable.scorecard && typeof mutable.scorecard === "object" && !Array.isArray(mutable.scorecard)) {
+      for (const [dimension, value] of Object.entries(mutable.scorecard as Record<string, unknown>)) {
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          mutable.scorecard[dimension] = {
+            ...(value as Record<string, unknown>),
+            score: null,
+            rationale: abstentionRationale,
+          };
+        }
+      }
+    }
+    if (mutable.commercialRead) {
+      mutable.commercialRead = {
+        marketability: "undetermined",
+        rationale: "Commercial assessment withheld because overall A&R assessment confidence is zero. Verified metrics, if present, remain source evidence and do not establish a reliable track-specific commercial verdict.",
+      };
+    }
+    if (mutable.aAndRPositioning) {
+      mutable.aAndRPositioning.primaryLane = "Unconfirmed — overall assessment confidence is zero";
+      mutable.aAndRPositioning.adjacentLanes = [];
+      mutable.aAndRPositioning.rationale = "No track-specific genre or lane verdict is issued because the overall assessment confidence is zero. Complete source reconciliation and a human listening review before assigning positioning.";
+    }
+    if (typeof mutable.laneHypothesis === "string") {
+      mutable.laneHypothesis = "No comparable-lane hypothesis is issued because overall assessment confidence is zero. Verify identity and complete a human listening review before selecting references.";
+    }
     if (mutable.releaseStrategy) {
       mutable.releaseStrategy.recommendation = "No track-specific release recommendation is issued because assessment confidence is zero. Verify the recording identity, complete a human listening review, and obtain source-attributed release and audience evidence before selecting a release lane or campaign.";
       mutable.releaseStrategy.priorities = [
