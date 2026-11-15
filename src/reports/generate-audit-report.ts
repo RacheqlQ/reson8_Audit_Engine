@@ -316,12 +316,12 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   }
   y-=12;
  }
- // Render the same decision context on either notes path. Inline placement is allowed
- // only when the complete summary, all review prompts and a usable field fit above the footer.
+ // Render the same decision context on either notes path. Long summaries continue
+ // across context pages; the editable notes field remains a single widget on the final page.
  const form=pdf.getForm(),field=form.createTextField("ar_notes");field.enableMultiline();
  const decisionContext=buildArNotesDecisionContext(input);
- const drawDecisionContext=(target:PDFPage,topY:number,shouldDraw=true):{rects:ReportRect[];bottom:number}=>{
-  const summaryLines=wrap(decisionContext.summary,fonts.regular,8.2,W-2*M-28);
+ const allSummaryLines=wrap(decisionContext.summary,fonts.regular,8.2,W-2*M-28);
+ const drawDecisionContext=(target:PDFPage,topY:number,shouldDraw=true,summaryLines=allSummaryLines,includePrompts=true):{rects:ReportRect[];bottom:number}=>{
   const cardHeight=50+summaryLines.length*11,cardBottom=topY-cardHeight;
   if(shouldDraw){
    target.drawRectangle({x:M,y:cardBottom,width:W-2*M,height:cardHeight,color:C.paper,borderColor:C.line,borderWidth:.7});
@@ -331,6 +331,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   let summaryY=topY-54;
   for(const line of summaryLines){if(shouldDraw)target.drawText(line,{x:M+14,y:summaryY,size:8.2,font:fonts.regular,color:C.ink});summaryY-=11;}
   const rects:ReportRect[]=[{x:M,y:cardBottom,width:W-2*M,height:cardHeight,id:"decision-context"}];
+  if(!includePrompts)return {rects,bottom:cardBottom};
   const promptsTitleY=cardBottom-18;
   if(shouldDraw)target.drawText("REVIEW PROMPTS",{x:M,y:promptsTitleY,size:7,font:fonts.bold,color:C.violet});
   rects.push({x:M,y:promptsTitleY-3,width:220,height:10,id:"review-prompts-title"});
@@ -347,11 +348,11 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  };
  const notesFieldBottom=BOTTOM+12,notesTitleY=y-18,notesSubtitleY=notesTitleY-25;
  const inlineContextTop=notesSubtitleY-32;
- const inlineLayout=drawDecisionContext(page,inlineContextTop,false);
+ const inlineLayout=drawDecisionContext(page,inlineContextTop,false,allSummaryLines,true);
  const inlineFieldTop=inlineLayout.bottom-18;
  const inlineNotesHeight=inlineFieldTop-notesFieldBottom;
  if(inlineNotesHeight>=120){
-  const inlineContext=drawDecisionContext(page,inlineContextTop);
+  const inlineContext=drawDecisionContext(page,inlineContextTop,true,allSummaryLines,true);
   page.drawText("A&R NOTES",{x:M,y:notesTitleY,size:16,font:fonts.bold,color:C.violet});
   page.drawText("Private working notes — editable field",{x:M,y:notesSubtitleY,size:8.5,font:fonts.regular,color:C.muted});
   field.addToPage(page,{x:M,y:notesFieldBottom,width:W-2*M,height:inlineNotesHeight,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
@@ -364,24 +365,48 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   );
   validate();
  }else{
-  // Discard the provisional inline layout and render the complete notes form on its own page.
+  // A compact continuation marker fills the intentional transition space and tells readers
+  // exactly where the complete decision context and editable notes field continue.
+  if(y-BOTTOM>=70){
+   const markerText="A&R NOTES CONTINUE — decision context, review prompts and editable working field follow on the next page.";
+   const markerY=y-58;
+   page.drawRectangle({x:M,y:markerY,width:W-2*M,height:46,color:C.paper,borderColor:C.line,borderWidth:.7});
+   const markerLines=wrap(markerText,fonts.regular,8,W-2*M-24);
+   markerLines.forEach((line,index)=>page.drawText(line,{x:M+12,y:markerY+29-index*11,size:8,font:fonts.regular,color:C.navy}));
+   rects.push({x:M,y:markerY,width:W-2*M,height:46,id:"notes-continuation-marker"});
+  }
   validate();
-  const notes=pdf.addPage([W,H]);pageNo++;header(notes,"A&R notes",pageNo,fonts,C.violet,input.evidence.fixture===true);
-  notes.drawText("A&R NOTES",{x:M,y:TOP,size:20,font:fonts.bold,color:C.navy});
-  notes.drawText("Private working notes — editable field",{x:M,y:TOP-27,size:9,font:fonts.regular,color:C.muted});
-  const notesContext=drawDecisionContext(notes,TOP-105);
-  const notesFieldY=145,notesFieldTop=notesContext.bottom-18,notesFieldHeight=notesFieldTop-notesFieldY;
-  if(notesFieldHeight<160)throw new Error("A&R Notes decision context is too long to fit safely with the editable field");
-  field.addToPage(notes,{x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
-  field.setFontSize(9);field.updateAppearances(fonts.regular);
-  const noteRects:ReportRect[]=[
-   {x:M,y:TOP-4,width:220,height:24,id:"notes-title"},
-   {x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},
-   ...notesContext.rects,
-   {x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,id:"A&R notes field"}
-  ];
-  const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; "));
-  const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes and decision-context page falls below the 65% content-occupancy threshold");
+  // Keep at most 42 summary lines on continuation pages and at most 16 on the final
+  // notes page, leaving room for all prompts and a meaningful editable field.
+  const summaryChunks:string[][]=[];let summaryOffset=0;
+  while(allSummaryLines.length-summaryOffset>16){
+   const count=Math.min(42,allSummaryLines.length-summaryOffset-16);
+   summaryChunks.push(allSummaryLines.slice(summaryOffset,summaryOffset+count));
+   summaryOffset+=count;
+  }
+  summaryChunks.push(allSummaryLines.slice(summaryOffset));
+  for(let chunkIndex=0;chunkIndex<summaryChunks.length;chunkIndex++){
+   const isLast=chunkIndex===summaryChunks.length-1;
+   const notes=pdf.addPage([W,H]);pageNo++;
+   header(notes,chunkIndex===0?"A&R notes":"A&R notes continued",pageNo,fonts,C.violet,input.evidence.fixture===true);
+   notes.drawText("A&R NOTES",{x:M,y:TOP,size:20,font:fonts.bold,color:C.navy});
+   notes.drawText(chunkIndex===0?"Private working notes — editable field":"DECISION CONTEXT — CONTINUED",{x:M,y:TOP-27,size:9,font:fonts.regular,color:C.muted});
+   const notesContext=drawDecisionContext(notes,TOP-105,true,summaryChunks[chunkIndex],isLast);
+   const noteRects:ReportRect[]=[
+    {x:M,y:TOP-4,width:220,height:24,id:"notes-title"},
+    {x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},
+    ...notesContext.rects
+   ];
+   if(isLast){
+    const notesFieldY=145,notesFieldTop=notesContext.bottom-18,notesFieldHeight=notesFieldTop-notesFieldY;
+    if(notesFieldHeight<160)throw new Error("A&R Notes final page cannot safely fit the complete context, review prompts and editable field");
+    field.addToPage(notes,{x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
+    field.setFontSize(9);field.updateAppearances(fonts.regular);
+    noteRects.push({x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,id:"A&R notes field"});
+   }
+   const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; "));
+   const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes decision-context page falls below the 65% content-occupancy threshold");
+  }
  }
  if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");
  signal?.throwIfAborted();
