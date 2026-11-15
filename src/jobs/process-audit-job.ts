@@ -111,8 +111,10 @@ function assessmentSafeCatalogMetadata(source: CatalogMetadata): CatalogMetadata
   const hasSpotifyCrossReference = Object.prototype.hasOwnProperty.call(crossReferences, "spotify");
   if (!hasSpotifyCrossReference) return source;
 
-  const { spotify: _spotify, ...safeCrossReferences } = crossReferences;
-  const { spotify: _spotifyId, ...safeExternalIds } = source.externalIds;
+  const safeCrossReferences = { ...crossReferences };
+  delete safeCrossReferences.spotify;
+  const safeExternalIds = { ...source.externalIds };
+  delete safeExternalIds.spotify;
   return {
     ...source,
     // The TIDAL fallback previously populated these fields from Spotify.
