@@ -5,6 +5,7 @@ import type { AuditReportInput, AuditReportTier } from "../reports/generate-audi
 import { isPdf } from "../reports/pdf-output.js";
 import { analyzePcm, type SonicDnaFeatures } from "../audio/sonic-dna.js";
 import { fuseGenreEvidence, type ProviderGenreTags } from "../genre/fusion.js";
+import { DEFAULT_GENRE_MODEL } from "../genre/model.js";
 import type { TrackIdentity } from "../metadata/MetadataEngine.js";
 import { reconcileMetadata, type MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
 import { readAudioTags } from "../metadata/audio-tags.js";
@@ -440,11 +441,19 @@ export async function processAuditJob(
     const reconciliation = reconcileMetadata(metadataInput);
     await awaitWithLease(deps, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources));
 
-    const genreClassification = fuseGenreEvidence({
+    const fusedGenreClassification = fuseGenreEvidence({
       providerTags: genreProviderTags(metadataSources, masterTags),
       bpm: masterDna?.bpm ?? null,
       tempoConfidence: masterDna?.tempoConfidence ?? null,
     });
+    const genreModelResult = await DEFAULT_GENRE_MODEL.classify({
+      bpm: masterDna?.bpm ?? null,
+      tempoConfidence: masterDna?.tempoConfidence ?? null,
+      key: masterDna?.key ?? null,
+      mode: masterDna?.mode ?? null,
+      providerGenreIds: fusedGenreClassification.genres.map((genre) => genre.id),
+    });
+    const genreClassification = { ...fusedGenreClassification, model: genreModelResult };
     if (masterDna) {
       masterDna = {
         ...masterDna,
