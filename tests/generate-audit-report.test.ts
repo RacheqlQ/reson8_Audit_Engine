@@ -100,7 +100,7 @@ describe("A4 report layout and fixture coverage",()=>{
   input.evidence.fieldProvenance={...input.evidence.fieldProvenance,album:"id3"};
   input.evidence.reconciliation={conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]};
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Album: Conflicting source values");
+  expect(report).toContain("Album: Synthetic test value — not a real identity match");
   expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
   expect(report).not.toContain("Album: Unavailable — no source result");
  });
