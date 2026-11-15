@@ -92,4 +92,26 @@ describe("DSP provider failure persistence", () => {
       error: "Spotify API request failed with HTTP 401",
     });
   });
+
+  it("persists provider-level failures as catalog-ingestion events with bounded errors", async () => {
+    const { store, fetchMock } = makeStore({});
+    await store.saveCatalogFailure(
+      "job-456",
+      "claim-token",
+      { platform: "tidal", catalogId: "tidal-456", canonicalUrl: "https://tidal.com/browse/track/tidal-456" },
+      "TIDAL track request failed with HTTP 503",
+    );
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.p_operation).toBe("catalog_metadata");
+    expect(requestBody.p_payload.eventPayload).toMatchObject({
+      platform: "tidal",
+      catalogId: "tidal-456",
+      canonicalUrl: "https://tidal.com/browse/track/tidal-456",
+      status: "unavailable",
+      error: "TIDAL track request failed with HTTP 503",
+      evidenceClass: null,
+    });
+  });
+
 });
