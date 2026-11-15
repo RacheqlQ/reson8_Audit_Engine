@@ -138,6 +138,38 @@ describe("native PDF chart helpers", () => {
   });
 
 
+  it("keeps complete constellation labels legible in narrow and boundary-aligned chart areas", async () => {
+    const rows: ChartRow[] = [
+      { label: "Primary lane", value: "A very long primary creative lane label that must remain complete without shortening or silent truncation" },
+      { label: "Adjacent lane", value: "A second extended adjacent lane label with several words and enough length to wrap across multiple lines" },
+      { label: "Adjacent lane", value: "A third boundary-case label with an exceptionallylongunbrokensegmentthatmustwrapwithoutlosinganycharacters" },
+      { label: "Adjacent lane", value: "A fourth adjacent lane label used to test the lower label row and chart footer clearance" },
+      { label: "Adjacent lane", value: "A fifth final label that must remain inside the rightmost narrow chart column" },
+    ];
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    for (const width of [240, 300, 499]) {
+      const height = chartPanelHeight("constellation", rows, width);
+      for (const x of [0, 48, 595.28 - width]) {
+        expect(chartPanelLayoutErrors("constellation", rows, x, 760, height, width)).toEqual([]);
+        const rects = chartPanelLayoutRects("constellation", rows, x, 760, height, width);
+        const card = rects.find((rect) => rect.id === "card-bounds");
+        expect(card).toBeDefined();
+        expect(card!.x).toBeGreaterThanOrEqual(0);
+        expect(card!.x + card!.width).toBeLessThanOrEqual(595.28 + 0.01);
+        expect(rects.filter((rect) => rect.id.startsWith("label-constellation-value-"))).toHaveLength(5);
+        const page = pdf.addPage([595.28, 841.89]);
+        expect(() => drawChartPanel(page, {
+          title: "Lane constellation", kind: "constellation", rows,
+          shows: "Primary and adjacent lane hypotheses", cantShow: "Verified market size or audience overlap",
+          width, y: 760,
+        }, font, bold)).not.toThrow();
+      }
+    }
+    expect(await pdf.save()).toBeInstanceOf(Uint8Array);
+  });
+
   it("keeps planned Strengths and Risks content in their own columns for every fixture, including four-item long-form lists", () => {
     for (const fixture of [fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture]) {
       const rows = buildStrengthRiskChartRows(fixture.assessment.strengths, fixture.assessment.risks);
