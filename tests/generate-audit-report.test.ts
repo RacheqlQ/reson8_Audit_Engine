@@ -40,7 +40,8 @@ describe("A4 report layout and fixture coverage",()=>{
    const notesField=pdf.getForm().getTextField("ar_notes");
    const widgets=notesField.acroField.getWidgets();
    expect(widgets).toHaveLength(1);
-   const notesWidgetPage=widgets[0].P();\n   const notesPageIndex=pdf.getPages().findIndex(page=>page.ref.objectNumber===notesWidgetPage?.objectNumber&&page.ref.generationNumber===notesWidgetPage?.generationNumber);
+   const notesWidgetPage=widgets[0].P();
+   const notesPageIndex=pdf.getPages().findIndex(page=>page.ref.objectNumber===notesWidgetPage?.objectNumber&&page.ref.generationNumber===notesWidgetPage?.generationNumber);
    expect(notesPageIndex).toBeGreaterThanOrEqual(0);
    expect(notesPageIndex).toBe(pdf.getPageCount()-1);
    expect(pdf.getPageCount()).toBeLessThanOrEqual(20);
