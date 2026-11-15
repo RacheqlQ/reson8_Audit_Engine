@@ -17,10 +17,18 @@ describe("embedded worker provider policy", () => {
     mocks.claimNextQueuedJob.mockReset();
   });
 
-  it("does not claim a queued job when Groq credentials exist but commercial policy is unverified", async () => {
+  it("allows the worker to preflight Groq only with the exact opt-in flag after owner authorization", async () => {
     vi.stubEnv("GROQ_API", "configured");
     vi.stubEnv("PROVIDER_ENABLED_GROQ", "true");
     mocks.claimNextQueuedJob.mockResolvedValue(null);
+
+    await expect(processNextQueuedAudit()).resolves.toBeNull();
+    expect(mocks.claimNextQueuedJob).toHaveBeenCalledOnce();
+  });
+
+  it("does not claim a queued job when the Groq opt-in flag is absent or not exactly true", async () => {
+    vi.stubEnv("GROQ_API", "configured");
+    vi.stubEnv("PROVIDER_ENABLED_GROQ", "TRUE");
 
     await expect(processNextQueuedAudit()).rejects.toThrow("groq: disabled by data policy");
     expect(mocks.claimNextQueuedJob).not.toHaveBeenCalled();
