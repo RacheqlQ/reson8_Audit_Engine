@@ -41,7 +41,7 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
 
 function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean): unknown {
   if (typeof value === "string") {
-    const sentences = value.split(/(?<=[.!?])\\s+(?=[A-Z])/);
+    const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
       const hasTempoClaim = /\b(?:\d{2,3}\s*bpm|beats per minute|tempo|high[- ]energy)\b/i.test(sentence);
       const lower = sentence.toLocaleLowerCase();
