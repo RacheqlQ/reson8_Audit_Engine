@@ -35,6 +35,8 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
   if (!value) return false;
   const key = value.key;
   const mode = value.mode;
+  const harmonic = value.harmonicFeatures;
+  if (harmonic && typeof harmonic === "object" && (harmonic as Record<string, unknown>).status === "insufficient_evidence") return false;
   const confidence = value.keyConfidence;
   const agreement = value.keySegmentAgreement;
   return typeof key === "string" && key.trim().length > 0
