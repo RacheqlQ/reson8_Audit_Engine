@@ -12,7 +12,7 @@
 3. A provider being technically integrated, having credentials, or returning data does not establish commercial permission. Each provider requires a current terms review and explicit opt-in configuration.
 4. Providers with **unverified** or **denied** commercial status must remain disabled. Missing credentials, disabled flags, rate limits, provider errors and policy rejections must be reported as unavailable; never silently substitute fabricated or stale values.
 5. Reports must identify data sources and methods, distinguish submitter-supplied/unverified information from provider observations and measured analysis, and include retrieval timestamps where applicable.
-6. Do not retain third-party audio or provider payloads beyond the documented operational need. Diagnostic events must contain derived features only, not audio samples or reconstructable audio.
+6. Do not retain third-party audio or provider payloads beyond the documented operational need. Diagnostic events contain derived features only: a normalized onset envelope capped at 128 values, beat markers capped at 512, heuristic four-beat downbeat candidates capped at 128, and up to 12 normalized 12-bin chroma segments. Never store PCM samples, audio bytes, access tokens or reconstructable audio in diagnostics.
 7. Payment controls are separate from data-provider controls. `PAYMENTS_ENABLED` remains false by default and must not be enabled as part of this policy work.
 
 ## Commercial status register
@@ -41,6 +41,8 @@
 | Chartmetric / Soundcharts / Luminate | Paid market intelligence | unverified; disabled | No integration or data ingestion without an executed commercial agreement and approved credentials | https://chartmetric.com/ ; https://soundcharts.com/ ; https://luminatedata.com/ |
 
 ## Required provider configuration
+
+Audio diagnostics are persisted in the existing fenced `sonic_dna` audit event payload; no database migration is required. `scripts/diagnostics-to-fixture.mjs` converts one exported event payload from stdin into a bounded Vitest fixture and deliberately selects only diagnostic fields. The downbeat grid is explicitly a four-beat diagnostic hypothesis, not a meter or downbeat detection claim.
 
 The executable registry is `src/providers/provider-policy.ts`. It currently registers Groq, AudD, Spotify, Apple Music/iTunes, YouTube Music oEmbed, TIDAL, Audiomack, Deezer, MusicBrainz, ListenBrainz, YouTube Data API, Last.fm, Beat This!, FMAK, GiantSteps, Chartmetric, Soundcharts, Luminate, Essentia and madmom. The DSP catalogue dispatcher and embedded worker consult the registry before third-party calls. Registry status is authoritative; setting an environment flag cannot promote an unverified or denied source.
 
