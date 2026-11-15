@@ -39,6 +39,19 @@ describe("genre evidence fusion", () => {
     expect(result.evidence.tempoContributionCap).toBe(0.15);
     expect(result.evidence.providerWeightShare).toBe(0.85);
     expect(result.genres[0].sources).toEqual(["audiomack"]);
+    expect(result.model).toBeUndefined();
+  });
+
+  it("accepts explicit provider-weight overrides", () => {
+    const result = fuseGenreEvidence({
+      providerTags: [
+        { provider: "apple_music", tags: ["Afrobeats"] },
+        { provider: "tidal", tags: ["Amapiano"] },
+      ],
+      providerWeights: { apple_music: 2, tidal: 0.5 },
+    });
+    expect(result.primaryGenre).toBe("Afrobeats");
+    expect(result.genres[0].confidence).toBeCloseTo(0.8, 5);
   });
 
   it("abstains when independent providers disagree", () => {
