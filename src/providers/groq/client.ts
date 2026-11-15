@@ -210,7 +210,17 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       await sleepImpl(await providerRetryDelayMs(response,networkAttempt), signal);
       signal?.throwIfAborted();
     }
-    if(!response||!response.ok){const detail=await response?.text().catch(()=>"")??"";throw new Error("Groq "+groupName+" assessment failed with HTTP "+(response?.status??"unknown")+(detail?": "+detail.slice(0,300):""));}
+    if(!response||!response.ok){
+      const detail=await response?.text().catch(()=>"")??"";
+      let providerError:{error?:{code?:unknown;message?:unknown}}={};
+      try{providerError=JSON.parse(detail) as typeof providerError;}catch{/* Preserve the original provider response below. */}
+      if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&attempt===0){
+        const message=typeof providerError.error.message==="string"?providerError.error.message:"The provider rejected its generated JSON against the supplied schema.";
+        lastError="Groq returned json_validate_failed: "+message+". Retry with a complete JSON object that includes every property required by the supplied schema. Do not omit required properties, including evidenceLabels; when no track-specific source supports a label, use only a clearly separated INDUSTRY PRACTICE entry where appropriate.";
+        continue;
+      }
+      throw new Error("Groq "+groupName+" assessment failed with HTTP "+(response?.status??"unknown")+(detail?": "+detail.slice(0,300):""));
+    }
     const payload=await response.json() as {choices?:Array<{message?:{content?:string|null}}>};
     const content=payload.choices?.[0]?.message?.content;
     if(!content){lastError="The response contained no JSON content.";continue;}
@@ -233,7 +243,7 @@ export class GroqClient implements GroqAssessmentClient {
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema,this.sleepImpl,signal),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"positioning","Write evidence-bounded A&R positioning and commercial read.",PositioningSchema,this.sleepImpl,signal),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"release","Write a grounded release recommendation and priorities.",ReleaseSchema,this.sleepImpl,signal),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"evidence-score","Score only evidence-derivable dimensions. Return the unscored human listening checklist. Every evidenceGaps item and every limitations item must contain at least 8 words. Every scorecard rationale must contain at least 25 words. In particular, scorecard.rhythmicConsistency.rationale needs at least 25 words even for a null score; state which uploaded-master timing evidence is missing in a complete sentence. Every humanListeningChecklist item must contain at least 5 words. Do not use fragments or short labels; write complete, specific sentences. If the correction field identifies a word-count failure, repair that exact field while preserving the evidence-bounded meaning.",EvidenceScoreSchema,this.sleepImpl,signal),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"evidence-score","Score only evidence-derivable dimensions. Always include the evidenceLabels array with at least one item; every item must include label, claim and source. Use only source-grounded labels. If no track-specific source supports a label, include a clearly separated INDUSTRY PRACTICE item with source industry_practice where appropriate; never fabricate track-specific evidence. Return the unscored human listening checklist. Every evidenceGaps item and every limitations item must contain at least 8 words. Every scorecard rationale must contain at least 25 words. In particular, scorecard.rhythmicConsistency.rationale needs at least 25 words even for a null score; state which uploaded-master timing evidence is missing in a complete sentence. Every humanListeningChecklist item must contain at least 5 words. Do not use fragments or short labels; write complete, specific sentences. If the correction field identifies a word-count failure, repair that exact field while preserving the evidence-bounded meaning.",EvidenceScoreSchema,this.sleepImpl,signal),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"production","Give actionable production and arrangement guidance. Separate lane-general craft as INDUSTRY PRACTICE.",ProductionSchema,this.sleepImpl,signal),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"comparables","Provide inferred lane descriptors and reference-search criteria to verify; do not invent named artists or tracks.",ComparableSchema,this.sleepImpl,signal),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,input,"promotion","Build a staged promotion plan, general pitching angles, content concepts and playlist categories only. Each playlist category must be a descriptive phrase of at least three words. Include INDUSTRY PRACTICE separately.",PromotionSchema,this.sleepImpl,signal),
