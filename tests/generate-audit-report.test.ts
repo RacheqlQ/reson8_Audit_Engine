@@ -4,8 +4,15 @@ import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLab
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
-const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];\nconst allFixtures=allFixtures;\nconst reportTiers=["sample","full"] as const;
-describe("A4 report layout and fixture coverage",()=>{\n it("defines exactly five generic fixtures across two report tiers",()=>{\n  expect(allFixtures).toHaveLength(5);\n  expect(reportTiers).toEqual(["sample","full"]);\n  expect(allFixtures.length*reportTiers.length).toBe(10);\n });
+const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
+const allFixtures=[...fixtures,ambiguousAudioFixture as unknown as AuditReportInput];
+const reportTiers=["sample","full"] as const;
+describe("A4 report layout and fixture coverage",()=>{
+ it("defines exactly five generic fixtures across two report tiers",()=>{
+  expect(allFixtures).toHaveLength(5);
+  expect(reportTiers).toEqual(["sample","full"]);
+  expect(allFixtures.length*reportTiers.length).toBe(10);
+ });
  it("detects element intersections and page overflow",()=>{
   expect(checkLayout([{x:0,y:0,width:20,height:20,id:"a"},{x:10,y:10,width:20,height:20,id:"b"}]).ok).toBe(false);
   expect(checkLayout([{x:590,y:0,width:20,height:20,id:"overflow"}]).ok).toBe(false);
@@ -32,7 +39,7 @@ describe("A4 report layout and fixture coverage",()=>{\n it("defines exactly fiv
   }finally{warning.mockRestore();}
  });
  it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
-  for(const input of allFixtures)for(const tier of ["sample","full"] as const){
+  for(const input of allFixtures)for(const tier of reportTiers){
    const bytes=await generateAuditReport(input,tier),pdf=await PDFDocument.load(bytes);
    for(const page of pdf.getPages()){const size=page.getSize();expect(size.width).toBeCloseTo(595.28,0);expect(size.height).toBeCloseTo(841.89,0);}
    const fields=pdf.getForm().getFields();
@@ -156,7 +163,7 @@ describe("A4 report layout and fixture coverage",()=>{\n it("defines exactly fiv
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not reported — insufficient confidence");
   expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
-  expect(report).not.toMatch(/156\s*BPM|high-energy/);
+  expect(report).not.toMatch(/128\s*BPM|high-energy/);
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
