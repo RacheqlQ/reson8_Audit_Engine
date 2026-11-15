@@ -110,6 +110,7 @@ describe("processAuditJob", () => {
 
   it("merges DSP identity with partial AudD enrichment before Groq and PDF generation", async () => {
     const assessmentInputs: Record<string, unknown>[] = [];
+    const assessmentCatalogInputs: Record<string, unknown>[] = [];
     const reportInputs: Record<string, unknown>[] = [];
 
     const result = await processAuditJob("job-dsp", {
@@ -138,13 +139,13 @@ describe("processAuditJob", () => {
         isrc: null,
         upc: null,
         label: null,
-        genre: null,
+        genre: "Spotify-derived genre",
         catalogPopularity: 0.61,
         catalogPopularityScale: "0_1" as const,
         artworkUrl: null,
         previewUrl: "https://example.com/preview.mp3",
-        externalIds: { tidal: "tidal-123" },
-        raw: {},
+        externalIds: { tidal: "tidal-123", spotify: "spotify-cross-reference" },
+        raw: { crossReferences: { spotify: { id: "spotify-cross-reference", genres: ["Spotify-derived genre"] } } },
         evidenceStatus: "recognized" as const,
         sonicProfile: {
           provenance: "tidal_catalog_metadata" as const,
@@ -176,6 +177,7 @@ describe("processAuditJob", () => {
       saveSonicDna: async () => {},
       generateAssessment: async (input) => {
         assessmentInputs.push(input.evidence);
+        assessmentCatalogInputs.push(input.catalogMetadata ?? {});
         expect(input.evidence.metadataSourcesChecked).toEqual(["tidal", "audd"]);
         expect(input.sonicDna).toMatchObject({
           provenance: "tidal_catalog_metadata",
@@ -198,6 +200,9 @@ describe("processAuditJob", () => {
     });
 
     expect(result.status).toBe("completed");
+    expect(assessmentCatalogInputs[0]).toMatchObject({ genre: null, catalogPopularity: null });
+    expect(assessmentCatalogInputs[0]).not.toHaveProperty("externalIds.spotify");
+    expect(assessmentCatalogInputs[0]).not.toHaveProperty("raw.crossReferences.spotify");
     expect(assessmentInputs[0]).toMatchObject({
       evidenceClass: "RECOGNIZED",
       artist: "TIDAL Artist",
