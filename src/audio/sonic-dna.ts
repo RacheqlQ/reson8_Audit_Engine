@@ -1,13 +1,12 @@
+import { estimateKey } from "./key-estimation.js";
 export interface TempoEstimate { bpm: number | null; alternateTempo: number | null; confidence: number | null; }
 export interface SonicDnaFeatures {
  sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
- key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; limitations:string[];
+ key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; keyTuningCents:number|null; keySegmentAgreement:number|null; keyAnalysisOperations:number; limitations:string[];
  loudnessLufs:number|null; rmsLevelDbfs:number; rmsEnergy:number; dynamicRangeDb:number; spectralCentroidHz:number; spectralBandwidthHz:number;
  spectralRolloffHz:number; zeroCrossingRate:number; moodTags:string[]; genreContext:string[];
 }
 const EPSILON=1e-12, MAX_ANALYSIS_SAMPLES=3_000_000, NOTES=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-const MAJOR=[6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88];
-const MINOR=[6.33,2.68,3.52,5.38,2.6,3.53,2.54,4.75,3.98,2.69,3.34,3.17];
 function rms(s:Float32Array):number { if(!s.length)return 0; let sum=0; for(const x of s)sum+=x*x; return Math.sqrt(sum/s.length); }
 function percentile(a:number[],p:number):number { if(!a.length)return 0; const i=(a.length-1)*p,l=Math.floor(i),u=Math.ceil(i); return l===u?a[l]:a[l]+(a[u]-a[l])*(i-l); }
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));
@@ -40,64 +39,6 @@ function prepareAnalysisPcm(samples:Float32Array,sampleRate:number,channels:numb
  return {samples:mono,sampleRate:sampleRate/stride,durationSeconds};
 }
 
-function estimateKey(samples:Float32Array,sampleRate:number):{key:string|null;mode:"major"|"minor"|null;confidence:number|null;limitation:string|null} {
- if(sampleRate<=0||samples.length<sampleRate*2||rms(samples)<1e-5)return {key:null,mode:null,confidence:null,limitation:"Insufficient pitched audio or signal energy for reliable key estimation."};
- const size=2048,windows=Math.min(12,Math.max(1,Math.floor(samples.length/size)));
- const maxHz=Math.min(2000,sampleRate/8),maxBin=Math.min(Math.floor(size/8),Math.floor(maxHz*size/sampleRate));
- const aggregate=Array(12).fill(0),segmentProfiles:number[][]=[];
- for(let w=0;w<windows;w++){
-  const start=windows===1?0:Math.floor(w*(samples.length-size)/(windows-1));
-  if(start<0||start+size>samples.length)continue;
-  const segment=Array(12).fill(0);
-  for(let bin=1;bin<=maxBin;bin++){
-   const hz=bin*sampleRate/size;
-   if(hz<65)continue;
-   let re=0,im=0;
-   for(let n=0;n<size;n+=4){
-    const win=0.5-0.5*Math.cos(2*Math.PI*n/(size-1)),angle=2*Math.PI*bin*n/size,x=samples[start+n]*win;
-    re+=x*Math.cos(angle);im-=x*Math.sin(angle);
-   }
-   const magnitude=Math.hypot(re,im);
-   if(magnitude>EPSILON){
-    const midi=Math.round(69+12*Math.log2(hz/440));
-    const pitchClass=(midi%12+12)%12;
-    const registerWeight=hz<500?1.12:hz<1200?0.88:0.62;
-    const harmonicWeight=magnitude*registerWeight/Math.sqrt(Math.max(1,hz/65));
-    segment[pitchClass]+=harmonicWeight;
-    aggregate[pitchClass]+=harmonicWeight;
-   }
-  }
-  const segmentTotal=segment.reduce((a,b)=>a+b,0);
-  if(segmentTotal>EPSILON)segmentProfiles.push(segment.map(value=>value/segmentTotal));
- }
- const total=aggregate.reduce((a,b)=>a+b,0);
- if(!segmentProfiles.length||total<=EPSILON)return {key:null,mode:null,confidence:null,limitation:"No stable tonal energy was detected for key estimation."};
- const norm=aggregate.map(value=>value/total);
- const candidates:Array<{key:number;mode:"major"|"minor";score:number}>=[];
- for(let key=0;key<12;key++)for(const [mode,profile] of [["major",MAJOR],["minor",MINOR]] as const){
-  let score=0,den=0;
-  for(let pitch=0;pitch<12;pitch++){score+=norm[(pitch+key)%12]*profile[pitch];den+=profile[pitch]*profile[pitch];}
-  candidates.push({key,mode,score:score/Math.sqrt(den)});
- }
- candidates.sort((a,b)=>b.score-a.score);
- const best=candidates[0],second=candidates[1];
- const winningSegments=segmentProfiles.filter((profile)=>{
-  let localBest:{key:number;mode:"major"|"minor";score:number}|null=null;
-  for(let key=0;key<12;key++)for(const [mode,scale] of [["major",MAJOR],["minor",MINOR]] as const){
-   let score=0,den=0;
-   for(let pitch=0;pitch<12;pitch++){score+=profile[(pitch+key)%12]*scale[pitch];den+=scale[pitch]*scale[pitch];}
-   const candidate={key,mode,score:score/Math.sqrt(den)};
-   if(!localBest||candidate.score>localBest.score)localBest=candidate;
-  }
-  return localBest?.key===best.key&&localBest.mode===best.mode;
- }).length;
- const consistency=winningSegments/segmentProfiles.length;
- if(consistency<0.6)return {key:null,mode:null,confidence:clamp(consistency),limitation:"Key estimates varied across audio segments; no single key is asserted."};
- const margin=(best.score-second.score)/Math.max(best.score,EPSILON);
- const confidence=clamp(margin*5*(0.4+0.6*consistency));
- if(confidence<0.08)return {key:null,mode:null,confidence,limitation:"Key and mode confidence was below threshold; no key is asserted."};
- return {key:NOTES[best.key],mode:best.mode,confidence,limitation:null};
-}
 
 export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstimate {
  if(sampleRate<=0||samples.length<sampleRate*4||rms(samples)<1e-5)return {bpm:null,alternateTempo:null,confidence:null};
@@ -170,24 +111,13 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  return {
   sampleRate,channels:Number.isInteger(channels)&&channels>0?channels:1,durationSeconds:prepared.durationSeconds,
   rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:"amplitude_envelope_autocorrelation"},
-  harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:"sampled_spectral_chroma"},
+  harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:key.method,tuningCents:key.tuningCents,segmentAgreement:key.segmentAgreement,analysisWindows:key.analysisWindows,operationCount:key.operationCount},
   vocalFeatures:{status:"not_analyzed",reason:"No vocal separation or vocal-activity model is configured; vocal attributes are not inferred."},
   bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
   key:key.key,mode:key.mode,keyConfidence:key.confidence,limitations,
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
   dynamicRangeDb:20*Math.log10(p95/p10),spectralCentroidHz:centroid,spectralBandwidthHz:bandwidth,
   spectralRolloffHz:rolloff,zeroCrossingRate:crossings/Math.max(1,a.length-1),
-  moodTags:tags,genreContext:classifyGenreFromBpm(tempo.bpm)
+  moodTags:tags,genreContext:[]
  };
-}
-export function classifyGenreFromBpm(bpm:number|null):string[] {
- if(bpm===null)return [];
- const m:string[]=[];
- if(bpm>=60&&bpm<=90)m.push("Ambient","R&B","Reggae");
- if(bpm>=70&&bpm<=100)m.push("Hip-Hop/Lo-Fi","Reggaeton");
- if(bpm>=90&&bpm<=140)m.push("Country/Folk");
- if(bpm>=100&&bpm<=130)m.push("Pop");
- if(bpm>=108&&bpm<=118)m.push("Amapiano");
- if(bpm>=100&&bpm<=120)m.push("Afrobeats");
- return [...new Set(m)];
 }
