@@ -69,9 +69,7 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
       const actionableMonitoringInstruction = /\b(?:verify|measure|monitor|track|investigate)\s+(?:the\s+)?(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|market demand|commercial performance|marketability)\b/i.test(sentence);
       const hasCommercialClaim = suppressCommercial && commercialTerms.test(sentence) && !cautionaryCommercialContext && !actionableMonitoringInstruction;
       const vocalClaim = /\b(?:instrumental(?:[- ]only)?|vocal[- ]free|no vocals?|without vocals?|without vocal content|no vocal content|vocals? (?:are )?(?:absent|not present|not detected))\b/i;
-      const vocalCaveat = /\b(?:vocal (?:analysis|activity|separation|model)|voice analysis)\b.{0,80}\b(?:not|unavailable|not configured|not performed|not analyzed|insufficient|cannot|unable)\b/i.test(sentence)
-        || /\b(?:not analyzed|not analysed|not performed|not configured|unavailable|insufficient|cannot be inferred|cannot determine)\b.{0,80}\b(?:vocal|voice)\b/i.test(sentence);
-      const hasUnsupportedVocalClaim = suppressVocal && vocalClaim.test(sentence) && !vocalCaveat;
+      const hasUnsupportedVocalClaim = suppressVocal && vocalClaim.test(sentence);
       return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim && !hasUnsupportedVocalClaim;
     });
     return kept.join(" ").trim() || "Not asserted: the supporting measurement confidence is insufficient.";
