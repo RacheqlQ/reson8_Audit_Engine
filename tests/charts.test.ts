@@ -1,11 +1,17 @@
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildStrengthRiskChartRows, compactChartItemSummary, strengthRiskItemsForColumn, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows, compactChartItemSummary, strengthRiskItemsForColumn, chartPanelStatus, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
 import { checkLayout } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
 import { philloLowConfidenceFixture } from "../scripts/fixtures/phillo-low-confidence.mjs";
 
 describe("native PDF chart helpers", () => {
+  it("labels synthetic fixture charts as fixtures rather than measured results", () => {
+    expect(chartPanelStatus({ fixture: true })).toBe("SYNTHETIC FIXTURE");
+    expect(chartPanelStatus({ fixture: false })).toBe("MEASURED");
+    expect(chartPanelStatus({ unavailable: true, fixture: true })).toBe("SYNTHETIC FIXTURE");
+  });
+
   it("preserves full assessment text while supplying concise chart-only item summaries", () => {
     const strength = "The vocal performance carries a distinctive melodic contour and clear emotional intent across the central hook.";
     const risk = "The second verse repeats the same rhythmic pattern for too long and needs a deliberate arrangement contrast.";
