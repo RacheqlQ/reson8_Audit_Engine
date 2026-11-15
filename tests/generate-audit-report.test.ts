@@ -108,6 +108,8 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).not.toContain("Measured from the uploaded master");
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
+  expect(report).toContain("Required next input: upload the actual master audio file");
+  expect(report).toContain("Do not infer genre, vocal presence, production quality or mastering readiness from DSP metadata alone");
  });
  it("builds the A&R Notes decision-context structure used by the generated PDF",()=>{
   const context=buildArNotesDecisionContext(ambiguousAudioFixture as any);
