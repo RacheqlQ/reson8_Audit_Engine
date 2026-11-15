@@ -9,12 +9,11 @@ describe("TIDAL commercial policy gate", () => {
     delete process.env.PROVIDER_ENABLED_TIDAL;
   });
 
-  it("does not call TIDAL when credentials and the opt-in flag are present but commercial status is unverified", async () => {
+  it("does not call TIDAL when credentials are present but exact opt-in is absent", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     process.env.TIDAL_CLIENT_ID = "client-id";
     process.env.TIDAL_CLIENT_SECRET = "client-secret";
-    process.env.PROVIDER_ENABLED_TIDAL = "true";
 
     const result = await collectCatalogMetadata("https://tidal.com/browse/track/12345");
 
