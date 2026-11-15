@@ -69,7 +69,7 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
   if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial));
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-      .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre)]));
+      .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial)]));
   }
   return value;
 }
