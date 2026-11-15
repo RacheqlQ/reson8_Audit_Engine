@@ -33,42 +33,39 @@ describe("DSP catalog URL detection", () => {
   });
 });
 
-describe("Audiomack official metadata API", () => {
+describe("Audiomack commercial policy gate", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     delete process.env.AUDIOMACK_CONSUMER_KEY;
     delete process.env.AUDIOMACK_CONSUMER_SECRET;
+    delete process.env.PROVIDER_ENABLED_AUDIOMACK;
   });
 
-  it("uses the official OAuth-signed metadata endpoint without scraping or playback metrics", async () => {
+  it("does not call the official API when credentials and the opt-in flag are present but permission is unverified", async () => {
     process.env.AUDIOMACK_CONSUMER_KEY = "consumer-key";
     process.env.AUDIOMACK_CONSUMER_SECRET = "consumer-secret";
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      new Response(JSON.stringify({ results: {
-        id: "162", type: "song", title: "Last in Class", artist: "Justa Test",
-        genre: "Hip Hop / Rap", released: "1381525467", streaming_url: "https://songs.example/secret.mp3", play_count: 999,
-        uploader: { name: "Justa Test", label: "Whatevz" },
-      } }), { status: 200, headers: { "content-type": "application/json" } }),
-    );
+    process.env.PROVIDER_ENABLED_AUDIOMACK = "true";
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await collectCatalogMetadata("https://audiomack.com/justa-test/song/last-in-class");
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(new URL(String(url)).pathname).toBe("/v1/music/song/justa-test/last-in-class");
-    expect(new URL(String(url)).searchParams.get("fields")).toContain("uploader:name");
-    expect(init?.redirect).toBe("error");
-    expect(new Headers(init?.headers).get("authorization")).toMatch(/^OAuth /);
-    expect(result).toMatchObject({
-      platform: "audiomack", catalogId: "162", artist: "Justa Test", title: "Last in Class",
-      genre: "Hip Hop / Rap", label: "Whatevz", evidenceStatus: "recognized",
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.raw.providerPolicy).toMatchObject({
+      provider: "audiomack",
+      status: "unavailable",
+      reason: "disabled by data policy",
+      commercialStatus: "unverified",
     });
-    expect(JSON.stringify(result.raw)).not.toMatch(/play_counter|event_counters|streaming_url/);
   });
 
-  it("fails closed when official Audiomack API credentials are missing", async () => {
-    await expect(collectCatalogMetadata("https://audiomack.com/artist/song/track-title"))
-      .rejects.toThrow("Audiomack official API credentials are not configured");
+  it("does not call the official API when credentials are absent", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await collectCatalogMetadata("https://audiomack.com/artist/song/track-title");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.raw.providerPolicy).toMatchObject({ reason: "disabled by data policy" });
   });
 });
