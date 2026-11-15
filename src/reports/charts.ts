@@ -85,7 +85,7 @@ function constellationLabelRowHeights(rows:ChartRow[],width:number):number[]{
  return heights;
 }
 export function chartPanelHeight(kind:ChartKind="bars",rows:ChartRow[]=[],width=CARD_W):number{
- if(kind==="constellation")return 174+constellationLabelRowHeights(rows,width).reduce((sum,height)=>sum+height,0);
+ if(kind==="constellation")return 218+constellationLabelRowHeights(rows,width).reduce((sum,height)=>sum+height,0);
  if(kind==="radar")return 345;
  if(kind==="layers")return 180;if(kind==="tension")return 205;
  if(kind==="sonic")return 230;
@@ -172,7 +172,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
   });
  }else if(kind==="constellation"){
   const labelHeights=constellationLabelRowHeights(rows,width),labelTotal=labelHeights.reduce((sum,value)=>sum+value,0);
-  const cx=x+width/2,graphBottom=contentBottom+labelTotal+10,cy=graphBottom+34,radiusX=Math.min(width*.2,88),radiusY=16;
+  const cx=x+width/2,graphBottom=contentBottom+labelTotal+10,cy=graphBottom+56,radiusX=Math.min(width*.2,88),radiusY=38;
   result.push({x:cx-23,y:cy-23,width:46,height:46,id:"shape-constellation-core"});
   rows.slice(0,5).forEach((row,i)=>{
    const angle=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(angle)*radiusX,py=cy+Math.sin(angle)*radiusY;
@@ -425,7 +425,7 @@ function drawBars(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typ
 }
 function drawConstellation(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const labelHeights=constellationLabelRowHeights(rows,g.width),labelTotal=labelHeights.reduce((sum,value)=>sum+value,0);
- const cx=g.x+g.width/2,graphBottom=g.contentBottom+labelTotal+10,cy=graphBottom+34,radiusX=Math.min(g.width*.2,88),radiusY=16;
+ const cx=g.x+g.width/2,graphBottom=g.contentBottom+labelTotal+10,cy=graphBottom+56,radiusX=Math.min(g.width*.2,88),radiusY=38;
  p.drawCircle({x:cx,y:cy,size:23,borderColor:C.violet,borderWidth:1.4,color:C.paper});
  rows.slice(0,5).forEach((row,i)=>{
   const angle=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(angle)*radiusX,py=cy+Math.sin(angle)*radiusY;
