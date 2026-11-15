@@ -6,27 +6,25 @@ import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAud
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 
 describe("native PDF chart helpers", () => {
-  it("labels synthetic fixture charts as fixtures rather than measured results", () => {
-    expect(chartPanelStatus({ fixture: true })).toBe("SYNTHETIC FIXTURE");
+  it("renders fixture status and underlying evidence class independently", () => {
+    const classes = [
+      ["measured", "MEASURED"],
+      ["provider-recognized", "PROVIDER-RECOGNIZED"],
+      ["inferred", "HYPOTHESIS"],
+      ["assessment-derived", "ASSESSMENT-DERIVED"],
+      ["illustrative", "ILLUSTRATIVE"],
+    ] as const;
     expect(chartPanelStatus({ fixture: false })).toBe("UNCLASSIFIED");
-    expect(chartPanelStatus({ unavailable: true, fixture: true })).toBe("SYNTHETIC FIXTURE");
-    expect(chartPanelStatus({ evidenceClass: "provider-recognized" })).toBe("PROVIDER-RECOGNIZED");
-    expect(chartPanelStatus({ evidenceClass: "assessment-derived" })).toBe("ASSESSMENT-DERIVED");
-    expect(chartPanelStatus({ evidenceClass: "illustrative" })).toBe("ILLUSTRATIVE");
-    expect(chartPanelStatus({ evidenceClass: "inferred" })).toBe("HYPOTHESIS");
-    expect(chartPanelStatus({ evidenceClass: "measured" })).toBe("MEASURED");
-    expect(chartPanelStatus({ unavailable: true, evidenceClass: "measured" })).toBe("REQUIRES AUDIO");
-    expect(chartPanelStatus({ evidenceClass: "measured" })).toBe("MEASURED");
-    expect(chartPanelStatus({ evidenceClass: "provider-recognized" })).toBe("PROVIDER-RECOGNIZED");
-    expect(chartPanelStatus({ evidenceClass: "inferred" })).toBe("HYPOTHESIS");
-    expect(chartPanelStatus({ evidenceClass: "assessment-derived" })).toBe("ASSESSMENT-DERIVED");
-    expect(chartPanelStatus({ evidenceClass: "illustrative" })).toBe("ILLUSTRATIVE");
-    for (const evidenceClass of ["measured","provider-recognized","inferred","assessment-derived","illustrative"] as const) {
-      expect(chartPanelDisplayStatus({ fixture: true, evidenceClass })).toContain("SYNTHETIC");
-      expect(chartPanelDisplayStatus({ fixture: true, evidenceClass })).not.toBe("SYNTHETIC");
+    for (const [evidenceClass, label] of classes) {
+      expect(chartPanelStatus({ evidenceClass })).toBe(label);
+      const display = chartPanelDisplayStatus({ fixture: true, evidenceClass });
+      expect(display).toContain("SYNTHETIC");
+      expect(display).toContain(label);
     }
-    expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" })).toContain("REQUIRES AUDIO");
-    expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" })).toContain("MEASURED");
+    expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" }))
+      .toBe("SYNTHETIC · REQUIRES AUDIO · MEASURED");
+    expect(chartPanelDisplayStatus({ unavailable: true, evidenceClass: "provider-recognized" }))
+      .toBe("REQUIRES AUDIO · PROVIDER-RECOGNIZED");
   });
 
   it("preserves full assessment text while supplying concise chart-only item summaries", () => {
