@@ -182,6 +182,30 @@ describe("Phillo evidence guardrails", () => {
     expect(result.aAndRPositioning.primaryLane).toContain("Unconfirmed");
   });
 
+  it("does not use key confidence as a rationale for an unmeasured dynamic-range dimension", () => {
+    const assessment = {
+      ...baseAssessment,
+      confidence: 0.75,
+      scorecard: {
+        ...baseAssessment.scorecard,
+        dynamicRangeLoudness: {
+          score: 74,
+          rationale: "Key confidence is low in this partial fixture; this null score is intentional.",
+        },
+      },
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      keyConfidence: 0.06,
+      dynamicRangeDb: null,
+      loudnessLufs: null,
+      rmsLevelDbfs: null,
+    });
+    expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("dynamic-range and loudness/RMS measurements are unavailable");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("Key confidence");
+  });
+
   it("withholds every numeric score when overall assessment confidence is zero", () => {
     const assessment = {
       ...baseAssessment,
