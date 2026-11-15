@@ -35,7 +35,14 @@ describe("A4 report layout and fixture coverage",()=>{
   for(const input of fixtures)for(const tier of ["sample","full"] as const){
    const bytes=await generateAuditReport(input,tier),pdf=await PDFDocument.load(bytes);
    for(const page of pdf.getPages()){const size=page.getSize();expect(size.width).toBeCloseTo(595.28,0);expect(size.height).toBeCloseTo(841.89,0);}
-   expect(pdf.getForm().getFields().map(f=>f.getName())).toEqual(["ar_notes"]);
+   const fields=pdf.getForm().getFields();
+   expect(fields.map(f=>f.getName())).toEqual(["ar_notes"]);
+   const notesField=pdf.getForm().getTextField("ar_notes");
+   const widgets=notesField.acroField.getWidgets();
+   expect(widgets).toHaveLength(1);
+   const notesPageIndex=pdf.getPages().findIndex(page=>page.ref===widgets[0].P());
+   expect(notesPageIndex).toBeGreaterThanOrEqual(0);
+   expect(notesPageIndex).toBe(pdf.getPageCount()-1);
    expect(pdf.getPageCount()).toBeLessThanOrEqual(20);
   }
  });
