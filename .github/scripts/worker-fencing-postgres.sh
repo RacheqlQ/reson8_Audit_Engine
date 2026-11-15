@@ -51,7 +51,7 @@ assert_sql "t" "select relrowsecurity from pg_class where oid='public.audit_asse
 assert_sql "false:true" "select has_function_privilege('anon','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text || ':' || has_function_privilege('service_role','public.persist_fenced_audit_step(uuid,uuid,text,jsonb)','execute')::text"
 assert_sql "false:true" "select has_function_privilege('anon','public.reconcile_audit_report_reference(uuid,text,text,text)','execute')::text || ':' || has_function_privilege('service_role','public.reconcile_audit_report_reference(uuid,text,text,text)','execute')::text"
 
-echo "Regression 1/8: concurrent claims grant the sole queued job exactly once"
+echo "Regression 1/12: concurrent claims grant the sole queued job exactly once"
 seed_job "$JOB_MAIN"
 psql "$DB" -At -v ON_ERROR_STOP=1 -c "select id from public.claim_next_audit_job('ci-worker-a',180)" > /tmp/worker-claim-a.txt &
 PID_A=$!
@@ -63,13 +63,13 @@ test "$CLAIM_COUNT" = "1"
 TOKEN_MAIN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.audit_jobs where id='$JOB_MAIN'")"
 echo "PASS: one claim only"
 
-echo "Regression 2/8: processing_started and catalog_metadata persist with events"
+echo "Regression 2/12: processing_started and catalog_metadata persist with events"
 rpc "$JOB_MAIN" "$TOKEN_MAIN" processing_started '{}'
 rpc "$JOB_MAIN" "$TOKEN_MAIN" catalog_metadata '{"platform":"spotify","catalogId":"track-test","raw":{"title":"Fixture Track"},"evidenceStatus":"recognized"}'
 assert_sql "spotify:track-test" "select catalog_platform || ':' || catalog_id from public.audit_jobs where id='$JOB_MAIN'"
 assert_sql "3" "select count(*) from public.audit_events where audit_job_id='$JOB_MAIN'"
 
-echo "Regression 3/8: recognition upsert, evidence reconciliation, and Sonic DNA persistence"
+echo "Regression 3/12: recognition upsert, evidence reconciliation, and Sonic DNA persistence"
 rpc "$JOB_MAIN" "$TOKEN_MAIN" recognition '{"matched":true,"artist":"Fixture Artist","title":"Fixture Track","releaseDate":"2025-01-02","isrc":"NGABC2500001","rawResponse":{"provider":"audd"}}'
 rpc "$JOB_MAIN" "$TOKEN_MAIN" recognition '{"matched":true,"artist":"Fixture Artist Updated","title":"Fixture Track","releaseDate":"2025-01-02","isrc":"NGABC2500001","rawResponse":{"provider":"audd","revision":2}}'
 assert_sql "1:Fixture Artist Updated" "select count(*)::text || ':' || max(artist) from public.recognition_results where audit_job_id='$JOB_MAIN'"
@@ -80,7 +80,7 @@ assert_sql "1:126.000:182.400" "select count(*)::text || ':' || max(bpm)::text |
 assert_sql "measured:measured:not_analyzed" "select (rhythm_features->>'status') || ':' || (harmonic_features->>'status') || ':' || (vocal_features->>'status') from public.sonic_dna where audit_job_id='$JOB_MAIN'"
 echo "PASS: all three persistence paths and their upsert/constraint contracts"
 
-echo "Regression 4/8: assessment and versioned report persistence"
+echo "Regression 4/12: assessment and versioned report persistence"
 rpc "$JOB_MAIN" "$TOKEN_MAIN" assessment '{"model":"fixture-model","promptVersion":"test-v1","assessment":{"verdict":"promising","score":82}}'
 assert_sql "promising" "select assessment->>'verdict' from public.audit_assessments where audit_job_id='$JOB_MAIN'"
 rpc "$JOB_MAIN" "$TOKEN_MAIN" report '{"tier":"sample","storagePath":"ci/sample.pdf","sha256":"sample-hash"}'
@@ -88,19 +88,19 @@ rpc "$JOB_MAIN" "$TOKEN_MAIN" report '{"tier":"sample","storagePath":"ci/sample-
 assert_sql "1,2" "select string_agg(version::text,',' order by version) from public.audit_reports where audit_job_id='$JOB_MAIN' and tier='sample'"
 echo "PASS: assessment and serialized report version allocation"
 
-echo "Regression 5/8: lease renewal and completion clear all fencing fields"
+echo "Regression 5/12: lease renewal and completion clear all fencing fields"
 psql "$DB" -v ON_ERROR_STOP=1 -c "set role service_role; select public.renew_audit_job_lease('$JOB_MAIN','$TOKEN_MAIN',180)"
 rpc "$JOB_MAIN" "$TOKEN_MAIN" complete '{}'
 assert_sql "completed:true:true:true" "select status || ':' || (claim_token is null)::text || ':' || (lease_expires_at is null)::text || ':' || (worker_id is null)::text from public.audit_jobs where id='$JOB_MAIN'"
 assert_sql "audit_completed" "select event_type from public.audit_events where audit_job_id='$JOB_MAIN' order by created_at desc limit 1"
 
-echo "Regression 6/8: fail operation atomically records failure and clears lease"
+echo "Regression 6/12: fail operation atomically records failure and clears lease"
 seed_job "$JOB_FAIL"
 TOKEN_FAIL="$(claim_job "$JOB_FAIL" ci-fail-worker)"
 rpc "$JOB_FAIL" "$TOKEN_FAIL" fail '{"message":"fixture failure"}'
 assert_sql "failed:AUDIT_PROCESSING_FAILED:true:true:true" "select status || ':' || error_code || ':' || (claim_token is null)::text || ':' || (lease_expires_at is null)::text || ':' || (worker_id is null)::text from public.audit_jobs where id='$JOB_FAIL'"
 
-echo "Regression 7/8: stale tokens, expired leases, and invalid payloads are rejected without partial writes"
+echo "Regression 7/12: stale tokens, expired leases, and invalid payloads are rejected without partial writes"
 seed_job "$JOB_STALE"
 TOKEN_STALE="$(claim_job "$JOB_STALE" ci-stale-worker)"
 if rpc "$JOB_STALE" "99999999-9999-4999-8999-999999999999" processing_started '{}' >/tmp/worker-stale-token.txt 2>&1; then
@@ -126,7 +126,7 @@ test "$BEFORE_EVENTS" = "$AFTER_EVENTS"
 assert_sql "0" "select count(*) from public.recognition_results where audit_job_id='$JOB_ROLLBACK'"
 echo "PASS: stale/expired fencing and transaction rollback"
 
-echo "Regression 8/8: heartbeat/completion race leaves terminal job unfenced"
+echo "Regression 8/12: heartbeat/completion race leaves terminal job unfenced"
 seed_job "$JOB_RACE"
 TOKEN_RACE="$(claim_job "$JOB_RACE" ci-race-worker)"
 psql "$DB" -v ON_ERROR_STOP=1 -c "set role service_role; select public.renew_audit_job_lease('$JOB_RACE','$TOKEN_RACE',180)" >/tmp/worker-heartbeat.txt 2>&1 &
@@ -137,7 +137,7 @@ wait "$COMPLETE_PID"
 if ! wait "$HEARTBEAT_PID"; then grep -q "AUDIT_LEASE_LOST" /tmp/worker-heartbeat.txt; fi
 assert_sql "completed:true:true:true" "select status || ':' || (claim_token is null)::text || ':' || (lease_expires_at is null)::text || ':' || (worker_id is null)::text from public.audit_jobs where id='$JOB_RACE'"
 
-echo "Regression 9/9: report reconciliation waits for in-flight commit or rollback"
+echo "Regression 9/12: report reconciliation waits for in-flight commit or rollback"
 JOB_REPORT_COMMIT="77777777-7777-4777-8777-777777777777"
 seed_job "$JOB_REPORT_COMMIT"
 TOKEN_REPORT_COMMIT="$(claim_job "$JOB_REPORT_COMMIT" ci-report-commit-worker)"
@@ -211,14 +211,14 @@ echo "PASS: neither partially finalized combined job was claimable; both became 
 
 echo "Regression 11/12: combined jobs can claim a DSP link stored in catalog_metadata.submittedLinks"
 psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_jobs(id,source_type,source_audio_path,mime_type,catalog_metadata,status) values ('$JOB_COMBINED_METADATA_LINK','combined','ci/combined-metadata-master.wav','audio/wav','{\"submittedLinks\":[\"https://music.apple.com/ng/album/fixture/123?i=456\"]}'::jsonb,'queued')"
-METADATA_LINK_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('ci-combined-metadata-link',180) where id='$JOB_COMBINED_METADATA_LINK')"
+METADATA_LINK_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('ci-combined-metadata-link',180) where id='$JOB_COMBINED_METADATA_LINK'")"
 test -n "$METADATA_LINK_TOKEN"
 echo "PASS: JSONB submitted DSP link satisfies combined-source claim readiness"
 
 echo "Regression 12/12: combined jobs can claim a DSP link recorded in catalog_links_submitted event"
 psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_jobs(id,source_type,source_audio_path,mime_type,status) values ('$JOB_COMBINED_EVENT_LINK','combined','ci/combined-event-master.wav','audio/wav','queued')"
 psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_events(audit_job_id,event_type,status,payload) values ('$JOB_COMBINED_EVENT_LINK','catalog_links_submitted','submitted','{\"submittedLinks\":[\"https://music.apple.com/ng/album/fixture/123?i=456\"]}'::jsonb)"
-EVENT_LINK_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('ci-combined-event-link',180) where id='$JOB_COMBINED_EVENT_LINK')"
+EVENT_LINK_TOKEN="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select claim_token from public.claim_next_audit_job('ci-combined-event-link',180) where id='$JOB_COMBINED_EVENT_LINK'")"
 test -n "$EVENT_LINK_TOKEN"
 echo "PASS: catalog_links_submitted event satisfies combined-source claim readiness"
 
