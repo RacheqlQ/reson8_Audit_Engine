@@ -155,7 +155,7 @@ export function providerDecision(
   provider: ProviderId,
   env: Record<string, string | undefined> = process.env,
 ): ProviderDecision {
-  const policy = PROVIDER_POLICY[provider];
+  const policy: ProviderPolicy = PROVIDER_POLICY[provider];
   const flagsSatisfied = env[policy.enableFlag] === "true"
     && (policy.requiredFlags ?? []).every((flag) => env[flag] === "true");
   const enabled = policy.commercialStatus === "allowed" && flagsSatisfied;
