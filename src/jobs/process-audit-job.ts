@@ -341,11 +341,6 @@ export async function processAuditJob(
         collectDspMetadata(links, { collect: deps.collectCatalogMetadata }, signal),
       );
       metadataSources = catalogResults.flatMap((result) => result.metadata ? [result.metadata] : []);
-      if (!metadataSources.length) {
-        const failures = catalogResults.map((result) => result.error).filter(Boolean).join("; ");
-        throw new Error(failures || "No DSP provider returned usable track metadata");
-      }
-      metadata = metadataSources[0];
       for (const result of catalogResults) {
         if (result.metadata) {
           await awaitWithLease(deps, (signal) =>
@@ -357,6 +352,11 @@ export async function processAuditJob(
           );
         }
       }
+      if (!metadataSources.length) {
+        const failures = catalogResults.map((result) => result.error).filter(Boolean).join("; ");
+        throw new Error(failures || "No DSP provider returned usable track metadata");
+      }
+      metadata = metadataSources[0];
     }
 
     let masterDna: SonicDnaFeatures | null = null;
