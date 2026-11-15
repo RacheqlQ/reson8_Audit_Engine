@@ -118,6 +118,11 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Album: Synthetic test value — not a real identity match");
   expect(report).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
   expect(report).not.toContain("Album: Unavailable — no source result");
+  input.evidence.fixture=false;
+  input.evidence.sources=[];
+  const sourceBackedReport=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(sourceBackedReport).toContain("Album: Conflicting source values");
+  expect(sourceBackedReport).toContain("album: Hole-Hearted - EP vs Hole-Hearted");
  });
  it("withholds a low-confidence harmonic key from the report while retaining the diagnostic confidence",()=>{
   const input=structuredClone(fullAudioFixture) as any;
