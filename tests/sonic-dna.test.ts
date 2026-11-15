@@ -124,6 +124,14 @@ describe("Sonic DNA",()=>{
   expect(classifyGenreFromBpm(999)).toEqual([]);
  });
 
+ it("labels the RMS-derived signal level as dBFS and does not claim integrated LUFS",()=>{
+  const sampleRate=8000;
+  const samples=Float32Array.from({length:sampleRate*2},(_,i)=>0.25*Math.sin(2*Math.PI*440*i/sampleRate));
+  const result=analyzePcm(samples,sampleRate);
+  expect(result.loudnessLufs).toBeNull();
+  expect((result as unknown as {rmsLevelDbfs:number}).rmsLevelDbfs)
+   .toBeCloseTo(20*Math.log10(result.rmsEnergy),5);
+ });
  it("returns explicit rhythm and harmonic measurements while marking vocal analysis unavailable",()=>{
   const sampleRate=8000;
   const rhythm=analyzePcm(pulse(120,12,sampleRate),sampleRate);
