@@ -50,6 +50,16 @@ describe("Sonic DNA",()=>{
   expect(result.key).toBe("A");
   expect(result.mode).toBe("minor");
  });
+ it("withholds a single key when sustained sections disagree tonally",()=>{
+  const first=chord([261.6256,329.6276,391.9954],6);
+  const second=chord([369.9944,466.1638,554.3653],6);
+  const combined=new Float32Array(first.length+second.length);
+  combined.set(first);combined.set(second,first.length);
+  const result=analyzePcm(combined,8000);
+  expect(result.key).toBeNull();
+  expect(result.mode).toBeNull();
+  expect(result.limitations.some((item)=>item.includes("varied across audio segments"))).toBe(true);
+ });
  it("returns null key and tempo with limitation notes for silence",()=>{
   const result=analyzePcm(new Float32Array(48000),8000);
   expect(result.key).toBeNull();

@@ -28,4 +28,26 @@ describe("createCatalogAuditJob", () => {
       createCatalogJob: async () => { throw new Error("must not create job"); },
     })).rejects.toThrow("Unsupported DSP or catalog URL");
   });
+  it("creates one job for multiple canonical DSP sources and hashes their ordered identity", async () => {
+    let created: any;
+    const result = await createCatalogAuditJob({
+      ownerId: null,
+      catalogUrl: "https://open.spotify.com/track/spotify-1",
+      catalogUrls: [
+        "https://open.spotify.com/track/spotify-1?si=tracking",
+        "https://www.deezer.com/track/deezer-1?utm_source=tracking",
+      ],
+    }, {
+      createCatalogJob: async (input) => { created = input; return "multi-catalog-job"; },
+    });
+
+    expect(created.catalogUrl).toBe("https://open.spotify.com/track/spotify-1");
+    expect(created.catalogUrls).toEqual([
+      "https://open.spotify.com/track/spotify-1",
+      "https://www.deezer.com/track/deezer-1",
+    ]);
+    expect(result.catalogUrls).toEqual(created.catalogUrls);
+    expect(result.sha256).toMatch(/^[a-f0-9]{64}$/);
+  });
+
 });

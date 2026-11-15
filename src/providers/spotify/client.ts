@@ -91,6 +91,7 @@ export class SpotifyClient implements SpotifyApiClient {
         grant_type: "client_credentials",
       }).toString(),
       signal,
+      redirect: "error",
     });
 
     const payload = (await response.json().catch(() => null)) as
@@ -151,6 +152,7 @@ export class SpotifyClient implements SpotifyApiClient {
           Authorization: `Bearer ${accessToken}`,
         },
         signal,
+        redirect: "error",
       });
 
       if (response.ok) {

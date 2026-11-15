@@ -100,7 +100,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
   });
 
   app.post<{
-    Body: { url?: string };
+    Body: { url?: string; urls?: string[] };
   }>("/v1/audits/catalog", async (request, reply) => {
     try {
       if (!allowPublicRequest(request.ip)) {
@@ -112,16 +112,18 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
 
       const ownerId = null;
 
-      const url = typeof request.body?.url === "string" ? request.body.url : "";
-      if (!url) {
+      const submittedUrls = Array.isArray(request.body?.urls)
+        ? request.body.urls
+        : typeof request.body?.url === "string" ? [request.body.url] : [];
+      if (!submittedUrls.length) {
         return reply.code(400).send({
           error: "CATALOG_URL_REQUIRED",
-          message: "A DSP or catalog URL is required",
+          message: "Provide at least one DSP track link",
         });
       }
 
       const result = await createCatalogAuditJob(
-        { ownerId, catalogUrl: url },
+        { ownerId, catalogUrl: submittedUrls[0] as string, catalogUrls: submittedUrls },
         {
           createCatalogJob: async (input) => {
             const deps = store.createJobDependencies();
@@ -136,6 +138,8 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         sourceType: "dsp_link",
         sha256: result.sha256,
         reportAccessToken: result.reportAccessToken,
+        catalogUrls: result.catalogUrls,
+        sourcesSubmitted: result.catalogUrls.length,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to create catalog audit job";
@@ -239,6 +243,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
       authorization?: string;
       "x-audio-filename"?: string;
       "x-catalog-url"?: string;
+      "x-catalog-urls"?: string;
     };
   }>("/v1/audits", async (request, reply) => {
     try {
@@ -263,13 +268,28 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
       const contentType = String(request.headers["content-type"] ?? "").split(";")[0].trim();
       const bytes = request.body as Buffer;
 
+      let catalogUrls: string[] | undefined;
+      const catalogUrlsHeader = request.headers["x-catalog-urls"];
+      if (catalogUrlsHeader) {
+        try {
+          const parsed = JSON.parse(catalogUrlsHeader) as unknown;
+          if (!Array.isArray(parsed) || parsed.some((value) => typeof value !== "string")) {
+            throw new Error("x-catalog-urls must be a JSON array of URL strings");
+          }
+          catalogUrls = parsed as string[];
+        } catch {
+          throw new Error("Invalid x-catalog-urls header");
+        }
+      }
+
       const result = await createAuditJob(
         {
           ownerId,
           filename,
           mimeType: contentType,
           bytes,
-          catalogUrl: request.headers["x-catalog-url"] ?? null,
+          catalogUrl: catalogUrls?.[0] ?? request.headers["x-catalog-url"] ?? null,
+          ...(catalogUrls ? { catalogUrls } : {}),
         },
         store.createJobDependencies(),
       );
@@ -292,10 +312,17 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         message === "DSP URL must use HTTPS" ||
         message === "DSP URL must not contain credentials" ||
         message === "Unsupported DSP or catalog URL" ||
-        message === "Invalid URL"
+        message === "Invalid URL" ||
+        message === "DSP track URL is invalid" ||
+        message === "Provide at least one DSP track link" ||
+        message === "A maximum of 8 DSP track links is allowed" ||
+        message === "Only individual DSP track links are supported" ||
+        message === "DSP URL must be a credential-free HTTPS link on a supported host" ||
+        message === "x-catalog-urls must be a JSON array of URL strings" ||
+        message === "Invalid x-catalog-urls header"
       ) {
         return reply.code(400).send({
-          error: message.startsWith("DSP URL") || message === "Unsupported DSP or catalog URL" || message === "Invalid URL" ? "INVALID_CATALOG_URL" : "INVALID_AUDIO_UPLOAD",
+          error: message.startsWith("DSP URL") || message === "Unsupported DSP or catalog URL" || message === "Invalid URL" || message.includes("DSP track") || message.includes("DSP links") ? "INVALID_CATALOG_URL" : "INVALID_AUDIO_UPLOAD",
           message,
         });
       }

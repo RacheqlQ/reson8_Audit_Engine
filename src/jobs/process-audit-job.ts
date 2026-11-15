@@ -7,6 +7,8 @@ import { analyzePcm, type SonicDnaFeatures } from "../audio/sonic-dna.js";
 import type { TrackIdentity } from "../metadata/MetadataEngine.js";
 import { reconcileMetadata, type MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
 import { readAudioTags } from "../metadata/audio-tags.js";
+import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
+import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
 
 export interface AuditJobRecord {
   id: string;
@@ -16,6 +18,7 @@ export interface AuditJobRecord {
   filename?: string | null;
   sourceType: "master" | "dsp_link" | "combined";
   catalogUrl: string | null;
+  catalogUrls?: string[];
   status: "queued" | "processing" | "completed" | "failed";
   claimToken: string;
   leaseExpiresAt: string;
@@ -31,7 +34,7 @@ export interface AuditProcessorDependencies {
   createRecognitionSample(master: Uint8Array, mimeType: string, signal?: AbortSignal): Promise<Uint8Array>;
   recognize(sample: Uint8Array, signal?: AbortSignal): Promise<AuditRecognition>;
   saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition, signal?: AbortSignal): Promise<void>;
-  saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata, signal?: AbortSignal): Promise<void>;
+  saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata, signal?: AbortSignal, metadataSources?: readonly CatalogMetadata[]): Promise<void>;
   saveCatalogMetadata(jobId: string, claimToken: string, metadata: CatalogMetadata, signal?: AbortSignal): Promise<void>;
   decode(bytes: Uint8Array, mimeType?: string, signal?: AbortSignal): Promise<{ samples: Float32Array; sampleRate: number; channels: number }>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
@@ -97,23 +100,28 @@ function recognitionEvidence(recognition: AuditRecognition): Record<string, unkn
   };
 }
 
-function catalogMetadataInput(metadata: CatalogMetadata) {
-  const fields = {
-          title: metadata.title,
-          artist: metadata.artist,
-          album: metadata.album,
-          isrc: metadata.isrc,
-          upc: metadata.upc,
-          label: metadata.label,
-          releaseDate: metadata.releaseDate,
-          genres: metadata.genre ? [metadata.genre] : [],
-  };
-  if (metadata.platform === "spotify") return { spotify: fields };
-  if (metadata.platform === "tidal") return { tidal: fields };
-  if (metadata.platform === "apple_music") return { apple_music: fields };
-  if (metadata.platform === "deezer") return { deezer: fields };
-  if (metadata.platform === "youtube_music") return { youtube_music: fields };
-  return {};
+function catalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetadata[]) {
+  const sources: readonly CatalogMetadata[] = Array.isArray(metadata) ? metadata : [metadata as CatalogMetadata];
+  const result: Record<string, unknown> = {};
+  for (const source of sources) {
+    const fields = {
+      title: source.title,
+      artist: source.artist,
+      album: source.album,
+      isrc: source.isrc,
+      upc: source.upc,
+      label: source.label,
+      releaseDate: source.releaseDate,
+      genres: source.genre ? [source.genre] : [],
+    };
+    if (source.platform === "spotify") result.spotify = fields;
+    if (source.platform === "tidal") result.tidal = fields;
+    if (source.platform === "apple_music") result.apple_music = fields;
+    if (source.platform === "deezer") result.deezer = fields;
+    if (source.platform === "youtube_music") result.youtube_music = fields;
+    if (source.platform === "audiomack") result.audiomack = fields;
+  }
+  return result;
 }
 
 function recognitionMetadataInput(recognition: AuditRecognition) {
@@ -260,13 +268,30 @@ export async function processAuditJob(
     await awaitWithLease(deps, (signal) => deps.markProcessing(jobId, job.claimToken, signal));
 
     const hasMaster = Boolean(job.sourceAudioPath && job.mimeType);
-    const hasCatalog = Boolean(job.catalogUrl);
+    const hasCatalog = Boolean(job.catalogUrls?.length || job.catalogUrl);
     if (!hasMaster && !hasCatalog) throw new Error("Audit job has no usable source");
 
     let metadata: CatalogMetadata | undefined;
+    let metadataSources: CatalogMetadata[] = [];
+    let catalogResults: DspMetadataResult[] = [];
     if (hasCatalog) {
-      metadata = await awaitWithLease(deps, (signal) => deps.collectCatalogMetadata(job.catalogUrl!, signal));
-      await awaitWithLease(deps, (signal) => deps.saveCatalogMetadata(jobId, job.claimToken, metadata!, signal));
+      const links = normalizeDspTrackLinks(job.catalogUrls?.length ? job.catalogUrls : [job.catalogUrl!]);
+      catalogResults = await awaitWithLease(deps, (signal) =>
+        collectDspMetadata(links, { collect: deps.collectCatalogMetadata }, signal),
+      );
+      metadataSources = catalogResults.flatMap((result) => result.metadata ? [result.metadata] : []);
+      if (!metadataSources.length) {
+        const failures = catalogResults.map((result) => result.error).filter(Boolean).join("; ");
+        throw new Error(failures || "No DSP provider returned usable track metadata");
+      }
+      metadata = metadataSources[0];
+      for (const result of catalogResults) {
+        if (result.metadata) {
+          await awaitWithLease(deps, (signal) =>
+            deps.saveCatalogMetadata(jobId, job.claimToken, result.metadata!, signal),
+          );
+        }
+      }
     }
 
     let masterDna: SonicDnaFeatures | null = null;
@@ -292,11 +317,12 @@ export async function processAuditJob(
     }
 
     let catalogRecognition: AuditRecognition | null = null;
-    if (metadata?.previewUrl) {
+    const previewMetadata = metadataSources.find((source) => source.previewUrl);
+    if (previewMetadata?.previewUrl) {
       try {
         catalogRecognition = await awaitWithLease(deps, (signal) => {
           attemptedRecognitionProviders.add("audd");
-          return deps.recognizeUrl(metadata!.previewUrl!, signal);
+          return deps.recognizeUrl(previewMetadata.previewUrl!, signal);
         });
       } catch (error) {
         if (deps.signal?.aborted) throw leaseLostError(deps.signal);
@@ -314,13 +340,13 @@ export async function processAuditJob(
     }
 
     const metadataInput = {
-      ...(metadata ? catalogMetadataInput(metadata) : {}),
+      ...(metadataSources.length ? catalogMetadataInput(metadataSources) : {}),
       ...(masterTags ? { id3: masterTags } : {}),
       ...(job.filename ? { filename: job.filename } : {}),
       audd: recognitionMetadataInput(recognition),
     };
     const reconciliation = reconcileMetadata(metadataInput);
-    await awaitWithLease(deps, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal));
+    await awaitWithLease(deps, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources));
     if (masterDna) {
       await awaitWithLease(deps, (signal) => deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal));
     }
@@ -336,7 +362,8 @@ export async function processAuditJob(
         : identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
       identity: identityEvidence(identity),
       reconciliation: reconciliationEvidence(reconciliation),
-      metadataSourcesChecked: [...(metadata ? [metadata.platform] : []), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...attemptedRecognitionProviders],
+      metadataSourcesChecked: [...catalogResults.map((result) => result.link.platform), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...attemptedRecognitionProviders],
+      catalogSources: catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, error: result.error })),
       sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
@@ -348,7 +375,7 @@ export async function processAuditJob(
     const assessment = await awaitWithLease(deps, (signal) => deps.generateAssessment({
       evidence,
       sonicDna,
-      catalogMetadata: metadata ? catalogEvidence(metadata, identity) : null,
+      catalogMetadata: metadata ? { ...catalogEvidence(metadata, identity), catalogSources: catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, error: result.error })) } : null,
     }, signal));
     await awaitWithLease(deps, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
 

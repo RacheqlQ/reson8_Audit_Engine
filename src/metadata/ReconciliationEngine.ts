@@ -18,7 +18,7 @@ export interface MetadataReconciliation {
   conflicts: readonly MetadataConflict[];
 }
 
-const PROVIDERS = ["spotify", "tidal", "apple_music", "deezer", "youtube_music", "audd", "id3"] as const;
+const PROVIDERS = ["spotify", "tidal", "apple_music", "deezer", "youtube_music", "audiomack", "audd", "id3"] as const;
 const FIELDS = [
   "title",
   "artist",
@@ -87,10 +87,13 @@ export function reconcileMetadata(
     if (uniqueValues.length >= 2) {
       conflicts.push({
         field,
-        values: claims.map((claim) => {
-          const original = providerMetadata(input, claim.provider)?.[field];
-          return clean(original) ?? claim.value;
-        }).filter((value): value is string => Boolean(value)),
+        values: claims
+          .filter((claim, index) => claims.findIndex((other) => other.value === claim.value) === index)
+          .map((claim) => {
+            const original = providerMetadata(input, claim.provider)?.[field];
+            return clean(original) ?? claim.value;
+          })
+          .filter((value): value is string => Boolean(value)),
       });
       continue;
     }

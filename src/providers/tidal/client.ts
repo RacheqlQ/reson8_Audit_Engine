@@ -46,6 +46,7 @@ export class TidalClient implements TidalApiClient {
       },
       body: "grant_type=client_credentials",
       signal,
+      redirect: "error",
     });
 
     if (!response.ok) {
@@ -87,6 +88,7 @@ export class TidalClient implements TidalApiClient {
           Authorization: `Bearer ${accessToken}`,
         },
         signal,
+        redirect: "error",
       },
     );
 
