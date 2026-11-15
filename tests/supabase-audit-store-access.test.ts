@@ -20,7 +20,7 @@ function makeStore(row: unknown, status = 200) {
   process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
   process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
   let requestUrl = "";
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     requestUrl = input instanceof Request ? input.url : String(input);
     return new Response(
       status >= 400 ? JSON.stringify({ message: "database unavailable", code: "XX000" }) : JSON.stringify(row),
@@ -63,5 +63,33 @@ describe("Supabase capability-token verification adapter", () => {
   it("fails closed when the database lookup returns an error", async () => {
     const { store } = makeStore(null, 500);
     await expect(store.verifyAuditAccessToken("job-a", TOKEN_A)).rejects.toThrow("Unable to verify audit access token");
+  });
+});
+
+
+describe("DSP provider failure persistence", () => {
+  it("persists Spotify API failure status and a bounded reason for audit polling", async () => {
+    const { store, fetchMock, getRequestUrl } = makeStore({});
+    const metadata = {
+      platform: "spotify" as const,
+      sourceUrl: "https://open.spotify.com/track/123",
+      canonicalUrl: "https://open.spotify.com/track/123",
+      catalogId: "123",
+      artist: null, title: null, album: null, releaseDate: null,
+      isrc: null, upc: null, catalogPopularity: null, catalogPopularityScale: null,
+      label: null, genre: null, artworkUrl: null, previewUrl: null,
+      externalIds: {}, sonicProfile: null,
+      raw: { spotifyEnrichment: { status: "unavailable", error: "Spotify API request failed with HTTP 401" } },
+      evidenceStatus: "partial" as const,
+    };
+
+    await store.saveCatalogMetadata("job-123", "claim-token", metadata);
+
+    expect(getRequestUrl()).toContain("persist_fenced_audit_step");
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.p_payload.eventPayload).toMatchObject({
+      status: "unavailable",
+      error: "Spotify API request failed with HTTP 401",
+    });
   });
 });
