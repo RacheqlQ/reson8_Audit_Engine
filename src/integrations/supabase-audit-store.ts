@@ -371,6 +371,24 @@ export function createSupabaseAuditStore(
         eventPayload: {
           analysisVersion: "audit-engine-0.2.0",
           evidenceClass: "OBSERVED",
+          diagnostics: {
+            version: 1,
+            tempo: {
+              method: dna.rhythmFeatures.method ?? null,
+              candidateScores: dna.rhythmFeatures.candidateScores ?? [],
+              onsetEnvelope: dna.rhythmFeatures.onsetEnvelope ?? [],
+              beatTimesSeconds: dna.rhythmFeatures.beatTimesSeconds ?? [],
+              downbeatCandidateTimesSeconds: dna.rhythmFeatures.downbeatCandidateTimesSeconds ?? [],
+              beatGridStatus: dna.rhythmFeatures.beatGridStatus ?? "not_determined",
+              downbeatGridAssumption: dna.rhythmFeatures.downbeatGridAssumption ?? null,
+            },
+            key: {
+              method: dna.harmonicFeatures.method ?? null,
+              tuningCents: dna.keyTuningCents,
+              segmentAgreement: dna.keySegmentAgreement,
+              segmentChroma: dna.harmonicFeatures.segmentChroma ?? [],
+            },
+          },
           ...(genreEvidenceAudit ? { genreEvidenceAudit } : {}),
           ...(genreFeatureCapture ? { genreFeatureCapture } : {}),
         },
