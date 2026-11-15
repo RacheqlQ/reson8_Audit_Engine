@@ -35,13 +35,13 @@ describe("GroqClient section groups",()=>{
    if(group==="evidence-score"){
     evidenceScoreBudgets.push(body.max_completion_tokens);
     evidenceScoreCalls++;
-    if(evidenceScoreCalls===1)return new Response(JSON.stringify({error:{message:"Request too large on tokens per minute. Limit 8000, Requested 8289."}}),{status:413});
+    if(evidenceScoreCalls===1)return new Response(JSON.stringify({error:{message:"Request too large on tokens per minute. Limit 8000, Requested 8524."}}),{status:413});
    }
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{},sonicDna:null});
-  expect(evidenceScoreBudgets).toEqual([6000,4000]);
+  expect(evidenceScoreBudgets).toEqual([6000,3000]);
   expect(evidenceScoreCalls).toBe(2);
   expect(result.evidenceLabels).toHaveLength(1);
  });
