@@ -9,9 +9,10 @@ export interface ChartRow {
   group?: "strength" | "risk";
 }
 export type ChartKind = "bars" | "sonic" | "spectrum" | "constellation" | "layers" | "tension" | "timeline" | "chain" | "radar";
+export type ChartEvidenceClass = "measured" | "provider-recognized" | "inferred" | "assessment-derived" | "illustrative";
 export interface ChartPanelInput {
   title: string; rows: ChartRow[]; shows: string; cantShow: string;
-  kind?: ChartKind; inferred?: boolean; unavailable?: boolean; fixture?: boolean; y?: number;
+  kind?: ChartKind; evidenceClass?: ChartEvidenceClass; inferred?: boolean; unavailable?: boolean; fixture?: boolean; y?: number;
 }
 export interface ChartRect { x:number; y:number; width:number; height:number; id:string; }
 const C = {
@@ -209,11 +210,17 @@ export function wrapChartSummary(value:string,font:PDFFont,size:number,width:num
  }
  return lines;
 }
-export function chartPanelStatus(input: Pick<ChartPanelInput, "fixture" | "inferred" | "unavailable">): "SYNTHETIC FIXTURE" | "REQUIRES AUDIO" | "HYPOTHESIS" | "MEASURED" {
+export function chartPanelStatus(input: Pick<ChartPanelInput, "fixture" | "inferred" | "unavailable" | "evidenceClass">): "SYNTHETIC FIXTURE" | "REQUIRES AUDIO" | "HYPOTHESIS" | "MEASURED" | "PROVIDER-RECOGNIZED" | "ASSESSMENT-DERIVED" | "ILLUSTRATIVE" | "UNCLASSIFIED" {
  if(input.fixture)return "SYNTHETIC FIXTURE";
  if(input.unavailable)return "REQUIRES AUDIO";
- if(input.inferred)return "HYPOTHESIS";
- return "MEASURED";
+ if(input.inferred||input.evidenceClass==="inferred")return "HYPOTHESIS";
+ switch(input.evidenceClass){
+  case "measured":return "MEASURED";
+  case "provider-recognized":return "PROVIDER-RECOGNIZED";
+  case "assessment-derived":return "ASSESSMENT-DERIVED";
+  case "illustrative":return "ILLUSTRATIVE";
+  default:return "UNCLASSIFIED";
+ }
 }
 function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,height:number){
  const x=CARD_X,w=CARD_W,top=input.y??700,bottom=top-height;
