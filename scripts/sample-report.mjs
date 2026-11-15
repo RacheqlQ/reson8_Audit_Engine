@@ -112,7 +112,7 @@ try{
   },regular,bold);
   await writeFile(chartCheckPath,await chartPdf.save());
   const chartText=execFileSync("pdftotext",["-layout",chartCheckPath,"-"],{encoding:"utf8"}).replace(/\s+/g,"");
-  if(!chartText.includes(label.replace(/\s+/g,"")))throw new Error("Generated chart PDF clipped a complete lane label: "+label);
+  if(!chartText.includes(label.replace(/\s+/g,"")))throw new Error("Generated chart PDF did not extract a complete lane label: "+label+"; extracted="+chartText);
  }
  process.stdout.write("Additional PDF regressions: unsupported claims absent from extracted PDF text; all five long constellation labels extracted completely.\n");
 }finally{
