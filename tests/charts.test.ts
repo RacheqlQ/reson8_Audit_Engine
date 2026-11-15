@@ -15,7 +15,8 @@ describe("native PDF chart helpers", () => {
     expect(chartPanelStatus({ evidenceClass: "illustrative" })).toBe("ILLUSTRATIVE");
     expect(chartPanelStatus({ evidenceClass: "inferred" })).toBe("HYPOTHESIS");
     expect(chartPanelStatus({ evidenceClass: "measured" })).toBe("MEASURED");
-    expect(chartPanelStatus({ unavailable: true, evidenceClass: "measured" })).toBe("REQUIRES AUDIO");\n    expect(chartPanelStatus({ evidenceClass: "measured" })).toBe("MEASURED");
+    expect(chartPanelStatus({ unavailable: true, evidenceClass: "measured" })).toBe("REQUIRES AUDIO");
+    expect(chartPanelStatus({ evidenceClass: "measured" })).toBe("MEASURED");
     expect(chartPanelStatus({ evidenceClass: "provider-recognized" })).toBe("PROVIDER-RECOGNIZED");
     expect(chartPanelStatus({ evidenceClass: "inferred" })).toBe("HYPOTHESIS");
     expect(chartPanelStatus({ evidenceClass: "assessment-derived" })).toBe("ASSESSMENT-DERIVED");
