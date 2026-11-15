@@ -66,9 +66,23 @@ const TEMPO_UNAVAILABLE_RATIONALE =
 const GENRE_UNCONFIRMED_RATIONALE =
   "No definitive provider-backed primary genre is available because the supplied genre classification abstained or lacks a supported primary genre. Keep lane positioning unconfirmed until named source evidence supports a cautious hypothesis.";
 
+function hasVerifiedCommercialMetrics(evidence:Record<string,unknown>|null|undefined):boolean {
+ if(!evidence)return false;
+ const candidates=[evidence.commercialPerformance,evidence.commercialMetrics];
+ return candidates.some((candidate)=>{
+  if(!candidate||typeof candidate!=="object"||Array.isArray(candidate))return false;
+  const record=candidate as Record<string,unknown>;
+  if(record.verified!==true||typeof record.source!=="string"||!record.source.trim())return false;
+  const metrics=record.metrics;
+  if(!metrics||typeof metrics!=="object"||Array.isArray(metrics))return false;
+  return Object.values(metrics as Record<string,unknown>).some(value=>typeof value==="number"&&Number.isFinite(value)&&value>=0);
+ });
+}
+
 export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   assessment: T,
   sonicDna: Record<string, unknown> | null | undefined,
+  evidence?: Record<string,unknown> | null,
 ): T {
   const reliableTempo = isReliableTempo(sonicDna as TempoEvidence);
   const classification = sonicDna?.genreClassification;
@@ -93,6 +107,12 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   const mutable = result as Record<string, any>;
   if (!hasProviderGenre && typeof mutable.laneHypothesis === "string") {
     mutable.laneHypothesis = GENRE_UNCONFIRMED_RATIONALE;
+  }
+  if (!hasVerifiedCommercialMetrics(evidence) && mutable.commercialRead) {
+    mutable.commercialRead = {
+      marketability: "undetermined",
+      rationale: "No verified, source-attributed commercial-performance metrics are available for this release. Streams, listeners, saves, sales, revenue, playlist conversion and campaign outcomes cannot be inferred from audio features, genre metadata or general catalog context.",
+    };
   }
   return result;
 }
