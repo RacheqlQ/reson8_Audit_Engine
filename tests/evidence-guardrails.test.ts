@@ -204,4 +204,33 @@ describe("Phillo evidence guardrails", () => {
     expect(Object.values(result.scorecard).every((dimension) => /overall assessment confidence is zero/i.test(dimension.rationale))).toBe(true);
   });
 
+  it("withholds low-confidence tempo/key and unperformed-vocal claims from the evidence ledger", () => {
+    const assessment = {
+      ...baseAssessment,
+      evidenceLabels: [
+        { label: "OBSERVED", claim: "Tempo estimate: 95 BPM.", source: "uploaded_audio_master" },
+        { label: "OBSERVED", claim: "Key and mode: F-sharp major.", source: "uploaded_audio_master" },
+        { label: "OBSERVED", claim: "Vocal analysis confirms an instrumental recording.", source: "uploaded_audio_master" },
+        { label: "OBSERVED", claim: "RMS loudness level: -11.32 dBFS.", source: "uploaded_audio_master" },
+        { label: "OBSERVED", claim: "Measured dynamic range: 13.11 dB.", source: "uploaded_audio_master" },
+      ],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 95,
+      tempoConfidence: 0,
+      key: "F#",
+      mode: "major",
+      keyConfidence: 0.049,
+      keySegmentAgreement: 0.5,
+      rmsLevelDbfs: -11.32,
+      dynamicRangeDb: 13.11,
+      vocalFeatures: { status: "not_analyzed" },
+    });
+    const claims = result.evidenceLabels.map((entry) => entry.claim).join(" ");
+    expect(claims).not.toMatch(/tempo|BPM|key and mode|major|vocal|instrumental/i);
+    expect(claims).toContain("RMS loudness level: -11.32 dBFS");
+    expect(claims).toContain("Measured dynamic range: 13.11 dB");
+  });
+
 });
