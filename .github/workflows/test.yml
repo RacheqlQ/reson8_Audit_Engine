@@ -43,7 +43,11 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
-      - name: Generate sample report PDFs
+      - name: Install PDF text-inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+      - name: Generate and inspect sample report PDFs
         run: npm run sample-report
       - name: Upload report PDFs
         if: always()
