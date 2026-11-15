@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
@@ -118,6 +118,15 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(context.prompts[0]).toContain("change the current decision");
   expect(context.prompts[1]).toContain("identity, rights or source gaps");
   expect(context.prompts[2]).toContain("before any external pitch");
+ });
+ it("splits long A&R Notes summaries into ordered, lossless continuation chunks",()=>{
+  const source=Array.from({length:100},(_,index)=>"summary-segment-"+(index+1));
+  const chunks=paginateArNotesSummary(source);
+  expect(chunks.length).toBeGreaterThan(1);
+  expect(chunks.flat()).toEqual(source);
+  expect(new Set(chunks.flat()).size).toBe(source.length);
+  expect(chunks.slice(0,-1).every(chunk=>chunk.length<=42)).toBe(true);
+  expect(chunks[chunks.length-1].length).toBeLessThanOrEqual(16);
  });
  it("preserves the complete executive summary in the shared A&R Notes decision context",()=>{
   const context=buildArNotesDecisionContext(longFormAudioFixture as any);

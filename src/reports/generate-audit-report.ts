@@ -113,6 +113,16 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
 interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string[];}
 function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"Insufficient evidence"};return m[v.toLowerCase()]??"Insufficient evidence";}
 export interface ArNotesDecisionContext { heading:string; verdict:string; summary:string; prompts:string[]; }
+export function paginateArNotesSummary(lines:string[]):string[][] {
+ const chunks:string[][]=[];let offset=0;
+ while(lines.length-offset>16){
+  const count=Math.min(42,lines.length-offset-16);
+  chunks.push(lines.slice(offset,offset+count));
+  offset+=count;
+ }
+ chunks.push(lines.slice(offset));
+ return chunks;
+}
 export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecisionContext {
  return {
   heading:"DECISION CONTEXT",
@@ -380,13 +390,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   validate(false);
   // Keep at most 42 summary lines on continuation pages and at most 16 on the final
   // notes page, leaving room for all prompts and a meaningful editable field.
-  const summaryChunks:string[][]=[];let summaryOffset=0;
-  while(allSummaryLines.length-summaryOffset>16){
-   const count=Math.min(42,allSummaryLines.length-summaryOffset-16);
-   summaryChunks.push(allSummaryLines.slice(summaryOffset,summaryOffset+count));
-   summaryOffset+=count;
-  }
-  summaryChunks.push(allSummaryLines.slice(summaryOffset));
+  const summaryChunks=paginateArNotesSummary(allSummaryLines);
   for(let chunkIndex=0;chunkIndex<summaryChunks.length;chunkIndex++){
    const isLast=chunkIndex===summaryChunks.length-1;
    const notes=pdf.addPage([W,H]);pageNo++;
