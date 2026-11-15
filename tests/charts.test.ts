@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildStrengthRiskChartRows, compactChartItemSummary, strengthRiskItemsForColumn, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
 import { checkLayout } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
+import { philloLowConfidenceFixture } from "../scripts/fixtures/phillo-low-confidence.mjs";
 
 describe("native PDF chart helpers", () => {
   it("preserves full assessment text while supplying concise chart-only item summaries", () => {
@@ -14,6 +15,16 @@ describe("native PDF chart helpers", () => {
     expect(rows[2].summary!.length).toBeLessThan(strength.length);
     expect(rows[3].label).toBe(risk);
     expect(rows[3].summary!.length).toBeLessThan(risk.length);
+  });
+
+  it("keeps the synthetic Phillo rhythm fixture aligned with the active abstaining estimator", () => {
+    expect(philloLowConfidenceFixture.evidence.fixture).toBe(true);
+    expect(philloLowConfidenceFixture.sonicDna.rhythmFeatures).toMatchObject({
+      status: "insufficient_evidence",
+      method: "high_frequency_transient_autocorrelation",
+      confidence: 0,
+    });
+    expect(philloLowConfidenceFixture.sonicDna.rhythmFeatures.abstentionReason).toContain("withheld");
   });
 
   it("does not draw a numeric BPM scale when the tempo value is withheld", () => {
