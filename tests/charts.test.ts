@@ -1,9 +1,9 @@
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildStrengthRiskChartRows, compactChartItemSummary, strengthRiskItemsForColumn, chartPanelStatus, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows, compactChartItemSummary, strengthRiskItemsForColumn, chartPanelStatus, chartPanelDisplayStatus, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
 import { checkLayout } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
-import { philloLowConfidenceFixture } from "../scripts/fixtures/phillo-low-confidence.mjs";
+import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 
 describe("native PDF chart helpers", () => {
   it("labels synthetic fixture charts as fixtures rather than measured results", () => {
@@ -15,7 +15,17 @@ describe("native PDF chart helpers", () => {
     expect(chartPanelStatus({ evidenceClass: "illustrative" })).toBe("ILLUSTRATIVE");
     expect(chartPanelStatus({ evidenceClass: "inferred" })).toBe("HYPOTHESIS");
     expect(chartPanelStatus({ evidenceClass: "measured" })).toBe("MEASURED");
-    expect(chartPanelStatus({ unavailable: true, evidenceClass: "measured" })).toBe("REQUIRES AUDIO");
+    expect(chartPanelStatus({ unavailable: true, evidenceClass: "measured" })).toBe("REQUIRES AUDIO");\n    expect(chartPanelStatus({ evidenceClass: "measured" })).toBe("MEASURED");
+    expect(chartPanelStatus({ evidenceClass: "provider-recognized" })).toBe("PROVIDER-RECOGNIZED");
+    expect(chartPanelStatus({ evidenceClass: "inferred" })).toBe("HYPOTHESIS");
+    expect(chartPanelStatus({ evidenceClass: "assessment-derived" })).toBe("ASSESSMENT-DERIVED");
+    expect(chartPanelStatus({ evidenceClass: "illustrative" })).toBe("ILLUSTRATIVE");
+    for (const evidenceClass of ["measured","provider-recognized","inferred","assessment-derived","illustrative"] as const) {
+      expect(chartPanelDisplayStatus({ fixture: true, evidenceClass })).toContain("SYNTHETIC");
+      expect(chartPanelDisplayStatus({ fixture: true, evidenceClass })).not.toBe("SYNTHETIC");
+    }
+    expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" })).toContain("REQUIRES AUDIO");
+    expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" })).toContain("MEASURED");
   });
 
   it("preserves full assessment text while supplying concise chart-only item summaries", () => {
@@ -36,7 +46,7 @@ describe("native PDF chart helpers", () => {
       method: "high_frequency_transient_autocorrelation",
       confidence: 0,
     });
-    expect(philloLowConfidenceFixture.sonicDna.rhythmFeatures.abstentionReason).toContain("withheld");
+    expect(ambiguousAudioFixture.sonicDna.rhythmFeatures.abstentionReason).toContain("withheld");
   });
 
   it("does not draw a numeric BPM scale when the tempo value is withheld", () => {
