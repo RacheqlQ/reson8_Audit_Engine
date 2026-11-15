@@ -36,6 +36,13 @@ export interface AuditProcessorDependencies {
   saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition, signal?: AbortSignal): Promise<void>;
   saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata, signal?: AbortSignal, metadataSources?: readonly CatalogMetadata[]): Promise<void>;
   saveCatalogMetadata(jobId: string, claimToken: string, metadata: CatalogMetadata, signal?: AbortSignal): Promise<void>;
+  saveCatalogFailure?(
+    jobId: string,
+    claimToken: string,
+    link: DspMetadataResult["link"],
+    error: string,
+    signal?: AbortSignal,
+  ): Promise<void>;
   decode(bytes: Uint8Array, mimeType?: string, signal?: AbortSignal): Promise<{ samples: Float32Array; sampleRate: number; channels: number }>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
   generateAssessment(input: {
@@ -343,6 +350,10 @@ export async function processAuditJob(
         if (result.metadata) {
           await awaitWithLease(deps, (signal) =>
             deps.saveCatalogMetadata(jobId, job.claimToken, result.metadata!, signal),
+          );
+        } else if (result.error && deps.saveCatalogFailure) {
+          await awaitWithLease(deps, (signal) =>
+            deps.saveCatalogFailure!(jobId, job.claimToken, result.link, result.error!, signal),
           );
         }
       }
