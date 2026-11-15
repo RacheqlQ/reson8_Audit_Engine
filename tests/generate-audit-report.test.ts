@@ -109,7 +109,9 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Verdict: Insufficient evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
-  expect(report).not.toMatch(/156\\s*BPM|high-energy/);
+  expect(report).toContain("Metadata completeness — NOT SCORED");
+  expect(report).toContain("Album metadata is present but conflicting");
+  expect(report).not.toMatch(/156\\s*BPM|high-energy|album title is missing/i);
  });
  it("reports a present-but-conflicting album instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
