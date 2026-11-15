@@ -77,6 +77,28 @@ const TEMPO_UNAVAILABLE_RATIONALE =
 const GENRE_UNCONFIRMED_RATIONALE =
   "No definitive provider-backed primary genre is available because the supplied genre classification abstained or lacks a supported primary genre. Keep lane positioning unconfirmed until named source evidence supports a cautious hypothesis.";
 
+const ALBUM_CONFLICT_RATIONALE =
+ "Album metadata is present but conflicting across supplied sources. Preserve the source-specific values and reconcile them before treating the album field as complete; do not describe the field as missing.";
+
+function hasAlbumConflict(evidence:Record<string,unknown>|null|undefined):boolean {
+ if(!evidence)return false;
+ const reconciliation=evidence.reconciliation;
+ if(!reconciliation||typeof reconciliation!=="object"||Array.isArray(reconciliation))return false;
+ const conflicts=(reconciliation as Record<string,unknown>).conflicts;
+ return Array.isArray(conflicts)&&conflicts.some((entry)=>Boolean(entry&&typeof entry==="object"&&(entry as Record<string,unknown>).field==="album"));
+}
+
+function sanitizeAlbumConflictClaims(value:unknown):unknown {
+ if(typeof value==="string"){
+  const sentences=value.split(/(?<=[.!?])\\s+(?=[A-Z])/);
+  const kept=sentences.filter(sentence=>!(/\\balbum\\b/i.test(sentence)&&/\\b(?:missing|unavailable|not supplied|not provided|absent|not present)\\b/i.test(sentence)));
+  return kept.join(" ").trim()||ALBUM_CONFLICT_RATIONALE;
+ }
+ if(Array.isArray(value))return value.map(sanitizeAlbumConflictClaims);
+ if(value&&typeof value==="object")return Object.fromEntries(Object.entries(value as Record<string,unknown>).map(([key,item])=>[key,sanitizeAlbumConflictClaims(item)]));
+ return value;
+}
+
 function hasVerifiedCommercialMetrics(evidence:Record<string,unknown>|null|undefined):boolean {
  if(!evidence)return false;
  const candidates=[evidence.commercialEvidence,evidence.commercialPerformance,evidence.commercialMetrics];
@@ -106,7 +128,20 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     genre && typeof genre.primaryGenre === "string" && genre.primaryGenre.trim()
       && genre.abstained !== true,
   );
-  const result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre) as T;
+  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre) as T;
+
+  if (hasAlbumConflict(evidence)) {
+    result = sanitizeAlbumConflictClaims(result) as T;
+    if (result.scorecard?.metadataCompleteness) {
+      result.scorecard.metadataCompleteness = { score: null, rationale: ALBUM_CONFLICT_RATIONALE };
+    }
+    if (Array.isArray(result.evidenceGaps) && !result.evidenceGaps.some((gap:unknown)=>typeof gap==="string"&&/album metadata is present but conflicting/i.test(gap))) {
+      result.evidenceGaps.push(ALBUM_CONFLICT_RATIONALE);
+    }
+    if (Array.isArray(result.risks) && !result.risks.some((risk:unknown)=>typeof risk==="string"&&/album metadata is present but conflicting/i.test(risk))) {
+      result.risks.push(ALBUM_CONFLICT_RATIONALE);
+    }
+  }
 
   if (!reliableTempo && result.scorecard) {
     if (result.scorecard.tempoLaneFit) result.scorecard.tempoLaneFit = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
