@@ -39,9 +39,9 @@ describe("native PDF chart helpers", () => {
     expect(rows[3].summary!.length).toBeLessThan(risk.length);
   });
 
-  it("keeps the synthetic Phillo rhythm fixture aligned with the active abstaining estimator", () => {
-    expect(philloLowConfidenceFixture.evidence.fixture).toBe(true);
-    expect(philloLowConfidenceFixture.sonicDna.rhythmFeatures).toMatchObject({
+  it("keeps the generic ambiguous-audio fixture aligned with the abstaining estimator", () => {
+    expect(ambiguousAudioFixture.evidence.fixture).toBe(true);
+    expect(ambiguousAudioFixture.sonicDna.rhythmFeatures).toMatchObject({
       status: "insufficient_evidence",
       method: "high_frequency_transient_autocorrelation",
       confidence: 0,
