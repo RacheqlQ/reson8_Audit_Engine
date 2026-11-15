@@ -23,7 +23,7 @@ describe("master audio submission evidence", () => {
       sourceAudioPath: null,
       mimeType: null,
       catalogUrl: "https://tidal.com/browse/track/example",
-    })).toContain("combined audit is missing its uploaded master audio");
+    })).toContain("Combined audit is missing its uploaded master audio");
     expect(getAuditSourceReadinessError({
       sourceType: "combined",
       sourceAudioPath: "owner/job/master.mp3",
@@ -39,7 +39,7 @@ describe("master audio submission evidence", () => {
       mimeType: "audio/mpeg",
       catalogUrl: null,
       catalogUrls: [],
-    })).toContain("combined audit is missing its DSP catalog link");
+    })).toContain("Combined audit is missing its DSP catalog link");
   });
 
   it("keeps master-only and DSP-only source requirements distinct", () => {
