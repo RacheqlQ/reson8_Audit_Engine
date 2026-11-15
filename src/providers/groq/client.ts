@@ -132,8 +132,8 @@ function thresholdError(name: string, value: unknown): string | null {
 
 const MAX_PROVIDER_RETRY_DELAY_MS = 15 * 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
-const MAX_COMPLETION_TOKENS = 6000;
-const RETRY_COMPLETION_TOKENS = 4000;
+const MAX_COMPLETION_TOKENS = 2500;
+const RETRY_COMPLETION_TOKENS = 1500;
 
 async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
   const retryAfter = response.headers.get("retry-after");
