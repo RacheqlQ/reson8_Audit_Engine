@@ -39,6 +39,29 @@ describe("commercial provider policy registry", () => {
     expect(decision.reason).toBe("disabled by data policy");
   });
 
+  it("keeps Groq disabled when an API key is present but commercial status is unverified", () => {
+    const decision = providerDecision("groq", {
+      GROQ_API: "present",
+      PROVIDER_ENABLED_GROQ: "true",
+    });
+    expect(decision.enabled).toBe(false);
+    expect(decision.reason).toBe("disabled by data policy");
+  });
+
+  it("keeps AudD disabled when an API token and opt-in flag are present", () => {
+    const decision = providerDecision("audd", {
+      AUDD_API: "present",
+      PROVIDER_ENABLED_AUDD: "true",
+    });
+    expect(decision.enabled).toBe(false);
+    expect(decision.reason).toBe("disabled by data policy");
+  });
+
+  it("allows only a reviewed provider with an exact true opt-in flag", () => {
+    expect(providerDecision("musicbrainz", { PROVIDER_ENABLED_MUSICBRAINZ: "true" }).enabled).toBe(true);
+    expect(providerDecision("musicbrainz", { PROVIDER_ENABLED_MUSICBRAINZ: "false" }).enabled).toBe(false);
+  });
+
   it("requires an exact true string and does not enable unknown flags", () => {
     expect(providerDecision("groq", { PROVIDER_ENABLED_GROQ: "1" }).enabled).toBe(false);
     expect(providerDecision("groq", { PROVIDER_ENABLED_GROQ: "TRUE" }).enabled).toBe(false);
