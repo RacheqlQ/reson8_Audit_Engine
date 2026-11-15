@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isReliableTempo, sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
+import { isReliableKey, isReliableTempo, sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
 
 const baseAssessment = {
   executiveSummary: "The recording is a 156 BPM high-energy release with a strong rhythmic lane.",
@@ -22,11 +22,28 @@ describe("Phillo evidence guardrails", () => {
     expect(isReliableTempo({ bpm: 156, tempoConfidence: 0, rhythmFeatures: { status: "measured" } })).toBe(false);
   });
 
-  it("accepts only bounded BPM with explicit confidence at or above the calibrated gate", () => {
+  it("accepts only bounded BPM with explicit confidence at or above the conservative reporting gate", () => {
     expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.5 })).toBe(true);
     expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.49 })).toBe(false);
     expect(isReliableTempo({ bpm: 0, tempoConfidence: 0.9 })).toBe(false);
     expect(isReliableTempo({ bpm: null, tempoConfidence: 0.9 })).toBe(false);
+  });
+
+  it("withholds key labels unless confidence and segment agreement both reach the 80% reporting target", () => {
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.8, keySegmentAgreement: 0.8 })).toBe(true);
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.79, keySegmentAgreement: 0.95 })).toBe(false);
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.6 })).toBe(false);
+    expect(isReliableKey({ key: null, mode: null, keyConfidence: 0.99, keySegmentAgreement: 1 })).toBe(false);
+  });
+
+  it("removes taxonomy genre claims from free text when provider classification abstains", () => {
+    const result = sanitizeAssessmentForEvidence(baseAssessment, {
+      bpm: 120,
+      tempoConfidence: 0.82,
+      genreClassification: { primaryGenre: null, abstained: true },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/Afrobeats|Afro Soul/i);
+    expect(result.aAndRPositioning.primaryLane).toContain("Unconfirmed");
   });
 
   it("nulls tempo-derived scores and removes unsupported tempo claims when confidence is zero", () => {
