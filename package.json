@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "sample-report": "npm run build && node scripts/sample-report.mjs",
     "start": "node dist/main.js",
+    "worker": "node dist/main.js",
     "evaluate:genres": "npm run build && node scripts/genre-evaluation.mjs",
     "benchmark:key": "npm run build && node scripts/benchmark-key-estimation.mjs"
   },
