@@ -68,14 +68,16 @@ const GENRE_UNCONFIRMED_RATIONALE =
 
 function hasVerifiedCommercialMetrics(evidence:Record<string,unknown>|null|undefined):boolean {
  if(!evidence)return false;
- const candidates=[evidence.commercialPerformance,evidence.commercialMetrics];
+ const candidates=[evidence.commercialEvidence,evidence.commercialPerformance,evidence.commercialMetrics];
+ const metricKeys=["streams","monthlyListeners","listeners","saves","sales","revenue","playlistAdds","conversions","completionRate"];
  return candidates.some((candidate)=>{
   if(!candidate||typeof candidate!=="object"||Array.isArray(candidate))return false;
   const record=candidate as Record<string,unknown>;
   if(record.verified!==true||typeof record.source!=="string"||!record.source.trim())return false;
-  const metrics=record.metrics;
-  if(!metrics||typeof metrics!=="object"||Array.isArray(metrics))return false;
-  return Object.values(metrics as Record<string,unknown>).some(value=>typeof value==="number"&&Number.isFinite(value)&&value>=0);
+  if(typeof record.reportingPeriod!=="string"||!record.reportingPeriod.trim())return false;
+  const metrics=(record.metrics&&typeof record.metrics==="object"&&!Array.isArray(record.metrics))
+   ?record.metrics as Record<string,unknown>:record;
+  return metricKeys.some(key=>typeof metrics[key]==="number"&&Number.isFinite(metrics[key])&&(metrics[key] as number)>=0);
  });
 }
 
