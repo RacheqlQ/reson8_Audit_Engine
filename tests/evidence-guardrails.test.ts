@@ -277,4 +277,31 @@ describe("Phillo evidence guardrails", () => {
     expect(claims).toContain("Measured dynamic range: 13.11 dB");
   });
 
+  it("fills all five scorecard dimensions when a zero-confidence assessment is incomplete", () => {
+    const assessment = {
+      ...baseAssessment,
+      confidence: 0,
+      scorecard: {
+        tempoLaneFit: { score: 88, rationale: "Unsupported populated fixture score." },
+      },
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 95,
+      tempoConfidence: 0,
+      vocalFeatures: { status: "not_analyzed" },
+    });
+    const required = [
+      "tempoLaneFit",
+      "rhythmicConsistency",
+      "dynamicRangeLoudness",
+      "metadataCompleteness",
+      "releaseReadiness",
+    ];
+    expect(Object.keys(result.scorecard).sort()).toEqual(required.sort());
+    expect(Object.values(result.scorecard).every((dimension) => dimension.score === null)).toBe(true);
+    expect(Object.values(result.scorecard).every((dimension) => /overall assessment confidence is zero/i.test(dimension.rationale))).toBe(true);
+    expect(result.strengths).toEqual([]);
+  });
+
 });
