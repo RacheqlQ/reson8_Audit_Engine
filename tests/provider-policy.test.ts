@@ -41,13 +41,16 @@ describe("commercial provider policy registry", () => {
     expect(decision.reason).toBe("disabled by data policy");
   });
 
-  it("keeps Groq disabled when an API key is present but commercial status is unverified", () => {
-    const decision = providerDecision("groq", {
+  it("enables Groq only with the exact opt-in flag after owner-authorized policy approval", () => {
+    const enabled = providerDecision("groq", {
       GROQ_API: "present",
       PROVIDER_ENABLED_GROQ: "true",
     });
-    expect(decision.enabled).toBe(false);
-    expect(decision.reason).toBe("disabled by data policy");
+    expect(enabled.enabled).toBe(true);
+    expect(enabled.commercialStatus).toBe("allowed");
+    expect(providerDecision("groq", { GROQ_API: "present", PROVIDER_ENABLED_GROQ: "false" }).enabled).toBe(false);
+    expect(providerDecision("groq", { GROQ_API: "present" }).enabled).toBe(false);
+    expect(providerDecision("groq", { GROQ_API: "present", PROVIDER_ENABLED_GROQ: "TRUE" }).enabled).toBe(false);
   });
 
   it("keeps AudD disabled when an API token and opt-in flag are present", () => {
