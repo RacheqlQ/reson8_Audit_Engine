@@ -4,8 +4,8 @@ import { checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLab
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
-const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
-describe("A4 report layout and fixture coverage",()=>{
+const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];\nconst allFixtures=allFixtures;\nconst reportTiers=["sample","full"] as const;
+describe("A4 report layout and fixture coverage",()=>{\n it("defines exactly five generic fixtures across two report tiers",()=>{\n  expect(allFixtures).toHaveLength(5);\n  expect(reportTiers).toEqual(["sample","full"]);\n  expect(allFixtures.length*reportTiers.length).toBe(10);\n });
  it("detects element intersections and page overflow",()=>{
   expect(checkLayout([{x:0,y:0,width:20,height:20,id:"a"},{x:10,y:10,width:20,height:20,id:"b"}]).ok).toBe(false);
   expect(checkLayout([{x:590,y:0,width:20,height:20,id:"overflow"}]).ok).toBe(false);
@@ -27,12 +27,12 @@ describe("A4 report layout and fixture coverage",()=>{
  it("does not emit low-density warnings across all sample and full fixture variants",async()=>{
   const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
   try{
-   for(const input of [...fixtures,ambiguousAudioFixture as unknown as AuditReportInput])for(const tier of ["sample","full"] as const)await generateAuditReport(input,tier);
+   for(const input of allFixtures)for(const tier of reportTiers)await generateAuditReport(input,tier);
    expect(warning.mock.calls.filter(([message])=>String(message).includes("[report-layout]"))).toEqual([]);
   }finally{warning.mockRestore();}
  });
  it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
-  for(const input of [...fixtures,ambiguousAudioFixture as unknown as AuditReportInput])for(const tier of ["sample","full"] as const){
+  for(const input of allFixtures)for(const tier of ["sample","full"] as const){
    const bytes=await generateAuditReport(input,tier),pdf=await PDFDocument.load(bytes);
    for(const page of pdf.getPages()){const size=page.getSize();expect(size.width).toBeCloseTo(595.28,0);expect(size.height).toBeCloseTo(841.89,0);}
    const fields=pdf.getForm().getFields();
@@ -119,7 +119,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
   expect(report).toContain("Metadata completeness — NOT SCORED");
   expect(report).toContain("Album metadata is present but conflicting");
-  expect(report).not.toMatch(/156\\s*BPM|high-energy|album title is missing/i);
+  expect(report).not.toMatch(/128\\s*BPM|high-energy|album title is missing/i);
  });
  it("reports present-but-conflicting generic release metadata instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
@@ -148,10 +148,10 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("withholds zero-confidence BPM and tempo-derived A&R assertions from the rendered report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
-  input.sonicDna={...input.sonicDna,bpm:156,tempoConfidence:0,rhythmFeatures:{status:"measured"},genreClassification:{primaryGenre:null,abstained:true}};
-  input.assessment.executiveSummary="The recording is a 156 BPM high-energy release with a strong rhythmic lane.";
-  input.assessment.aAndRPositioning.primaryLane="Afrobeats";
-  input.assessment.aAndRPositioning.adjacentLanes=["Afro Soul"];
+  input.sonicDna={...input.sonicDna,bpm:128,tempoConfidence:0,rhythmFeatures:{status:"measured"},genreClassification:{primaryGenre:null,abstained:true}};
+  input.assessment.executiveSummary="The recording is a 128 BPM high-energy release with a strong rhythmic lane.";
+  input.assessment.aAndRPositioning.primaryLane="Unconfirmed";
+  input.assessment.aAndRPositioning.adjacentLanes=[];
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not reported — insufficient confidence");
