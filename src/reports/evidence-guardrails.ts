@@ -183,7 +183,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     const dynamicRangeDimension = mutable.scorecard?.dynamicRangeLoudness;
     if (dynamicRangeDimension && typeof dynamicRangeDimension === "object") {
       dynamicRangeDimension.score = null;
-      dynamicRangeDimension.rationale = "Not scored: direct dynamic-range and loudness/RMS measurements are unavailable from the uploaded master. Key confidence does not establish this dimension, and no mastering-quality conclusion can be inferred.";
+      dynamicRangeDimension.rationale = "Not scored: direct dynamic-range and loudness/RMS measurements are unavailable from the uploaded master. No mastering-quality conclusion can be inferred.";
     }
   }
   const zeroConfidence = typeof assessment.confidence === "number"
