@@ -341,14 +341,19 @@ export async function processAuditJob(
         collectDspMetadata(links, { collect: deps.collectCatalogMetadata }, signal),
       );
       metadataSources = catalogResults.flatMap((result) => result.metadata ? [result.metadata] : []);
+      // Persist failures first so the final successful catalog write, when present,
+      // remains the job row's latest raw metadata snapshot.
+      for (const result of catalogResults) {
+        if (!result.metadata && result.error && deps.saveCatalogFailure) {
+          await awaitWithLease(deps, (signal) =>
+            deps.saveCatalogFailure!(jobId, job.claimToken, result.link, result.error!, signal),
+          );
+        }
+      }
       for (const result of catalogResults) {
         if (result.metadata) {
           await awaitWithLease(deps, (signal) =>
             deps.saveCatalogMetadata(jobId, job.claimToken, result.metadata!, signal),
-          );
-        } else if (result.error && deps.saveCatalogFailure) {
-          await awaitWithLease(deps, (signal) =>
-            deps.saveCatalogFailure!(jobId, job.claimToken, result.link, result.error!, signal),
           );
         }
       }
