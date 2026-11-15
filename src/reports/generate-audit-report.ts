@@ -320,11 +320,30 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
   const notes=pdf.addPage([W,H]);pageNo++;header(notes,"A&R notes",pageNo,fonts,C.violet,input.evidence.fixture===true);
   notes.drawText("A&R NOTES",{x:M,y:TOP,size:20,font:fonts.bold,color:C.navy});
   notes.drawText("Private working notes — editable field",{x:M,y:TOP-27,size:9,font:fonts.regular,color:C.muted});
-  field.addToPage(notes,{x:M,y:145,width:W-2*M,height:470,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
-  field.setFontSize(10);field.updateAppearances(fonts.regular);
-  const noteRects=[{x:M,y:TOP-4,width:220,height:24,id:"notes-title"},{x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},{x:M,y:145,width:W-2*M,height:470,id:"A&R notes field"}];
+  const decisionTitleY=TOP-92;
+  const summaryLines=wrap(val(input.assessment.executiveSummary,"No executive summary supplied."),fonts.regular,9,W-2*M-28).slice(0,5);
+  notes.drawRectangle({x:M,y:decisionTitleY-92,width:W-2*M,height:112,color:C.paper,borderColor:C.line,borderWidth:.7});
+  notes.drawText("DECISION CONTEXT",{x:M+14,y:decisionTitleY,size:7,font:fonts.bold,color:C.violet});
+  notes.drawText(coverVerdictLabel(input).toUpperCase(),{x:M+14,y:decisionTitleY-23,size:12,font:fonts.bold,color:C.navy});
+  let summaryY=decisionTitleY-43;
+  for(const line of summaryLines){notes.drawText(line,{x:M+14,y:summaryY,size:8.2,font:fonts.regular,color:C.ink});summaryY-=11;}
+  notes.drawText("REVIEW PROMPTS",{x:M,y:decisionTitleY-119,size:7,font:fonts.bold,color:C.violet});
+  const prompts=["What evidence would change the current decision?","Which identity, rights or source gaps remain unresolved?","What should be verified before any external pitch?"];
+  let promptY=decisionTitleY-139;
+  for(const prompt of prompts){notes.drawText("- "+prompt,{x:M+8,y:promptY,size:8,font:fonts.regular,color:C.muted});promptY-=15;}
+  const notesFieldY=145,notesFieldHeight=245;
+  field.addToPage(notes,{x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
+  field.setFontSize(9);field.updateAppearances(fonts.regular);
+  const noteRects=[
+   {x:M,y:TOP-4,width:220,height:24,id:"notes-title"},
+   {x:M,y:TOP-32,width:300,height:14,id:"notes-subtitle"},
+   {x:M,y:decisionTitleY-95,width:W-2*M,height:112,id:"decision-context"},
+   {x:M,y:decisionTitleY-143,width:220,height:10,id:"review-prompts-title"},
+   {x:M+8,y:promptY+15,width:W-2*M-16,height:48,id:"review-prompts"},
+   {x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,id:"A&R notes field"}
+  ];
   const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; "));
-  const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes page falls below the 65% content-occupancy threshold");
+  const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes and decision-context page falls below the 65% content-occupancy threshold");
  }
  if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");
  signal?.throwIfAborted();
