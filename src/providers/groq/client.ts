@@ -210,7 +210,17 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       await sleepImpl(await providerRetryDelayMs(response,networkAttempt), signal);
       signal?.throwIfAborted();
     }
-    if(!response||!response.ok){const detail=await response?.text().catch(()=>"")??"";throw new Error("Groq "+groupName+" assessment failed with HTTP "+(response?.status??"unknown")+(detail?": "+detail.slice(0,300):""));}
+    if(!response||!response.ok){
+      const detail=await response?.text().catch(()=>"")??"";
+      let providerError:{error?:{code?:unknown;message?:unknown}}={};
+      try{providerError=JSON.parse(detail) as typeof providerError;}catch{/* Preserve the original provider response below. */}
+      if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&attempt===0){
+        const message=typeof providerError.error.message==="string"?providerError.error.message:"The provider rejected its generated JSON against the supplied schema.";
+        lastError="Groq returned json_validate_failed: "+message+". Retry with a complete JSON object that includes every property required by the supplied schema. Do not omit required properties, including evidenceLabels; when no track-specific source supports a label, use only a clearly separated INDUSTRY PRACTICE entry where appropriate.";
+        continue;
+      }
+      throw new Error("Groq "+groupName+" assessment failed with HTTP "+(response?.status??"unknown")+(detail?": "+detail.slice(0,300):""));
+    }
     const payload=await response.json() as {choices?:Array<{message?:{content?:string|null}}>};
     const content=payload.choices?.[0]?.message?.content;
     if(!content){lastError="The response contained no JSON content.";continue;}
