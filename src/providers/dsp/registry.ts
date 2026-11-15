@@ -32,11 +32,21 @@ export async function collectDspMetadata(
     try {
       const metadata = await collect(link.canonicalUrl, providerSignal);
       signal?.throwIfAborted();
+      const spotifyFailure = metadata.raw?.spotifyEnrichment;
+      const spotifyUnavailable = Boolean(
+        spotifyFailure && typeof spotifyFailure === "object"
+        && (spotifyFailure as Record<string, unknown>).status === "unavailable",
+      );
+      const providerError = spotifyUnavailable
+        ? typeof (spotifyFailure as Record<string, unknown>).error === "string"
+          ? (spotifyFailure as Record<string, unknown>).error as string
+          : "Spotify API enrichment is unavailable"
+        : null;
       results.push({
         link,
-        status: metadata.evidenceStatus,
+        status: spotifyUnavailable ? "unavailable" : metadata.evidenceStatus,
         metadata,
-        error: null,
+        error: providerError,
       });
     } catch (error) {
       if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error("DSP lookup aborted");
