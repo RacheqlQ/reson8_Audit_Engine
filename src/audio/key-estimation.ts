@@ -6,7 +6,7 @@ export interface KeyEstimate {
   segmentAgreement: number | null;
   method: "fft_harmonic_chroma_ensemble";
   analysisWindows: number;
-  operationCount: number;
+  fftButterflyCount: number;
   limitation: string | null;
 }
 
@@ -111,7 +111,7 @@ function tuningOffset(peaks: Array<{ frequency: number; magnitude: number }>): n
 function profileForSegment(samples: Float32Array, start: number, sampleRate: number): {
   chroma: number[];
   peaks: Array<{ frequency: number; magnitude: number }>;
-  operations: number;
+  fftButterflyCount: number;
 } {
   const real = new Float64Array(FRAME_SIZE);
   const imaginary = new Float64Array(FRAME_SIZE);
@@ -165,7 +165,7 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
     }
   }
   const chroma = bassChroma.map((value, index) => value * 0.55 + midChroma[index] * 0.45);
-  return { chroma, peaks, operations: operations + FRAME_SIZE * 4 };
+  return { chroma, peaks, fftButterflyCount: operations };
 }
 
 function correlation(profile: readonly number[], template: readonly number[]): number {
@@ -206,7 +206,7 @@ function emptyEstimate(limitation: string): KeyEstimate {
   return {
     key: null, mode: null, confidence: null, tuningCents: null,
     segmentAgreement: null, method: "fft_harmonic_chroma_ensemble",
-    analysisWindows: 0, operationCount: 0, limitation,
+    analysisWindows: 0, fftButterflyCount: 0, limitation,
   };
 }
 
@@ -225,7 +225,7 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   const segmentProfiles: number[][] = [];
   const segmentWinners: Candidate[] = [];
   const tuningValues: Array<{ value: number; weight: number }> = [];
-  let operationCount = 0;
+  let fftButterflyCount = 0;
 
   for (let window = 0; window < windowCount; window++) {
     const selectedWindow = windowCount === 1
@@ -233,7 +233,7 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
       : Math.round(window * (possibleWindows - 1) / (windowCount - 1));
     const start = selectedWindow * hop;
     const result = profileForSegment(samples, start, sampleRate);
-    operationCount += result.operations;
+    fftButterflyCount += result.fftButterflyCount;
     const total = result.chroma.reduce((sum, value) => sum + value, 0);
     if (total <= EPSILON) continue;
     const normalized = result.chroma.map((value) => value / total);
@@ -263,19 +263,19 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      operationCount, limitation: "Key estimates varied across audio segments; no single key is asserted.",
+      fftButterflyCount, limitation: "Key estimates varied across audio segments; no single key is asserted.",
     };
   }
   if (confidence < 0.12 || margin < 0.015) {
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      operationCount, limitation: "Key and mode confidence was below threshold; no key is asserted.",
+      fftButterflyCount, limitation: "Key and mode confidence was below threshold; no key is asserted.",
     };
   }
   return {
     key: NOTES[best.key], mode: best.mode, confidence, tuningCents,
     segmentAgreement: agreement, method: "fft_harmonic_chroma_ensemble",
-    analysisWindows: segmentProfiles.length, operationCount, limitation: null,
+    analysisWindows: segmentProfiles.length, fftButterflyCount, limitation: null,
   };
 }
