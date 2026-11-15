@@ -49,15 +49,16 @@ describe("DSP key estimator", () => {
     expect(result.limitation).toContain("Insufficient pitched audio");
   });
 
-  it("stays within the deterministic FFT operation budget", () => {
+  it("reports only actual FFT butterfly iterations for the bounded analysis windows", () => {
     const samples = chord([261.6256, 329.6276, 391.9954], 68, 44100);
     const result = estimateKey(samples, 44100);
     expect(result.analysisWindows).toBeLessThanOrEqual(12);
-    expect(result.operationCount).toBeLessThanOrEqual(500_000);
+    expect(result.fftButterflyCount).toBe(result.analysisWindows * 24_576);
+    expect(result.fftButterflyCount).toBeLessThanOrEqual(12 * 24_576);
     console.info("[key-estimator:synthetic-benchmark]", JSON.stringify({
       durationSeconds: 68,
       windows: result.analysisWindows,
-      operationCount: result.operationCount,
+      fftButterflyCount: result.fftButterflyCount,
       method: result.method,
       realWorldAccuracyClaim: false,
     }));
