@@ -1,6 +1,7 @@
 import { createAudioDecoder } from "../audio/decoder.js";
 import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
+import { providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
 import { GroqClient } from "../providers/groq/client.js";
 import { generateAuditReport } from "../reports/generate-audit-report.js";
@@ -20,6 +21,8 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   if (signal?.aborted) return null;
   // Validate required provider configuration before claiming work so a
   // misconfigured worker cannot strand a queued job in processing.
+  const groqDecision = providerDecision("groq");
+  if (!groqDecision.enabled) throw new Error("groq: disabled by data policy");
   const groq = new GroqClient();
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
@@ -43,7 +46,9 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     return null;
   }
 
-  const audd = process.env.AUDD_API || process.env.AUDD_API_TOKEN ? new AuddClient() : null;
+  const auddDecision = providerDecision("audd");
+  const audd = auddDecision.enabled && (process.env.AUDD_API || process.env.AUDD_API_TOKEN)
+    ? new AuddClient() : null;
   const decoder = createAudioDecoder();
 
   const deps: AuditProcessorDependencies = {
