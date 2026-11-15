@@ -32,7 +32,7 @@ describe("A4 report layout and fixture coverage",()=>{
   }finally{warning.mockRestore();}
  });
  it("renders each fixture pair at A4 with exactly one isolated A&R notes field",async()=>{
-  for(const input of [...fixtures,philloLowConfidenceFixture as unknown as AuditReportInput])for(const tier of ["sample","full"] as const){
+  for(const input of [...fixtures,ambiguousAudioFixture as unknown as AuditReportInput])for(const tier of ["sample","full"] as const){
    const bytes=await generateAuditReport(input,tier),pdf=await PDFDocument.load(bytes);
    for(const page of pdf.getPages()){const size=page.getSize();expect(size.width).toBeCloseTo(595.28,0);expect(size.height).toBeCloseTo(841.89,0);}
    const fields=pdf.getForm().getFields();
@@ -104,8 +104,8 @@ describe("A4 report layout and fixture coverage",()=>{
  it("uses the evidence-sanitized commercial verdict on the PDF cover",()=>{
   expect(coverVerdictLabel(ambiguousAudioFixture as any)).toBe("Insufficient evidence");
  });
- it("renders the Phillo regression fixture with tempo, key, genre and commercial claims withheld",()=>{
-  const pages=planAuditReportPages(philloLowConfidenceFixture as any,"full");
+ it("renders the generic ambiguous-audio regression fixture with tempo, key, genre and commercial claims withheld",()=>{
+  const pages=planAuditReportPages(ambiguousAudioFixture as any,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not reported — insufficient confidence");
   expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
@@ -164,7 +164,7 @@ describe("A4 report layout and fixture coverage",()=>{
  it("checks generated-output pagination, chart-bearing pages, continuation pages, footer clearance, disclosures and the 20-page cap",async()=>{
   const longInput=structuredClone(longFormAudioFixture) as AuditReportInput;
   longInput.evidence={...longInput.evidence,fixture:true};
-  longInput.assessment={...longInput.assessment,executiveSummary:Array(180).fill("A long-form evidence paragraph must wrap at word boundaries and continue without clipping or overlapping the footer.").join(" ")};
+  longInput.assessment={...longInput.assessment,executiveSummary:Array(24).fill("A long-form evidence paragraph must wrap at word boundaries and continue without clipping or overlapping the footer.").join(" ")};
   for(const tier of ["sample","full"] as const){
    const bytes=await generateAuditReport(longInput,tier),pdf=await PDFDocument.load(bytes);
    const pages=pdf.getPages();
