@@ -180,9 +180,9 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
       const record = entry as Record<string, unknown>;
       const claim = typeof record.claim === "string" ? record.claim : "";
-      if (!reliableTempo && /\\b(?:tempo|bpm|beats per minute)\\b/i.test(claim)) return false;
-      if (!isReliableKey(sonicDna as Record<string, unknown> | null | undefined) && /\\b(?:key|mode|major|minor|tonic)\\b/i.test(claim)) return false;
-      if (!hasVocalAnalysis(sonicDna) && /\\b(?:vocal|instrumental|singing|singer|voice)\\b/i.test(claim)) return false;
+      if (!reliableTempo && /\b(?:tempo|bpm|beats per minute)\b/i.test(claim)) return false;
+      if (!isReliableKey(sonicDna as Record<string, unknown> | null | undefined) && /\b(?:key|mode|major|minor|tonic)\b/i.test(claim)) return false;
+      if (!hasVocalAnalysis(sonicDna) && /\b(?:vocal|instrumental|singing|singer|voice)\b/i.test(claim)) return false;
       if (zeroConfidence && record.label === "INFERRED") return false;
       return true;
     });
