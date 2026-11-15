@@ -73,7 +73,7 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
       const keyClaim = /\b[A-G](?:#|b|♯|♭)\s*(?:major|minor)\b|\b[A-G]-(?:sharp|flat)\s*(?:major|minor)\b/i.test(sentence)
         || /\b(?:key|mode|tonic)\s*(?:is|of|:|at|centered on)\s+[A-G]\s*(?:major|minor)\b/i.test(sentence)
         || /\bin\s+[A-G]\s*(?:major|minor)\b/.test(sentence);
-      const hasUnsupportedKeyClaim = suppressKey && keyClaim.test(sentence);
+      const hasUnsupportedKeyClaim = suppressKey && keyClaim;
       return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim && !hasUnsupportedVocalClaim && !hasUnsupportedKeyClaim;
     });
     return kept.join(" ").trim() || "Not asserted: the supporting measurement confidence is insufficient.";
