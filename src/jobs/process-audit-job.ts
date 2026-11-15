@@ -430,7 +430,37 @@ export async function processAuditJob(
       audd: recognitionMetadataInput(recognition),
     };
     const assessmentReconciliation = reconcileMetadata(assessmentMetadataInput);
-    const assessmentIdentity = assessmentReconciliation.identity;
+    const conflictedFields = new Set(assessmentReconciliation.conflicts.map((conflict) => conflict.field));
+    const sourceIdentity = assessmentReconciliation.identity;
+    const assessmentIdentity: TrackIdentity = Object.freeze({
+      ...sourceIdentity,
+      title: conflictedFields.has("title") ? null : sourceIdentity.title,
+      artist: conflictedFields.has("artist") ? null : sourceIdentity.artist,
+      album: conflictedFields.has("album") ? null : sourceIdentity.album,
+      isrc: conflictedFields.has("isrc") ? null : sourceIdentity.isrc,
+      upc: conflictedFields.has("upc") ? null : sourceIdentity.upc,
+      label: conflictedFields.has("label") ? null : sourceIdentity.label,
+      releaseDate: conflictedFields.has("releaseDate") ? null : sourceIdentity.releaseDate,
+      fieldProvenance: Object.freeze({
+        ...sourceIdentity.fieldProvenance,
+        title: conflictedFields.has("title") ? null : sourceIdentity.fieldProvenance.title,
+        artist: conflictedFields.has("artist") ? null : sourceIdentity.fieldProvenance.artist,
+        album: conflictedFields.has("album") ? null : sourceIdentity.fieldProvenance.album,
+        isrc: conflictedFields.has("isrc") ? null : sourceIdentity.fieldProvenance.isrc,
+        upc: conflictedFields.has("upc") ? null : sourceIdentity.fieldProvenance.upc,
+        label: conflictedFields.has("label") ? null : sourceIdentity.fieldProvenance.label,
+        releaseDate: conflictedFields.has("releaseDate") ? null : sourceIdentity.fieldProvenance.releaseDate,
+      }),
+    });
+    const assessmentReconciliationEvidence = {
+      status: assessmentReconciliation.status,
+      evidenceClass: assessmentReconciliation.status === "reconciled"
+        ? "RECONCILED"
+        : assessmentIdentity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
+      reconciledFields: assessmentReconciliation.reconciledFields,
+      conflicts: assessmentReconciliation.conflicts,
+      identity: identityEvidence(assessmentIdentity),
+    };
     const assessmentRecognition = recognitionEvidence(recognition);
     delete assessmentRecognition.spotifyId;
     const assessmentEvidence = {
@@ -441,7 +471,7 @@ export async function processAuditJob(
         ? "RECONCILED"
         : assessmentIdentity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
       identity: identityEvidence(assessmentIdentity),
-      reconciliation: reconciliationEvidence(assessmentReconciliation),
+      reconciliation: assessmentReconciliationEvidence,
       metadataSourcesChecked: [
         ...catalogResults.filter((result) => result.link.platform !== "spotify").map((result) => result.link.platform),
         ...(masterTags ? ["id3"] : []),
@@ -463,7 +493,13 @@ export async function processAuditJob(
       evidence: assessmentEvidence,
       sonicDna,
       catalogMetadata: assessmentMetadata
-        ? { ...catalogEvidence(assessmentMetadata, assessmentIdentity), catalogSources: assessmentEvidence.catalogSources }
+        ? {
+            ...catalogEvidence(assessmentMetadata, assessmentIdentity),
+            ...identityEvidence(assessmentIdentity),
+            identity: identityEvidence(assessmentIdentity),
+            reconciliation: assessmentReconciliationEvidence,
+            catalogSources: assessmentEvidence.catalogSources,
+          }
         : null,
     }, signal));
     await awaitWithLease(deps, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
