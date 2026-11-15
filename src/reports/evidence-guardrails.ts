@@ -214,9 +214,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     if (typeof mutable.creativeIdentity === "string") {
       mutable.creativeIdentity = "Creative identity is unconfirmed because overall A&R assessment confidence is zero. Do not assign a genre, mood, vocal identity or audience position until source reconciliation and a human listening review are complete.";
     }
-    if (Array.isArray(mutable.strengths)) {
-      mutable.strengths = ["No track-specific creative strengths are asserted because overall A&R assessment confidence is zero. Objective technical measurements remain available in the Sonic DNA section but do not, by themselves, establish artistic quality or audience response."];
-    }
+    mutable.strengths = [];
     if (Array.isArray(mutable.risks)) {
       mutable.risks = [...mutable.risks, "Overall A&R assessment confidence is zero; track-specific creative strengths, positioning and commercial conclusions are withheld."];
     }
@@ -241,16 +239,28 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
           return "Not scored: overall assessment confidence is zero. The available evidence cannot support a numeric rating for this dimension; complete the listed evidence and human-review steps before assigning a score.";
       }
     };
-    if (mutable.scorecard && typeof mutable.scorecard === "object" && !Array.isArray(mutable.scorecard)) {
-      for (const [dimension, value] of Object.entries(mutable.scorecard as Record<string, unknown>)) {
-        if (value && typeof value === "object" && !Array.isArray(value)) {
-          mutable.scorecard[dimension] = {
-            ...(value as Record<string, unknown>),
-            score: null,
-            rationale: dimensionAbstentionRationale(dimension),
-          };
-        }
-      }
+    if (!mutable.scorecard || typeof mutable.scorecard !== "object" || Array.isArray(mutable.scorecard)) {
+      mutable.scorecard = {};
+    }
+    for (const [dimension, value] of Object.entries(mutable.scorecard as Record<string, unknown>)) {
+      const existing = value && typeof value === "object" && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : {};
+      mutable.scorecard[dimension] = {
+        ...existing,
+        score: null,
+        rationale: dimensionAbstentionRationale(dimension),
+      };
+    }
+    for (const dimension of ["tempoLaneFit", "rhythmicConsistency", "dynamicRangeLoudness", "metadataCompleteness", "releaseReadiness"]) {
+      const existing = mutable.scorecard[dimension] && typeof mutable.scorecard[dimension] === "object"
+        ? mutable.scorecard[dimension] as Record<string, unknown>
+        : {};
+      mutable.scorecard[dimension] = {
+        ...existing,
+        score: null,
+        rationale: dimensionAbstentionRationale(dimension),
+      };
     }
     if (mutable.commercialRead) {
       mutable.commercialRead = {
