@@ -2,7 +2,7 @@ export interface TempoEstimate { bpm: number | null; alternateTempo: number | nu
 export interface SonicDnaFeatures {
  sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
  key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; limitations:string[];
- loudnessLufs:number; rmsEnergy:number; dynamicRangeDb:number; spectralCentroidHz:number; spectralBandwidthHz:number;
+ loudnessLufs:number|null; rmsLevelDbfs:number; rmsEnergy:number; dynamicRangeDb:number; spectralCentroidHz:number; spectralBandwidthHz:number;
  spectralRolloffHz:number; zeroCrossingRate:number; moodTags:string[]; genreContext:string[];
 }
 const EPSILON=1e-12, MAX_ANALYSIS_SAMPLES=3_000_000, NOTES=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -174,7 +174,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
   vocalFeatures:{status:"not_analyzed",reason:"No vocal separation or vocal-activity model is configured; vocal attributes are not inferred."},
   bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
   key:key.key,mode:key.mode,keyConfidence:key.confidence,limitations,
-  loudnessLufs:20*Math.log10(Math.max(EPSILON,energy))-0.691,rmsEnergy:energy,
+  loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
   dynamicRangeDb:20*Math.log10(p95/p10),spectralCentroidHz:centroid,spectralBandwidthHz:bandwidth,
   spectralRolloffHz:rolloff,zeroCrossingRate:crossings/Math.max(1,a.length-1),
   moodTags:tags,genreContext:classifyGenreFromBpm(tempo.bpm)
