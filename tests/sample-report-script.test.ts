@@ -18,7 +18,7 @@ describe("sample-report command",()=>{
   expect(ambiguous).toContain("Generic Test Artist");
   const fixture=await readFile(new URL("scripts/fixtures/sample-report-input.mjs",root),"utf8");
   expect(fixture).toContain("Fixture Artist");
-  expect(fixture).toContain("provenance:"uploaded_audio_master"");
+  expect(fixture).toContain('provenance:"uploaded_audio_master"');
   expect(fixture).toContain("synthetic fixture");
   expect(fixture).toContain("sonicDna:null");
  });
