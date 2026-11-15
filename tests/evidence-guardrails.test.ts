@@ -11,6 +11,18 @@ const baseAssessment = {
   laneHypothesis: "The 156 BPM tempo points to Afrobeats.",
   releaseStrategy: { recommendation: "Pitch the 156 BPM track to high-energy playlists.", priorities: ["Verify rights and delivery."] },
   promotionPlan: { pitchingAngles: ["Lead with the 156 BPM energy."], playlistCategories: ["High-energy Afrobeats party mixes"] },
+  labelPartnerFit: {
+    partnerProfile: "An instrumental-focused boutique label is a strong fit for this recording.",
+    criteriaToDemonstrate: ["Demonstrate instrumental production quality and playlist fit."],
+    diligenceBeforeContact: "Prepare an instrumental pitch for the label.",
+  },
+  executionPlan: {
+    days30: "Prepare the instrumental campaign and pitch to suitable labels.",
+    days60: "Release the instrumental edit and begin playlist outreach.",
+    days90: "Scale the campaign based on playlist response.",
+  },
+  productionArrangementGuidance: "Add a new instrumental bridge and strengthen the bass arrangement.",
+  confidence: 0,
   scorecard: {
     tempoLaneFit: { score: 80, rationale: "Tempo supports the lane." },
     rhythmicConsistency: { score: 75, rationale: "The rhythm is consistent." },
@@ -118,5 +130,35 @@ describe("Phillo evidence guardrails", () => {
     });
     expect(result.scorecard.tempoLaneFit.score).toBe(80);
     expect(result.aAndRPositioning.primaryLane).toBe("Afrobeats");
+  });
+
+  it("does not assert instrumental or vocal absence when vocal analysis was not performed", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "This is an instrumental track with no vocals.",
+      releaseStrategy: { recommendation: "Without vocal content, target instrumental playlists.", priorities: ["Pitch to instrumental playlists."] },
+      promotionPlan: { pitchingAngles: ["Promote this vocal-free instrumental beat."], playlistCategories: ["Instrumental lo-fi playlists"] },
+      evidenceGaps: ["Vocal analysis was not performed because no vocal-activity model is configured."],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      vocalFeatures: { status: "not_analyzed", reason: "No vocal analysis model is configured." },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/instrumental|vocal-free|no vocals|without vocal content/i);
+    expect(JSON.stringify(result)).toContain("Vocal analysis was not performed");
+  });
+
+  it("withholds track-specific release and partner recommendations when overall assessment confidence is zero", () => {
+    const result = sanitizeAssessmentForEvidence(baseAssessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 95,
+      tempoConfidence: 0,
+      vocalFeatures: { status: "not_analyzed" },
+      genreClassification: { primaryGenre: null, abstained: true },
+    });
+    expect(result.releaseStrategy.recommendation).toContain("No track-specific release recommendation is issued");
+    expect(result.labelPartnerFit.partnerProfile).toContain("No label or partner fit can be established");
+    expect(result.executionPlan.days30).toContain("Verify artist, title and release identity");
+    expect(result.productionArrangementGuidance).toContain("No track-specific production changes are recommended");
   });
 });
