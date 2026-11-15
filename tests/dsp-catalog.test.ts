@@ -62,7 +62,9 @@ describe("catalogue policy gate coverage", () => {
 
   it("extracts Apple Music track identity fields when the exact provider opt-in is enabled", async () => {
     process.env.PROVIDER_ENABLED_APPLE_MUSIC = "true";
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toContain("itunes.apple.com/lookup?id=67890&entity=song");
+      return new Response(JSON.stringify({
       resultCount: 1,
       results: [{
         kind: "song",
@@ -74,13 +76,13 @@ describe("catalogue policy gate coverage", () => {
         primaryGenreName: "R&B",
         trackViewUrl: "https://music.apple.com/us/album/test-track/12345?i=67890",
       }],
-    }), { status: 200, headers: { "content-type": "application/json" } }));
+    }), { status: 200, headers: { "content-type": "application/json" } });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await collectCatalogMetadata("https://music.apple.com/us/album/test-album/12345?i=67890");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]?.[0]).toContain("itunes.apple.com/lookup?id=67890&entity=song");
     expect(result).toMatchObject({
       platform: "apple_music",
       catalogId: "67890",
