@@ -133,7 +133,21 @@ function thresholdError(name: string, value: unknown): string | null {
 const MAX_PROVIDER_RETRY_DELAY_MS = 15 * 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
 const MAX_COMPLETION_TOKENS = 2500;
-const RETRY_COMPLETION_TOKENS = 1500;
+
+function retryCompletionTokenBudget(detail: string, currentBudget: number): number {
+  const match = detail.match(/Limit\s+(\d+)\s*,\s*Requested\s+(\d+)/i);
+  if (!match) return Math.max(256, Math.floor(currentBudget / 2));
+
+  const limit = Number(match[1]);
+  const requested = Number(match[2]);
+  if (!Number.isSafeInteger(limit) || !Number.isSafeInteger(requested) || limit <= 0 || requested <= limit) {
+    return Math.max(256, Math.floor(currentBudget / 2));
+  }
+
+  // Leave at least 5% of the provider's TPM allowance unused after accounting for the reported overage.
+  const headroom = Math.max(400, Math.ceil(limit * 0.05));
+  return Math.max(256, Math.min(currentBudget - 1, currentBudget - (requested - limit) - headroom));
+}
 
 async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
   const retryAfter = response.headers.get("retry-after");
@@ -217,7 +231,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       let providerError:{error?:{code?:unknown;message?:unknown}}={};
       try{providerError=JSON.parse(detail) as typeof providerError;}catch{/* Preserve the original provider response below. */}
       if(response?.status===413&&attempt===0){
-        completionTokenBudget=RETRY_COMPLETION_TOKENS;
+        completionTokenBudget=retryCompletionTokenBudget(detail,completionTokenBudget);
         lastError="Groq rejected the request with HTTP 413. Retry once with a smaller completion-token reservation while preserving the complete supplied evidence.";
         continue;
       }
