@@ -81,12 +81,19 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const scores=new Map<number,number>();
  for(let bpm=40;bpm<=240;bpm++){
   const lag=Math.max(1,Math.round(60/bpm*sampleRate/hop));
-  let cross=0,left=0,right=0;
-  for(let i=lag;i<novelty.length;i++){
-   const x=novelty[i],y=novelty[i-lag];
-   cross+=x*y;left+=x*x;right+=y*y;
+  const tolerance=Math.min(4,Math.max(1,Math.round(lag*0.08)));
+  let bestScore=0;
+  for(let offset=-tolerance;offset<=tolerance;offset++){
+   const candidateLag=lag+offset;
+   if(candidateLag<1)continue;
+   let cross=0,left=0,right=0;
+   for(let i=candidateLag;i<novelty.length;i++){
+    const x=novelty[i],y=novelty[i-candidateLag];
+    cross+=x*y;left+=x*x;right+=y*y;
+   }
+   bestScore=Math.max(bestScore,cross/Math.sqrt(Math.max(EPSILON,left*right)));
   }
-  scores.set(bpm,cross/Math.sqrt(Math.max(EPSILON,left*right)));
+  scores.set(bpm,bestScore);
  }
  const localPeaks=[...scores.entries()].filter(([bpm,score])=>
   score>=(scores.get(bpm-1)??-1)&&score>=(scores.get(bpm+1)??-1),
