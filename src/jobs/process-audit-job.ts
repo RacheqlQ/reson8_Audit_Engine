@@ -4,6 +4,8 @@ import type { ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { isPdf } from "../reports/pdf-output.js";
 import { analyzePcm, type SonicDnaFeatures } from "../audio/sonic-dna.js";
+import { fuseGenreEvidence, type ProviderGenreTags } from "../genre/fusion.js";
+import { DEFAULT_GENRE_MODEL } from "../genre/model.js";
 import type { TrackIdentity } from "../metadata/MetadataEngine.js";
 import { reconcileMetadata, type MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
 import { readAudioTags } from "../metadata/audio-tags.js";
@@ -186,6 +188,23 @@ function catalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetada
   return result;
 }
 
+function genreProviderTags(metadataSources: readonly CatalogMetadata[], masterTags: ReturnType<typeof readAudioTags> | null): ProviderGenreTags[] {
+  const result: ProviderGenreTags[] = [];
+  for (const source of metadataSources) {
+    // Reuse the existing fail-closed Spotify provenance filter. TIDAL's
+    // provider-reported sonic profile remains a separate source.
+    const safe = assessmentSafeCatalogMetadata(source);
+    if (!safe) continue;
+    const tags = [...new Set([
+      safe.genre,
+      ...(safe.sonicProfile?.genreContext ?? []),
+    ].filter((value): value is string => typeof value === "string" && value.trim().length > 0))];
+    if (tags.length) result.push({ provider: source.platform, tags });
+  }
+  if (masterTags?.genres.length) result.push({ provider: "id3", tags: masterTags.genres });
+  return result;
+}
+
 function recognitionMetadataInput(recognition: AuditRecognition) {
   return {
     matched: recognition.matched,
@@ -302,6 +321,7 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
     vocalFeatures: dna.vocalFeatures,
     moodTags: dna.moodTags,
     genreContext: dna.genreContext,
+    ...(dna.genreClassification ? { genreClassification: dna.genreClassification } : {}),
   };
 }
 
@@ -420,7 +440,26 @@ export async function processAuditJob(
     };
     const reconciliation = reconcileMetadata(metadataInput);
     await awaitWithLease(deps, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources));
+
+    const fusedGenreClassification = fuseGenreEvidence({
+      providerTags: genreProviderTags(metadataSources, masterTags),
+      bpm: masterDna?.bpm ?? null,
+      tempoConfidence: masterDna?.tempoConfidence ?? null,
+    });
+    const genreModelResult = await DEFAULT_GENRE_MODEL.classify({
+      bpm: masterDna?.bpm ?? null,
+      tempoConfidence: masterDna?.tempoConfidence ?? null,
+      key: masterDna?.key ?? null,
+      mode: masterDna?.mode ?? null,
+      providerGenreIds: fusedGenreClassification.genres.map((genre) => genre.id),
+    });
+    const genreClassification = { ...fusedGenreClassification, model: genreModelResult };
     if (masterDna) {
+      masterDna = {
+        ...masterDna,
+        genreClassification,
+        genreContext: genreClassification.genres.map((genre) => genre.label),
+      };
       await awaitWithLease(deps, (signal) => deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal));
     }
 
@@ -435,6 +474,7 @@ export async function processAuditJob(
         : identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
       identity: identityEvidence(identity),
       reconciliation: reconciliationEvidence(reconciliation),
+      genreClassification,
       metadataSourcesChecked: [...catalogResults.map((result) => result.link.platform), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...attemptedRecognitionProviders],
       catalogSources: catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, error: result.error })),
       sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
@@ -493,6 +533,7 @@ export async function processAuditJob(
         : assessmentIdentity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
       identity: identityEvidence(assessmentIdentity),
       reconciliation: assessmentReconciliationEvidence,
+      genreClassification,
       metadataSourcesChecked: [
         ...catalogResults.filter((result) => result.link.platform !== "spotify").map((result) => result.link.platform),
         ...(masterTags ? ["id3"] : []),
@@ -505,11 +546,16 @@ export async function processAuditJob(
       sourceCombination: evidence.sourceCombination,
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
-    const sonicDna = masterDna
+    const sonicDnaBase = masterDna
       ? dnaEvidence(masterDna)
       : assessmentMetadata
         ? catalogSonicDna(assessmentMetadata)
         : null;
+    const sonicDna = sonicDnaBase ? {
+      ...sonicDnaBase,
+      genreClassification,
+      genreContext: genreClassification.genres.map((genre) => genre.label),
+    } : null;
     const assessment = await awaitWithLease(deps, (signal) => deps.generateAssessment({
       evidence: assessmentEvidence,
       sonicDna,

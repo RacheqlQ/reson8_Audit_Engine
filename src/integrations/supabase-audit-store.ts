@@ -341,6 +341,24 @@ export function createSupabaseAuditStore(
       }, signal);
     },
     async saveSonicDna(jobId, claimToken, dna, signal) {
+      const genreEvidenceAudit = dna.genreClassification
+        ? {
+            taxonomyVersion: dna.genreClassification.taxonomyVersion,
+            primaryGenre: dna.genreClassification.primaryGenre,
+            confidence: dna.genreClassification.confidence,
+            abstained: dna.genreClassification.abstained,
+            unmappedTags: dna.genreClassification.unmappedTags,
+          }
+        : undefined;
+      const genreFeatureCapture = process.env.GENRE_FEATURE_CAPTURE_ENABLED === "true" && dna.genreClassification
+        ? {
+            taxonomyVersion: dna.genreClassification.taxonomyVersion,
+            candidateGenreIds: dna.genreClassification.genres.map((genre) => genre.id),
+            confidence: dna.genreClassification.confidence,
+            abstained: dna.genreClassification.abstained,
+            tempoContributionCap: dna.genreClassification.evidence.tempoContributionCap,
+          }
+        : undefined;
       await fencedStep(jobId, claimToken, "sonic_dna", {
         durationSeconds: dna.durationSeconds, sampleRate: dna.sampleRate, channels: dna.channels,
         bpm: dna.bpm, key: dna.key, mode: dna.mode, loudnessLufs: dna.loudnessLufs,
@@ -350,7 +368,12 @@ export function createSupabaseAuditStore(
         rhythmFeatures: dna.rhythmFeatures, harmonicFeatures: dna.harmonicFeatures, vocalFeatures: dna.vocalFeatures,
         moodTags: dna.moodTags, genreContext: dna.genreContext,
         rawFeatures: { ...dna, provenance: "uploaded_audio_master", evidenceClass: "OBSERVED" },
-        eventPayload: { analysisVersion: "audit-engine-0.2.0", evidenceClass: "OBSERVED" },
+        eventPayload: {
+          analysisVersion: "audit-engine-0.2.0",
+          evidenceClass: "OBSERVED",
+          ...(genreEvidenceAudit ? { genreEvidenceAudit } : {}),
+          ...(genreFeatureCapture ? { genreFeatureCapture } : {}),
+        },
       }, signal);
     },
     async saveAssessment(jobId, claimToken, assessment, signal) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzePcm, classifyGenreFromBpm, estimateTempo } from "../src/audio/sonic-dna.js";
+import { analyzePcm, estimateTempo } from "../src/audio/sonic-dna.js";
 
 function pulse(bpm:number,seconds=12,sampleRate=8000):Float32Array {
  const samples=new Float32Array(sampleRate*seconds);
@@ -117,11 +117,9 @@ describe("Sonic DNA",()=>{
   expect(estimateTempo(dc,8000).bpm).toBeNull();
   expect(estimateTempo(tone,8000).bpm).toBeNull();
  });
- it("maps tempo to broad genre context without asserting genre as fact",()=>{
-  expect(classifyGenreFromBpm(75)).toContain("R&B");
-  expect(classifyGenreFromBpm(112)).toContain("Amapiano");
-  expect(classifyGenreFromBpm(128)).toContain("Pop");
-  expect(classifyGenreFromBpm(999)).toEqual([]);
+ it("does not assert genre from tempo alone",()=>{
+  const result=analyzePcm(pulse(112),8000);
+  expect(result.genreContext).toEqual([]);
  });
 
  it("labels the RMS-derived signal level as dBFS and does not claim integrated LUFS",()=>{
@@ -139,7 +137,7 @@ describe("Sonic DNA",()=>{
   expect(rhythm.rhythmFeatures).toMatchObject({status:"measured",method:"amplitude_envelope_autocorrelation"});
   expect(rhythm.rhythmFeatures.bpm).toBeGreaterThanOrEqual(115);
   expect(rhythm.rhythmFeatures.bpm).toBeLessThanOrEqual(125);
-  expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:"C",mode:"major",method:"sampled_spectral_chroma"});
+  expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:"C",mode:"major",method:"fft_harmonic_chroma_ensemble"});
   expect(rhythm.vocalFeatures).toMatchObject({status:"not_analyzed"});
   expect(rhythm.vocalFeatures.reason).toContain("No vocal");
  });
