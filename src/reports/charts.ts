@@ -222,6 +222,20 @@ export function chartPanelStatus(input: Pick<ChartPanelInput, "fixture" | "infer
   default:return "UNCLASSIFIED";
  }
 }
+export function chartPanelDisplayStatus(input: Pick<ChartPanelInput, "fixture" | "inferred" | "unavailable" | "evidenceClass">): string {
+ const status=chartPanelStatus(input);
+ const evidence=input.evidenceClass==="provider-recognized"?"PROVIDER-RECOGNIZED"
+  :input.evidenceClass==="assessment-derived"?"ASSESSMENT-DERIVED"
+  :input.evidenceClass==="illustrative"?"ILLUSTRATIVE"
+  :input.evidenceClass==="inferred"||input.inferred?"HYPOTHESIS"
+  :input.evidenceClass==="measured"?"MEASURED":"UNCLASSIFIED";
+ const labels:string[]=[];
+ if(input.fixture)labels.push("SYNTHETIC");
+ else if(input.unavailable)labels.push("REQUIRES AUDIO");
+ if(status!=="SYNTHETIC FIXTURE"&&status!=="REQUIRES AUDIO")labels.push(status);
+ if(!labels.includes(evidence))labels.push(evidence);
+ return labels.join(" · ");
+}
 function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,height:number){
  const x=CARD_X,w=CARD_W,top=input.y??700,bottom=top-height;
  p.drawRectangle({x,y:bottom,width:w,height,color:C.paper,borderColor:C.line,borderWidth:.6});
@@ -232,8 +246,8 @@ function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,hei
  p.drawRectangle({x,y:top-HEADER_H,width:w,height:HEADER_H,color:C.navy});
  p.drawRectangle({x,y:top-HEADER_H,width:5,height:HEADER_H,color:input.inferred?C.violet:input.unavailable?C.coral:C.teal});
  tracked(p,input.title.toUpperCase(),x+13,top-19,bold,8,C.white,.65);
- const status=chartPanelStatus(input);
- tracked(p,status,x+w-112,top-19,bold,6.2,input.fixture||input.inferred?C.gold:input.unavailable?C.coral:C.teal,.45);
+ const status=chartPanelDisplayStatus(input);
+ tracked(p,status,x+w-164,top-19,bold,5.2,input.fixture||input.inferred?C.gold:input.unavailable?C.coral:C.teal,.25);
  const captionTop=bottom+CAPTION_H;
  line(p,x+9,captionTop,x+w-9,captionTop,C.line,.65);
  let cy=bottom+CAPTION_H-12;
