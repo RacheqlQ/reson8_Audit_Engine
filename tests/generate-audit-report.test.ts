@@ -77,7 +77,9 @@ describe("A4 report layout and fixture coverage",()=>{
   input.evidence.reconciliation={conflicts:[{field:"artist",values:["Tems","Wrong Artist"]}]};
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Platform presence and consistency");
+  expect(report).toContain("DSP provider lookup outcomes");
+  expect(report).toContain("Apple Music — recognized");
+  expect(report).toContain("YouTube Music — unavailable");
   expect(report).toContain("Conflict details: artist: Tems vs Wrong Artist");
   expect(report).toContain("Confidence definition");
   expect(chartLayoutIssuesForReport(input)).toEqual([]);
