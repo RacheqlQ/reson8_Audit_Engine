@@ -60,9 +60,12 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
         genre.label.length >= 4 && lower.includes(genre.label.toLocaleLowerCase()),
       );
       const commercialTerms = /\b(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|marketability|commercial performance|commercial potential|commercial success|commercially (?:promising|viable|strong|successful|attractive|competitive)|demand|traction|market fit)\b/i;
-      const cautionaryCommercialContext = /\b(?:without|insufficient|unverified|unavailable|unknown|cannot|can't|could not|unable|withheld|requires? review)\b/i.test(sentence)
-        || /\bno\s+(?:verified\s+)?(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|commercial (?:performance|potential|success|metrics?)|market demand|traction|market fit|supporting evidence)\b/i.test(sentence)
-        || /\bnot\s+(?:available|verified|supported|supplied|reported|provided|established|confirmed|measured|substantiated)\b/i.test(sentence);
+      const cautionaryCommercialContext = /\b(?:cannot|can't|could not|unable|withheld|requires? review)\b/i.test(sentence)
+        || /\bno\s+(?:(?:verified|source-attributed|reliable|supporting|sufficient)\s+)*(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|commercial (?:performance|potential|success|metrics?)|market demand|traction|market fit|evidence)\b/i.test(sentence)
+        || /\bwithout\s+(?:(?:verified|source-attributed|reliable|sufficient)\s+)*(?:commercial (?:performance|metrics?|potential|success)|audience|streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|evidence)\b/i.test(sentence)
+        || /\b(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|commercial (?:performance|potential|success|metrics?)|market demand|traction|market fit|marketability)\s+(?:is|are|remains?|was|were)\s+(?:not|unavailable|unverified|unknown|undetermined|withheld|unsubstantiated)\b/i.test(sentence)
+        || /\bnot\s+(?:available|verified|supported|supplied|reported|provided|established|confirmed|measured|substantiated)\b/i.test(sentence)
+        || /\binsufficient\s+(?:evidence|data|metrics?|support|reporting)\b/i.test(sentence);
       const actionableMonitoringInstruction = /\b(?:verify|measure|monitor|track|investigate)\s+(?:the\s+)?(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|market demand|commercial performance|marketability)\b/i.test(sentence);
       const hasCommercialClaim = suppressCommercial && commercialTerms.test(sentence) && !cautionaryCommercialContext && !actionableMonitoringInstruction;
       return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim;
