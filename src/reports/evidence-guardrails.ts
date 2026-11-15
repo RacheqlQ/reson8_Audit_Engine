@@ -210,7 +210,12 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
           mutable.scorecard[dimension] = {
             ...(value as Record<string, unknown>),
             score: null,
-            rationale: abstentionRationale,
+            rationale: [
+              typeof (value as Record<string, unknown>).rationale === "string"
+                ? ((value as Record<string, unknown>).rationale as string).trim()
+                : "",
+              abstentionRationale,
+            ].filter(Boolean).join(" "),
           };
         }
       }
@@ -218,7 +223,9 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     if (mutable.commercialRead) {
       mutable.commercialRead = {
         marketability: "undetermined",
-        rationale: "Commercial assessment withheld because overall A&R assessment confidence is zero. Verified metrics, if present, remain source evidence and do not establish a reliable track-specific commercial verdict.",
+        rationale: hasVerifiedCommercialMetrics(evidence)
+          ? "Verified commercial metrics are present, but overall A&R assessment confidence is zero. They remain source evidence and do not establish a reliable track-specific commercial verdict."
+          : "No verified, source-attributed commercial-performance metrics are available. Overall A&R assessment confidence is zero, so no commercial verdict can be issued.",
       };
     }
     if (mutable.aAndRPositioning) {
