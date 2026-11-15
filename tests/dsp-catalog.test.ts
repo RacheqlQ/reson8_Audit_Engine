@@ -41,10 +41,7 @@ describe("catalogue policy gate coverage", () => {
     delete process.env.PROVIDER_ENABLED_DEEZER;
   });
 
-  it("does not call Apple, YouTube Music or denied Deezer even when opt-in flags are set", async () => {
-    process.env.PROVIDER_ENABLED_APPLE_MUSIC = "true";
-    process.env.PROVIDER_ENABLED_YOUTUBE_MUSIC = "true";
-    process.env.PROVIDER_ENABLED_DEEZER = "true";
+  it("keeps Apple, YouTube Music and Deezer off by default without exact opt-in flags", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -57,9 +54,9 @@ describe("catalogue policy gate coverage", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(results.map((result) => result.raw.providerPolicy)).toMatchObject([
-      { provider: "apple_music", reason: "disabled by data policy", commercialStatus: "unverified" },
-      { provider: "youtube_music", reason: "disabled by data policy", commercialStatus: "unverified" },
-      { provider: "deezer", reason: "disabled by data policy", commercialStatus: "denied" },
+      { provider: "apple_music", reason: "disabled by data policy", commercialStatus: "allowed" },
+      { provider: "youtube_music", reason: "disabled by data policy", commercialStatus: "allowed" },
+      { provider: "deezer", reason: "disabled by data policy", commercialStatus: "allowed" },
     ]);
   });
 });
@@ -72,10 +69,9 @@ describe("Audiomack commercial policy gate", () => {
     delete process.env.PROVIDER_ENABLED_AUDIOMACK;
   });
 
-  it("does not call the official API when credentials and the opt-in flag are present but permission is unverified", async () => {
+  it("does not call the official API when credentials are present but exact opt-in is absent", async () => {
     process.env.AUDIOMACK_CONSUMER_KEY = "consumer-key";
     process.env.AUDIOMACK_CONSUMER_SECRET = "consumer-secret";
-    process.env.PROVIDER_ENABLED_AUDIOMACK = "true";
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -86,7 +82,7 @@ describe("Audiomack commercial policy gate", () => {
       provider: "audiomack",
       status: "unavailable",
       reason: "disabled by data policy",
-      commercialStatus: "unverified",
+      commercialStatus: "allowed",
     });
   });
 
