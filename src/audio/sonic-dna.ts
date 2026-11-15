@@ -108,10 +108,10 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const related=[0.5,1/3,2,3]
   .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
   .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=240&&candidate.bpm!==bestBpm&&candidate.score>=bestScore*0.25)
-  .sort((a,b)=>b.score-a.score);
- const strongerRelated=related.find(candidate=>candidate.score>bestScore*1.05)??null;
- const bpm=strongerRelated?.bpm??bestBpm;
- const alternateTempo=strongerRelated?bestBpm:(related[0]?.bpm??null);
+  .sort((a,b)=>b.bpm-a.bpm);
+ const relatedCandidate=related[0]??null;
+ const bpm=relatedCandidate&&relatedCandidate.bpm>bestBpm?relatedCandidate.bpm:bestBpm;
+ const alternateTempo=relatedCandidate?(bpm===bestBpm?relatedCandidate.bpm:bestBpm):null;
  const candidates=selected.map(([candidate])=>candidate);
  for(const candidate of [Math.round(bpm),Math.round(bpm)-1,Math.round(bpm)+1,...related.map(item=>item.bpm)])if(candidate>=40&&candidate<=240&&!candidates.includes(candidate))candidates.push(candidate);
  return {bpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),confidence,method,candidateBpms:candidates.slice(0,8),abstentionReason:null};
