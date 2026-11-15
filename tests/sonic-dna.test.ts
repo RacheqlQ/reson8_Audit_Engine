@@ -27,6 +27,19 @@ describe("Sonic DNA",()=>{
   expect(result.spectralCentroidHz).toBeLessThan(500);
   expect(result.zeroCrossingRate).toBeGreaterThan(0.05);
  });
+ it("uses transient-onset evidence and exposes ranked tempo candidates with an abstention diagnostic",()=>{
+  const result=estimateTempo(pulse(120),8000);
+  expect(result.method).toBe("high_frequency_transient_autocorrelation");
+  expect(result.candidateBpms).toContain(120);
+  expect(result.abstentionReason).toBeNull();
+ });
+ it("abstains on sustained non-rhythmic noise instead of reporting an arbitrary tempo",()=>{
+  let seed=17;
+  const noise=Float32Array.from({length:8000*8},()=>{seed=(seed*16807)%2147483647;return ((seed/2147483647)*2-1)*0.08;});
+  const result=estimateTempo(noise,8000);
+  expect(result.bpm).toBeNull();
+  expect(result.abstentionReason).not.toBeNull();
+ });
  it("estimates a regular 120 BPM pulse",()=>{
   const result=estimateTempo(pulse(120),8000);
   expect(result.bpm).toBeGreaterThanOrEqual(115);
