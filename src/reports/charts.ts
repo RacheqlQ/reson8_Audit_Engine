@@ -90,7 +90,7 @@ export function chartPanelHeight(kind:ChartKind="bars",rows:ChartRow[]=[],width=
  if(kind==="layers")return 180;if(kind==="tension")return 205;
  if(kind==="sonic")return 230;
  if(kind==="spectrum")return 270;
- if(kind==="constellation"||kind==="timeline"||kind==="chain")return 202;
+ if(kind==="timeline"||kind==="chain")return 202;
  if(kind==="bars")return 205;
  return 190;
 }
