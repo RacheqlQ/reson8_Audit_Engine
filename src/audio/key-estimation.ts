@@ -111,23 +111,24 @@ function isHarmonicOf(
   return harmonic >= 2 && harmonic <= 8 && Math.abs(ratio - harmonic) / harmonic <= 0.03;
 }
 
-function fundamentalPeaks(peaks: Array<{ frequency: number; magnitude: number }>): Array<{ frequency: number; magnitude: number }> {
+function analyzeFundamentalPeaks(peaks: Array<{ frequency: number; magnitude: number }>): {
+  fundamentals: Array<{ frequency: number; magnitude: number }>;
+  supportedWeakRoots: Array<{ frequency: number; magnitude: number }>;
+} {
   const strongest = peaks.reduce((maximum, peak) => Math.max(maximum, peak.magnitude), 0);
   const crediblePeaks = peaks.filter((peak) => peak.magnitude >= strongest * 0.08);
 
-  // A weak fundamental below the 8% voting floor must still be allowed to
-  // explain a coherent series of stronger upper partials. It is not itself
-  // admitted as a key vote; it only prevents those partials becoming false
-  // independent roots when the fundamental is weak.
+  // A weak fundamental below the 8% voting floor can still explain a coherent
+  // series of stronger upper partials. It is not itself admitted as a key vote.
   const supportedWeakRoots = peaks.filter((lower) =>
     lower.magnitude < strongest * 0.08
       && peaks.filter((upper) => isHarmonicOf(upper, lower)).length >= 2,
   );
   const harmonicAnchors = [...crediblePeaks, ...supportedWeakRoots];
-
-  return crediblePeaks.filter((peak) =>
+  const fundamentals = crediblePeaks.filter((peak) =>
     !harmonicAnchors.some((lower) => isHarmonicOf(peak, lower)),
   );
+  return { fundamentals, supportedWeakRoots };
 }
 
 function tuningOffset(peaks: Array<{ frequency: number; magnitude: number }>): number {
@@ -179,7 +180,7 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
     });
   }
 
-  const fundamentals = fundamentalPeaks(peaks);
+  const { fundamentals, supportedWeakRoots } = analyzeFundamentalPeaks(peaks);
   // A single harmonic series is evidence of a pitched note, not a musical key.
   // Count independent spectral roots before harmonic/subharmonic chroma voting.
   if (fundamentals.length < 2) {
@@ -193,18 +194,24 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
   }
   const bassChroma = Array(12).fill(0);
   const midChroma = Array(12).fill(0);
-  for (const peak of fundamentals) {
+  for (const peak of peaks) {
+    // A weak fundamental below the root-voting floor may explain several
+    // stronger partials. Those partials must not become independent notes.
+    if (supportedWeakRoots.some((lower) => isHarmonicOf(peak, lower))) continue;
+
+    const supportingRoot = fundamentals.find((lower) => isHarmonicOf(peak, lower));
+    const harmonicNumber = supportingRoot
+      ? Math.round(peak.frequency / supportingRoot.frequency)
+      : 1;
+    const harmonicWeight = supportingRoot ? 0.12 / harmonicNumber : 1;
     const correctedHz = peak.frequency / Math.pow(2, tuningCents / 1200);
     if (correctedHz < MIN_FREQUENCY_HZ || correctedHz > MAX_FREQUENCY_HZ) continue;
     const midi = 69 + 12 * Math.log2(correctedHz / 440);
     const pitchClass = (Math.round(midi) % 12 + 12) % 12;
     const target = correctedHz < 250 ? bassChroma : midChroma;
     const bandWeight = correctedHz < 1000 ? 1 : 0.65;
-    const peakWeight = Math.pow(peak.magnitude, 0.8) * bandWeight;
+    const peakWeight = Math.pow(peak.magnitude, 0.8) * bandWeight * harmonicWeight;
     target[pitchClass] += peakWeight;
-
-    // Harmonic peaks are excluded from chroma voting above. Guessing
-    // subharmonics from independent roots can create unsupported pitch classes.
   }
   const chroma = bassChroma.map((value, index) => value * 0.55 + midChroma[index] * 0.45);
   return { chroma, peaks: fundamentals, fftButterflyCount: operations };
