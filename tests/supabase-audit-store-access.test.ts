@@ -115,3 +115,54 @@ describe("DSP provider failure persistence", () => {
   });
 
 });
+
+
+describe("Sonic DNA diagnostic event persistence", () => {
+  it("stores bounded tempo and key diagnostics in audit_events without audio samples", async () => {
+    const { store, fetchMock } = makeStore({});
+    const dna = {
+      durationSeconds: 8, sampleRate: 8000, channels: 1,
+      rhythmFeatures: {
+        method: "high_frequency_transient_autocorrelation",
+        candidateScores: [{ bpm: 100, score: 0.91 }],
+        onsetEnvelope: [0, 0.5, 1],
+        beatTimesSeconds: [0.2, 0.8, 1.4],
+        downbeatCandidateTimesSeconds: [0.2],
+        beatGridStatus: "tentative",
+        downbeatGridAssumption: "four-beat grouping for diagnostics only",
+      },
+      harmonicFeatures: {
+        method: "fft_harmonic_chroma_ensemble",
+        segmentChroma: [{ startSeconds: 0, endSeconds: 4, chroma: Array(12).fill(1 / 12) }],
+      },
+      vocalFeatures: {},
+      bpm: 100, alternateTempo: 50, tempoConfidence: 0.91,
+      key: "C", mode: "major", keyConfidence: 0.8, keyTuningCents: 7.5,
+      keySegmentAgreement: 0.9, keyAnalysisFftButterflyCount: 100,
+      limitations: [], loudnessLufs: null, rmsLevelDbfs: -12, rmsEnergy: 0.2,
+      dynamicRangeDb: 8, spectralCentroidHz: 1000, spectralBandwidthHz: 200,
+      spectralRolloffHz: 3000, zeroCrossingRate: 0.1, moodTags: [], genreContext: [],
+    } as import("../src/audio/sonic-dna.js").SonicDnaFeatures;
+
+    await store.saveSonicDna("job-diagnostics", "claim-token", dna);
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.p_operation).toBe("sonic_dna");
+    expect(requestBody.p_payload.eventPayload.diagnostics).toMatchObject({
+      version: 1,
+      tempo: {
+        candidateScores: [{ bpm: 100, score: 0.91 }],
+        onsetEnvelope: [0, 0.5, 1],
+        beatTimesSeconds: [0.2, 0.8, 1.4],
+        downbeatCandidateTimesSeconds: [0.2],
+      },
+      key: {
+        tuningCents: 7.5,
+        segmentAgreement: 0.9,
+        segmentChroma: [{ startSeconds: 0, endSeconds: 4 }],
+      },
+    });
+    expect(JSON.stringify(requestBody.p_payload.eventPayload)).not.toContain("samples");
+    expect(JSON.stringify(requestBody.p_payload.eventPayload)).not.toContain("audioBytes");
+  });
+});
