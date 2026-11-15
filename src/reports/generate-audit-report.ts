@@ -148,7 +148,7 @@ export function metadataFieldSource(e:Record<string,unknown>,field:string):strin
  return typeof provider==="string"&&labels[provider]? "Field source: "+labels[provider] : "Field source: unavailable";
 }
 function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
- const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),counts=countEvidenceLayers(a.evidenceLabels);
+ const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),counts=countEvidenceLayers(a.evidenceLabels);
  if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",rows:[{label:"Measured",value:counts.OBSERVED},{label:"Source matches",value:counts.RECOGNIZED},{label:"Cross-checked",value:counts.RECONCILED},{label:"Hypotheses",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful."}];
  if(title==="Identity and source reconciliation"&&Array.isArray(e.catalogSources)&&e.catalogSources.length>0){
   const sources=e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"));
