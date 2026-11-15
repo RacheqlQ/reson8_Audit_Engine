@@ -101,57 +101,6 @@ async function tidal(u:URL, signal?:AbortSignal){
   const track=await client.getTrack(id, signal);
   const metadata = normalizeTidalTrack(u.toString(), track);
 
-  if (metadata.isrc && (!metadata.genre || !metadata.label || metadata.catalogPopularity === null)) {
-    try {
-      const spotifyClient = new SpotifyClient();
-      const spotifyTrack = await spotifyClient.getTrackByIsrc(metadata.isrc, signal);
-      if (!spotifyTrack) return metadata;
-
-      const artistId = (
-        spotifyTrack.artists as Array<Record<string, unknown>> | undefined
-      )?.[0]?.id;
-
-      if (typeof artistId === "string" && artistId) {
-        const artist = await spotifyClient.getArtist(artistId, signal);
-        const genres = Array.isArray(artist.genres)
-          ? artist.genres.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-          : [];
-
-        return {
-          ...metadata,
-          genre: genres[0] ?? metadata.genre,
-          catalogPopularity: metadata.catalogPopularity ?? (
-            typeof spotifyTrack?.popularity === "number" && Number.isFinite(spotifyTrack.popularity)
-              ? spotifyTrack.popularity
-              : null
-          ),
-          catalogPopularityScale: metadata.catalogPopularityScale ?? (
-            typeof spotifyTrack?.popularity === "number" && Number.isFinite(spotifyTrack.popularity)
-              ? "0_100"
-              : null
-          ),
-          externalIds: {
-            ...metadata.externalIds,
-            ...(typeof spotifyTrack.id === "string" ? { spotify: spotifyTrack.id } : {}),
-          },
-          raw: {
-            ...metadata.raw,
-            crossReferences: {
-              spotify: {
-                id: typeof spotifyTrack.id === "string" ? spotifyTrack.id : null,
-                artistId,
-                genres,
-              },
-            },
-          },
-        };
-      }
-    } catch (error) {
-      if (signal?.aborted) throw signal.reason;
-      // TIDAL remains authoritative when optional Spotify enrichment is unavailable.
-    }
-  }
-
   return metadata;
 }
 async function deezer(u:URL, signal?:AbortSignal){const m=base("deezer",u);if(!m.catalogId)throw new Error("Deezer track ID could not be detected");const r=await fetch("https://api.deezer.com/track/"+encodeURIComponent(m.catalogId), { signal, redirect: "error" });if(!r.ok)throw new Error("Deezer metadata request failed with HTTP "+r.status);const x=await r.json() as Record<string,unknown>;if(x.error)throw new Error("Deezer track was not found");const a=x.artist as Record<string,unknown>|undefined,b=x.album as Record<string,unknown>|undefined;m.title=String(x.title??"")||null;m.artist=String(a?.name??"")||null;m.album=String(b?.title??"")||null;m.artworkUrl=String(b?.cover_medium??"")||null;m.previewUrl=String(x.preview??"")||null;m.canonicalUrl=String(x.link??u);if(m.catalogId)m.externalIds.deezer=m.catalogId;m.raw=x;m.evidenceStatus=m.title&&m.artist?"recognized":"partial";return m;}
