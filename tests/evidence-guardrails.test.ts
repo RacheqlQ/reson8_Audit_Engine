@@ -212,7 +212,7 @@ describe("Phillo evidence guardrails", () => {
       confidence: 0,
       scorecard: {
         ...baseAssessment.scorecard,
-        dynamicRangeLoudness: { score: 78, rationale: "A populated test score that must be withheld when the overall assessment has zero confidence." },
+        dynamicRangeLoudness: { score: 78, rationale: "Key confidence is low; this does not justify a dynamic-range score." },
         metadataCompleteness: { score: 65, rationale: "A populated test score that must be withheld when the overall assessment has zero confidence." },
         releaseReadiness: { score: 72, rationale: "A populated test score that must be withheld when the overall assessment has zero confidence." },
       },
@@ -226,6 +226,8 @@ describe("Phillo evidence guardrails", () => {
     });
     expect(Object.values(result.scorecard).every((dimension) => dimension.score === null)).toBe(true);
     expect(Object.values(result.scorecard).every((dimension) => /overall assessment confidence is zero/i.test(dimension.rationale))).toBe(true);
+    expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("Key confidence");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("Direct dynamic-range and loudness/RMS measurements are unavailable");
   });
 
   it("removes specific key and mode assertions from narrative when key confidence is below the reporting gate", () => {
