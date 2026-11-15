@@ -186,6 +186,23 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     && assessment.confidence <= 0;
   if (zeroConfidence) {
     const mutable = result as Record<string, any>;
+    if (typeof mutable.creativeIdentity === "string") {
+      mutable.creativeIdentity = "Creative identity is unconfirmed because overall A&R assessment confidence is zero. Do not assign a genre, mood, vocal identity or audience position until source reconciliation and a human listening review are complete.";
+    }
+    if (Array.isArray(mutable.strengths)) {
+      mutable.strengths = ["No track-specific creative strengths are asserted because overall A&R assessment confidence is zero. Objective technical measurements remain available in the Sonic DNA section but do not, by themselves, establish artistic quality or audience response."];
+    }
+    if (Array.isArray(mutable.risks)) {
+      mutable.risks = [...mutable.risks, "Overall A&R assessment confidence is zero; track-specific creative strengths, positioning and commercial conclusions are withheld."];
+    }
+    if (Array.isArray(mutable.referencesToVerify)) {
+      mutable.referencesToVerify = ["No comparable recording is selected. After identity and musical lane are verified, choose references and document the exact musical dimension being compared."];
+    }
+    if (Array.isArray(mutable.evidenceLabels)) {
+      mutable.evidenceLabels = mutable.evidenceLabels.filter((entry: unknown) =>
+        Boolean(entry && typeof entry === "object" && (entry as Record<string, unknown>).label !== "INFERRED")
+      );
+    }
     const abstentionRationale = "Not scored: overall assessment confidence is zero. The available evidence cannot support a numeric rating for this dimension; complete the listed evidence and human-review steps before assigning a score.";
     if (mutable.scorecard && typeof mutable.scorecard === "object" && !Array.isArray(mutable.scorecard)) {
       for (const [dimension, value] of Object.entries(mutable.scorecard as Record<string, unknown>)) {
