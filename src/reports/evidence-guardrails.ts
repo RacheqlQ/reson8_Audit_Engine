@@ -47,7 +47,7 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
     && agreement >= 0.8 && agreement <= 1;
 }
 
-function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean): unknown {
+function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean, suppressVocal: boolean): unknown {
   if (typeof value === "string") {
     const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
@@ -68,11 +68,15 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
         || /\binsufficient\s+(?:evidence|data|metrics?|support|reporting)\b/i.test(sentence);
       const actionableMonitoringInstruction = /\b(?:verify|measure|monitor|track|investigate)\s+(?:the\s+)?(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|market demand|commercial performance|marketability)\b/i.test(sentence);
       const hasCommercialClaim = suppressCommercial && commercialTerms.test(sentence) && !cautionaryCommercialContext && !actionableMonitoringInstruction;
-      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim;
+      const vocalClaim = /\\b(?:instrumental(?:[- ]only)?|vocal[- ]free|no vocals?|without vocals?|without vocal content|no vocal content|vocals? (?:are )?(?:absent|not present|not detected))\\b/i;
+      const vocalCaveat = /\\b(?:vocal (?:analysis|activity|separation|model)|voice analysis)\\b.{0,80}\\b(?:not|unavailable|not configured|not performed|not analyzed|insufficient|cannot|unable)\\b/i.test(sentence)
+        || /\\b(?:not analyzed|not analysed|not performed|not configured|unavailable|insufficient|cannot be inferred|cannot determine)\\b.{0,80}\\b(?:vocal|voice)\\b/i.test(sentence);
+      const hasUnsupportedVocalClaim = suppressVocal && vocalClaim.test(sentence) && !vocalCaveat;
+      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim && !hasUnsupportedVocalClaim;
     });
     return kept.join(" ").trim() || "Not asserted: the supporting measurement confidence is insufficient.";
   }
-  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial));
+  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial, suppressVocal));
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>)
       .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial)]));
@@ -123,6 +127,14 @@ function hasVerifiedCommercialMetrics(evidence:Record<string,unknown>|null|undef
  });
 }
 
+function hasVocalAnalysis(value: Record<string, unknown> | null | undefined): boolean {
+  if (!value) return false;
+  const features = value.vocalFeatures;
+  if (!features || typeof features !== "object" || Array.isArray(features)) return false;
+  const status = (features as Record<string, unknown>).status;
+  return status === "analyzed" || status === "measured" || status === "completed";
+}
+
 export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   assessment: T,
   sonicDna: Record<string, unknown> | null | undefined,
@@ -137,7 +149,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     genre && typeof genre.primaryGenre === "string" && genre.primaryGenre.trim()
       && genre.abstained !== true,
   );
-  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence)) as T;
+  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence), !hasVocalAnalysis(sonicDna)) as T;
 
   if (hasAlbumConflict(evidence)) {
     result = sanitizeAlbumConflictClaims(result) as T;
@@ -170,6 +182,44 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       marketability: "undetermined",
       rationale: "No verified, source-attributed commercial-performance metrics are available for this release. Streams, listeners, saves, sales, revenue, playlist conversion and campaign outcomes cannot be inferred from audio features, genre metadata or general catalog context.",
     };
+  }
+  if (typeof assessment.confidence === "number" && assessment.confidence <= 0) {
+    const mutable = result as Record<string, any>;
+    if (mutable.releaseStrategy) {
+      mutable.releaseStrategy.recommendation = "No track-specific release recommendation is issued because assessment confidence is zero. Verify the recording identity, complete a human listening review, and obtain source-attributed release and audience evidence before selecting a release lane or campaign.";
+      mutable.releaseStrategy.priorities = [
+        "Verify artist, title, release version and ISRC against an authoritative DSP or distributor source.",
+        "Complete a human listening review covering hook recall, arrangement, vocal presence, mix translation and creative differentiation.",
+        "Confirm rights ownership, release status, master approval and distributor delivery with the rights holder.",
+        "Collect source-attributed audience and campaign baselines with a defined reporting period before recommending spend."
+      ];
+    }
+    if (mutable.promotionPlan) {
+      mutable.promotionPlan.preRelease = "No track-specific pre-release campaign is recommended until identity, genre, vocal status and release readiness have been verified.";
+      mutable.promotionPlan.releaseWindow = "No release window is recommended from the current evidence. Confirm the release date, distributor lead time, rights clearance and campaign capacity first.";
+      mutable.promotionPlan.postRelease = "No track-specific post-release sequence is recommended until the release is live and source-attributed performance data can establish a baseline.";
+      mutable.promotionPlan.pitchingAngles = ["No track-specific pitching angle is approved until a human listening review and verified identity record are available."];
+      mutable.promotionPlan.playlistCategories = ["No target playlist assigned pending verified genre and vocal analysis."];
+      mutable.promotionPlan.contentIdeas = ["Prepare a visual asset only after the artist confirms the creative identity and intended audience."];
+    }
+    if (mutable.labelPartnerFit) {
+      mutable.labelPartnerFit.partnerProfile = "No label or partner fit can be established from the current zero-confidence assessment. Verify the artist, release identity, genre and vocal profile before shortlisting any company or curator.";
+      mutable.labelPartnerFit.criteriaToDemonstrate = [
+        "A verified artist and release identity supported by an authoritative source.",
+        "A human-reviewed genre and vocal profile supported by the submitted master.",
+        "Documented rights ownership, release status and approved distribution materials.",
+        "Source-attributed audience and campaign performance with a defined reporting period."
+      ];
+      mutable.labelPartnerFit.diligenceBeforeContact = "Do not contact a label or curator on the basis of this assessment. First reconcile identity metadata, complete the listening review, confirm rights and delivery, and research current submission requirements from each target's official source.";
+    }
+    if (mutable.executionPlan) {
+      mutable.executionPlan.days30 = "Verify artist, title and release identity against authoritative DSP and distributor records. Complete a human listening review covering hook recall, arrangement, vocal presence, production choices and lane clarity. Confirm rights ownership, master approval and delivery status before making release recommendations.";
+      mutable.executionPlan.days60 = "Repeat the technical assessment with validated audio analysis, document its methods and confidence, and reconcile metadata across independent providers. Build a shortlist of actual labels and curators only after the musical lane and submission eligibility are supported by evidence.";
+      mutable.executionPlan.days90 = "Create a release and promotion plan from verified release dates, confirmed partner requirements and source-attributed audience baselines. Record outreach, responses and campaign outcomes; do not assume placements, demand or commercial conversion.";
+    }
+    if (typeof mutable.productionArrangementGuidance === "string") {
+      mutable.productionArrangementGuidance = "No track-specific production changes are recommended because the overall assessment confidence is zero. A qualified listener or mix engineer should review the full recording, identify audible arrangement or mix issues, and document time-coded observations before proposing edits. Preserve measured technical values as measurements only; they do not establish musical quality or justify adding instruments, changing the arrangement or altering loudness.";
+    }
   }
   return result;
 }
