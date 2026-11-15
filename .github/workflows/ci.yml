@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, feat/multi-dsp-enrichment]
   pull_request:
-    branches: [main]
+    branches: [main, fix/report-fixture-provenance-date]
   workflow_dispatch:
 
 permissions:
