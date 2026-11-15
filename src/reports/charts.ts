@@ -103,10 +103,13 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
   rows.slice(0,3).forEach((row,index)=>{
    const labelY=contentTop-14-index*57,trackY=labelY-24;
    result.push({x:x+14,y:labelY-3,width:145,height:11,id:"label-spectrum-name-"+index});
-   result.push({x:trackX,y:trackY,width:trackW,height:8,id:"shape-spectrum-gradient-track-"+index});
-   result.push({x:trackX-1,y:trackY-1,width:trackW+2,height:10,id:"shape-spectrum-track-outline-"+index});
-   result.push({x:trackX-4,y:trackY-4,width:trackW+8,height:16,id:"shape-spectrum-marker-range-"+index});
-   result.push({x:trackX,y:trackY-16,width:trackW,height:9,id:"label-spectrum-scale-"+index});
+   const tempoWithheld = /TEMPO|BPM/.test(row.label) && validNumber(row.value) === null;
+   if (!tempoWithheld) {
+    result.push({x:trackX,y:trackY,width:trackW,height:8,id:"shape-spectrum-gradient-track-"+index});
+    result.push({x:trackX-1,y:trackY-1,width:trackW+2,height:10,id:"shape-spectrum-track-outline-"+index});
+    result.push({x:trackX-4,y:trackY-4,width:trackW+8,height:16,id:"shape-spectrum-marker-range-"+index});
+    result.push({x:trackX,y:trackY-16,width:trackW,height:9,id:"label-spectrum-scale-"+index});
+   }
    result.push({x:trackX+trackW+7,y:trackY-2,width:70,height:11,id:"label-spectrum-value-"+index});
   });
  }else if(kind==="radar"){
@@ -330,8 +333,13 @@ function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType
   const label=row.label.toUpperCase(),labelY=g.contentTop-14-index*57,trackY=labelY-24;
   tracked(p,label,g.x+14,labelY,b,6.5,color(index),.4);
   const raw=validNumber(row.value)??(typeof row.value==="string"?Number.parseFloat(row.value):NaN);
-  const range=/TEMPO|BPM/.test(label)?{min:60,max:180,unit:"BPM"}:/RMS|ENERGY/.test(label)?{min:0,max:1,unit:""}:{min:0,max:20,unit:"dB"};
+  const isTempo = /TEMPO|BPM/.test(label);
+  const range=isTempo?{min:60,max:180,unit:"BPM"}:/RMS|ENERGY/.test(label)?{min:0,max:1,unit:""}:{min:0,max:20,unit:"dB"};
   const known=Number.isFinite(raw),ratio=known?Math.max(0,Math.min(1,(raw-range.min)/(range.max-range.min))):null;
+  if (isTempo && ratio === null) {
+   text(p,"Tempo withheld — insufficient confidence",trackX,trackY+1,f,6.2,C.muted);
+   return;
+  }
   if(ratio===null){
    for(let strip=0;strip<16;strip++){const sx=trackX+strip*(trackW/16);p.drawRectangle({x:sx,y:trackY,width:trackW/32,height:trackH,color:C.muted,opacity:.42});}
    text(p,"Not determined",trackX+trackW+7,trackY+1,f,6.5,C.muted);
@@ -342,8 +350,10 @@ function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType
    p.drawCircle({x:markerX,y:trackY+trackH/2,size:4,color:C.coral,borderColor:C.white,borderWidth:.8});
    text(p,String(Number(raw.toFixed(2)))+(range.unit?" "+range.unit:""),trackX+trackW+7,trackY+1,b,7,C.ink);
   }
-  text(p,String(range.min),trackX,trackY-13,f,5.8,C.muted);
-  text(p,String(range.max)+(range.unit?" "+range.unit:""),trackX+trackW-36,trackY-13,f,5.8,C.muted);
+  if (!isTempo || ratio !== null) {
+   text(p,String(range.min),trackX,trackY-13,f,5.8,C.muted);
+   text(p,String(range.max)+(range.unit?" "+range.unit:""),trackX+trackW-36,trackY-13,f,5.8,C.muted);
+  }
  });
 }
 function drawBars(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
