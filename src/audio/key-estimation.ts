@@ -101,18 +101,33 @@ function weightedMedian(values: Array<{ value: number; weight: number }>): numbe
 }
 
 
+function isHarmonicOf(
+  upper: { frequency: number; magnitude: number },
+  lower: { frequency: number; magnitude: number },
+): boolean {
+  if (lower.frequency >= upper.frequency) return false;
+  const ratio = upper.frequency / lower.frequency;
+  const harmonic = Math.round(ratio);
+  return harmonic >= 2 && harmonic <= 8 && Math.abs(ratio - harmonic) / harmonic <= 0.03;
+}
+
 function fundamentalPeaks(peaks: Array<{ frequency: number; magnitude: number }>): Array<{ frequency: number; magnitude: number }> {
   const strongest = peaks.reduce((maximum, peak) => Math.max(maximum, peak.magnitude), 0);
   const crediblePeaks = peaks.filter((peak) => peak.magnitude >= strongest * 0.08);
-  return crediblePeaks.filter((peak) => {
-    for (const lower of crediblePeaks) {
-      if (lower.frequency >= peak.frequency) continue;
-      const ratio = peak.frequency / lower.frequency;
-      const harmonic = Math.round(ratio);
-      if (harmonic >= 2 && harmonic <= 8 && Math.abs(ratio - harmonic) / harmonic <= 0.03) return false;
-    }
-    return true;
-  });
+
+  // A weak fundamental below the 8% voting floor must still be allowed to
+  // explain a coherent series of stronger upper partials. It is not itself
+  // admitted as a key vote; it only prevents those partials becoming false
+  // independent roots when the fundamental is weak.
+  const supportedWeakRoots = peaks.filter((lower) =>
+    lower.magnitude < strongest * 0.08
+      && peaks.filter((upper) => isHarmonicOf(upper, lower)).length >= 2,
+  );
+  const harmonicAnchors = [...crediblePeaks, ...supportedWeakRoots];
+
+  return crediblePeaks.filter((peak) =>
+    !harmonicAnchors.some((lower) => isHarmonicOf(peak, lower)),
+  );
 }
 
 function tuningOffset(peaks: Array<{ frequency: number; magnitude: number }>): number {
@@ -170,15 +185,15 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
   if (fundamentals.length < 2) {
     return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
   }
-  const tuningCents = tuningOffset(peaks);
+  const tuningCents = tuningOffset(fundamentals);
   // A stable global tuning offset should explain independent tonal roots.
   // Do not compare upper harmonics as if each were an independent note.
-  if (peaks.length >= 4 && tuningDeviationCents(peaks, tuningCents) > 30) {
+  if (fundamentals.length >= 4 && tuningDeviationCents(fundamentals, tuningCents) > 30) {
     return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
   }
   const bassChroma = Array(12).fill(0);
   const midChroma = Array(12).fill(0);
-  for (const peak of peaks) {
+  for (const peak of fundamentals) {
     const correctedHz = peak.frequency / Math.pow(2, tuningCents / 1200);
     if (correctedHz < MIN_FREQUENCY_HZ || correctedHz > MAX_FREQUENCY_HZ) continue;
     const midi = 69 + 12 * Math.log2(correctedHz / 440);
@@ -188,19 +203,11 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
     const peakWeight = Math.pow(peak.magnitude, 0.8) * bandWeight;
     target[pitchClass] += peakWeight;
 
-    // A small subharmonic vote lets strong upper partials support a likely
-    // fundamental without allowing harmonics to dominate the direct peak.
-    for (let harmonic = 2; harmonic <= 4; harmonic++) {
-      const fundamental = correctedHz / harmonic;
-      if (fundamental < MIN_FREQUENCY_HZ || fundamental > 1000) continue;
-      const fundamentalMidi = 69 + 12 * Math.log2(fundamental / 440);
-      const fundamentalClass = (Math.round(fundamentalMidi) % 12 + 12) % 12;
-      const fundamentalTarget = fundamental < 250 ? bassChroma : midChroma;
-      fundamentalTarget[fundamentalClass] += peakWeight * (0.12 / harmonic);
-    }
+    // Harmonic peaks are excluded from chroma voting above. Guessing
+    // subharmonics from independent roots can create unsupported pitch classes.
   }
   const chroma = bassChroma.map((value, index) => value * 0.55 + midChroma[index] * 0.45);
-  return { chroma, peaks, fftButterflyCount: operations };
+  return { chroma, peaks: fundamentals, fftButterflyCount: operations };
 }
 
 function correlation(profile: readonly number[], template: readonly number[]): number {
