@@ -27,6 +27,13 @@ export interface SupabaseAuditStore {
   saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition, signal?: AbortSignal): Promise<void>;
   saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata, signal?: AbortSignal, metadataSources?: readonly CatalogMetadata[]): Promise<void>;
   saveCatalogMetadata(jobId: string, claimToken: string, metadata: CatalogMetadata, signal?: AbortSignal): Promise<void>;
+  saveCatalogFailure(
+    jobId: string,
+    claimToken: string,
+    link: { platform: string; catalogId: string; canonicalUrl: string },
+    error: string,
+    signal?: AbortSignal,
+  ): Promise<void>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment, signal?: AbortSignal): Promise<void>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
@@ -261,6 +268,22 @@ export function createSupabaseAuditStore(
           raw: metadata.raw,
           hasPreview: Boolean(metadata.previewUrl),
           evidenceClass: spotifyUnavailable ? null : metadata.evidenceStatus === "recognized" ? "RECOGNIZED" : "PARTIAL",
+        },
+      }, signal);
+    },
+    async saveCatalogFailure(jobId, claimToken, link, error, signal) {
+      await fencedStep(jobId, claimToken, "catalog_metadata", {
+        platform: link.platform,
+        catalogId: link.catalogId,
+        evidenceStatus: "unavailable",
+        eventPayload: {
+          platform: link.platform,
+          catalogId: link.catalogId,
+          canonicalUrl: link.canonicalUrl,
+          sourceUrl: link.canonicalUrl,
+          status: "unavailable",
+          error: error.slice(0, 240),
+          evidenceClass: null,
         },
       }, signal);
     },
