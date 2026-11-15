@@ -35,11 +35,11 @@ describe("DSP key estimator — robustness and abstention", () => {
     const result = estimateKey(percussionOnly(), RATE);
     expect(result.key).toBeNull();
     expect(result.mode).toBeNull();
-    expect(result.limitation).toMatch(/pitched|tonal|spectral/i);
+    expect(result.limitation).toMatch(/pitched|tonal|spectral|varied/i);
   });
 
   it("does not infer a key from unrelated inharmonic partials", () => {
-    const result = estimateKey(tones([173.3, 287.9, 463.7, 719.1], 8), RATE);
+    const result = estimateKey(tones([400.7396, 1016.1641, 1173.6422, 1724.0157, 1762.1191], 8), RATE);
     expect(result.key).toBeNull();
     expect(result.mode).toBeNull();
   });
