@@ -4,6 +4,7 @@ export interface ChartRow {
   label: string;
   value: string | number | null | undefined;
   rationale?: string;
+  summary?: string;
   proportion?: number | null;
   group?: "strength" | "risk";
 }
@@ -23,12 +24,20 @@ const PALETTE=[C.blue,C.violet,C.teal,C.coral,C.gold,C.sky,C.green];
 const CARD_X=48,CARD_W=499,HEADER_H=29,CAPTION_H=43,PAD=12;
 function color(index:number){return PALETTE[index%PALETTE.length];}
 function validNumber(v:ChartRow["value"]):number|null{return typeof v==="number"&&Number.isFinite(v)?v:null;}
+export function compactChartItemSummary(value:string,maxLength=58):string{
+ const clean=value.replace(/\s+/g," ").trim();
+ const first=clean.split(/(?<=[.!?])\s+/)[0]??clean;
+ if(first.length<=maxLength)return first;
+ const clipped=first.slice(0,maxLength-1);
+ const boundary=clipped.lastIndexOf(" ");
+ return (boundary>Math.floor(maxLength*.55)?clipped.slice(0,boundary):clipped).replace(/[,:;\s]+$/,"")+"…";
+}
 export function buildStrengthRiskChartRows(strengths:string[],risks:string[]):ChartRow[]{
  return [
   {label:"Strengths",value:strengths.length},
   {label:"Risks",value:risks.length},
-  ...strengths.map(label=>({label,value:null,group:"strength" as const})),
-  ...risks.map(label=>({label,value:null,group:"risk" as const})),
+  ...strengths.map(label=>({label,summary:compactChartItemSummary(label),value:null,group:"strength" as const})),
+  ...risks.map(label=>({label,summary:compactChartItemSummary(label),value:null,group:"risk" as const})),
  ];
 }
 export function strengthRiskItemsForColumn(rows:ChartRow[],group:"strength"|"risk"):ChartRow[]{
@@ -309,9 +318,10 @@ function drawTension(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<
   tracked(p,title,x+9,panelTop-12,b,7,C.white,.5);
   text(p,String(count)+" documented",x+9,panelTop-37,b,9,accent);
   shadowBar(p,x+9,panelTop-56,(colW-18)*count/maxCount,5,accent,c);
-  // The complete written strengths and risks appear in the adjacent report sections.
-  // Keep this dashboard comparative and uncluttered instead of truncating long prose.
-  text(p,"See written assessment for complete details",x+9,panelTop-78,f,6.5,C.muted);
+  const firstItem=rows.find((item)=>item.group===(c===0?"strength":"risk"));
+  const summary=firstItem?.summary??firstItem?.label??"No item recorded";
+  const summaryLines=wrapChartSummary(summary,f,6.2,colW-18,1);
+  text(p,summaryLines[0]??"No item recorded",x+9,panelTop-78,f,6.2,C.muted);
  }
 }
 function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){

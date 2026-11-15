@@ -97,12 +97,13 @@
           </section>
 
           <section id="dspSource">
-            <div class="section-heading compact"><div><p class="kicker">DSP / CATALOG</p><h3>Ingest an existing release link</h3></div><span class="limit">Spotify · Apple Music · YouTube · Deezer · Tidal</span></div>
+            <div class="section-heading compact"><div><p class="kicker">DSP / CATALOG</p><h3>Ingest an existing release link</h3></div><span class="limit">Spotify · Apple Music · YouTube · Deezer · Tidal · Audiomack</span></div>
             <div class="catalog-form">
-              <label for="catalogUrl">DSP or catalog URL</label>
-              <div class="catalog-input-row"><input id="catalogUrl" type="url" placeholder="https://open.spotify.com/track/… or https://music.apple.com/…" autocomplete="off" /><button id="detectCatalog" type="button" class="ghost-btn">Detect</button></div>
+              <label for="catalogUrl">DSP track URLs — one per line, up to 8</label>
+              <div class="catalog-input-row"><textarea id="catalogUrl" rows="4" placeholder="Paste up to 8 track links, one per line&#10;https://open.spotify.com/track/…&#10;https://music.apple.com/…" autocomplete="off" spellcheck="false"></textarea><button id="detectCatalog" type="button" class="ghost-btn">Detect</button></div>
               <div class="catalog-platform" id="catalogPlatform">Platform not detected</div>
               <div class="catalog-preview hidden" id="catalogPreview"></div>
+              <div class="catalog-source-status hidden" id="catalogSourceStatuses" aria-live="polite"></div>
             </div>
             <div class="preflight catalog-preflight"><div class="preflight-title"><span>CATALOG PREFLIGHT</span><strong id="catalogState">Waiting for URL</strong></div><div class="checks"><div class="check" id="catalogCheck"><i></i><span>Supported catalog URL</span><b>—</b></div></div></div>
           </section>

@@ -2,7 +2,7 @@ import { readPdfResponse, triggerPdfDownload } from "./report-download.js";
 import { createAuditPoller } from "./audit-polling.js";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),resultName=document.querySelector("#resultName"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
 const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain"),accessTokenDisplay=document.querySelector("#accessTokenDisplay"),revealAccessTokenButton=document.querySelector("#revealAccessTokenButton"),copyAccessTokenButton=document.querySelector("#copyAccessTokenButton"),fullReportAccessKey=document.querySelector("#fullReportAccessKey"),unlockFullReportButton=document.querySelector("#unlockFullReportButton"),tokenSaveMessage=document.querySelector("#tokenSaveMessage");
-const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.querySelector("#detectCatalog"),catalogPlatform=document.querySelector("#catalogPlatform"),catalogPreview=document.querySelector("#catalogPreview"),catalogState=document.querySelector("#catalogState"),catalogCheck=document.querySelector("#catalogCheck");
+const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.querySelector("#detectCatalog"),catalogPlatform=document.querySelector("#catalogPlatform"),catalogPreview=document.querySelector("#catalogPreview"),catalogSourceStatuses=document.querySelector("#catalogSourceStatuses"),catalogState=document.querySelector("#catalogState"),catalogCheck=document.querySelector("#catalogCheck");
 const checks={type:document.querySelector("#checkType"),size:document.querySelector("#checkSize"),hash:document.querySelector("#checkHash")};
 const MAX_BYTES=50*1024*1024,AUDIO_EXTENSIONS=new Set(["mp3","wav","flac","aac","ogg","m4a"]);
 const EVIDENCE_STEPS=[
@@ -34,17 +34,65 @@ async function inspect(file){
   updateSubmit();
 }
 function clearFile(){selectedFile=null;digest=null;input.value="";filePanel.classList.add("hidden");preflightState.textContent="Waiting for source";setCheck(checks.type,"","—");setCheck(checks.size,"","—");setCheck(checks.hash,"","—");updateSubmit();}
+function getCatalogUrls(){
+  return catalogUrl.value.split(/\r?\n/).map(value=>value.trim()).filter(Boolean);
+}
+function detectTrackPlatform(value){
+  const u=new URL(value),host=u.hostname.toLowerCase(),parts=u.pathname.split("/").filter(Boolean);
+  if(u.protocol!=="https:"||u.username||u.password||u.port)throw new Error("Use a credential-free HTTPS track URL");
+  if(["open.spotify.com","play.spotify.com"].includes(host)&&parts.includes("track")&&parts[parts.indexOf("track")+1])return "Spotify";
+  if(["music.apple.com","itunes.apple.com"].includes(host)&&parts.includes("album")&&/^\d+$/.test(parts[parts.indexOf("album")+2]||"")&&u.searchParams.get("i"))return "Apple Music";
+  if(["deezer.com","www.deezer.com"].includes(host)&&parts[0]==="track"&&parts[1])return "Deezer";
+  if(["tidal.com","listen.tidal.com"].includes(host)&&parts.includes("track")&&parts[parts.indexOf("track")+1])return "TIDAL";
+  if(host==="youtu.be"&&parts[0]||["youtube.com","www.youtube.com","music.youtube.com"].includes(host)&&u.pathname==="/watch"&&u.searchParams.get("v"))return "YouTube Music";
+  if(["audiomack.com","www.audiomack.com"].includes(host)&&parts.length>=2)return "Audiomack";
+  throw new Error("Unsupported DSP or non-track URL");
+}
 async function previewCatalog(){
-  const url=catalogUrl.value.trim();catalogReady=false;catalogPreview.classList.add("hidden");catalogPreview.textContent="";catalogState.textContent="Validating…";catalogPlatform.textContent="Detecting platform…";
-  if(!url){catalogState.textContent="Waiting for URL";catalogPlatform.textContent="Platform not detected";setCheck(catalogCheck,"","—");updateSubmit();return;}
+  const urls=getCatalogUrls();catalogReady=false;catalogPreview.classList.add("hidden");catalogPreview.textContent="";catalogSourceStatuses.classList.add("hidden");catalogSourceStatuses.textContent="";catalogState.textContent="Validating…";
+  if(!urls.length){catalogState.textContent="Waiting for URLs";catalogPlatform.textContent="No DSP links submitted";setCheck(catalogCheck,"","—");updateSubmit();return;}
   try{
-    const u=new URL(url);if(u.protocol!=="https:")throw new Error("Use an HTTPS URL");const host=u.hostname.toLowerCase();let platform="Unknown";
-    if(host.includes("spotify"))platform="Spotify";else if(host.includes("apple.com")||host.includes("itunes.apple"))platform="Apple Music";else if(host.includes("youtube")||host==="youtu.be")platform="YouTube / YouTube Music";else if(host.includes("deezer"))platform="Deezer";else if(host.includes("tidal"))platform="Tidal";else throw new Error("Unsupported DSP or catalog host");
-    catalogPlatform.textContent=platform;setCheck(catalogCheck,"ok","PASS");catalogState.textContent="URL accepted";catalogReady=true;
-    catalogPreview.textContent="Catalog evidence will be collected server-side. Where the provider exposes a public audio preview, AudD will be used as an additional recognition evidence source.";catalogPreview.classList.remove("hidden");
-    actionMessage.textContent="Ready. Anonymous catalog intake is enabled.";
-  }catch(e){catalogState.textContent="Invalid source";catalogPlatform.textContent="Unsupported or malformed URL";setCheck(catalogCheck,"bad","INVALID");actionMessage.textContent=e instanceof Error?e.message:"Invalid catalog URL";}
+    if(urls.length>8)throw new Error("A maximum of 8 DSP track links is allowed");
+    const platforms=urls.map(detectTrackPlatform);
+    catalogPlatform.textContent=platforms.join(" · ");
+    setCheck(catalogCheck,"ok",urls.length+" LINKS");
+    catalogState.textContent="Ready for server verification";
+    catalogReady=true;
+    catalogPreview.textContent=urls.length+" track link(s) will be normalized, deduplicated and checked against official provider endpoints. Duplicate platform + track IDs are processed once.";
+    catalogPreview.classList.remove("hidden");
+    catalogSourceStatuses.textContent="Provider lookup statuses will appear here after secure submission.";
+    catalogSourceStatuses.classList.remove("hidden");
+    actionMessage.textContent="Ready. One audit will reconcile all submitted DSP sources.";
+  }catch(e){
+    catalogState.textContent="Invalid source";
+    catalogPlatform.textContent="One or more links are unsupported";
+    setCheck(catalogCheck,"bad","INVALID");
+    actionMessage.textContent=e instanceof Error?e.message:"Invalid catalog URL";
+  }
   updateSubmit();
+}
+function renderCatalogStatuses(payload){
+  if(!catalogSourceStatuses)return;
+  const statuses=Array.isArray(payload.catalogSources)?payload.catalogSources:[];
+  const submitted=Array.isArray(payload.catalogUrlsSubmitted)?payload.catalogUrlsSubmitted:[];
+  catalogSourceStatuses.replaceChildren();
+  if(!submitted.length&&!statuses.length){catalogSourceStatuses.classList.add("hidden");return;}
+  const heading=document.createElement("strong");
+  heading.textContent="DSP provider status";
+  catalogSourceStatuses.appendChild(heading);
+  const list=document.createElement("ul");
+  for(const item of statuses){
+    const li=document.createElement("li");
+    li.textContent=[item.platform,item.catalogId,item.status?.toUpperCase(),item.error].filter(Boolean).join(" · ");
+    list.appendChild(li);
+  }
+  if(!statuses.length){
+    const li=document.createElement("li");
+    li.textContent=submitted.length+" source link(s) queued for lookup";
+    list.appendChild(li);
+  }
+  catalogSourceStatuses.appendChild(list);
+  catalogSourceStatuses.classList.remove("hidden");
 }
 function renderEvidenceChain(currentStepIndex=0){
   if(!evidenceChain)return;
@@ -58,6 +106,7 @@ function renderEvidenceChain(currentStepIndex=0){
 function stopPolling(){auditPoller.stop();}
 function applyAuditPayload(payload){
   currentAuditPayload={...payload,displayName:currentAuditPayload?.displayName??payload.displayName};
+  renderCatalogStatuses(payload);
   unlockFullReportButton.disabled=!(payload.status==="completed"&&payload.full?.available);
   renderEvidenceChain(payload.currentStepIndex ?? (payload.status==="completed" ? 5 : 0));
   auditStatus.textContent=(payload.status||"unknown").toUpperCase();
@@ -76,17 +125,18 @@ async function submitAudit(){
   submit.disabled=true;submit.querySelector("span").textContent="Submitting…";
   try{
     const hasMaster=Boolean(selectedFile&&digest),hasCatalog=catalogReady;
+    const urls=hasCatalog?getCatalogUrls():[];
     let response;
     if(hasMaster){
       const headers={"Content-Type":selectedFile.type||"application/octet-stream","X-Audio-Filename":selectedFile.name};
-      if(hasCatalog)headers["X-Catalog-Url"]=catalogUrl.value.trim();
+      if(hasCatalog){headers["X-Catalog-Url"]=urls[0];headers["X-Catalog-Urls"]=JSON.stringify(urls);}
       response=await fetch("/v1/audits",{method:"POST",headers,body:selectedFile});
     }else if(hasCatalog){
-      response=await fetch("/v1/audits/catalog",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:catalogUrl.value.trim()})});
+      response=await fetch("/v1/audits/catalog",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({urls})});
     }else throw new Error("Provide a valid master file, DSP link, or both.");
     const payload=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(payload.message||"Audit intake failed");
-    const submittedName=hasMaster?selectedFile.name.replace(/\.[^.]+$/,""):catalogPlatform.textContent+" "+(new URL(catalogUrl.value).pathname.split("/").filter(Boolean).at(-1)||"catalog");
+    const submittedName=hasMaster?selectedFile.name.replace(/\.[^.]+$/,""):catalogPlatform.textContent+" "+(new URL(urls[0]).pathname.split("/").filter(Boolean).at(-1)||"catalog");
     const displayName=submittedName.replace(/[\s]+/g," ").trim().slice(0,100)||"Untitled audit";
     jobId.textContent=payload.jobId||"—";resultName.textContent=displayName+" — AUDIT ACCEPTED";serverHash.textContent=payload.sha256||"—";reportAccessToken=payload.reportAccessToken||null;currentAuditPayload={jobId:payload.jobId,status:"queued",currentStepIndex:0,displayName};resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
     resultMessage.textContent=hasMaster&&hasCatalog?"Accepted. Master Sonic DNA and DSP catalog evidence will be reconciled into one report.":hasMaster?"Accepted. Master Sonic DNA analysis is processing.":"Accepted. DSP catalog analysis is processing.";
