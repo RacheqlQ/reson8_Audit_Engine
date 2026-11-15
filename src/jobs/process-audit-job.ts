@@ -100,10 +100,37 @@ function recognitionEvidence(recognition: AuditRecognition): Record<string, unkn
   };
 }
 
+function assessmentSafeCatalogMetadata(source: CatalogMetadata): CatalogMetadata | null {
+  // Spotify Content and data derived from Spotify must not enter AI inputs.
+  if (source.platform === "spotify") return null;
+
+  const raw = source.raw && typeof source.raw === "object" ? source.raw : {};
+  const crossReferences = raw.crossReferences && typeof raw.crossReferences === "object"
+    ? raw.crossReferences as Record<string, unknown>
+    : {};
+  const hasSpotifyCrossReference = Object.prototype.hasOwnProperty.call(crossReferences, "spotify");
+  if (!hasSpotifyCrossReference) return source;
+
+  const { spotify: _spotify, ...safeCrossReferences } = crossReferences;
+  const { spotify: _spotifyId, ...safeExternalIds } = source.externalIds;
+  return {
+    ...source,
+    // The TIDAL fallback previously populated these fields from Spotify.
+    // Their field-level provenance is unavailable, so exclude them fail-closed.
+    genre: null,
+    catalogPopularity: null,
+    catalogPopularityScale: null,
+    externalIds: safeExternalIds,
+    raw: { ...raw, crossReferences: safeCrossReferences },
+  };
+}
+
 function catalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetadata[]) {
   const sources: readonly CatalogMetadata[] = Array.isArray(metadata) ? metadata : [metadata as CatalogMetadata];
   const result: Record<string, unknown> = {};
-  for (const source of sources) {
+  for (const original of sources) {
+    const source = assessmentSafeCatalogMetadata(original);
+    if (!source) continue;
     const fields = {
       title: source.title,
       artist: source.artist,
@@ -114,7 +141,6 @@ function catalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetada
       releaseDate: source.releaseDate,
       genres: source.genre ? [source.genre] : [],
     };
-    if (source.platform === "spotify") result.spotify = fields;
     if (source.platform === "tidal") result.tidal = fields;
     if (source.platform === "apple_music") result.apple_music = fields;
     if (source.platform === "deezer") result.deezer = fields;
@@ -367,15 +393,52 @@ export async function processAuditJob(
       sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
+    const assessmentMetadataSources = metadataSources
+      .map(assessmentSafeCatalogMetadata)
+      .filter((source): source is CatalogMetadata => source !== null);
+    const assessmentMetadata = assessmentMetadataSources[0] ?? undefined;
+    const assessmentMetadataInput = {
+      ...catalogMetadataInput(metadataSources),
+      ...(masterTags ? { id3: masterTags } : {}),
+      ...(job.filename ? { filename: job.filename } : {}),
+      audd: recognitionMetadataInput(recognition),
+    };
+    const assessmentReconciliation = reconcileMetadata(assessmentMetadataInput);
+    const assessmentIdentity = assessmentReconciliation.identity;
+    const assessmentRecognition = recognitionEvidence(recognition);
+    delete assessmentRecognition.spotifyId;
+    const assessmentEvidence = {
+      ...(assessmentMetadata ? catalogEvidence(assessmentMetadata, assessmentIdentity) : { auditType: evidence.auditType }),
+      ...assessmentRecognition,
+      ...identityEvidence(assessmentIdentity),
+      evidenceClass: assessmentReconciliation.status === "reconciled"
+        ? "RECONCILED"
+        : assessmentIdentity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
+      identity: identityEvidence(assessmentIdentity),
+      reconciliation: reconciliationEvidence(assessmentReconciliation),
+      metadataSourcesChecked: [
+        ...catalogResults.filter((result) => result.link.platform !== "spotify").map((result) => result.link.platform),
+        ...(masterTags ? ["id3"] : []),
+        ...(job.filename ? ["filename"] : []),
+        ...attemptedRecognitionProviders,
+      ],
+      catalogSources: catalogResults
+        .filter((result) => result.link.platform !== "spotify")
+        .map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, error: result.error })),
+      sourceCombination: evidence.sourceCombination,
+      ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
+    };
     const sonicDna = masterDna
       ? dnaEvidence(masterDna)
-      : metadata
-        ? catalogSonicDna(metadata)
+      : assessmentMetadata
+        ? catalogSonicDna(assessmentMetadata)
         : null;
     const assessment = await awaitWithLease(deps, (signal) => deps.generateAssessment({
-      evidence,
+      evidence: assessmentEvidence,
       sonicDna,
-      catalogMetadata: metadata ? { ...catalogEvidence(metadata, identity), catalogSources: catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, error: result.error })) } : null,
+      catalogMetadata: assessmentMetadata
+        ? { ...catalogEvidence(assessmentMetadata, assessmentIdentity), catalogSources: assessmentEvidence.catalogSources }
+        : null,
     }, signal));
     await awaitWithLease(deps, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
 
