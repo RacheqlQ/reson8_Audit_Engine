@@ -212,6 +212,18 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
     const bandWeight = correctedHz < 1000 ? 1 : 0.65;
     const peakWeight = Math.pow(peak.magnitude, 0.8) * bandWeight * harmonicWeight;
     target[pitchClass] += peakWeight;
+
+    // Retain a small subharmonic contribution to help distinguish sparse
+    // segmental tonal profiles; its source peak's harmonic weight is applied
+    // first so strong partials cannot overwhelm independent roots.
+    for (let harmonic = 2; harmonic <= 4; harmonic++) {
+      const subharmonicHz = correctedHz / harmonic;
+      if (subharmonicHz < MIN_FREQUENCY_HZ || subharmonicHz > 1000) continue;
+      const subharmonicMidi = 69 + 12 * Math.log2(subharmonicHz / 440);
+      const subharmonicClass = (Math.round(subharmonicMidi) % 12 + 12) % 12;
+      const subharmonicTarget = subharmonicHz < 250 ? bassChroma : midChroma;
+      subharmonicTarget[subharmonicClass] += peakWeight * (0.12 / harmonic);
+    }
   }
   const chroma = bassChroma.map((value, index) => value * 0.55 + midChroma[index] * 0.45);
   return { chroma, peaks, fftButterflyCount: operations };
