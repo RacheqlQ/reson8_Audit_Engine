@@ -297,7 +297,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
     y=TOP-20-visualHeading.length*18-35;
    }
    const panelTop=y-8;
-   drawChartPanel(page,{...panel,y:panelTop},fonts.regular,fonts.bold);
+   drawChartPanel(page,{...panel,fixture:input.evidence.fixture===true,y:panelTop},fonts.regular,fonts.bold);
    rects.push({x:M,y:panelTop-panelHeight,width:W-2*M,height:panelHeight,id:"chart-"+si+"-"+panel.title.replace(/\s+/g,"-")});
    y=panelTop-panelHeight-14;
   }
