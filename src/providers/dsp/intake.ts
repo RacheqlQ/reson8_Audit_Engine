@@ -72,27 +72,27 @@ function normalizeOne(input: string): NormalizedDspTrackLink {
 
       if (songIndex >= 0) {
         const firstSongPart = segments[songIndex + 1];
-        const trackId = /^\\d+$/.test(firstSongPart ?? "") ? firstSongPart : segments[songIndex + 2];
+        const trackId = /^\d+$/.test(firstSongPart ?? "") ? firstSongPart : segments[songIndex + 2];
         catalogId = requireTrackId(trackId);
-        if (!/^\\d+$/.test(catalogId)) {
+        if (!/^\d+$/.test(catalogId)) {
           throw new Error("Apple Music song URLs must contain a numeric track ID");
         }
         const songPath = segments.slice(songIndex).join("/");
-        canonicalUrl = \`https://music.apple.com/\${storefront}/\${songPath}\`;
+        canonicalUrl = `https://music.apple.com/\${storefront}/\${songPath}`;
         break;
       }
 
       const albumId = albumIndex >= 0 ? segments[albumIndex + 2] : null;
-      if (!albumId || !/^\\d+$/.test(albumId)) {
+      if (!albumId || !/^\d+$/.test(albumId)) {
         throw new Error("Apple Music requires an individual track URL, not an album or collection link");
       }
       const trackId = url.searchParams.get("i");
-      if (!trackId || !/^\\d+$/.test(trackId)) {
+      if (!trackId || !/^\d+$/.test(trackId)) {
         throw new Error("Apple Music album links identify a collection. Submit a track-specific song URL or include ?i={trackId}.");
       }
       catalogId = requireTrackId(trackId);
-      const slug = segments[albumIndex + 1] && !/^\\d+$/.test(segments[albumIndex + 1]) ? segments[albumIndex + 1] : "track";
-      canonicalUrl = \`https://music.apple.com/\${storefront}/album/\${slug}/\${albumId}?i=\${catalogId}\`;
+      const slug = segments[albumIndex + 1] && !/^\d+$/.test(segments[albumIndex + 1]) ? segments[albumIndex + 1] : "track";
+      canonicalUrl = `https://music.apple.com/\${storefront}/album/\${slug}/\${albumId}?i=\${catalogId}`;
       break;
     }
     case "deezer": {
