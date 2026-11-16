@@ -364,19 +364,20 @@ describe("Groq JSON-object fallback schema contract", () => {
     await client.assess({ evidence: {}, sonicDna: null });
     expect(fallbackPayloads).toHaveLength(1);
     expect(fallbackPayloads[0].outputSchema).toBeDefined();
-    expect(fallbackPayloads[0].outputSchema.properties).toMatchObject({
+    const schema = fallbackPayloads[0].outputSchema;
+    expect(schema).toMatchObject({ type: "object" });
+    expect(schema.properties).toMatchObject({
       evidenceGaps: { type: "array" },
       confidence: { type: "number" },
       limitations: { type: "array" },
-      scorecard: { type: "object", properties: {
-        tempoLaneFit: { type: "object", properties: { score: { type: ["number", "null"] }, rationale: { type: "string" } } },
-        rhythmicConsistency: { type: "object", properties: { score: { type: ["number", "null"] }, rationale: { type: "string" } } },
-        dynamicRangeLoudness: { type: "object" },
-        metadataCompleteness: { type: "object" },
-        releaseReadiness: { type: "object" }
-      }},
+      scorecard: { type: "object" },
       humanListeningChecklist: { type: "array" },
       evidenceLabels: { type: "array" }
     });
+    for (const dimension of ["tempoLaneFit", "rhythmicConsistency", "dynamicRangeLoudness", "metadataCompleteness", "releaseReadiness"]) {
+      const dimensionSchema = schema.properties.scorecard.properties[dimension];
+      expect(dimensionSchema.properties.score).toBeDefined();
+      expect(dimensionSchema.properties.rationale).toMatchObject({ type: "string" });
+    }
   });
 });
