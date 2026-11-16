@@ -24,7 +24,7 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   expect(body.max_completion_tokens).toBe(2500);
+   expect(body.max_completion_tokens).toBe(1800);
   }
  });
  it("retries a Groq 413 once with a smaller completion reservation",async()=>{
@@ -41,7 +41,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{},sonicDna:null});
-  expect(evidenceScoreBudgets).toEqual([2500,1811]);
+  expect(evidenceScoreBudgets).toEqual([1800,1111]);
   expect(evidenceScoreCalls).toBe(2);
   expect(result.evidenceLabels).toHaveLength(1);
  });
@@ -62,7 +62,7 @@ describe("GroqClient section groups",()=>{
   const input={evidence:{artist:"Fixture Artist",catalogSources:[{platform:"apple_music",status:"recognized",canonicalUrl:"https://music.example/track/1"}],reconciliation:{status:"reconciled",conflicts:[]}},sonicDna:{provenance:"uploaded_audio_master",bpm:96,tempoConfidence:0.82,rhythmFeatures:{onsetStability:0.91}},catalogMetadata:{apple_music:{artist:"Fixture Artist",title:"Fixture Track",isrc:"USAAA2600001"}}};
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess(input);
-  expect(budgets).toEqual([2500,1902,1304]);
+  expect(budgets).toEqual([1800,1202,604]);
   expect(productionCalls).toBe(3);
   const first=JSON.parse(payloads[0]),second=JSON.parse(payloads[1]),third=JSON.parse(payloads[2]);
   for(const retry of [second,third]){
@@ -89,7 +89,7 @@ describe("GroqClient section groups",()=>{
   const input={evidence:{artist:"Fixture Artist",catalogSources:[{platform:"apple_music",status:"recognized",canonicalUrl:"https://music.example/track/1"}],reconciliation:{status:"reconciled",conflicts:[]}},sonicDna:{provenance:"uploaded_audio_master",bpm:96,tempoConfidence:0.82,rhythmFeatures:{onsetStability:0.91}},catalogMetadata:{apple_music:{artist:"Fixture Artist",title:"Fixture Track",isrc:"USAAA2600001"}}};
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess(input);
-  expect(budgets).toEqual([2500,1247]);
+  expect(budgets).toEqual([1800,547]);
   expect(evidenceScoreCalls).toBe(2);
   const firstPayload=JSON.parse(userPayloads[0]);
   const retryPayload=JSON.parse(userPayloads[1]);

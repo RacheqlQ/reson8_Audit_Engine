@@ -132,7 +132,7 @@ function thresholdError(name: string, value: unknown): string | null {
 
 const MAX_PROVIDER_RETRY_DELAY_MS = 15 * 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
-const MAX_COMPLETION_TOKENS = 2500;
+const MAX_COMPLETION_TOKENS = 1800;
 const MAX_SECTION_ATTEMPTS = 4;
 
 function retryCompletionTokenBudget(detail: string, currentBudget: number): number {
