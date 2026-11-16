@@ -78,7 +78,7 @@ function normalizeOne(input: string): NormalizedDspTrackLink {
           throw new Error("Apple Music song URLs must contain a numeric track ID");
         }
         const songPath = segments.slice(songIndex).join("/");
-        canonicalUrl = `https://music.apple.com/\${storefront}/\${songPath}`;
+        canonicalUrl = `https://music.apple.com/${storefront}/${songPath}`;
         break;
       }
 
@@ -92,7 +92,7 @@ function normalizeOne(input: string): NormalizedDspTrackLink {
       }
       catalogId = requireTrackId(trackId);
       const slug = segments[albumIndex + 1] && !/^\d+$/.test(segments[albumIndex + 1]) ? segments[albumIndex + 1] : "track";
-      canonicalUrl = `https://music.apple.com/\${storefront}/album/\${slug}/\${albumId}?i=\${catalogId}`;
+      canonicalUrl = `https://music.apple.com/${storefront}/album/${slug}/${albumId}?i=${catalogId}`;
       break;
     }
     case "deezer": {
