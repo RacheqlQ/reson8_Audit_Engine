@@ -277,6 +277,13 @@ function identityEvidence(identity: TrackIdentity): Record<string, unknown> {
   };
 }
 
+function catalogLookupReason(status: string): string {
+  if (status === "recognized") return "Provider returned track metadata.";
+  if (status === "partial") return "Provider returned incomplete metadata; some identity fields remain unresolved.";
+  if (status === "unavailable") return "Provider could not verify this submitted link.";
+  return "Provider lookup is pending.";
+}
+
 function reconciliationEvidence(reconciliation: MetadataReconciliation): Record<string, unknown> {
   return {
     status: reconciliation.status,
@@ -524,7 +531,7 @@ export async function processAuditJob(
       reconciliation: reconciliationEvidence(reconciliation),
       genreClassification,
       metadataSourcesChecked: [...catalogResults.map((result) => result.link.platform), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...attemptedRecognitionProviders],
-      catalogSources: catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, error: result.error })),
+      catalogSources: catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
       sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
@@ -590,7 +597,7 @@ export async function processAuditJob(
       ],
       catalogSources: catalogResults
         .filter((result) => result.link.platform !== "spotify")
-        .map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, error: result.error })),
+        .map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
       sourceCombination: evidence.sourceCombination,
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
