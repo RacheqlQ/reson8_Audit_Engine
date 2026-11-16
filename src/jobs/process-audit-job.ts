@@ -94,6 +94,7 @@ function userSafeFailureMessage(error: unknown): string {
     };
     return messages[stage] ?? "Audit processing: the " + stage.replace(/_/g, " ") + " stage exceeded its time limit. Please retry.";
   }
+  if (raw === "GROQ_ASSESSMENT_TIMEOUT") return "AI assessment: the analysis exceeded its four-minute time limit. Please retry later.";
   if (raw.startsWith("GROQ_REQUEST_TOO_LARGE")) return "AI assessment: the request exceeded the supported input budget. Please retry later.";
   if (raw.startsWith("GROQ_PROMPT_BUDGET_EXCEEDED")) return "AI assessment: the evidence is too large to process safely in one request. Please retry with a smaller source set.";
   if (raw.includes("Zod validation") || raw.includes("json_validate_failed")) return "AI assessment: the generated response could not be validated. Please retry later.";
