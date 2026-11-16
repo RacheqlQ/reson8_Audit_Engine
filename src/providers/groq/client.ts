@@ -214,6 +214,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   let strictSchemaRetries = 0;
   let jsonObjectProviderRetries = 0;
   let promptOnlyProviderRetries = 0;
+  let strictContentRetries = 0;
   let jsonObjectContentRetries = 0;
   let promptOnlyContentRetries = 0;
   let responseMode: "json_schema" | "json_object" | "prompt_only" = "json_schema";
@@ -221,11 +222,12 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 
   const scheduleCorrection = (reason: string): boolean => {
     lastError = reason;
-    if (responseMode === "json_schema") {
-      responseMode = "json_object";
-      lastError += " Switch to JSON-object mode and follow the exact outputSchema included in the next request.";
+    if (responseMode === "json_schema" && strictContentRetries < 1) {
+      strictContentRetries++;
+      lastError += " Retry strict structured-output mode once with the complete corrected schema object.";
       return true;
     }
+    if (responseMode === "json_schema") return false;
     if (responseMode === "json_object" && jsonObjectContentRetries < 2) {
       jsonObjectContentRetries++;
       lastError += " Correct every reported issue and return one complete object matching outputSchema.";
