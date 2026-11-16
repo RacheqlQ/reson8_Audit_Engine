@@ -433,17 +433,26 @@ export function createSupabaseAuditStore(
       if (error) throw new Error("Unable to resume completed AI assessment section");
       const match = (data ?? []).find((event) => {
         const payload = event.payload as Record<string, unknown> | null;
-        return payload?.group === group && payload.result !== undefined;
+        return payload?.group === group && payload.result !== undefined
+          && payload.promptVersion === GROQ_PROMPT_VERSION
+          && payload.model === (process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL);
       });
       return match ? (match.payload as Record<string, unknown>).result : null;
     },
-    async saveAssessmentSectionGroup(jobId, _claimToken, group, result, signal) {
+    async saveAssessmentSectionGroup(jobId, claimToken, group, result, signal) {
       signal?.throwIfAborted();
+      const { data: activeJob, error: activeJobError } = await admin.from("audit_jobs")
+        .select("status,claim_token")
+        .eq("id", jobId)
+        .maybeSingle();
+      if (activeJobError || !activeJob || activeJob.status !== "processing" || activeJob.claim_token !== claimToken) {
+        throw new Error("AUDIT_LEASE_LOST");
+      }
       const { error } = await admin.from("audit_events").insert({
         audit_job_id: jobId,
         event_type: "groq_section_completed",
         status: "completed",
-        payload: { group, result },
+        payload: { group, result, promptVersion: GROQ_PROMPT_VERSION, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL },
       });
       if (error) throw new Error("Unable to persist completed AI assessment section");
     },
@@ -661,6 +670,7 @@ export function createSupabaseAuditStore(
         status: job.status as "queued" | "processing" | "completed" | "failed",
         currentStepIndex,
         errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
+          : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
           : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
         full: full ? { available: true, version: full.version } : { available: false },
