@@ -27,7 +27,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   const groq = new GroqClient();
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
-    await store.failExpiredProcessingJobs();
+    await store.failExpiredProcessingJobs?.();
     job = await store.claimNextQueuedJob();
   } catch (error) {
     console.error(JSON.stringify({
