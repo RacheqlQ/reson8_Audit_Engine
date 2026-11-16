@@ -83,7 +83,11 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     saveCatalogFailure: async (jobId, _claimToken, link, error, signal) =>
       store.saveCatalogFailure(jobId, _claimToken, link, error, signal),
     decode: async (bytes, _mimeType, signal) => decoder.decode(bytes, signal),
-    generateAssessment: (input, signal) => groq.assess(input, signal),
+    generateAssessment: (input, signal) => groq.assess({
+      ...input,
+      loadCompletedSectionGroup: (group) => store.loadAssessmentSectionGroup(job.id, group),
+      saveCompletedSectionGroup: (group, result) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, signal),
+    }, signal),
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
     generateReport: generateAuditReport,
     saveReport: async (jobId, _claimToken, tier, pdf, reportInput, signal) => store.saveReport(jobId, _claimToken, tier, pdf, reportInput, signal),
