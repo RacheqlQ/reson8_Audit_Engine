@@ -33,6 +33,17 @@ describe("GET /", () => {
   });
 });
 
+describe("GET /dsp-url.js", () => {
+  it("serves the browser DSP detector module required by app.js", async () => {
+    const app = buildServer({ createJobDependencies: () => { throw new Error("not used"); } } as any);
+    const response = await app.inject({ method: "GET", url: "/dsp-url.js?v=20261116-2" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("javascript");
+    expect(response.body).toContain("detectTrackPlatform");
+    await app.close();
+  });
+});
+
 describe("GET /health", () => {
   it("returns a healthy Audit Engine status without requiring authentication", async () => {
     const app = buildServer({
