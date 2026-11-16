@@ -104,6 +104,8 @@ const SYSTEM_PROMPT = [
   "scorecard.rhythmicConsistency.rationale must contain at least 25 words, including when its score is null; explain the specific missing timing evidence in a complete sentence rather than using a short label.",
   "Do not score artistic taste. Hook, originality, production quality, replay value and lane clarity belong only in the unscored human listening checklist. Include a distinct first-listen question for hook recall, originality against verified references, production/arrangement choices, replay impulse and lane clarity.",
   "All recommendations must be specific, actionable and grounded in supplied track evidence or clearly labelled INDUSTRY PRACTICE. Never invent artist/track comparables; give descriptors or search criteria for references to verify.",
+  "Genre labels must exactly match labels supplied in sonicDna.genreClassification.genres; do not invent compound genre tags, synonyms or adjacent genre names. Keep any A&R interpretation separate from taxonomy-backed genre labels.",
+  "A measured loudness near -11 LUFS is not by itself a reason to optimise or raise loudness; never recommend loudness changes without a specific measured technical fault and delivery target. A spectral centroid at or below 2,000 Hz must not be described as bright or bright-sounding. If the uploaded master has one channel, flag mono delivery as a distribution compatibility risk and recommend checking destination requirements; do not claim it is incompatible.",
   "Return JSON only, meet all schema and word-count requirements, and do not pad with repeated boilerplate."
 ].join(" ");
 
