@@ -207,11 +207,11 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
   const groupFields: Record<string, string[]> = {
     narrative: ["commercialEvidence", "commercialPerformance", "commercialMetrics", "audienceTelemetry", "catalogPopularity", "rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
     positioning: ["commercialEvidence", "commercialPerformance", "commercialMetrics", "audienceTelemetry", "catalogPopularity"],
-    release: ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved", "releaseDate"],
+    release: ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
     "evidence-score": ["commercialEvidence", "commercialPerformance", "commercialMetrics", "audienceTelemetry", "rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
     production: [],
     comparables: [],
-    promotion: ["releaseDate", "releaseStatus"],
+    promotion: ["releaseStatus"],
     "label-fit": ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
     timeline: ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
   };

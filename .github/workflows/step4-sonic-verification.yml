@@ -1,0 +1,31 @@
+name: step4-sonic-verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  verify-sonic-dna:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+      - run: npm install
+      - run: |
+          for i in 1 2 3 4 5; do
+            echo "Sonic DNA focused verification cycle $i/5"
+            npm test -- tests/sonic-dna.test.ts
+          done
+      - run: |
+          for i in 1 2 3 4 5; do
+            echo "Full-suite verification cycle $i/5"
+            npm test
+          done
+      - run: |
+          for i in 1 2 3 4 5; do
+            echo "TypeScript build verification cycle $i/5"
+            npm run build
+          done

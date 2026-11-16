@@ -1,0 +1,75 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Only the newest five-pass acceptance run for this ref should consume CI minutes.
+concurrency:
+  group: audit-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Acceptance verification pass ${{ matrix.pass }}/5
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        pass: [1, 2, 3, 4, 5]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: reson8_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d reson8_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Identify acceptance verification pass
+        run: echo "Running full acceptance pass ${{ matrix.pass }} of 5"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+      - name: Install dependencies
+        run: npm install
+      - name: Run focused report-quality regressions
+        run: npx vitest run tests/charts.test.ts tests/generate-audit-report.test.ts tests/sample-report-script.test.ts
+      - name: Run isolated PostgreSQL worker-fencing regressions
+        env:
+          WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
+        run: bash .github/scripts/worker-fencing-postgres.sh
+      - name: Verify expired worker lease reclamation
+        env:
+          WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
+        run: bash .github/scripts/worker-lease-recovery-postgres.sh
+      - name: Verify queue fairness and bounded stale-job retries
+        env:
+          WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
+        run: bash .github/scripts/worker-queue-fairness-postgres.sh
+      - name: Run unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Install PDF text-inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+      - name: Generate and inspect sample report PDFs
+        run: npm run sample-report
+      - name: Upload report PDFs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report-pdfs-pass-${{ matrix.pass }}
+          path: artifacts/*.pdf
+          if-no-files-found: warn
