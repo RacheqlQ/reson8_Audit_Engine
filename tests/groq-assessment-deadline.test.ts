@@ -20,7 +20,7 @@ describe("Groq assessment deadline", () => {
       signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
     }));
 
-    const client = new GroqClient("test-key", "test-model", fetchImpl as typeof fetch, sleepImpl, 90_000, 10);
+    const client = new GroqClient("test-key", "test-model", fetchImpl as typeof fetch, sleepImpl, 90_000, 500);
     const pending = client.assess({ evidence: {}, sonicDna: null });
     await sleepStarted;
     await expect(pending).rejects.toThrow("GROQ_ASSESSMENT_TIMEOUT");
