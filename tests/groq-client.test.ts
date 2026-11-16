@@ -338,3 +338,45 @@ describe("GroqClient cancellation", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Groq JSON-object fallback schema contract", () => {
+  it("supplies the exact local Zod output schema to the model after strict-mode rejection", async () => {
+    let evidenceScoreCalls = 0;
+    const fallbackPayloads: Array<Record<string, any>> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const userPayload = JSON.parse(body.messages[1].content);
+      const group = userPayload.sectionGroup;
+      if (group === "evidence-score") {
+        evidenceScoreCalls++;
+        if (body.response_format.type === "json_object") fallbackPayloads.push(userPayload);
+        if (evidenceScoreCalls <= 2) {
+          return new Response(JSON.stringify({ error: {
+            message: "Failed to validate JSON. Please adjust your prompt.",
+            code: "json_validate_failed",
+            failed_generation: ""
+          }}), { status: 400 });
+        }
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(group)) } }] }), { status: 200 });
+    });
+    const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
+    await client.assess({ evidence: {}, sonicDna: null });
+    expect(fallbackPayloads).toHaveLength(1);
+    expect(fallbackPayloads[0].outputSchema).toBeDefined();
+    expect(fallbackPayloads[0].outputSchema.properties).toMatchObject({
+      evidenceGaps: { type: "array" },
+      confidence: { type: "number" },
+      limitations: { type: "array" },
+      scorecard: { type: "object", properties: {
+        tempoLaneFit: { type: "object", properties: { score: { type: ["number", "null"] }, rationale: { type: "string" } } },
+        rhythmicConsistency: { type: "object", properties: { score: { type: ["number", "null"] }, rationale: { type: "string" } } },
+        dynamicRangeLoudness: { type: "object" },
+        metadataCompleteness: { type: "object" },
+        releaseReadiness: { type: "object" }
+      }},
+      humanListeningChecklist: { type: "array" },
+      evidenceLabels: { type: "array" }
+    });
+  });
+});
