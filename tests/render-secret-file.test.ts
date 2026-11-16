@@ -6,9 +6,9 @@ const packageJson = JSON.parse(
 ) as { scripts: Record<string, string> };
 
 describe("Render secret-file startup configuration", () => {
-  it.each(["start", "worker"])("%s loads the mounted secret.env before importing the app", (script) => {
+  it.each(["start", "worker"])("%s loads the mounted Secrets.env before importing the app", (script) => {
     expect(packageJson.scripts[script]).toContain(
-      "--env-file-if-exists=/etc/secrets/secret.env",
+      "--env-file-if-exists=/etc/secrets/Secrets.env",
     );
   });
 });
