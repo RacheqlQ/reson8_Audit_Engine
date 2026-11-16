@@ -133,6 +133,7 @@ function thresholdError(name: string, value: unknown): string | null {
 const MAX_PROVIDER_RETRY_DELAY_MS = 15 * 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
 const MAX_COMPLETION_TOKENS = 2500;
+const MAX_SECTION_ATTEMPTS = 4;
 
 function retryCompletionTokenBudget(detail: string, currentBudget: number): number {
   const match = detail.match(/Limit\s+(\d+)\s*,\s*Requested\s+(\d+)/i);
@@ -208,7 +209,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number, signal?:AbortSignal)=>Promise<void>, signal?: AbortSignal): Promise<T> {
   let lastError = "No valid response was returned";
   let completionTokenBudget = MAX_COMPLETION_TOKENS;
-  for(let attempt=0;attempt<2;attempt++){
+  for(let attempt=0;attempt<MAX_SECTION_ATTEMPTS;attempt++){
     let response:Response|null=null;
     for(let networkAttempt=0;networkAttempt<MAX_NETWORK_ATTEMPTS;networkAttempt++){
       signal?.throwIfAborted();
@@ -230,7 +231,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       const detail=await response?.text().catch(()=>"")??"";
       let providerError:{error?:{code?:unknown;message?:unknown}}={};
       try{providerError=JSON.parse(detail) as typeof providerError;}catch{/* Preserve the original provider response below. */}
-      if(response?.status===413&&attempt===0){
+      if(response?.status===413&&attempt<MAX_SECTION_ATTEMPTS-1){
         completionTokenBudget=retryCompletionTokenBudget(detail,completionTokenBudget);
         lastError="Groq rejected the request with HTTP 413. Retry once with a smaller completion-token reservation while preserving the complete supplied evidence.";
         continue;
