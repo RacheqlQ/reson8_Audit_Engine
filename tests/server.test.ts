@@ -8,6 +8,14 @@ const store = {
   getAuditReport: async () => ({ bytes: new Uint8Array([37, 80, 68, 70]), contentType: "application/pdf", filename: "report.pdf" }),
 };
 describe("anonymous capability API surface", () => {
+  it("serves the browser DSP URL detector module with cache-busting query strings", async () => {
+    const app = buildServer(store as any);
+    const response = await app.inject({ method: "GET", url: "/dsp-url.js?v=20261116-2" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("javascript");
+    expect(response.body).toContain("detectTrackPlatform");
+    await app.close();
+  });
   it("does not expose a browser authentication configuration endpoint", async () => {
     const app = buildServer({ createJobDependencies: () => { throw new Error("not used"); }, getAuditStatus: store.getAuditStatus, getAuditReport: store.getAuditReport, verifyAuditAccessToken: store.verifyAuditAccessToken } as any);
     const response = await app.inject({ method: "GET", url: "/v1/auth/config" });
