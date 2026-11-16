@@ -48,13 +48,13 @@ describe("uploaded master provenance in reports", () => {
       fixture: false,
       sourceCombination: "master_and_dsp",
       masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" },
-      catalogSources: [{ platform: "apple_music", status: "recognized", error: null }],
+      catalogSources: [{ platform: "apple_music", status: "recognized", reason: "Provider returned track metadata.", canonicalUrl: "https://music.apple.com/us/album/song/1?i=2" }],
     };
     const report = planAuditReportPages(input, "full")
       .flatMap((section) => [section.title, ...section.text])
       .join(" ");
     expect(report).toContain("Submitted source combination: Combined — uploaded master audio + submitted DSP catalog link.");
-    expect(report).toContain("Apple Music — recognized");
+    expect(report).toContain("Apple Music — recognized — Provider returned track metadata. — https://music.apple.com/us/album/song/1?i=2");
   });
 
   it("discloses when a combined DSP link has no provider lookup result", () => {
