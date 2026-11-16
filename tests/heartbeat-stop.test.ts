@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { processAuditJob, type AuditProcessorDependencies } from "../src/jobs/process-audit-job.js";
 
 describe("worker heartbeat shutdown ordering", () => {
-  it("awaits an in-flight heartbeat shutdown before writing terminal completion", async () => {
+  it("keeps the lease heartbeat running until terminal completion is persisted", async () => {
     const events: string[] = [];
-    let releaseStop!: () => void;
-    let signalStopStarted!: () => void;
-    const stopGate = new Promise<void>((resolve) => { releaseStop = resolve; });
-    const stopStarted = new Promise<void>((resolve) => { signalStopStarted = resolve; });
+    let releaseTerminalWrite!: () => void;
+    let signalTerminalWriteStarted!: () => void;
+    const terminalWriteGate = new Promise<void>((resolve) => { releaseTerminalWrite = resolve; });
+    const terminalWriteStarted = new Promise<void>((resolve) => { signalTerminalWriteStarted = resolve; });
 
     const deps = {
       getJob: async () => ({
@@ -36,27 +36,26 @@ describe("worker heartbeat shutdown ordering", () => {
       saveAssessment: async () => {},
       generateReport: async () => new Uint8Array([37, 80, 68, 70, 45]),
       saveReport: async () => {},
-      stopHeartbeat: async () => {
-        events.push("heartbeat-stop-started");
-        signalStopStarted();
-        await stopGate;
-        events.push("heartbeat-stopped");
+      stopHeartbeat: async () => { events.push("heartbeat-stopped"); },
+      markCompleted: async () => {
+        events.push("terminal-write-started");
+        signalTerminalWriteStarted();
+        await terminalWriteGate;
+        events.push("terminal-write-completed");
       },
-      markCompleted: async () => { events.push("terminal-completion"); },
       markFailed: async () => { events.push("terminal-failure"); },
     } as unknown as AuditProcessorDependencies;
 
     const processing = processAuditJob("heartbeat-race-job", deps);
-    await stopStarted;
-    expect(events).toContain("heartbeat-stop-started");
-    expect(events).not.toContain("terminal-completion");
+    await terminalWriteStarted;
+    expect(events).toEqual(["terminal-write-started"]);
 
-    releaseStop();
+    releaseTerminalWrite();
     await expect(processing).resolves.toEqual({ status: "completed" });
     expect(events).toEqual([
-      "heartbeat-stop-started",
+      "terminal-write-started",
+      "terminal-write-completed",
       "heartbeat-stopped",
-      "terminal-completion",
     ]);
   });
 });
