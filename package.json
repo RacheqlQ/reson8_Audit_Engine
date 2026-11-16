@@ -11,8 +11,8 @@
     "test:watch": "vitest",
     "build": "tsc -p tsconfig.json",
     "sample-report": "npm run build && node scripts/sample-report.mjs",
-    "start": "node dist/main.js",
-    "worker": "node dist/main.js",
+    "start": "node --env-file-if-exists=/etc/secrets/Secrets.env dist/main.js",
+    "worker": "node --env-file-if-exists=/etc/secrets/Secrets.env dist/main.js",
     "evaluate:genres": "npm run build && node scripts/genre-evaluation.mjs",
     "benchmark:key": "npm run build && node scripts/benchmark-key-estimation.mjs"
   },

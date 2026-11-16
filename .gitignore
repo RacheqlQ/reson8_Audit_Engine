@@ -3,6 +3,8 @@ dist/
 .env
 .env.*
 !.env.example
+Secrets.env
+secret.env
 coverage/
 *.log
 artifacts/
