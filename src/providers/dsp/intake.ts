@@ -65,17 +65,22 @@ function normalizeOne(input: string): NormalizedDspTrackLink {
     case "apple_music": {
       const songIndex = segments.indexOf("song");
       const albumIndex = segments.indexOf("album");
+      const isSongPath = songIndex >= 0 && (albumIndex < 0 || songIndex < albumIndex);
       const pathStorefront = segments[0] && /^[a-z]{2}(?:-[a-z]{2})?$/i.test(segments[0]) ? segments[0].toLowerCase() : null;
       const queryStorefront = url.searchParams.get("country");
       const storefront = pathStorefront
         ?? (queryStorefront && /^[a-z]{2}$/i.test(queryStorefront) ? queryStorefront.toLowerCase() : "us");
 
-      if (songIndex >= 0) {
+      if (isSongPath) {
         const firstSongPart = segments[songIndex + 1];
         const trackId = /^\d+$/.test(firstSongPart ?? "") ? firstSongPart : segments[songIndex + 2];
         catalogId = requireTrackId(trackId);
         if (!/^\d+$/.test(catalogId)) {
           throw new Error("Apple Music song URLs must contain a numeric track ID");
+        }
+        const trackQuery = url.searchParams.get("i");
+        if (trackQuery && (!/^\d+$/.test(trackQuery) || trackQuery !== catalogId)) {
+          throw new Error("Apple Music song URL contains conflicting track identifiers");
         }
         const songPath = segments.slice(songIndex).join("/");
         canonicalUrl = `https://music.apple.com/${storefront}/${songPath}`;
