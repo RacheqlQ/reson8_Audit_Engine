@@ -37,6 +37,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     throw error;
   }
   if (!job) return null;
+  console.info(JSON.stringify({ worker: "audit", jobId: job.id, event: "job_claimed", workerId: job.workerId, leaseExpiresAt: job.leaseExpiresAt }));
   if (signal?.aborted) {
     console.info(JSON.stringify({
       worker: "audit",
@@ -146,6 +147,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     })().finally(() => { heartbeatPromise = null; });
   };
   if (!heartbeatStopped) {
+    heartbeatTick();
     heartbeat = setInterval(heartbeatTick, HEARTBEAT_INTERVAL_MS);
     heartbeat.unref();
   }
