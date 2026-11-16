@@ -3,7 +3,8 @@ import type { CatalogMetadata } from "../providers/dsp/catalog.js";
 import type { ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { isPdf } from "../reports/pdf-output.js";
-import { analyzePcm, type SonicDnaFeatures } from "../audio/sonic-dna.js";
+import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
+import { analyzePcmWithTimeout } from "../audio/sonic-dna-worker-client.js";
 import { fuseGenreEvidence, type ProviderGenreTags } from "../genre/fusion.js";
 import { DEFAULT_GENRE_MODEL } from "../genre/model.js";
 import type { TrackIdentity } from "../metadata/MetadataEngine.js";
@@ -458,9 +459,9 @@ export async function processAuditJob(
         return deps.recognize(sample, signal);
       });
       const decoded = await awaitWithStage(deps, "audio_decode", 90_000, (signal) => deps.decode(master, job.mimeType!, signal));
-      const sonicDnaStartedAt = Date.now();
-      const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
-      if (Date.now() - sonicDnaStartedAt > 90_000) throw new Error("AUDIT_STAGE_TIMEOUT:sonic_dna");
+      const dna = await awaitWithStage(deps, "sonic_dna", 90_000, (signal) =>
+        analyzePcmWithTimeout(decoded.samples, decoded.sampleRate, decoded.channels, 90_000, signal),
+      );
       masterDna = {
         ...dna,
         sampleRate: decoded.sampleRate,
