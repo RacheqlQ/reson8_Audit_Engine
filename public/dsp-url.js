@@ -5,12 +5,12 @@ export function detectTrackPlatform(value){
   if(["music.apple.com","itunes.apple.com","geo.music.apple.com"].includes(host)){
     const songIndex=parts.indexOf("song"),albumIndex=parts.indexOf("album");
     const firstSongPart=songIndex>=0?parts[songIndex+1]:null;
-    const songId=songIndex>=0?(/^\\d+$/.test(firstSongPart||"")?firstSongPart:parts[songIndex+2]):null;
+    const songId=songIndex>=0?(/^\d+$/.test(firstSongPart||"")?firstSongPart:parts[songIndex+2]):null;
     const albumId=albumIndex>=0?parts[albumIndex+2]:null;
     const trackQuery=u.searchParams.get("i");
-    if(songId&&/^\\d+$/.test(songId))return "Apple Music";
-    if(albumId&&/^\\d+$/.test(albumId)&&trackQuery&&/^\\d+$/.test(trackQuery))return "Apple Music";
-    if(albumId&&/^\\d+$/.test(albumId))throw new Error("Apple Music album links identify a collection. Submit a track-specific song URL or an album URL with ?i={trackId}.");
+    if(songId&&/^\d+$/.test(songId))return "Apple Music";
+    if(albumId&&/^\d+$/.test(albumId)&&trackQuery&&/^\d+$/.test(trackQuery))return "Apple Music";
+    if(albumId&&/^\d+$/.test(albumId))throw new Error("Apple Music album links identify a collection. Submit a track-specific song URL or an album URL with ?i={trackId}.");
   }
   if(["deezer.com","www.deezer.com"].includes(host)&&parts[0]==="track"&&parts[1])return "Deezer";
   if(["tidal.com","listen.tidal.com"].includes(host)&&parts.includes("track")&&parts[parts.indexOf("track")+1])return "TIDAL";
