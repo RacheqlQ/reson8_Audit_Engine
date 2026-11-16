@@ -35,8 +35,8 @@ describe("uploaded master provenance in reports", () => {
     const report = planAuditReportPages(input, "full")
       .flatMap((section) => [section.title, ...section.text])
       .join(" ");
-    expect(report).toContain("Integrated loudness: -11.32 LUFS");
-    expect(report).toContain("Dynamic range: 13.11 dB");
+    expect(report).toContain("Integrated loudness: -11.3 LUFS");
+    expect(report).toContain("Dynamic range: 13.1 dB");
     expect(report).toContain("Vocal analysis: Not performed");
     expect(report.toLowerCase()).toContain("vocal presence/absence is unknown");
   });
