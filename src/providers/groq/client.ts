@@ -135,6 +135,34 @@ const MAX_NETWORK_ATTEMPTS = 5;
 const MAX_COMPLETION_TOKENS = 1800;
 const MAX_TPM_RETRIES = 4;
 const MAX_SECTION_REQUEST_ATTEMPTS = 16;
+async function fetchGroqWithTimeout(
+  fetchImpl: typeof fetch,
+  url: string,
+  init: RequestInit,
+  groupName: string,
+  parentSignal?: AbortSignal,
+): Promise<Response> {
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => {
+    timeoutController.abort(new Error("GROQ_REQUEST_TIMEOUT"));
+  }, GROQ_REQUEST_TIMEOUT_MS);
+  timeout.unref?.();
+  const signal = parentSignal
+    ? AbortSignal.any([parentSignal, timeoutController.signal])
+    : timeoutController.signal;
+  try {
+    return await fetchImpl(url, { ...init, signal });
+  } catch (error) {
+    if (timeoutController.signal.aborted && !parentSignal?.aborted) {
+      throw new Error(`Groq ${groupName} request timed out after ${GROQ_REQUEST_TIMEOUT_MS}ms`, { cause: error });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+const GROQ_REQUEST_TIMEOUT_MS = 90_000;
 
 function retryCompletionTokenBudget(detail: string, currentBudget: number): number {
   const match = detail.match(/Limit\s+(\d+)\s*,\s*Requested\s+(\d+)/i);
@@ -287,12 +315,12 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     let response: Response | null = null;
     for (let networkAttempt = 0; networkAttempt < MAX_NETWORK_ATTEMPTS; networkAttempt++) {
       signal?.throwIfAborted();
-      response = await fetchImpl("https://api.groq.com/openai/v1/chat/completions", {
+      response = await fetchGroqWithTimeout(fetchImpl, "https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { authorization: "Bearer " + apiKey, "content-type": "application/json" },
         signal,
         body: JSON.stringify(requestBody),
-      });
+      }, groupName, signal);
       if (response.ok) break;
       const transient = response.status === 429 || response.status >= 500;
       if (!transient || networkAttempt === MAX_NETWORK_ATTEMPTS - 1) break;
