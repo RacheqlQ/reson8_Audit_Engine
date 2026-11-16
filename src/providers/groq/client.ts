@@ -337,8 +337,11 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
             lastError = "Groq strict JSON-schema validation failed twice for " + groupName + ": " + message + "." + diagnostic
               + " Switch to JSON-object mode and return one complete object matching the exact outputSchema.";
           } else {
+            const requiredFields = Object.keys((outputSchema as { properties?: Record<string, unknown> }).properties ?? {}).join(", ")
+              || "all required schema properties";
             lastError = "Groq returned json_validate_failed for the " + groupName + " section: " + message + "." + diagnostic
-              + " Retry strict mode with every required property, nested field, type, enum and nullable value.";
+              + " Retry strict mode with one complete JSON object including every required property: " + requiredFields
+              + ". Satisfy every nested field, type, enum and nullable value.";
           }
           continue;
         }
