@@ -450,6 +450,7 @@ export class GroqClient implements GroqAssessmentClient {
   private readonly fetchImpl: typeof fetch;
   private readonly sleepImpl: (ms: number, signal?: AbortSignal) => Promise<void>;
   private readonly requestTimeoutMs: number;
+  private readonly assessmentTimeoutMs: number;
 
   constructor(
     apiKey = process.env.GROQ_API_KEY ?? process.env.GROQ_API,
@@ -457,23 +458,28 @@ export class GroqClient implements GroqAssessmentClient {
     fetchImpl: typeof fetch = fetch,
     sleepImpl: (ms: number, signal?: AbortSignal) => Promise<void> = abortableSleep,
     requestTimeoutMs = GROQ_REQUEST_TIMEOUT_MS,
+    assessmentTimeoutMs = GROQ_ASSESSMENT_TIMEOUT_MS,
   ) {
     if (!apiKey) throw new Error("GROQ_API is required");
     if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
       throw new Error("Groq request timeout must be a positive finite number");
+    }
+    if (!Number.isFinite(assessmentTimeoutMs) || assessmentTimeoutMs <= 0) {
+      throw new Error("Groq assessment timeout must be a positive finite number");
     }
     this.apiKey = apiKey;
     this.model = model;
     this.fetchImpl = fetchImpl;
     this.sleepImpl = sleepImpl;
     this.requestTimeoutMs = requestTimeoutMs;
+    this.assessmentTimeoutMs = assessmentTimeoutMs;
   }
   async assess(input:GroqAssessmentInput, signal?:AbortSignal):Promise<ArAssessment>{
     const deadlineController = new AbortController();
     const deadlineError = new Error("GROQ_ASSESSMENT_TIMEOUT");
     const deadlineTimer = setTimeout(
       () => deadlineController.abort(deadlineError),
-      GROQ_ASSESSMENT_TIMEOUT_MS,
+      this.assessmentTimeoutMs,
     );
     deadlineTimer.unref?.();
     const assessmentSignal = signal
