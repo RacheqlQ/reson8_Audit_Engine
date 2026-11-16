@@ -12,6 +12,7 @@ export function createAuditPoller({
   let timer = null;
   let stopped = true;
   let startedAt = 0;
+  let longRunningNoticeSent = false;
   function stop() {
     stopped = true;
     if (timer !== null) { clearTimer(timer); timer = null; }
@@ -23,6 +24,7 @@ export function createAuditPoller({
       return;
     }
     startedAt = now();
+    longRunningNoticeSent = false;
     stopped = false;
     async function check() {
       if (stopped) return;
@@ -45,18 +47,16 @@ export function createAuditPoller({
           onMessage("Audit failed: " + (payload.errorMessage || "processing error"));
           return;
         }
-        if (now() - startedAt >= maxWaitMs) {
-          stop();
-          onMessage("Audit is still processing. Keep this page open and check the job again shortly.");
-          return;
+        if (!longRunningNoticeSent && now() - startedAt >= maxWaitMs) {
+          longRunningNoticeSent = true;
+          onMessage("Audit is taking longer than expected. Keep this page open; automatic status checks will continue.");
         }
         timer = setTimer(check, retryDelayMs);
       } catch (error) {
         if (stopped) return;
-        if (now() - startedAt >= maxWaitMs) {
-          stop();
-          onMessage(error instanceof Error ? error.message : "Could not read audit status");
-          return;
+        if (!longRunningNoticeSent && now() - startedAt >= maxWaitMs) {
+          longRunningNoticeSent = true;
+          onMessage("Audit is still processing. Temporary status checks are failing; automatic retries will continue.");
         }
         timer = setTimer(check, errorRetryDelayMs);
       }
