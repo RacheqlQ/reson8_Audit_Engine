@@ -253,7 +253,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   let jsonObjectContentRetries = 0;
   let promptOnlyContentRetries = 0;
   let responseMode: "json_schema" | "json_object" | "prompt_only" = providerName === "gemini" ? "json_object" : "json_schema";
-  const cacheGroupName = providerName === "gemini" ? "gemini:" + groupName : groupName;
+  const cacheGroupName = groupName;
   const providerLabel = providerName === "gemini" ? "Gemini" : "Groq";
   const tokenField = providerName === "gemini" ? "max_tokens" : "max_completion_tokens";
   const outputSchema = z.toJSONSchema(schema);
