@@ -211,6 +211,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   let completionTokenBudget = MAX_COMPLETION_TOKENS;
   let tpmRetries = 0;
   let validationRetryUsed = false;
+  let providerSchemaRetries = 0;
+  let jsonObjectFallback = false;
   for(let attempt=0;attempt<MAX_SECTION_ATTEMPTS+1;attempt++){
     let response:Response|null=null;
     for(let networkAttempt=0;networkAttempt<MAX_NETWORK_ATTEMPTS;networkAttempt++){
@@ -218,7 +220,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       response=await fetchImpl("https://api.groq.com/openai/v1/chat/completions",{
         method:"POST",headers:{authorization:"Bearer "+apiKey,"content-type":"application/json"},
         signal,
-        body:JSON.stringify({model,temperature:0.1,max_completion_tokens:completionTokenBudget,response_format:{type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
+        body:JSON.stringify({model,temperature:0.1,max_completion_tokens:completionTokenBudget,response_format:jsonObjectFallback
+          ? {type:"json_object"}
+          : {type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
           messages:[{role:"system",content:SYSTEM_PROMPT+" "+instructions},
             {role:"user",content:JSON.stringify({promptVersion:GROQ_PROMPT_VERSION,sectionGroup:groupName,evidence:input.evidence,
               sonicDna:input.sonicDna,catalogMetadata:input.catalogMetadata??null,correction:attempt===0?null:lastError})}]})
@@ -239,10 +243,26 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         lastError="Groq rejected the request with HTTP 413. Retry with a smaller completion-token reservation while preserving the complete supplied evidence.";
         continue;
       }
+      if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&groupName==="evidence-score"&&providerSchemaRetries<2){
+        providerSchemaRetries++;
+        const message=typeof providerError.error.message==="string"?providerError.error.message:"The provider rejected its generated JSON against the supplied schema.";
+        const failedGeneration=typeof (providerError.error as {failed_generation?:unknown}).failed_generation==="string"
+          ? (providerError.error as {failed_generation:string}).failed_generation.trim() : "";
+        const generationNote=failedGeneration
+          ? " Groq included failed_generation diagnostics; rely on the schema and supplied evidence rather than copying unsupported output."
+          : " Groq supplied no failed_generation diagnostics.";
+        if(providerSchemaRetries===1){
+          lastError="Groq returned json_validate_failed: "+message+"."+generationNote+" Retry once in strict structured-output mode with a complete object, every required property, all five scorecard dimensions, and at least one valid evidenceLabels item. Preserve evidence boundaries and use null scores when evidence is insufficient.";
+        }else{
+          jsonObjectFallback=true;
+          lastError="Groq strict structured-output validation failed twice: "+message+"."+generationNote+" The next request uses JSON-object mode. Return one complete JSON object matching the same evidence-score schema exactly. Include evidenceGaps, confidence, limitations, scorecard with all five dimensions, humanListeningChecklist, and evidenceLabels. Do not add prose or markdown. Preserve evidence boundaries and use null scores when evidence is insufficient; local Zod validation remains mandatory.";
+        }
+        continue;
+      }
       if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&!validationRetryUsed){
         validationRetryUsed=true;
         const message=typeof providerError.error.message==="string"?providerError.error.message:"The provider rejected its generated JSON against the supplied schema.";
-        lastError="Groq returned json_validate_failed: "+message+". Retry with a complete JSON object that includes every property required by the supplied schema. Do not omit required properties, including evidenceLabels; when no track-specific source supports a label, use only a clearly separated INDUSTRY PRACTICE entry where appropriate.";
+        lastError="Groq returned json_validate_failed: "+message+". Retry with a complete JSON object that includes every property required by the supplied schema.";
         continue;
       }
       throw new Error("Groq "+groupName+" assessment failed with HTTP "+(response?.status??"unknown")+(detail?": "+detail.slice(0,300):""));
