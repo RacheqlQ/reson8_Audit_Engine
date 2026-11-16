@@ -97,11 +97,11 @@ const ALBUM_CONFLICT_RATIONALE =
 
 function stripUnsupportedTechnicalClaims(value: unknown, suppressLoudnessOptimisation: boolean, suppressBrightTimbre: boolean): unknown {
   if (typeof value === "string") {
-    const sentences = value.split(/(?<=[.!?])\\s+(?=[A-Z])/);
+    const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
-      if (suppressLoudnessOptimisation && /\\b(?:LUFS|loudness)\\b/i.test(sentence)
-        && /\\b(?:optimis\\w*|increas\\w*|rais\\w*|louder|target level|push the level)\\b/i.test(sentence)) return false;
-      if (suppressBrightTimbre && /\\bbright(?:ness)?\\b/i.test(sentence)) return false;
+      if (suppressLoudnessOptimisation && /\b(?:LUFS|loudness)\b/i.test(sentence)
+        && /\b(?:optimis\w*|increas\w*|rais\w*|louder|target level|push the level)\b/i.test(sentence)) return false;
+      if (suppressBrightTimbre && /\bbright(?:ness)?\b/i.test(sentence)) return false;
       return true;
     });
     return kept.join(" ").trim() || "Not asserted: the measured technical profile does not support that claim.";
