@@ -50,7 +50,13 @@ describe("GroqClient section groups",()=>{
   expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("beatTimesSeconds");
   expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("downbeatCandidateTimesSeconds");
   expect(payload.sonicDna.harmonicFeatures).not.toHaveProperty("segmentChroma");
-  expect(payload.sonicDna).not.toBe(sonicDna);
+  expect(JSON.stringify(payload.sonicDna).length).toBeLessThan(JSON.stringify(sonicDna).length * 0.7);
+  expect(mock.mock.calls).toHaveLength(8);
+  for(const call of mock.mock.calls){
+   const body=JSON.parse(String(call[1]?.body));
+   const repeated=JSON.parse(body.messages[1].content);
+   expect(repeated.sonicDna).toEqual(payload.sonicDna);
+  }
  });
 
  it("passes the completion-token budget on every Groq request",async()=>{
