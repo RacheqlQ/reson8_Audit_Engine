@@ -23,6 +23,12 @@ export const PROVIDER_POLICY = {
     retention: "Verify current API retention, training and deletion terms before enabling.",
     enableFlag: "PROVIDER_ENABLED_GROQ", decisionNote: "Operational enablement explicitly authorized by the product owner; this setting is not a legal determination and does not waive applicable terms or retention obligations.",
   },
+  gemini: {
+    id: "gemini", commercialStatus: "allowed", termsUrl: "https://ai.google.dev/gemini-api/terms",
+    attribution: "Identify Google Gemini as the fallback assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
+    retention: "Verify current Gemini API retention, training, regional processing and deletion terms before enabling.",
+    enableFlag: "PROVIDER_ENABLED_GEMINI", decisionNote: "Operational fallback is opt-in and requires the exact enable flag plus GEMINI_API_KEY; verify applicable Google AI terms and data handling before use.",
+  },
   audd: {
     id: "audd", commercialStatus: "allowed", termsUrl: "https://audd.io/terms/",
     attribution: "Name AudD and retrieval time for every recognition result.",
