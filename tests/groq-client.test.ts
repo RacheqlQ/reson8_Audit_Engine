@@ -45,6 +45,33 @@ describe("GroqClient section groups",()=>{
   expect(evidenceScoreCalls).toBe(2);
   expect(result.evidenceLabels).toHaveLength(1);
  });
+ it("progressively adapts repeated TPM 413 responses for production while preserving all evidence",async()=>{
+  const budgets:number[]=[];
+  const payloads:string[]=[];
+  let productionCalls=0;
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="production"){
+    budgets.push(body.max_completion_tokens);
+    payloads.push(body.messages[1].content);
+    productionCalls++;
+    if(productionCalls<=2)return new Response(JSON.stringify({error:{message:"Request too large for model in organization on tokens per minute (TPM): Limit 8000, Requested 8198."}}),{status:413});
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const input={evidence:{artist:"Fixture Artist",catalogSources:[{platform:"apple_music",status:"recognized",canonicalUrl:"https://music.example/track/1"}],reconciliation:{status:"reconciled",conflicts:[]}},sonicDna:{provenance:"uploaded_audio_master",bpm:96,tempoConfidence:0.82,rhythmFeatures:{onsetStability:0.91}},catalogMetadata:{apple_music:{artist:"Fixture Artist",title:"Fixture Track",isrc:"USAAA2600001"}}};
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  const result=await client.assess(input);
+  expect(budgets).toEqual([2500,1902,1304]);
+  expect(productionCalls).toBe(3);
+  const first=JSON.parse(payloads[0]),second=JSON.parse(payloads[1]),third=JSON.parse(payloads[2]);
+  for(const retry of [second,third]){
+   expect(retry.evidence).toEqual(first.evidence);
+   expect(retry.sonicDna).toEqual(first.sonicDna);
+   expect(retry.catalogMetadata).toEqual(first.catalogMetadata);
+  }
+  expect(result.productionArrangementGuidance).toBeTruthy();
+ });
  it("adapts an 8,853-token TPM rejection while preserving the complete evidence payload",async()=>{
   const budgets:number[]=[];
   const userPayloads:string[]=[];
