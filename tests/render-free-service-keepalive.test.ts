@@ -6,7 +6,7 @@ afterEach(() => vi.useRealTimers());
 describe("embedded worker Render Free keepalive", () => {
   it("sends a low-frequency health request while a claimed job is active", async () => {
     vi.useFakeTimers();
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
     const stop = startRenderFreeServiceKeepalive({
       enabled: true,
       baseUrl: "https://reson8-audit-engine.onrender.com",
