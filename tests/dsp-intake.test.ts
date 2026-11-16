@@ -106,6 +106,7 @@ describe("Apple Music regional and direct-song URL intake", () => {
     const geo = "https://geo.music.apple.com/gb/song/example-track/1234567890";
     const itunes = "https://itunes.apple.com/gb/song/example-track/1234567890";
     expect(detectTrackPlatform(geo)).toBe("Apple Music");
+    expect(detectTrackPlatform(itunes)).toBe("Apple Music");
     expect(normalizeDspTrackLinks([geo])[0]).toMatchObject({ platform: "apple_music", catalogId: "1234567890" });
     expect(normalizeDspTrackLinks([itunes])[0]).toMatchObject({ platform: "apple_music", catalogId: "1234567890" });
   });
@@ -119,6 +120,8 @@ describe("Apple Music regional and direct-song URL intake", () => {
     });
     expect(() => normalizeDspTrackLinks(["https://music.apple.com/ng/album/example-album/12345"]))
       .toThrow(/track-specific/i);
+    expect(() => detectTrackPlatform("https://music.apple.com/ng/album/example-album/12345"))
+      .toThrow(/track-specific/i);
   });
 
   it.each([
@@ -129,5 +132,15 @@ describe("Apple Music regional and direct-song URL intake", () => {
     "http://music.apple.com/ng/song/example-track/1234567890"
   ])("rejects malformed IDs or unsafe Apple Music hosts: %s", (url) => {
     expect(() => normalizeDspTrackLinks([url])).toThrow();
+    expect(() => detectTrackPlatform(url)).toThrow();
+  });
+
+  it("preserves country query storefronts when a share URL omits the storefront path", () => {
+    const url = "https://geo.music.apple.com/song/example-track/1234567890?country=ng";
+    expect(normalizeDspTrackLinks([url])[0]).toEqual({
+      platform: "apple_music",
+      catalogId: "1234567890",
+      canonicalUrl: "https://music.apple.com/ng/song/example-track/1234567890"
+    });
   });
 });
