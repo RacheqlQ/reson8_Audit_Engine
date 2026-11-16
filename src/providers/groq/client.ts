@@ -133,6 +133,7 @@ function thresholdError(name: string, value: unknown): string | null {
 const MAX_PROVIDER_RETRY_DELAY_MS = 15 * 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
 export const GROQ_REQUEST_TIMEOUT_MS = 90_000;
+export const GROQ_ASSESSMENT_TIMEOUT_MS = 12 * 60_000;
 const MAX_COMPLETION_TOKENS = 1800;
 const MAX_TPM_RETRIES = 4;
 const MAX_SECTION_REQUEST_ATTEMPTS = 16;
@@ -468,6 +469,24 @@ export class GroqClient implements GroqAssessmentClient {
     this.requestTimeoutMs = requestTimeoutMs;
   }
   async assess(input:GroqAssessmentInput, signal?:AbortSignal):Promise<ArAssessment>{
+    const deadlineController = new AbortController();
+    const deadlineError = new Error("GROQ_ASSESSMENT_TIMEOUT");
+    const deadlineTimer = setTimeout(
+      () => deadlineController.abort(deadlineError),
+      GROQ_ASSESSMENT_TIMEOUT_MS,
+    );
+    deadlineTimer.unref?.();
+    const assessmentSignal = signal
+      ? AbortSignal.any([signal, deadlineController.signal])
+      : deadlineController.signal;
+    try {
+      return await this.assessWithinDeadline(input, assessmentSignal);
+    } finally {
+      clearTimeout(deadlineTimer);
+    }
+  }
+
+  private async assessWithinDeadline(input:GroqAssessmentInput, signal?:AbortSignal):Promise<ArAssessment>{
     signal?.throwIfAborted();
     const promptInput: GroqAssessmentInput = {
       ...input,
