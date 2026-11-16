@@ -2,7 +2,6 @@ import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { buildServer } from "./server.js";
-import { runAuditQueueWorker } from "./jobs/worker.js";
 import { withAbortTimeout } from "./jobs/with-abort-timeout.js";
 
 type ShutdownSignal = "SIGTERM" | "SIGINT";
@@ -32,7 +31,7 @@ export interface RunningAuditEngine {
 }
 
 /**
- * Starts the HTTP API and its single embedded queue consumer.
+ * Starts the HTTP API only. Queue consumption is owned by the dedicated worker service.
  * Importing this module is side-effect-free; only the executable entrypoint starts it.
  */
 export async function startAuditEngine(
@@ -41,7 +40,7 @@ export async function startAuditEngine(
   const app = options.app ?? buildServer();
   const port = options.port ?? Number(process.env.PORT ?? 10000);
   const host = options.host ?? process.env.HOST ?? "0.0.0.0";
-  const runWorker = options.runWorker ?? runAuditQueueWorker;
+  const runWorker = options.runWorker;
   const signals = options.signals ?? process;
   const reportError = options.onError ?? ((error: unknown) => {
     console.error(JSON.stringify({
@@ -110,12 +109,14 @@ export async function startAuditEngine(
   signals.on("SIGTERM", onSigterm);
   signals.on("SIGINT", onSigint);
 
-  workerTask = Promise.resolve().then(() => runWorker(controller.signal));
-  workerTask.catch(() => {
-    // Shutdown observes and reports the worker rejection together with any
-    // HTTP-close failure; do not report the same worker error twice.
-    void shutdown().catch(reportError);
-  });
+  workerTask = runWorker ? Promise.resolve().then(() => runWorker(controller.signal)) : Promise.resolve();
+  if (runWorker) {
+    workerTask.catch(() => {
+      // Shutdown observes and reports the worker rejection together with any
+      // HTTP-close failure; do not report the same worker error twice.
+      void shutdown().catch(reportError);
+    });
+  }
 
   return { app, shutdown };
 }
