@@ -1,4 +1,6 @@
 import Fastify from "fastify";
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
 import { startAuditEngine } from "./main.js";
 import { runAuditQueueWorker } from "./jobs/worker.js";
 
@@ -13,7 +15,7 @@ export async function startAuditWorkerService() {
 }
 
 const entrypoint = process.argv[1]
-  ? new URL(`file://${process.argv[1]}`).href
+  ? pathToFileURL(resolve(process.argv[1])).href
   : null;
 
 if (entrypoint === import.meta.url) {
