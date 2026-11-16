@@ -339,6 +339,49 @@ describe("GroqClient cancellation", () => {
   });
 });
 
+describe("Groq release-section JSON schema recovery", () => {
+  it("falls back to JSON-object mode after repeated release schema rejection and still validates locally", async () => {
+    let releaseCalls = 0;
+    const releaseFormats: string[] = [];
+    const releasePayloads: Array<Record<string, any>> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      const group = payload.sectionGroup;
+      if (group === "release") {
+        releaseCalls++;
+        releaseFormats.push(body.response_format.type);
+        releasePayloads.push(payload);
+        if (releaseCalls <= 2) {
+          return new Response(JSON.stringify({ error: {
+            message: "Failed to validate JSON. Please adjust your prompt.",
+            type: "invalid_request_error",
+            code: "json_validate_failed",
+            failed_generation: ""
+          }}), { status: 400 });
+        }
+        if (releaseCalls === 3) {
+          return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), { status: 200 });
+        }
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(group)) } }] }), { status: 200 });
+    });
+    const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
+    const result = await client.assess({ evidence: { artist: "Regression Artist" }, sonicDna: null });
+    expect(releaseCalls).toBe(4);
+    expect(releaseFormats).toEqual(["json_schema", "json_schema", "json_object", "json_object"]);
+    expect(releasePayloads[0].outputSchema).toBeUndefined();
+    expect(releasePayloads[2].outputSchema).toBeDefined();
+    expect(releasePayloads[2].outputSchema).toMatchObject({
+      type: "object",
+      properties: { releaseStrategy: { type: "object" } }
+    });
+    expect(releasePayloads[3].outputSchema).toEqual(releasePayloads[2].outputSchema);
+    expect(releasePayloads[3].correction).toContain("release outputSchema");
+    expect(result.releaseStrategy.priorities).toHaveLength(3);
+  });
+});
+
 describe("Groq JSON-object fallback schema contract", () => {
   it("supplies the exact local Zod output schema to the model after strict-mode rejection", async () => {
     let evidenceScoreCalls = 0;
