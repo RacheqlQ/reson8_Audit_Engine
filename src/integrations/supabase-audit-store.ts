@@ -440,21 +440,12 @@ export function createSupabaseAuditStore(
       return match ? (match.payload as Record<string, unknown>).result : null;
     },
     async saveAssessmentSectionGroup(jobId, claimToken, group, result, signal) {
-      signal?.throwIfAborted();
-      const { data: activeJob, error: activeJobError } = await admin.from("audit_jobs")
-        .select("status,claim_token")
-        .eq("id", jobId)
-        .maybeSingle();
-      if (activeJobError || !activeJob || activeJob.status !== "processing" || activeJob.claim_token !== claimToken) {
-        throw new Error("AUDIT_LEASE_LOST");
-      }
-      const { error } = await admin.from("audit_events").insert({
-        audit_job_id: jobId,
-        event_type: "groq_section_completed",
-        status: "completed",
-        payload: { group, result, promptVersion: GROQ_PROMPT_VERSION, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL },
-      });
-      if (error) throw new Error("Unable to persist completed AI assessment section");
+      await fencedStep(jobId, claimToken, "groq_section_completed", {
+        group,
+        result,
+        promptVersion: GROQ_PROMPT_VERSION,
+        model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
+      }, signal);
     },
     async saveAssessment(jobId, claimToken, assessment, signal) {
       await fencedStep(jobId, claimToken, "assessment", {
