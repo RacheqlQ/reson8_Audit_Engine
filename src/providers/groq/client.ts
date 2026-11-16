@@ -223,9 +223,12 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         body:JSON.stringify({model,temperature:0.1,max_completion_tokens:completionTokenBudget,response_format:jsonObjectFallback
           ? {type:"json_object"}
           : {type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
-          messages:[{role:"system",content:SYSTEM_PROMPT+" "+instructions},
+          messages:[{role:"system",content:SYSTEM_PROMPT+" "+instructions+(jsonObjectFallback
+            ? " The user payload includes outputSchema, which is the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value and length constraint. Do not include outputSchema in your returned object."
+            : "")},
             {role:"user",content:JSON.stringify({promptVersion:GROQ_PROMPT_VERSION,sectionGroup:groupName,evidence:input.evidence,
-              sonicDna:input.sonicDna,catalogMetadata:input.catalogMetadata??null,correction:attempt===0?null:lastError})}]})
+              sonicDna:input.sonicDna,catalogMetadata:input.catalogMetadata??null,correction:attempt===0?null:lastError,
+              ...(jsonObjectFallback?{outputSchema:z.toJSONSchema(schema)}:{})})}]})
       });
       if(response.ok)break;
       const transient=response.status===429||response.status>=500;

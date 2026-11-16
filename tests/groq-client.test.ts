@@ -338,3 +338,51 @@ describe("GroqClient cancellation", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Groq JSON-object fallback schema contract", () => {
+  it("supplies the exact local Zod output schema to the model after strict-mode rejection", async () => {
+    let evidenceScoreCalls = 0;
+    const fallbackPayloads: Array<Record<string, any>> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const userPayload = JSON.parse(body.messages[1].content);
+      const group = userPayload.sectionGroup;
+      if (group === "evidence-score") {
+        evidenceScoreCalls++;
+        if (body.response_format.type === "json_object") fallbackPayloads.push(userPayload);
+        if (evidenceScoreCalls <= 2) {
+          return new Response(JSON.stringify({ error: {
+            message: "Failed to validate JSON. Please adjust your prompt.",
+            code: "json_validate_failed",
+            failed_generation: ""
+          }}), { status: 400 });
+        }
+        if (evidenceScoreCalls === 3) {
+          return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), { status: 200 });
+        }
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(group)) } }] }), { status: 200 });
+    });
+    const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
+    await client.assess({ evidence: {}, sonicDna: null });
+    expect(fallbackPayloads).toHaveLength(2);
+    expect(fallbackPayloads[0].outputSchema).toBeDefined();
+    expect(fallbackPayloads[1].outputSchema).toEqual(fallbackPayloads[0].outputSchema);
+    expect(fallbackPayloads[1].correction).toContain("evidenceGaps");
+    const schema = fallbackPayloads[0].outputSchema;
+    expect(schema).toMatchObject({ type: "object" });
+    expect(schema.properties).toMatchObject({
+      evidenceGaps: { type: "array" },
+      confidence: { type: "number" },
+      limitations: { type: "array" },
+      scorecard: { type: "object" },
+      humanListeningChecklist: { type: "array" },
+      evidenceLabels: { type: "array" }
+    });
+    for (const dimension of ["tempoLaneFit", "rhythmicConsistency", "dynamicRangeLoudness", "metadataCompleteness", "releaseReadiness"]) {
+      const dimensionSchema = schema.properties.scorecard.properties[dimension];
+      expect(dimensionSchema.properties.score).toBeDefined();
+      expect(dimensionSchema.properties.rationale).toMatchObject({ type: "string" });
+    }
+  });
+});
