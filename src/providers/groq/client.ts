@@ -301,7 +301,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     }
     // prompt_only deliberately omits response_format. The exact schema is still
     // supplied to the model, and no response is accepted without local Zod checks.
-    const estimatedInputTokens = new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length + 256;
+    const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 4) + 256;
     completionTokenBudget = Math.min(MAX_COMPLETION_TOKENS, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens);
     if (completionTokenBudget < 256 || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS) {
       throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
