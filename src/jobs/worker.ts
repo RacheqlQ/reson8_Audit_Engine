@@ -96,7 +96,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         return await groq.assess(assessmentInput, signal);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const retryableGroqFailure = /AI capacity reached|timed out|HTTP (?:429|5\\d\\d)|fetch failed|network|ECONNRESET|ETIMEDOUT/i.test(message);
+        const retryableGroqFailure = /AI capacity reached|timed out|GROQ_ASSESSMENT_TIMEOUT|HTTP (?:429|5\d\d)|fetch failed|network|ECONNRESET|ETIMEDOUT/i.test(message);
         if (!gemini || signal?.aborted || !retryableGroqFailure) throw error;
         console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: /capacity/i.test(message) ? "capacity" : /timed out/i.test(message) ? "timeout" : "transient_provider_error" }));
         return gemini.assess(assessmentInput, signal);
