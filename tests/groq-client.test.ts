@@ -51,7 +51,7 @@ describe("GroqClient section groups",()=>{
   expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("downbeatCandidateTimesSeconds");
   expect(payload.sonicDna.harmonicFeatures).not.toHaveProperty("segmentChroma");
   expect(JSON.stringify(payload.sonicDna).length).toBeLessThan(JSON.stringify(sonicDna).length * 0.7);
-  expect(mock.mock.calls).toHaveLength(8);
+  expect(mock.mock.calls).toHaveLength(9);
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
    const repeated=JSON.parse(body.messages[1].content);
