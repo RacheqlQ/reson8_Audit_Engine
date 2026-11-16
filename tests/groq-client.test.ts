@@ -87,6 +87,23 @@ describe("GroqClient section groups",()=>{
   await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("AI capacity reached for now, please try again later");
   expect(calls).toBe(1);expect(sleeps).toEqual([]);
  });
+ it("resumes validated completed section groups without another provider request",async()=>{
+  const saved:string[]=[];const requested:string[]=[];
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   requested.push(group);
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  await client.assess({
+   evidence:{},sonicDna:null,
+   loadCompletedSectionGroup:async(group)=>group==="narrative"?p("narrative"):null,
+   saveCompletedSectionGroup:async(group)=>{saved.push(group);},
+  });
+  expect(requested).not.toContain("narrative");
+  expect(requested).toHaveLength(8);
+  expect(saved).toHaveLength(8);
+ });
  it("requests and validates all nine Zod section groups with evidence guardrails",async()=>{
   let active=0,maxActive=0;
   const {mock:baseMock}=fetchMock();
