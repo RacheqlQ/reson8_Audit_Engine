@@ -246,7 +246,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         lastError="Groq rejected the request with HTTP 413. Retry with a smaller completion-token reservation while preserving the complete supplied evidence.";
         continue;
       }
-      if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&groupName==="evidence-score"&&providerSchemaRetries<2){
+      if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&providerSchemaRetries<2){
         providerSchemaRetries++;
         const message=typeof providerError.error.message==="string"?providerError.error.message:"The provider rejected its generated JSON against the supplied schema.";
         const failedGeneration=typeof (providerError.error as {failed_generation?:unknown}).failed_generation==="string"
@@ -254,11 +254,13 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         const generationNote=failedGeneration
           ? " Groq included failed_generation diagnostics; rely on the schema and supplied evidence rather than copying unsupported output."
           : " Groq supplied no failed_generation diagnostics.";
+        const schemaFields=Object.keys((z.toJSONSchema(schema) as {properties?:Record<string,unknown>}).properties??{});
+        const requiredFields=schemaFields.length?schemaFields.join(", "):"all required schema properties";
         if(providerSchemaRetries===1){
-          lastError="Groq returned json_validate_failed: "+message+"."+generationNote+" Retry once in strict structured-output mode with a complete object, every required property, all five scorecard dimensions, and at least one valid evidenceLabels item. Preserve evidence boundaries and use null scores when evidence is insufficient.";
+          lastError="Groq returned json_validate_failed for the "+groupName+" section: "+message+"."+generationNote+" Retry once in strict structured-output mode with one complete JSON object containing every property required by the supplied "+groupName+" schema, including: "+requiredFields+". Satisfy every field type, enum, nullable value, array bound and minimum length. Preserve evidence boundaries; do not invent missing evidence.";
         }else{
           jsonObjectFallback=true;
-          lastError="Groq strict structured-output validation failed twice: "+message+"."+generationNote+" The next request uses JSON-object mode. Return one complete JSON object matching the same evidence-score schema exactly. Include evidenceGaps, confidence, limitations, scorecard with all five dimensions, humanListeningChecklist, and evidenceLabels. Do not add prose or markdown. Preserve evidence boundaries and use null scores when evidence is insufficient; local Zod validation remains mandatory.";
+          lastError="Groq strict structured-output validation failed twice for the "+groupName+" section: "+message+"."+generationNote+" The next request uses JSON-object mode. Return one complete JSON object matching the exact "+groupName+" outputSchema supplied in the user payload. Include every required property and nested property, with correct types, enums, nullable values, array bounds and minimum lengths. Do not add prose or markdown. Preserve evidence boundaries and do not invent missing evidence; local Zod and section word-count validation remain mandatory.";
         }
         continue;
       }
@@ -274,7 +276,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     const content=payload.choices?.[0]?.message?.content;
     if(!content){lastError="The response contained no JSON content.";if(validationRetryUsed)break;validationRetryUsed=true;continue;}
     let parsed:unknown;try{parsed=JSON.parse(content);}catch{lastError="The response was not valid JSON.";if(validationRetryUsed)break;validationRetryUsed=true;continue;}
-    const result=schema.safeParse(parsed);if(!result.success){lastError=result.error.message;if(validationRetryUsed)break;validationRetryUsed=true;continue;}
+    const result=schema.safeParse(parsed);if(!result.success){lastError=jsonObjectFallback?"The JSON-object response failed local validation: "+result.error.message+". Correct every reported issue and return a complete object matching the supplied "+groupName+" outputSchema.":result.error.message;if(validationRetryUsed)break;validationRetryUsed=true;continue;}
     const wordError=thresholdError(groupName,result.data);if(wordError){lastError=wordError;if(validationRetryUsed)break;validationRetryUsed=true;continue;}
     return result.data;
   }
