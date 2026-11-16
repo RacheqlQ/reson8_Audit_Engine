@@ -579,19 +579,17 @@ export async function processAuditJob(
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
-    await deps.stopHeartbeat?.();
     await awaitWithLease(deps, (signal) => deps.markCompleted(jobId, job.claimToken, signal));
     return { status: "completed" };
   } catch (error) {
     if (deps.signal?.aborted) throw leaseLostError(deps.signal);
     const message = error instanceof Error ? error.message : "Unknown processing error";
-    try {
-      await deps.stopHeartbeat?.();
-    } catch (stopError) {
-      if (deps.signal?.aborted) throw leaseLostError(deps.signal);
-      throw stopError;
-    }
     await awaitWithLease(deps, (signal) => deps.markFailed(jobId, job.claimToken, message, signal));
     return { status: "failed" };
+  } finally {
+    // Keep renewing the lease until the terminal database write has settled.
+    // Otherwise a slow completion/failure RPC can strand the row in processing
+    // after its heartbeat is stopped.
+    await deps.stopHeartbeat?.();
   }
 }

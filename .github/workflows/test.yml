@@ -52,6 +52,10 @@ jobs:
         env:
           WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
         run: bash .github/scripts/worker-lease-recovery-postgres.sh
+      - name: Verify queue fairness and bounded stale-job retries
+        env:
+          WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
+        run: bash .github/scripts/worker-queue-fairness-postgres.sh
       - name: Run unit tests
         run: npm test
       - name: Build
