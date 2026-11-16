@@ -130,12 +130,12 @@ function thresholdError(name: string, value: unknown): string | null {
   return null;
 }
 
-const MAX_PROVIDER_RETRY_DELAY_MS = 15 * 60_000;
-const MAX_NETWORK_ATTEMPTS = 5;
-export const GROQ_REQUEST_TIMEOUT_MS = 90_000;
-export const GROQ_ASSESSMENT_TIMEOUT_MS = 12 * 60_000;
-const MAX_COMPLETION_TOKENS = 1800;
-const MAX_TPM_RETRIES = 4;
+const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
+const MAX_NETWORK_ATTEMPTS = 3;
+export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
+export const GROQ_ASSESSMENT_TIMEOUT_MS = 4 * 60_000;
+const MAX_COMPLETION_TOKENS = 1200;
+const MAX_GROQ_TOTAL_TOKENS = 6000;
 const MAX_SECTION_REQUEST_ATTEMPTS = 16;
 
 function retryCompletionTokenBudget(detail: string, currentBudget: number): number {
@@ -235,7 +235,6 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number, signal?:AbortSignal)=>Promise<void>, signal?: AbortSignal, requestTimeoutMs = GROQ_REQUEST_TIMEOUT_MS): Promise<T> {
   let lastError = "No valid response was returned";
   let completionTokenBudget = MAX_COMPLETION_TOKENS;
-  let tpmRetries = 0;
   let strictSchemaRetries = 0;
   let jsonObjectProviderRetries = 0;
   let promptOnlyProviderRetries = 0;
@@ -308,6 +307,13 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     }
     // prompt_only deliberately omits response_format. The exact schema is still
     // supplied to the model, and no response is accepted without local Zod checks.
+    const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 2) + 128;
+    completionTokenBudget = Math.min(MAX_COMPLETION_TOKENS, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens);
+    if (completionTokenBudget < 256 || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS) {
+      throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
+    }
+    requestBody.max_completion_tokens = completionTokenBudget;
+    console.info(JSON.stringify({ provider: "groq", event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
     for (let networkAttempt = 0; networkAttempt < MAX_NETWORK_ATTEMPTS; networkAttempt++) {
@@ -330,9 +336,13 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         throw error;
       }
       if (response.ok) break;
+      const errorBody = response.status === 429 ? await response.clone().text().catch(() => "") : "";
+      if (response.status === 429 && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody)) {
+        throw new Error("AI capacity reached for now, please try again later", { cause: new Error("GROQ_DAILY_CAP_REACHED") });
+      }
       const transient = response.status === 429 || response.status >= 500;
-      if (!transient || networkAttempt === MAX_NETWORK_ATTEMPTS - 1) break;
-      await sleepImpl(await providerRetryDelayMs(response, networkAttempt), signal);
+      if (!transient || networkAttempt >= 2) break;
+      await sleepImpl(Math.min(60_000, await providerRetryDelayMs(response, networkAttempt)), signal);
       signal?.throwIfAborted();
     }
 
@@ -346,13 +356,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 413) {
-        if (tpmRetries >= MAX_TPM_RETRIES) {
-          throw new Error("Groq " + groupName + " assessment exhausted bounded TPM retries: " + detail.slice(0, 300));
-        }
-        completionTokenBudget = retryCompletionTokenBudget(detail, completionTokenBudget);
-        tpmRetries++;
-        lastError = "Groq rejected the request with HTTP 413. Retry with a smaller completion-token reservation while preserving the complete supplied evidence.";
-        continue;
+        throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; the same payload was not retried");
       }
 
       if (response?.status === 400 && providerError.error?.code === "json_validate_failed") {
@@ -409,7 +413,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         + (detail ? ": " + detail.slice(0, 300) : ""));
     }
 
-    const payload = await response.json() as { choices?: Array<{ message?: { content?: string | null } }> };
+    const payload = await response.json() as { choices?: Array<{ message?: { content?: string | null } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
+    console.info(JSON.stringify({ provider: "groq", event: "response_usage", group: groupName, estimatedInputTokens, actualPromptTokens: payload.usage?.prompt_tokens ?? null, actualCompletionTokens: payload.usage?.completion_tokens ?? null, actualTotalTokens: payload.usage?.total_tokens ?? null }));
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
       if (scheduleCorrection("The response contained no JSON content. Return one complete JSON object matching outputSchema.")) continue;
