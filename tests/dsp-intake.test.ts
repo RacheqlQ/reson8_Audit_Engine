@@ -144,3 +144,23 @@ describe("Apple Music regional and direct-song URL intake", () => {
     });
   });
 });
+
+
+describe("real-world TIDAL and Apple Music pasted links", () => {
+  const tidal = "https://tidal.com/track/518706255/u";
+  const apple = "https://music.apple.com/ng/song/will-you-be-there/322847207";
+  it("detects and normalizes the exact TIDAL track share URL", () => {
+    expect(detectTrackPlatform(tidal)).toBe("TIDAL");
+    expect(normalizeDspTrackLinks([tidal])).toEqual([{platform:"tidal",catalogId:"518706255",canonicalUrl:"https://tidal.com/browse/track/518706255"}]);
+  });
+  it("detects and normalizes the exact Nigerian Apple Music song URL", () => {
+    expect(detectTrackPlatform(apple)).toBe("Apple Music");
+    expect(normalizeDspTrackLinks([apple])).toEqual([{platform:"apple_music",catalogId:"322847207",canonicalUrl:apple}]);
+  });
+  it("accepts copied Markdown and angle-bracket link wrappers", () => {
+    expect(detectTrackPlatform("["+tidal+"]("+tidal+")")).toBe("TIDAL");
+    expect(detectTrackPlatform("<"+apple+">")).toBe("Apple Music");
+    expect(normalizeDspTrackLinks(["["+tidal+"]("+tidal+")"])[0]?.catalogId).toBe("518706255");
+    expect(normalizeDspTrackLinks(["<"+apple+">"])[0]?.catalogId).toBe("322847207");
+  });
+});

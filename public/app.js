@@ -1,6 +1,6 @@
 import { readPdfResponse, triggerPdfDownload } from "./report-download.js";
 import { createAuditPoller } from "./audit-polling.js";
-import { detectTrackPlatform } from "./dsp-url.js";
+import { detectTrackPlatform } from "./dsp-url.js?v=20261116-1";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),resultName=document.querySelector("#resultName"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
 const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain"),accessTokenDisplay=document.querySelector("#accessTokenDisplay"),revealAccessTokenButton=document.querySelector("#revealAccessTokenButton"),copyAccessTokenButton=document.querySelector("#copyAccessTokenButton"),fullReportAccessKey=document.querySelector("#fullReportAccessKey"),unlockFullReportButton=document.querySelector("#unlockFullReportButton"),tokenSaveMessage=document.querySelector("#tokenSaveMessage");
 const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.querySelector("#detectCatalog"),catalogPlatform=document.querySelector("#catalogPlatform"),catalogPreview=document.querySelector("#catalogPreview"),catalogSourceStatuses=document.querySelector("#catalogSourceStatuses"),catalogState=document.querySelector("#catalogState"),catalogCheck=document.querySelector("#catalogCheck");
@@ -180,7 +180,12 @@ async function downloadReport(tier,accessToken=reportAccessToken){
     reportDownloadMessage.textContent=tier+" PDF downloaded successfully.";
   }catch(error){reportDownloadMessage.textContent=error instanceof Error?error.message:"Report retrieval failed.";}
 }
-input.addEventListener("change",()=>input.files?.[0]&&inspect(input.files[0]));removeFile.addEventListener("click",clearFile);detectCatalog.addEventListener("click",previewCatalog);catalogUrl.addEventListener("input",()=>{catalogReady=false;setCheck(catalogCheck,"","—");updateSubmit();});catalogUrl.addEventListener("blur",previewCatalog);submit.addEventListener("click",submitAudit);
+input.addEventListener("change",()=>input.files?.[0]&&inspect(input.files[0]));removeFile.addEventListener("click",clearFile);detectCatalog.addEventListener("click",previewCatalog);catalogUrl.addEventListener("input",()=>{
+  catalogReady=false;setCheck(catalogCheck,"","—");
+  const urls=getCatalogUrls();
+  const complete=urls.length>0&&urls.every(value=>/^https:\/\/\S+$/i.test(value.trim())||/^\[[^\]]+\]\(https:\/\/[^)\s]+\)$/i.test(value.trim())||/^<https:\/\/[^<>]+>$/i.test(value.trim()));
+  if(complete)previewCatalog();else updateSubmit();
+});catalogUrl.addEventListener("blur",previewCatalog);submit.addEventListener("click",submitAudit);
 sampleReportButton.addEventListener("click",()=>downloadReport("sample"));
 revealAccessTokenButton.addEventListener("click",revealAccessToken);
 copyAccessTokenButton.addEventListener("click",copyAccessToken);

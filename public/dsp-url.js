@@ -1,5 +1,11 @@
+function unwrapPastedUrl(value){
+  const text=String(value??"").trim();
+  const markdown=text.match(/^\[([^\]]+)\]\((https:\/\/[^)\s]+)\)$/i);
+  if(markdown)return markdown[2];
+  return text.replace(/^<([^<>]+)>$/,"$1").trim();
+}
 export function detectTrackPlatform(value){
-  const u=new URL(value),host=u.hostname.toLowerCase(),parts=u.pathname.split("/").filter(Boolean);
+  const u=new URL(unwrapPastedUrl(value)),host=u.hostname.toLowerCase(),parts=u.pathname.split("/").filter(Boolean);
   if(u.protocol!=="https:"||u.username||u.password||u.port)throw new Error("Use a credential-free HTTPS track URL");
   if(["open.spotify.com","play.spotify.com"].includes(host)&&parts.includes("track")&&parts[parts.indexOf("track")+1])return "Spotify";
   if(["music.apple.com","itunes.apple.com","geo.music.apple.com"].includes(host)){
