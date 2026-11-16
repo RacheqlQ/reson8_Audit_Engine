@@ -36,6 +36,8 @@ export interface SupabaseAuditStore {
   ): Promise<void>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment, signal?: AbortSignal): Promise<void>;
+  loadAssessmentSectionGroup(jobId: string, group: string): Promise<unknown | null>;
+  saveAssessmentSectionGroup(jobId: string, claimToken: string, group: string, result: unknown, signal?: AbortSignal): Promise<void>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
@@ -393,6 +395,30 @@ export function createSupabaseAuditStore(
           ...(genreFeatureCapture ? { genreFeatureCapture } : {}),
         },
       }, signal);
+    },
+    async loadAssessmentSectionGroup(jobId, group) {
+      const { data, error } = await admin.from("audit_events")
+        .select("payload")
+        .eq("audit_job_id", jobId)
+        .eq("event_type", "groq_section_completed")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw new Error("Unable to resume completed AI assessment section");
+      const match = (data ?? []).find((event) => {
+        const payload = event.payload as Record<string, unknown> | null;
+        return payload?.group === group && payload.result !== undefined;
+      });
+      return match ? (match.payload as Record<string, unknown>).result : null;
+    },
+    async saveAssessmentSectionGroup(jobId, _claimToken, group, result, signal) {
+      signal?.throwIfAborted();
+      const { error } = await admin.from("audit_events").insert({
+        audit_job_id: jobId,
+        event_type: "groq_section_completed",
+        status: "completed",
+        payload: { group, result },
+      });
+      if (error) throw new Error("Unable to persist completed AI assessment section");
     },
     async saveAssessment(jobId, claimToken, assessment, signal) {
       await fencedStep(jobId, claimToken, "assessment", {
