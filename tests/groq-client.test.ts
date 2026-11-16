@@ -203,15 +203,17 @@ describe("GroqClient section groups",()=>{
   const responseFormats:string[]=[];
   const payloads:Array<Record<string,unknown>>=[];
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
-   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   const body=JSON.parse(String(init?.body)),userPayload=JSON.parse(body.messages[1].content),group=userPayload.sectionGroup;
    if(group==="evidence-score"){
     evidenceScoreCalls++;
     prompts.push(body.messages[1].content);
     responseFormats.push(body.response_format.type);
-    payloads.push(JSON.parse(body.messages[1].content));
+    payloads.push(userPayload);
     systemPrompts.push(body.messages[0].content);
-    expect(body.response_format.json_schema.strict).toBe(true);
-    expect(body.response_format.json_schema.schema.required).toContain("evidenceLabels");
+    if(body.response_format.type==="json_schema"){
+     expect(body.response_format.json_schema.strict).toBe(true);
+     expect(body.response_format.json_schema.schema.required).toContain("evidenceLabels");
+    }
     if(evidenceScoreCalls<=2){
      return new Response(JSON.stringify({error:{
       message:"Generated JSON does not match the expected schema. Missing required property: evidenceLabels",
