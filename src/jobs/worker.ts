@@ -4,6 +4,7 @@ import { AuddClient } from "../providers/audd/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
 import { GeminiClient, GroqClient } from "../providers/groq/client.js";
+import { summarizeProviderFailure } from "../providers/provider-error.js";
 import { generateAuditReport } from "../reports/generate-audit-report.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
@@ -98,8 +99,24 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         const message = error instanceof Error ? error.message : String(error);
         const retryableGroqFailure = /AI capacity reached|timed out|GROQ_ASSESSMENT_TIMEOUT|HTTP (?:429|5\d\d)|fetch failed|network|ECONNRESET|ETIMEDOUT/i.test(message);
         if (!gemini || signal?.aborted || !retryableGroqFailure) throw error;
-        console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: /capacity/i.test(message) ? "capacity" : /timed out/i.test(message) ? "timeout" : "transient_provider_error" }));
-        return gemini.assess(assessmentInput, signal);
+        console.warn(JSON.stringify({
+          worker: "audit",
+          jobId: job.id,
+          event: "groq_fallback_to_gemini",
+          reason: /capacity/i.test(message) ? "capacity" : /timed out/i.test(message) ? "timeout" : "transient_provider_error",
+          failure: summarizeProviderFailure(error),
+        }));
+        try {
+          return await gemini.assess(assessmentInput, signal);
+        } catch (fallbackError) {
+          console.error(JSON.stringify({
+            worker: "audit",
+            jobId: job.id,
+            event: "gemini_fallback_failed",
+            failure: summarizeProviderFailure(fallbackError),
+          }));
+          throw fallbackError;
+        }
       }
     },
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
