@@ -259,7 +259,6 @@ function sections(i:AuditReportInput):Section[]{
   sonicDnaBody.push(
    e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
    "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
-   "Tempo confidence score (not calibrated accuracy): " + metric(s?.tempoConfidence,2),
    "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not reported — confidence below 80% reporting target"),
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
    "Integrated loudness: " + metric(s?.loudnessLufs,1) + " LUFS (direct signal measurement; not a mastering verdict)",
