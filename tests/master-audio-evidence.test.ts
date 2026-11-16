@@ -83,7 +83,7 @@ describe("master audio submission evidence", () => {
     } as unknown as AuditProcessorDependencies);
 
     expect(result.status).toBe("failed");
-    expect(failureMessage).toContain("Combined audit is missing its uploaded master audio path");
+    expect(failureMessage).toBe("Audio intake: the combined audit is missing its uploaded master audio. Upload the master file and retry.");
     expect(catalogLookupAttempted).toBe(false);
   });
 });
