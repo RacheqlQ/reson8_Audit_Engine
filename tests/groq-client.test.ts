@@ -65,7 +65,10 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   expect(body.max_completion_tokens).toBe(1200);
+   const estimatedInputBytes=new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length+256;
+   expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
+   expect(body.max_completion_tokens).toBeLessThanOrEqual(1200);
+   expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
  });
  it("treats HTTP 413 as permanent and never retries the same request payload",async()=>{
