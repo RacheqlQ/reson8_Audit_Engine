@@ -387,7 +387,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           : "";
         const diagnostic = failedGeneration
           ? " " + providerLabel + " returned failed_generation diagnostics; do not copy unsupported content."
-          : " Groq supplied no failed_generation diagnostics.";
+          : " " + providerLabel + " supplied no failed_generation diagnostics.";
 
         if (responseMode === "json_schema" && strictSchemaRetries < 2) {
           strictSchemaRetries++;
