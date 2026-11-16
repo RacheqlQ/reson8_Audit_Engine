@@ -382,8 +382,29 @@ describe("GroqClient cancellation", () => {
     await Promise.resolve();
     controller.abort(new Error("AUDIT_SHUTDOWN_DRAIN_TIMEOUT"));
     await expect(pending).rejects.toThrow("AUDIT_SHUTDOWN_DRAIN_TIMEOUT");
-    expect(requestSignal).toBe(controller.signal);
+    expect(requestSignal).toBeDefined();
+    expect(requestSignal).not.toBe(controller.signal);
+    expect(requestSignal?.aborted).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Groq request deadlines", () => {
+  it("aborts a stalled provider request at the configured per-request deadline", async () => {
+    let requestSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal ?? undefined;
+      if (!requestSignal) throw new Error("missing request signal");
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal!.addEventListener("abort", () => reject(requestSignal!.reason), { once: true });
+      });
+    });
+    const client = new GroqClient("test-key", "test-model", fetchMock as typeof fetch, async () => {}, 5);
+    await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow(
+      "Groq narrative request timed out after 5ms",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(requestSignal?.aborted).toBe(true);
   });
 });
 
