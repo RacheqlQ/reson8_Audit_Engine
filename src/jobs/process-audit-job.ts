@@ -125,11 +125,26 @@ async function awaitWithStage<T>(
   timeoutMs: number,
   operation: (signal?: AbortSignal) => Promise<T>,
 ): Promise<T> {
-  return await awaitWithLease(deps, (leaseSignal) => withAbortTimeout(
-    (timeoutSignal) => operation(leaseSignal ? AbortSignal.any([leaseSignal, timeoutSignal]) : timeoutSignal),
-    timeoutMs,
-    "AUDIT_STAGE_TIMEOUT:" + stage,
-  ));
+  return await awaitWithLease(deps, async (leaseSignal) => {
+    let onAbort: (() => void) | undefined;
+    const leaseAbort = leaseSignal ? new Promise<never>((_resolve, reject) => {
+      onAbort = () => reject(leaseSignal.reason instanceof Error ? leaseSignal.reason : new Error("AUDIT_LEASE_LOST"));
+      if (leaseSignal.aborted) onAbort();
+      else leaseSignal.addEventListener("abort", onAbort, { once: true });
+    }) : new Promise<never>(() => undefined);
+    try {
+      return await Promise.race([
+        withAbortTimeout(
+          (timeoutSignal) => operation(leaseSignal ? AbortSignal.any([leaseSignal, timeoutSignal]) : timeoutSignal),
+          timeoutMs,
+          "AUDIT_STAGE_TIMEOUT:" + stage,
+        ),
+        leaseAbort,
+      ]);
+    } finally {
+      if (onAbort && leaseSignal) leaseSignal.removeEventListener("abort", onAbort);
+    }
+  });
 }
 
 function recognitionEvidence(recognition: AuditRecognition): Record<string, unknown> {
@@ -645,8 +660,11 @@ export async function processAuditJob(
     const message = jobDeadlineExceeded
       ? "Audit processing: the job exceeded its eight-minute time limit. Please submit it again."
       : userSafeFailureMessage(error);
-    if (jobDeadlineExceeded) await deps.markFailed(jobId, job.claimToken, message);
-    else await awaitWithLease(deps, (signal) => deps.markFailed(jobId, job.claimToken, message, signal));
+    await withAbortTimeout(
+      (signal) => deps.markFailed(jobId, job.claimToken, message, signal),
+      15_000,
+      "AUDIT_TERMINAL_WRITE_TIMEOUT",
+    );
     return { status: "failed" };
   } finally {
     // Keep renewing the lease until the terminal database write has settled.
