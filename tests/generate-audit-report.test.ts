@@ -59,6 +59,14 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(normalized).toContain("Café - mix... 4x4 # b");
   expect(normalized).not.toContain("?");
  });
+ it("normalizes extended technical and typographic Unicode without question-mark substitution",()=>{
+  const normalized=normalizeReportText("LUFS −11.0 dB ≥ −1 dB; RMS × 2; arrow →; © ® ™; Café — “mix”…");
+  expect(normalized).toContain("LUFS -11.0 dB >= -1 dB");
+  expect(normalized).toContain("RMS x 2");
+  expect(normalized).toContain("(c) (R) TM");
+  expect(normalized).toContain("Café - \"mix\"...");
+  expect(normalized).not.toContain("?");
+ });
  it("reports detected, tentative half/double and not-determined tempo tiers",()=>{
   const tentative=structuredClone(fullAudioFixture) as any;
   tentative.sonicDna.tempoConfidence=0.32;
