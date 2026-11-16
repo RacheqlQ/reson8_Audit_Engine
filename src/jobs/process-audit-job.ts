@@ -72,6 +72,34 @@ function assertLeaseActive(deps: AuditProcessorDependencies): void {
   if (deps.signal?.aborted) throw leaseLostError(deps.signal);
 }
 
+function userSafeFailureMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (raw === "AI capacity reached for now, please try again later") return raw;
+  if (raw.startsWith("AUDIT_STAGE_TIMEOUT:")) {
+    const stage = raw.slice("AUDIT_STAGE_TIMEOUT:".length);
+    const messages: Record<string, string> = {
+      catalog_lookup: "Catalog lookup: a submitted DSP link could not be checked within the time limit. Verify the link and retry.",
+      catalog_persist: "Catalog lookup: the provider result could not be saved in time. Please retry the audit.",
+      audio_download: "Audio intake: the uploaded master could not be retrieved in time. Re-upload the master and retry.",
+      recognition_sample: "Audio recognition: the identification sample could not be prepared in time. Please retry.",
+      audio_recognition: "Audio recognition: track identification did not finish in time. Please retry.",
+      audio_decode: "Sonic DNA: the uploaded audio could not be decoded in time. Check the audio file and retry.",
+      catalog_preview_recognition: "Catalog recognition: optional preview identification timed out; the audit can continue without it.",
+      sonic_dna: "Sonic DNA: technical analysis exceeded its time limit. Please retry with a shorter or supported master.",
+      ai_assessment: "AI assessment: the analysis exceeded its four-minute time limit. Please retry later.",
+      sample_pdf_generation: "Sample report: PDF generation exceeded its time limit. Please retry.",
+      full_pdf_generation: "Full report: PDF generation exceeded its time limit. Please retry.",
+      sample_pdf_persistence: "Sample report: the PDF could not be saved in time. Please retry.",
+      full_pdf_persistence: "Full report: the PDF could not be saved in time. Please retry.",
+    };
+    return messages[stage] ?? "Audit processing: the " + stage.replace(/_/g, " ") + " stage exceeded its time limit. Please retry.";
+  }
+  if (raw.startsWith("GROQ_REQUEST_TOO_LARGE")) return "AI assessment: the request exceeded the supported input budget. Please retry later.";
+  if (raw.startsWith("GROQ_PROMPT_BUDGET_EXCEEDED")) return "AI assessment: the evidence is too large to process safely in one request. Please retry with a smaller source set.";
+  if (raw.includes("Zod validation") || raw.includes("json_validate_failed")) return "AI assessment: the generated response could not be validated. Please retry later.";
+  return "Audit processing: a required stage could not be completed. Please retry the audit.";
+}
+
 async function awaitWithLease<T>(
   deps: AuditProcessorDependencies,
   operation: (signal?: AbortSignal) => Promise<T>,
@@ -414,7 +442,9 @@ export async function processAuditJob(
         return deps.recognize(sample, signal);
       });
       const decoded = await awaitWithStage(deps, "audio_decode", 90_000, (signal) => deps.decode(master, job.mimeType!, signal));
+      const sonicDnaStartedAt = Date.now();
       const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
+      if (Date.now() - sonicDnaStartedAt > 90_000) throw new Error("AUDIT_STAGE_TIMEOUT:sonic_dna");
       masterDna = {
         ...dna,
         sampleRate: decoded.sampleRate,
@@ -594,7 +624,7 @@ export async function processAuditJob(
     return { status: "completed" };
   } catch (error) {
     if (deps.signal?.aborted) throw leaseLostError(deps.signal);
-    const message = error instanceof Error ? error.message : "Unknown processing error";
+    const message = userSafeFailureMessage(error);
     await awaitWithLease(deps, (signal) => deps.markFailed(jobId, job.claimToken, message, signal));
     return { status: "failed" };
   } finally {
