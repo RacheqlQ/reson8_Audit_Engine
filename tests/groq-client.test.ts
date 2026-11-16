@@ -18,6 +18,41 @@ const p=(group:string):Record<string,unknown>=>{
 };
 function fetchMock(invalid?:string){const counts=new Map<string,number>();const mock=vi.fn(async (_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const name=body.response_format.json_schema.name.replace(/^ar_/,"");const n=(counts.get(name)??0)+1;counts.set(name,n);const value=name===invalid&&n===1?{}:p(name);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});return {mock,counts};}
 describe("GroqClient section groups",()=>{
+ it("removes high-volume Sonic DNA diagnostic arrays from repeated Groq prompts while preserving useful measurements",async()=>{
+  const {mock}=fetchMock();
+  const sonicDna={
+   provenance:"uploaded_audio_master",evidenceClass:"OBSERVED",bpm:95,tempoConfidence:0.82,
+   key:"A",mode:"minor",moodTags:["Moderate Energy","Bright Timbre"],
+   rhythmFeatures:{
+    status:"measured",bpm:95,confidence:0.82,method:"high_frequency_transient_autocorrelation",
+    candidateBpms:[95,63,76],candidateScores:[{bpm:95,score:0.35}],
+    onsetEnvelope:Array.from({length:128},(_,index)=>index/128),
+    beatTimesSeconds:Array.from({length:512},(_,index)=>index*0.32),
+    downbeatCandidateTimesSeconds:Array.from({length:128},(_,index)=>index*1.28),
+    beatGridStatus:"tentative",abstentionReason:null,
+   },
+   harmonicFeatures:{
+    status:"measured",key:"A",mode:"minor",confidence:0.71,segmentAgreement:0.62,
+    tuningCents:1.2,analysisWindows:8,fftButterflyCount:1000,
+    segmentChroma:Array.from({length:8},()=>Array.from({length:12},(_,index)=>index/12)),
+   },
+  };
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch);
+  await client.assess({evidence:{artist:"Fixture Artist"},sonicDna});
+  const firstBody=JSON.parse(String(mock.mock.calls[0][1]?.body));
+  const payload=JSON.parse(firstBody.messages[1].content);
+  expect(payload.sonicDna).toMatchObject({
+   provenance:"uploaded_audio_master",bpm:95,tempoConfidence:0.82,key:"A",mode:"minor",
+   rhythmFeatures:{status:"measured",bpm:95,confidence:0.82,candidateBpms:[95,63,76]},
+   harmonicFeatures:{status:"measured",key:"A",mode:"minor",segmentAgreement:0.62},
+  });
+  expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("onsetEnvelope");
+  expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("beatTimesSeconds");
+  expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("downbeatCandidateTimesSeconds");
+  expect(payload.sonicDna.harmonicFeatures).not.toHaveProperty("segmentChroma");
+  expect(payload.sonicDna).not.toBe(sonicDna);
+ });
+
  it("passes the completion-token budget on every Groq request",async()=>{
   const {mock}=fetchMock();
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
