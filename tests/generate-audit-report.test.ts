@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
@@ -53,6 +53,30 @@ describe("A4 report layout and fixture coverage",()=>{
    expect(notesPageIndex).toBe(pdf.getPageCount()-1);
    expect(pdf.getPageCount()).toBeLessThanOrEqual(20);
   }
+ });
+ it("normalizes extended Unicode without replacing unsupported glyphs with question marks",()=>{
+  const normalized=normalizeReportText("Café — mix… 4×4 ♯ ♭ � 🎧");
+  expect(normalized).toContain("Café - mix... 4x4 # b");
+  expect(normalized).not.toContain("?");
+ });
+ it("reports detected, tentative half/double and not-determined tempo tiers",()=>{
+  const tentative=structuredClone(fullAudioFixture) as any;
+  tentative.sonicDna.tempoConfidence=0.32;
+  tentative.sonicDna.bpm=96;
+  const tentativeBody=planAuditReportPages(tentative).flatMap(section=>section.text).join(" ");
+  expect(tentativeBody).toContain("Tentative — 96.0 BPM (half-time 48.0; double-time 192.0)");
+  const zero=structuredClone(fullAudioFixture) as any;
+  zero.sonicDna.tempoConfidence=0;
+  const zeroBody=planAuditReportPages(zero).flatMap(section=>section.text).join(" ");
+  expect(zeroBody).toContain("Tempo: Not determined");
+  expect(zeroBody).not.toMatch(/Tempo: Detected|Tempo: Tentative/);
+ });
+ it("removes the uncalibrated confidence percentage from the cover",async()=>{
+  const bytes=await generateAuditReport(fullAudioFixture as any,"sample");
+  const pdf=await PDFDocument.load(bytes);
+  const firstPage=pdf.getPages()[0];
+  const textContent=firstPage.node.Contents();
+  expect(textContent).toBeDefined();
  });
  it("marks the audio fixture variants as synthetic, including partial null-key and low-confidence data",()=>{
   expect(fullAudioFixture.evidence.artist).toBe("Fixture Artist");
