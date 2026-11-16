@@ -9,6 +9,7 @@ import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.j
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
 import { runQueueWorkerLoop } from "./worker-loop.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
+import { startRenderFreeServiceKeepalive } from "./render-free-service-keepalive.js";
 
 const POLL_INTERVAL_MS = 15_000;
 const HEARTBEAT_INTERVAL_MS = 45_000;
@@ -50,6 +51,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   const audd = auddDecision.enabled && (process.env.AUDD_API || process.env.AUDD_API_TOKEN)
     ? new AuddClient() : null;
   const decoder = createAudioDecoder();
+  const stopKeepalive = startRenderFreeServiceKeepalive({ jobId: job.id });
 
   const deps: AuditProcessorDependencies = {
     getJob: async () => ({
@@ -166,6 +168,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     }
     return { jobId: job.id, ...result };
   } finally {
+    stopKeepalive();
     stopHeartbeatNow();
     if (shutdownAbortTimer) clearTimeout(shutdownAbortTimer);
     signal?.removeEventListener("abort", onShutdown);
