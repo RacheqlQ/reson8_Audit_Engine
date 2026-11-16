@@ -29,6 +29,14 @@ function requireTrackId(value: string | null | undefined): string {
   return id;
 }
 
+function unwrapPastedUrl(input: string): string {
+  const value = input.trim();
+  const markdown = value.match(/^\[([^\]]+)\]\((https:\/\/[^)\s]+)\)$/i);
+  if (markdown) return markdown[2];
+  const angle = value.match(/^<([^<>]+)>$/);
+  return angle ? angle[1].trim() : value;
+}
+
 function normalizeOne(input: string): NormalizedDspTrackLink {
   if (typeof input !== "string" || input.length > 2048) {
     throw new Error("DSP track URL is invalid");
@@ -36,7 +44,7 @@ function normalizeOne(input: string): NormalizedDspTrackLink {
 
   let url: URL;
   try {
-    url = new URL(input.trim());
+    url = new URL(unwrapPastedUrl(input));
   } catch {
     throw new Error("DSP track URL is invalid");
   }
