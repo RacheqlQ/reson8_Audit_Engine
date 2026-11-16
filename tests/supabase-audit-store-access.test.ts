@@ -106,10 +106,9 @@ describe("DSP provider failure persistence", () => {
     expect(requestBody.p_operation).toBe("catalog_metadata");
     expect(requestBody.p_payload.eventPayload).toMatchObject({
       platform: "tidal",
-      catalogId: "tidal-456",
       canonicalUrl: "https://tidal.com/browse/track/tidal-456",
       status: "unavailable",
-      error: "TIDAL track request failed with HTTP 503",
+      reason: "Provider could not verify this submitted link.",
       evidenceClass: null,
     });
   });
