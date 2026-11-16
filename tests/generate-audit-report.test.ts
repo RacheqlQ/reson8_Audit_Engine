@@ -269,3 +269,16 @@ describe("A4 report layout and fixture coverage",()=>{
   }
  });
 });
+
+describe("extended Unicode report text normalization",()=>{
+ it("normalizes supported punctuation without question-mark substitutions",()=>{
+  const source="A’B “C”—D… E F G −2 × 3 ≤ 4 ≥ 1 ≠ 0 • item → next ™ © ®";
+  const normalized=normalizeReportText(source);
+  expect(normalized).toContain("A'B");
+  expect(normalized).toContain('"C"');
+  expect(normalized).toContain("-D...");
+  expect(normalized).toContain("E F G -2 x 3 <= 4 >= 1 != 0 - item");
+  expect(normalized).not.toContain("?");
+  expect(normalized).not.toContain("\uFFFD");
+ });
+});
