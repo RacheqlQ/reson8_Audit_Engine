@@ -387,6 +387,10 @@ export async function processAuditJob(
   const job = await awaitWithLease(deps, (signal) => deps.getJob(jobId, signal));
   if (!job) throw new Error("Audit job not found");
   if (job.status !== "processing") throw new Error(`Audit job is not actively claimed: ${job.status}`);
+  const previousSignal = deps.signal;
+  const jobDeadlineController = new AbortController();
+  const jobDeadlineTimer = setTimeout(() => jobDeadlineController.abort(new Error("AUDIT_JOB_DEADLINE_EXCEEDED")), 8 * 60_000);
+  deps.signal = previousSignal ? AbortSignal.any([previousSignal, jobDeadlineController.signal]) : jobDeadlineController.signal;
 
   try {
     await awaitWithStage(deps, "job_start", 15_000, (signal) => deps.markProcessing(jobId, job.claimToken, signal));
@@ -623,14 +627,22 @@ export async function processAuditJob(
     await awaitWithStage(deps, "job_completion", 15_000, (signal) => deps.markCompleted(jobId, job.claimToken, signal));
     return { status: "completed" };
   } catch (error) {
-    if (deps.signal?.aborted) throw leaseLostError(deps.signal);
-    const message = userSafeFailureMessage(error);
-    await awaitWithLease(deps, (signal) => deps.markFailed(jobId, job.claimToken, message, signal));
+    const jobDeadlineExceeded = jobDeadlineController.signal.aborted && !previousSignal?.aborted;
+    if (deps.signal?.aborted && !jobDeadlineExceeded) throw leaseLostError(deps.signal);
+    const message = jobDeadlineExceeded
+      ? "Audit processing: the job exceeded its eight-minute time limit. Please submit it again."
+      : userSafeFailureMessage(error);
+    if (jobDeadlineExceeded) await deps.markFailed(jobId, job.claimToken, message);
+    else await awaitWithLease(deps, (signal) => deps.markFailed(jobId, job.claimToken, message, signal));
     return { status: "failed" };
   } finally {
     // Keep renewing the lease until the terminal database write has settled.
     // Otherwise a slow completion/failure RPC can strand the row in processing
     // after its heartbeat is stopped.
-    await deps.stopHeartbeat?.();
+    try { await deps.stopHeartbeat?.(); }
+    finally {
+      clearTimeout(jobDeadlineTimer);
+      deps.signal = previousSignal;
+    }
   }
 }
