@@ -189,7 +189,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const pages=planAuditReportPages(ambiguousAudioFixture as any,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not determined");
-  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0.00");
+  expect(report).not.toContain("Tempo confidence score");
   expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
@@ -235,7 +235,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not determined");
-  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0.00");
+  expect(report).not.toContain("Tempo confidence score");
   expect(report).not.toMatch(/128\s*BPM|high-energy/);
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
