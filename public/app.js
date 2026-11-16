@@ -1,6 +1,6 @@
 import { readPdfResponse, triggerPdfDownload } from "./report-download.js";
 import { createAuditPoller } from "./audit-polling.js";
-import { detectTrackPlatform } from "./dsp-url.js?v=20261116-1";
+import { detectTrackPlatform } from "./dsp-url.js?v=20261116-2";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),resultName=document.querySelector("#resultName"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
 const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain"),accessTokenDisplay=document.querySelector("#accessTokenDisplay"),revealAccessTokenButton=document.querySelector("#revealAccessTokenButton"),copyAccessTokenButton=document.querySelector("#copyAccessTokenButton"),fullReportAccessKey=document.querySelector("#fullReportAccessKey"),unlockFullReportButton=document.querySelector("#unlockFullReportButton"),tokenSaveMessage=document.querySelector("#tokenSaveMessage");
 const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.querySelector("#detectCatalog"),catalogPlatform=document.querySelector("#catalogPlatform"),catalogPreview=document.querySelector("#catalogPreview"),catalogSourceStatuses=document.querySelector("#catalogSourceStatuses"),catalogState=document.querySelector("#catalogState"),catalogCheck=document.querySelector("#catalogCheck");
@@ -119,7 +119,9 @@ async function submitAudit(){
     const urls=hasCatalog?getCatalogUrls():[];
     let response;
     if(hasMaster){
-      const headers={"Content-Type":selectedFile.type||"application/octet-stream","X-Audio-Filename":selectedFile.name};
+      const extension=extensionOf(selectedFile.name);
+      const audioMimeTypes={mp3:"audio/mpeg",wav:"audio/wav",flac:"audio/flac",aac:"audio/aac",ogg:"audio/ogg",m4a:"audio/mp4"};
+      const headers={"Content-Type":audioMimeTypes[extension]||selectedFile.type||"application/octet-stream","X-Audio-Filename":selectedFile.name};
       if(hasCatalog){headers["X-Catalog-Url"]=urls[0];headers["X-Catalog-Urls"]=JSON.stringify(urls);}
       response=await fetch("/v1/audits",{method:"POST",headers,body:selectedFile});
     }else if(hasCatalog){
