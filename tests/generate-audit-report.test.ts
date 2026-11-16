@@ -98,7 +98,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Apple Music — recognized");
   expect(report).toContain("YouTube Music — unavailable");
   expect(report).toContain("Conflict details: artist: Tems vs Wrong Artist");
-  expect(report).toContain("Confidence definition");
+  expect(report).toContain("Assessment confidence: a model-generated evidence-quality indicator");
   expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
@@ -180,8 +180,8 @@ describe("A4 report layout and fixture coverage",()=>{
  it("renders the generic ambiguous-audio regression fixture with tempo, key, genre and commercial claims withheld",()=>{
   const pages=planAuditReportPages(ambiguousAudioFixture as any,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Tempo: Not reported — insufficient confidence");
-  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
+  expect(report).toContain("Tempo: Not determined");
+  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0.00");
   expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
