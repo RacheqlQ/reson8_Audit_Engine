@@ -74,7 +74,7 @@ function renderCatalogStatuses(payload){
   const list=document.createElement("ul");
   for(const item of statuses){
     const li=document.createElement("li");
-    li.textContent=[item.platform,item.catalogId,item.status?.toUpperCase(),item.reason||item.error,item.canonicalUrl].filter(Boolean).join(" · ");
+    li.textContent=[item.platform,item.status?.toUpperCase(),item.reason||item.error,item.canonicalUrl].filter(Boolean).join(" · ");
     list.appendChild(li);
   }
   if(!statuses.length){
