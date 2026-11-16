@@ -23,7 +23,7 @@ NEXT_QUEUED_JOB="44444444-4444-4444-8444-444444444444"
 echo "Regression 1: a queued submission must be claimed before an older expired lease"
 seed_master "$STALE_JOB" processing "2026-01-01T00:00:00Z"
 seed_master "$QUEUED_JOB" queued "2026-01-02T00:00:00Z"
-psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_events(audit_job_id,event_type,status,payload) values ('$STALE_JOB','processing_claimed','processing','{}'::jsonb)"
+psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_events(audit_job_id,event_type,status,payload,created_at) values ('$STALE_JOB','processing_claimed','processing','{}'::jsonb,'2026-01-01T00:01:00Z')"
 CLAIMED="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select id from public.claim_next_audit_job('ci-fairness-worker',180)")"
 test "$CLAIMED" = "$QUEUED_JOB"
 echo "PASS: fresh queued work is not starved by an older expired job"
@@ -31,11 +31,11 @@ echo "PASS: fresh queued work is not starved by an older expired job"
 echo "Regression 2: an expired job exceeding three claims after its last explicit retry is failed and fenced"
 seed_master "$EXHAUSTED_JOB" processing "2025-12-01T00:00:00Z"
 seed_master "$NEXT_QUEUED_JOB" queued "2025-12-02T00:00:00Z"
-psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_events(audit_job_id,event_type,status,payload) values
-  ('$EXHAUSTED_JOB','audit_retry_requested','queued','{}'::jsonb),
-  ('$EXHAUSTED_JOB','processing_claimed','processing','{}'::jsonb),
-  ('$EXHAUSTED_JOB','processing_claimed','processing','{}'::jsonb),
-  ('$EXHAUSTED_JOB','processing_claimed','processing','{}'::jsonb)"
+psql "$DB" -v ON_ERROR_STOP=1 -c "insert into public.audit_events(audit_job_id,event_type,status,payload,created_at) values
+  ('$EXHAUSTED_JOB','audit_retry_requested','queued','{}'::jsonb,'2025-12-01T00:01:00Z'),
+  ('$EXHAUSTED_JOB','processing_claimed','processing','{}'::jsonb,'2025-12-01T00:02:00Z'),
+  ('$EXHAUSTED_JOB','processing_claimed','processing','{}'::jsonb,'2025-12-01T00:03:00Z'),
+  ('$EXHAUSTED_JOB','processing_claimed','processing','{}'::jsonb,'2025-12-01T00:04:00Z')"
 CLAIMED="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "select id from public.claim_next_audit_job('ci-retry-limit-worker',180)")"
 test "$CLAIMED" = "$NEXT_QUEUED_JOB"
 assert_sql "failed:WORKER_LEASE_RETRIES_EXHAUSTED:true:true:true" "select status || ':' || error_code || ':' || (claim_token is null)::text || ':' || (worker_id is null)::text || ':' || (lease_expires_at is null)::text from public.audit_jobs where id='$EXHAUSTED_JOB'"
