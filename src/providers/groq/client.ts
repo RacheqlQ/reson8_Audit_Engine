@@ -386,19 +386,19 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           ? providerError.error.failed_generation.trim()
           : "";
         const diagnostic = failedGeneration
-          ? " Groq returned failed_generation diagnostics; do not copy unsupported content."
+          ? " " + providerLabel + " returned failed_generation diagnostics; do not copy unsupported content."
           : " Groq supplied no failed_generation diagnostics.";
 
         if (responseMode === "json_schema" && strictSchemaRetries < 2) {
           strictSchemaRetries++;
           if (strictSchemaRetries === 2) {
             responseMode = "json_object";
-            lastError = "Groq strict JSON-schema validation failed twice for " + groupName + ": " + message + "." + diagnostic
+            lastError = "" + providerLabel + " strict JSON-schema validation failed twice for " + groupName + ": " + message + "." + diagnostic
               + " Switch to JSON-object mode and return one complete object matching the exact outputSchema.";
           } else {
             const requiredFields = Object.keys((outputSchema as { properties?: Record<string, unknown> }).properties ?? {}).join(", ")
               || "all required schema properties";
-            lastError = "Groq returned json_validate_failed for the " + groupName + " section: " + message + "." + diagnostic
+            lastError = "" + providerLabel + " returned json_validate_failed for the " + groupName + " section: " + message + "." + diagnostic
               + " Retry strict mode with one complete JSON object including every required property: " + requiredFields
               + ". Satisfy every nested field, type, enum and nullable value.";
           }
@@ -409,10 +409,10 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           jsonObjectProviderRetries++;
           if (jsonObjectProviderRetries === 2) {
             responseMode = "prompt_only";
-            lastError = "Groq also rejected JSON-object mode for " + groupName + ": " + message + "." + diagnostic
+            lastError = "" + providerLabel + " also rejected JSON-object mode for " + groupName + ": " + message + "." + diagnostic
               + " Omit response_format on the next request, return raw JSON only, and match every field in outputSchema.";
           } else {
-            lastError = "Groq rejected JSON-object mode for " + groupName + ": " + message + "." + diagnostic
+            lastError = "" + providerLabel + " rejected JSON-object mode for " + groupName + ": " + message + "." + diagnostic
               + " Retry JSON-object mode with the exact outputSchema and a complete JSON object.";
           }
           continue;
@@ -420,15 +420,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 
         if (responseMode === "prompt_only" && promptOnlyProviderRetries < 1) {
           promptOnlyProviderRetries++;
-          lastError = "Groq rejected prompt-only JSON for " + groupName + ": " + message + "." + diagnostic
+          lastError = "" + providerLabel + " rejected prompt-only JSON for " + groupName + ": " + message + "." + diagnostic
             + " Retry once with a complete raw JSON object matching outputSchema exactly.";
           continue;
         }
 
-        throw new Error("Groq " + groupName + " assessment failed with HTTP 400 after bounded JSON recovery: " + detail.slice(0, 300));
+        throw new Error("" + providerLabel + " " + groupName + " assessment failed with HTTP 400 after bounded JSON recovery: " + detail.slice(0, 300));
       }
 
-      throw new Error("Groq " + groupName + " assessment failed with HTTP " + (response?.status ?? "unknown")
+      throw new Error("" + providerLabel + " " + groupName + " assessment failed with HTTP " + (response?.status ?? "unknown")
         + (detail ? ": " + detail.slice(0, 300) : ""));
     }
 
@@ -466,7 +466,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     return result.data;
   }
 
-  throw new Error("Groq " + groupName + " response failed Zod validation after one retry: " + lastError);
+  throw new Error("" + providerLabel + " " + groupName + " response failed Zod validation after one retry: " + lastError);
 }
 
 export class GroqClient implements GroqAssessmentClient {
