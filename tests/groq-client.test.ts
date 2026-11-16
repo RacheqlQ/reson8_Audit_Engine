@@ -65,7 +65,7 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/4)+256;
+   const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
    expect(body.max_completion_tokens).toBeLessThanOrEqual(1200);
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
