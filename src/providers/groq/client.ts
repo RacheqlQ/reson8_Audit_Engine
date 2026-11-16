@@ -164,7 +164,7 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number,
 
   const tokenReset = response.headers.get("x-ratelimit-reset-tokens");
   if (tokenReset) {
-    const resetMatch = tokenReset.trim().match(/^(?:(\\d+(?:\\.\\d+)?)m)?\\s*(\\d+(?:\\.\\d+)?)s$/i);
+    const resetMatch = tokenReset.trim().match(/^(?:(\d+(?:\.\d+)?)m)?\s*(\d+(?:\.\d+)?)s$/i);
     const resetSeconds = resetMatch
       ? Number(resetMatch[1] ?? 0) * 60 + Number(resetMatch[2])
       : Number(tokenReset);
