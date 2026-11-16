@@ -357,13 +357,18 @@ describe("Groq JSON-object fallback schema contract", () => {
             failed_generation: ""
           }}), { status: 400 });
         }
+        if (evidenceScoreCalls === 3) {
+          return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), { status: 200 });
+        }
       }
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(group)) } }] }), { status: 200 });
     });
     const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
     await client.assess({ evidence: {}, sonicDna: null });
-    expect(fallbackPayloads).toHaveLength(1);
+    expect(fallbackPayloads).toHaveLength(2);
     expect(fallbackPayloads[0].outputSchema).toBeDefined();
+    expect(fallbackPayloads[1].outputSchema).toEqual(fallbackPayloads[0].outputSchema);
+    expect(fallbackPayloads[1].correction).toContain("evidenceGaps");
     const schema = fallbackPayloads[0].outputSchema;
     expect(schema).toMatchObject({ type: "object" });
     expect(schema.properties).toMatchObject({
