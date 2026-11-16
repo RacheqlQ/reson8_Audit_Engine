@@ -133,7 +133,8 @@ function thresholdError(name: string, value: unknown): string | null {
 const MAX_PROVIDER_RETRY_DELAY_MS = 15 * 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
 const MAX_COMPLETION_TOKENS = 1800;
-const MAX_SECTION_ATTEMPTS = 4;
+const MAX_TPM_RETRIES = 4;
+const MAX_SECTION_REQUEST_ATTEMPTS = 16;
 
 function retryCompletionTokenBudget(detail: string, currentBudget: number): number {
   const match = detail.match(/Limit\s+(\d+)\s*,\s*Requested\s+(\d+)/i);
@@ -210,77 +211,201 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   let lastError = "No valid response was returned";
   let completionTokenBudget = MAX_COMPLETION_TOKENS;
   let tpmRetries = 0;
-  let validationRetryUsed = false;
-  let providerSchemaRetries = 0;
-  let jsonObjectFallback = false;
-  for(let attempt=0;attempt<MAX_SECTION_ATTEMPTS+1;attempt++){
-    let response:Response|null=null;
-    for(let networkAttempt=0;networkAttempt<MAX_NETWORK_ATTEMPTS;networkAttempt++){
+  let strictSchemaRetries = 0;
+  let jsonObjectProviderRetries = 0;
+  let promptOnlyProviderRetries = 0;
+  let strictContentRetries = 0;
+  let jsonObjectContentRetries = 0;
+  let promptOnlyContentRetries = 0;
+  let responseMode: "json_schema" | "json_object" | "prompt_only" = "json_schema";
+  const outputSchema = z.toJSONSchema(schema);
+
+  const scheduleCorrection = (reason: string): boolean => {
+    lastError = reason;
+    if (responseMode === "json_schema" && strictContentRetries < 1) {
+      strictContentRetries++;
+      lastError += " Retry strict structured-output mode once with the complete corrected schema object.";
+      return true;
+    }
+    if (responseMode === "json_schema") return false;
+    if (responseMode === "json_object" && jsonObjectContentRetries < 2) {
+      jsonObjectContentRetries++;
+      lastError += " Correct every reported issue and return one complete object matching outputSchema.";
+      return true;
+    }
+    if (responseMode === "json_object") {
+      responseMode = "prompt_only";
+      lastError += " JSON-object output did not validate. Switch to prompt-only JSON and match every field in outputSchema exactly.";
+      return true;
+    }
+    if (responseMode === "prompt_only" && promptOnlyContentRetries < 2) {
+      promptOnlyContentRetries++;
+      lastError += " Correct every reported issue and return one complete raw JSON object matching outputSchema.";
+      return true;
+    }
+    return false;
+  };
+
+  for (let attempt = 0; attempt < MAX_SECTION_REQUEST_ATTEMPTS; attempt++) {
+    signal?.throwIfAborted();
+    const fallbackMode = responseMode !== "json_schema";
+    const schemaGuidance = fallbackMode
+      ? " The user payload includes outputSchema, the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value, array bound and minimum length. Return one complete JSON object only. Do not include outputSchema in the returned object. Local Zod and section word-count validation are mandatory."
+      : "";
+    const messages = [
+      { role: "system", content: SYSTEM_PROMPT + " " + instructions + schemaGuidance },
+      {
+        role: "user",
+        content: JSON.stringify({
+          promptVersion: GROQ_PROMPT_VERSION,
+          sectionGroup: groupName,
+          evidence: input.evidence,
+          sonicDna: input.sonicDna,
+          catalogMetadata: input.catalogMetadata ?? null,
+          correction: attempt === 0 ? null : lastError,
+          ...(fallbackMode ? { outputSchema } : {}),
+        }),
+      },
+    ];
+    const requestBody: Record<string, unknown> = {
+      model,
+      temperature: 0.1,
+      max_completion_tokens: completionTokenBudget,
+      messages,
+    };
+    if (responseMode === "json_schema") {
+      requestBody.response_format = {
+        type: "json_schema",
+        json_schema: { name: "ar_" + groupName, strict: true, schema: outputSchema },
+      };
+    } else if (responseMode === "json_object") {
+      requestBody.response_format = { type: "json_object" };
+    }
+    // prompt_only deliberately omits response_format. The exact schema is still
+    // supplied to the model, and no response is accepted without local Zod checks.
+
+    let response: Response | null = null;
+    for (let networkAttempt = 0; networkAttempt < MAX_NETWORK_ATTEMPTS; networkAttempt++) {
       signal?.throwIfAborted();
-      response=await fetchImpl("https://api.groq.com/openai/v1/chat/completions",{
-        method:"POST",headers:{authorization:"Bearer "+apiKey,"content-type":"application/json"},
+      response = await fetchImpl("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { authorization: "Bearer " + apiKey, "content-type": "application/json" },
         signal,
-        body:JSON.stringify({model,temperature:0.1,max_completion_tokens:completionTokenBudget,response_format:jsonObjectFallback
-          ? {type:"json_object"}
-          : {type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
-          messages:[{role:"system",content:SYSTEM_PROMPT+" "+instructions+(jsonObjectFallback
-            ? " The user payload includes outputSchema, which is the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value and length constraint. Do not include outputSchema in your returned object."
-            : "")},
-            {role:"user",content:JSON.stringify({promptVersion:GROQ_PROMPT_VERSION,sectionGroup:groupName,evidence:input.evidence,
-              sonicDna:input.sonicDna,catalogMetadata:input.catalogMetadata??null,correction:attempt===0?null:lastError,
-              ...(jsonObjectFallback?{outputSchema:z.toJSONSchema(schema)}:{})})}]})
+        body: JSON.stringify(requestBody),
       });
-      if(response.ok)break;
-      const transient=response.status===429||response.status>=500;
-      if(!transient||networkAttempt===MAX_NETWORK_ATTEMPTS-1)break;
-      await sleepImpl(await providerRetryDelayMs(response,networkAttempt), signal);
+      if (response.ok) break;
+      const transient = response.status === 429 || response.status >= 500;
+      if (!transient || networkAttempt === MAX_NETWORK_ATTEMPTS - 1) break;
+      await sleepImpl(await providerRetryDelayMs(response, networkAttempt), signal);
       signal?.throwIfAborted();
     }
-    if(!response||!response.ok){
-      const detail=await response?.text().catch(()=>"")??"";
-      let providerError:{error?:{code?:unknown;message?:unknown}}={};
-      try{providerError=JSON.parse(detail) as typeof providerError;}catch{/* Preserve the original provider response below. */}
-      if(response?.status===413&&tpmRetries<MAX_SECTION_ATTEMPTS-1){
-        completionTokenBudget=retryCompletionTokenBudget(detail,completionTokenBudget);
-        tpmRetries++;
-        lastError="Groq rejected the request with HTTP 413. Retry with a smaller completion-token reservation while preserving the complete supplied evidence.";
-        continue;
+
+    if (!response || !response.ok) {
+      const detail = await response?.text().catch(() => "") ?? "";
+      let providerError: { error?: { code?: unknown; message?: unknown; failed_generation?: unknown } } = {};
+      try {
+        providerError = JSON.parse(detail) as typeof providerError;
+      } catch {
+        // Preserve the original provider response below.
       }
-      if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&providerSchemaRetries<2){
-        providerSchemaRetries++;
-        const message=typeof providerError.error.message==="string"?providerError.error.message:"The provider rejected its generated JSON against the supplied schema.";
-        const failedGeneration=typeof (providerError.error as {failed_generation?:unknown}).failed_generation==="string"
-          ? (providerError.error as {failed_generation:string}).failed_generation.trim() : "";
-        const generationNote=failedGeneration
-          ? " Groq included failed_generation diagnostics; rely on the schema and supplied evidence rather than copying unsupported output."
-          : " Groq supplied no failed_generation diagnostics.";
-        const schemaFields=Object.keys((z.toJSONSchema(schema) as {properties?:Record<string,unknown>}).properties??{});
-        const requiredFields=schemaFields.length?schemaFields.join(", "):"all required schema properties";
-        if(providerSchemaRetries===1){
-          lastError="Groq returned json_validate_failed for the "+groupName+" section: "+message+"."+generationNote+" Retry once in strict structured-output mode with one complete JSON object containing every property required by the supplied "+groupName+" schema, including: "+requiredFields+". Satisfy every field type, enum, nullable value, array bound and minimum length. Preserve evidence boundaries; do not invent missing evidence.";
-        }else{
-          jsonObjectFallback=true;
-          lastError="Groq strict structured-output validation failed twice for the "+groupName+" section: "+message+"."+generationNote+" The next request uses JSON-object mode. Return one complete JSON object matching the exact "+groupName+" outputSchema supplied in the user payload. Include every required property and nested property, with correct types, enums, nullable values, array bounds and minimum lengths. Do not add prose or markdown. Preserve evidence boundaries and do not invent missing evidence; local Zod and section word-count validation remain mandatory.";
+
+      if (response?.status === 413) {
+        if (tpmRetries >= MAX_TPM_RETRIES) {
+          throw new Error("Groq " + groupName + " assessment exhausted bounded TPM retries: " + detail.slice(0, 300));
         }
+        completionTokenBudget = retryCompletionTokenBudget(detail, completionTokenBudget);
+        tpmRetries++;
+        lastError = "Groq rejected the request with HTTP 413. Retry with a smaller completion-token reservation while preserving the complete supplied evidence.";
         continue;
       }
-      if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&!validationRetryUsed){
-        validationRetryUsed=true;
-        const message=typeof providerError.error.message==="string"?providerError.error.message:"The provider rejected its generated JSON against the supplied schema.";
-        lastError="Groq returned json_validate_failed: "+message+". Retry with a complete JSON object that includes every property required by the supplied schema.";
-        continue;
+
+      if (response?.status === 400 && providerError.error?.code === "json_validate_failed") {
+        const message = typeof providerError.error.message === "string"
+          ? providerError.error.message
+          : "The provider rejected its generated JSON.";
+        const failedGeneration = typeof providerError.error.failed_generation === "string"
+          ? providerError.error.failed_generation.trim()
+          : "";
+        const diagnostic = failedGeneration
+          ? " Groq returned failed_generation diagnostics; do not copy unsupported content."
+          : " Groq supplied no failed_generation diagnostics.";
+
+        if (responseMode === "json_schema" && strictSchemaRetries < 2) {
+          strictSchemaRetries++;
+          if (strictSchemaRetries === 2) {
+            responseMode = "json_object";
+            lastError = "Groq strict JSON-schema validation failed twice for " + groupName + ": " + message + "." + diagnostic
+              + " Switch to JSON-object mode and return one complete object matching the exact outputSchema.";
+          } else {
+            const requiredFields = Object.keys((outputSchema as { properties?: Record<string, unknown> }).properties ?? {}).join(", ")
+              || "all required schema properties";
+            lastError = "Groq returned json_validate_failed for the " + groupName + " section: " + message + "." + diagnostic
+              + " Retry strict mode with one complete JSON object including every required property: " + requiredFields
+              + ". Satisfy every nested field, type, enum and nullable value.";
+          }
+          continue;
+        }
+
+        if (responseMode === "json_object" && jsonObjectProviderRetries < 2) {
+          jsonObjectProviderRetries++;
+          if (jsonObjectProviderRetries === 2) {
+            responseMode = "prompt_only";
+            lastError = "Groq also rejected JSON-object mode for " + groupName + ": " + message + "." + diagnostic
+              + " Omit response_format on the next request, return raw JSON only, and match every field in outputSchema.";
+          } else {
+            lastError = "Groq rejected JSON-object mode for " + groupName + ": " + message + "." + diagnostic
+              + " Retry JSON-object mode with the exact outputSchema and a complete JSON object.";
+          }
+          continue;
+        }
+
+        if (responseMode === "prompt_only" && promptOnlyProviderRetries < 1) {
+          promptOnlyProviderRetries++;
+          lastError = "Groq rejected prompt-only JSON for " + groupName + ": " + message + "." + diagnostic
+            + " Retry once with a complete raw JSON object matching outputSchema exactly.";
+          continue;
+        }
+
+        throw new Error("Groq " + groupName + " assessment failed with HTTP 400 after bounded JSON recovery: " + detail.slice(0, 300));
       }
-      throw new Error("Groq "+groupName+" assessment failed with HTTP "+(response?.status??"unknown")+(detail?": "+detail.slice(0,300):""));
+
+      throw new Error("Groq " + groupName + " assessment failed with HTTP " + (response?.status ?? "unknown")
+        + (detail ? ": " + detail.slice(0, 300) : ""));
     }
-    const payload=await response.json() as {choices?:Array<{message?:{content?:string|null}}>};
-    const content=payload.choices?.[0]?.message?.content;
-    if(!content){lastError="The response contained no JSON content.";if(validationRetryUsed)break;validationRetryUsed=true;continue;}
-    let parsed:unknown;try{parsed=JSON.parse(content);}catch{lastError="The response was not valid JSON.";if(validationRetryUsed)break;validationRetryUsed=true;continue;}
-    const result=schema.safeParse(parsed);if(!result.success){lastError=jsonObjectFallback?"The JSON-object response failed local validation: "+result.error.message+". Correct every reported issue and return a complete object matching the supplied "+groupName+" outputSchema.":result.error.message;if(validationRetryUsed)break;validationRetryUsed=true;continue;}
-    const wordError=thresholdError(groupName,result.data);if(wordError){lastError=wordError;if(validationRetryUsed)break;validationRetryUsed=true;continue;}
+
+    const payload = await response.json() as { choices?: Array<{ message?: { content?: string | null } }> };
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) {
+      if (scheduleCorrection("The response contained no JSON content. Return one complete JSON object matching outputSchema.")) continue;
+      break;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      if (scheduleCorrection("The response was not valid JSON. Return raw JSON only, without markdown or surrounding prose.")) continue;
+      break;
+    }
+
+    const result = schema.safeParse(parsed);
+    if (!result.success) {
+      const detail = responseMode === "json_object" || responseMode === "prompt_only"
+        ? "The " + responseMode + " response failed local Zod validation: " + result.error.message + "."
+        : "Strict structured output failed local Zod validation: " + result.error.message + ".";
+      if (scheduleCorrection(detail + " Correct every reported field and return the complete schema object.")) continue;
+      break;
+    }
+
+    const wordError = thresholdError(groupName, result.data);
+    if (wordError) {
+      if (scheduleCorrection(wordError + " Repair the exact field and preserve the evidence-bounded meaning.")) continue;
+      break;
+    }
     return result.data;
   }
-  throw new Error("Groq "+groupName+" response failed Zod validation after one retry: "+lastError);
+
+  throw new Error("Groq " + groupName + " response failed Zod validation after one retry: " + lastError);
 }
 
 export class GroqClient implements GroqAssessmentClient {

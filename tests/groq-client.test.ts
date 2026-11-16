@@ -318,6 +318,54 @@ describe("GroqClient section groups",()=>{
 });
 
 
+
+describe("Groq recovery across independent retry budgets", () => {
+  it("preserves TPM retries and reaches prompt-only JSON fallback after provider rejects both structured modes", async () => {
+    let evidenceScoreCalls = 0;
+    const formats: Array<string | undefined> = [];
+    const payloads: Array<Record<string, any>> = [];
+    const input = {
+      evidence: { artist: "Regression Artist", title: "Regression Track", sourceCombination: "master_and_dsp" },
+      sonicDna: { provenance: "uploaded_audio_master", bpm: 96, tempoConfidence: 0.82 },
+      catalogMetadata: { apple_music: { title: "Regression Track", isrc: "USAAA2600001" } },
+    };
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const userPayload = JSON.parse(body.messages[1].content);
+      const group = userPayload.sectionGroup;
+      if (group === "evidence-score") {
+        evidenceScoreCalls++;
+        formats.push(body.response_format?.type);
+        payloads.push(userPayload);
+        if (evidenceScoreCalls === 1) {
+          return new Response(JSON.stringify({ error: { message: "TPM limit. Limit 8000, Requested 8289." } }), { status: 413 });
+        }
+        if (evidenceScoreCalls === 2) {
+          return new Response(JSON.stringify({ error: { message: "TPM limit. Limit 8000, Requested 8198." } }), { status: 413 });
+        }
+        if (evidenceScoreCalls <= 6) {
+          return new Response(JSON.stringify({ error: {
+            message: "Failed to validate JSON. Please adjust your prompt.",
+            code: "json_validate_failed",
+            failed_generation: ""
+          } }), { status: 400 });
+        }
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(group)) } }] }), { status: 200 });
+    });
+    const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
+    const result = await client.assess(input);
+    expect(evidenceScoreCalls).toBe(7);
+    expect(formats).toEqual(["json_schema", "json_schema", "json_schema", "json_schema", "json_object", "json_object", undefined]);
+    expect(payloads.every((payload) => JSON.stringify(payload.evidence) === JSON.stringify(input.evidence))).toBe(true);
+    expect(payloads.every((payload) => JSON.stringify(payload.sonicDna) === JSON.stringify(input.sonicDna))).toBe(true);
+    expect(payloads.every((payload) => JSON.stringify(payload.catalogMetadata) === JSON.stringify(input.catalogMetadata))).toBe(true);
+    expect(payloads[4].outputSchema).toBeDefined();
+    expect(payloads[6].outputSchema).toEqual(payloads[4].outputSchema);
+    expect(result.evidenceLabels).toHaveLength(1);
+  });
+});
+
 describe("GroqClient cancellation", () => {
   it("aborts an in-flight provider request when the audit signal is aborted", async () => {
     const controller = new AbortController();
