@@ -1,5 +1,6 @@
 import { readPdfResponse, triggerPdfDownload } from "./report-download.js";
 import { createAuditPoller } from "./audit-polling.js";
+import { detectTrackPlatform } from "./dsp-url.js";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),resultName=document.querySelector("#resultName"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
 const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain"),accessTokenDisplay=document.querySelector("#accessTokenDisplay"),revealAccessTokenButton=document.querySelector("#revealAccessTokenButton"),copyAccessTokenButton=document.querySelector("#copyAccessTokenButton"),fullReportAccessKey=document.querySelector("#fullReportAccessKey"),unlockFullReportButton=document.querySelector("#unlockFullReportButton"),tokenSaveMessage=document.querySelector("#tokenSaveMessage");
 const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.querySelector("#detectCatalog"),catalogPlatform=document.querySelector("#catalogPlatform"),catalogPreview=document.querySelector("#catalogPreview"),catalogSourceStatuses=document.querySelector("#catalogSourceStatuses"),catalogState=document.querySelector("#catalogState"),catalogCheck=document.querySelector("#catalogCheck");
@@ -37,17 +38,7 @@ function clearFile(){selectedFile=null;digest=null;input.value="";filePanel.clas
 function getCatalogUrls(){
   return catalogUrl.value.split(/\r?\n/).map(value=>value.trim()).filter(Boolean);
 }
-function detectTrackPlatform(value){
-  const u=new URL(value),host=u.hostname.toLowerCase(),parts=u.pathname.split("/").filter(Boolean);
-  if(u.protocol!=="https:"||u.username||u.password||u.port)throw new Error("Use a credential-free HTTPS track URL");
-  if(["open.spotify.com","play.spotify.com"].includes(host)&&parts.includes("track")&&parts[parts.indexOf("track")+1])return "Spotify";
-  if(["music.apple.com","itunes.apple.com"].includes(host)&&parts.includes("album")&&/^\d+$/.test(parts[parts.indexOf("album")+2]||"")&&u.searchParams.get("i"))return "Apple Music";
-  if(["deezer.com","www.deezer.com"].includes(host)&&parts[0]==="track"&&parts[1])return "Deezer";
-  if(["tidal.com","listen.tidal.com"].includes(host)&&parts.includes("track")&&parts[parts.indexOf("track")+1])return "TIDAL";
-  if(host==="music.youtube.com"&&u.pathname==="/watch"&&u.searchParams.get("v"))return "YouTube Music";
-  if(["audiomack.com","www.audiomack.com"].includes(host)&&parts.length>=2)return "Audiomack";
-  throw new Error("Unsupported DSP or non-track URL");
-}
+
 async function previewCatalog(){
   const urls=getCatalogUrls();catalogReady=false;catalogPreview.classList.add("hidden");catalogPreview.textContent="";catalogSourceStatuses.classList.add("hidden");catalogSourceStatuses.textContent="";catalogState.textContent="Validating…";
   if(!urls.length){catalogState.textContent="Waiting for URLs";catalogPlatform.textContent="No DSP links submitted";setCheck(catalogCheck,"","—");updateSubmit();return;}
