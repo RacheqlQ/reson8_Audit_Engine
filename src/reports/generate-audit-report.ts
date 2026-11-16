@@ -22,6 +22,13 @@ export function normalizeReportText(value: string): string {
   .replace(/[\u00D7]/g,"x")
   .replace(/[\u266F]/g,"#")
   .replace(/[\u266D]/g,"b")
+  .replace(/[\u2190-\u21FF]/g," ")
+  .replace(/[\u2260]/g,"!=")
+  .replace(/[\u2264]/g,"<=")
+  .replace(/[\u2265]/g,">=")
+  .replace(/[\u00A9]/g,"(c)")
+  .replace(/[\u00AE]/g,"(R)")
+  .replace(/[\u2122]/g,"TM")
   .replace(/[\uFFFD]/g,"")
   .replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"");
 }
