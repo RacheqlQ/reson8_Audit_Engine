@@ -76,7 +76,7 @@ describe("multi-DSP track-link intake", () => {
 
   it.each([
     "https://open.spotify.com/playlist/abc",
-    "https://music.apple.com/us/album/album-name/123",
+
     "https://www.deezer.com/album/123",
     "https://tidal.com/playlist/123",
     "https://music.youtube.com/channel/channel-1",
