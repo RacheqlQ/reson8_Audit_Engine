@@ -21,6 +21,7 @@ export function normalizeReportText(value: string): string {
   .replace(/[\u2022\u25CF]/g,"-")
   .replace(/[\u00D7]/g,"x")
   .replace(/[\u266F]/g,"#")
+  .replace(/[\u266D]/g,"b")
   .replace(/[\uFFFD]/g,"")
   .replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"");
 }
