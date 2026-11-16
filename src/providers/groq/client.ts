@@ -133,6 +133,7 @@ function thresholdError(name: string, value: unknown): string | null {
 const MAX_PROVIDER_RETRY_DELAY_MS = 15 * 60_000;
 const MAX_NETWORK_ATTEMPTS = 5;
 const MAX_COMPLETION_TOKENS = 2500;
+const MAX_SECTION_ATTEMPTS = 4;
 
 function retryCompletionTokenBudget(detail: string, currentBudget: number): number {
   const match = detail.match(/Limit\s+(\d+)\s*,\s*Requested\s+(\d+)/i);
@@ -208,7 +209,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number, signal?:AbortSignal)=>Promise<void>, signal?: AbortSignal): Promise<T> {
   let lastError = "No valid response was returned";
   let completionTokenBudget = MAX_COMPLETION_TOKENS;
-  for(let attempt=0;attempt<2;attempt++){
+  let tpmRetries = 0;
+  let validationRetryUsed = false;
+  for(let attempt=0;attempt<MAX_SECTION_ATTEMPTS+1;attempt++){
     let response:Response|null=null;
     for(let networkAttempt=0;networkAttempt<MAX_NETWORK_ATTEMPTS;networkAttempt++){
       signal?.throwIfAborted();
@@ -230,12 +233,14 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       const detail=await response?.text().catch(()=>"")??"";
       let providerError:{error?:{code?:unknown;message?:unknown}}={};
       try{providerError=JSON.parse(detail) as typeof providerError;}catch{/* Preserve the original provider response below. */}
-      if(response?.status===413&&attempt===0){
+      if(response?.status===413&&tpmRetries<MAX_SECTION_ATTEMPTS-1){
         completionTokenBudget=retryCompletionTokenBudget(detail,completionTokenBudget);
-        lastError="Groq rejected the request with HTTP 413. Retry once with a smaller completion-token reservation while preserving the complete supplied evidence.";
+        tpmRetries++;
+        lastError="Groq rejected the request with HTTP 413. Retry with a smaller completion-token reservation while preserving the complete supplied evidence.";
         continue;
       }
-      if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&attempt===0){
+      if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&!validationRetryUsed){
+        validationRetryUsed=true;
         const message=typeof providerError.error.message==="string"?providerError.error.message:"The provider rejected its generated JSON against the supplied schema.";
         lastError="Groq returned json_validate_failed: "+message+". Retry with a complete JSON object that includes every property required by the supplied schema. Do not omit required properties, including evidenceLabels; when no track-specific source supports a label, use only a clearly separated INDUSTRY PRACTICE entry where appropriate.";
         continue;
@@ -244,10 +249,10 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     }
     const payload=await response.json() as {choices?:Array<{message?:{content?:string|null}}>};
     const content=payload.choices?.[0]?.message?.content;
-    if(!content){lastError="The response contained no JSON content.";continue;}
-    let parsed:unknown;try{parsed=JSON.parse(content);}catch{lastError="The response was not valid JSON.";continue;}
-    const result=schema.safeParse(parsed);if(!result.success){lastError=result.error.message;continue;}
-    const wordError=thresholdError(groupName,result.data);if(wordError){lastError=wordError;continue;}
+    if(!content){lastError="The response contained no JSON content.";if(validationRetryUsed)break;validationRetryUsed=true;continue;}
+    let parsed:unknown;try{parsed=JSON.parse(content);}catch{lastError="The response was not valid JSON.";if(validationRetryUsed)break;validationRetryUsed=true;continue;}
+    const result=schema.safeParse(parsed);if(!result.success){lastError=result.error.message;if(validationRetryUsed)break;validationRetryUsed=true;continue;}
+    const wordError=thresholdError(groupName,result.data);if(wordError){lastError=wordError;if(validationRetryUsed)break;validationRetryUsed=true;continue;}
     return result.data;
   }
   throw new Error("Groq "+groupName+" response failed Zod validation after one retry: "+lastError);
