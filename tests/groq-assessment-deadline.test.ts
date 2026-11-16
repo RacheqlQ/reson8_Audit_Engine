@@ -1,13 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { GroqClient } from "../src/providers/groq/client.js";
-
-afterEach(() => {
-  vi.useRealTimers();
-});
 
 describe("Groq assessment deadline", () => {
   it("aborts a long provider Retry-After wait within the overall assessment deadline", async () => {
-    vi.useFakeTimers();
     let observedSleepSignal: AbortSignal | undefined;
     let signalRetryWaitStarted!: () => void;
     const sleepStarted = new Promise<void>((resolve) => { signalRetryWaitStarted = resolve; });
@@ -25,13 +20,10 @@ describe("Groq assessment deadline", () => {
       signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
     }));
 
-    const client = new GroqClient("test-key", "test-model", fetchImpl as typeof fetch, sleepImpl);
+    const client = new GroqClient("test-key", "test-model", fetchImpl as typeof fetch, sleepImpl, 90_000, 10);
     const pending = client.assess({ evidence: {}, sonicDna: null });
-    const assertion = expect(pending).rejects.toThrow("GROQ_ASSESSMENT_TIMEOUT");
-
     await sleepStarted;
-    await vi.advanceTimersByTimeAsync(12 * 60_000);
-    await assertion;
+    await expect(pending).rejects.toThrow("GROQ_ASSESSMENT_TIMEOUT");
 
     expect(observedSleepSignal?.aborted).toBe(true);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
