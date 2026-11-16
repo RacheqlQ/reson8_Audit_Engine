@@ -24,6 +24,34 @@ describe("browser audit polling authorization and retry policy", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(onPayload).toHaveBeenCalledWith({ status: "queued" });
   });
+
+  it("continues polling after the long-running notice instead of going idle", async () => {
+    vi.useFakeTimers();
+    let requests = 0;
+    const fetchImpl = vi.fn(async () => {
+      requests++;
+      const completed = requests >= 4;
+      return new Response(JSON.stringify({
+        status: completed ? "completed" : "processing",
+        full: { available: completed },
+      }), { status: 200 });
+    });
+    const onMessage = vi.fn();
+    const poller = createAuditPoller({
+      fetchImpl,
+      onMessage,
+      maxWaitMs: 1000,
+      retryDelayMs: 500,
+    });
+
+    await poller.poll("job-long-running", "capability");
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect(onMessage).toHaveBeenCalledOnce();
+    expect(onMessage.mock.calls[0][0]).toContain("status checks will continue");
+  });
+
   it("retries transient network failures", async () => {
     vi.useFakeTimers();
     const fetchImpl = vi.fn()
