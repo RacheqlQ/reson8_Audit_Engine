@@ -21,6 +21,6 @@ describe("Groq TPM reservation budget", () => {
     await expect(client.assess({ evidence: {}, sonicDna: null }))
       .rejects.toThrow("Groq narrative assessment failed with HTTP 400");
 
-    expect(budgets).toEqual([2500, 1576]);
+    expect(budgets).toEqual([1800, 876]);
   });
 });
