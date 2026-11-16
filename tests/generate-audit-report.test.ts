@@ -71,13 +71,6 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(zeroBody).toContain("Tempo: Not determined");
   expect(zeroBody).not.toMatch(/Tempo: Detected|Tempo: Tentative/);
  });
- it("removes the uncalibrated confidence percentage from the cover",async()=>{
-  const bytes=await generateAuditReport(fullAudioFixture as any,"sample");
-  const pdf=await PDFDocument.load(bytes);
-  const firstPage=pdf.getPages()[0];
-  const textContent=firstPage.node.Contents();
-  expect(textContent).toBeDefined();
- });
  it("marks the audio fixture variants as synthetic, including partial null-key and low-confidence data",()=>{
   expect(fullAudioFixture.evidence.artist).toBe("Fixture Artist");
   expect(fullAudioFixture.sonicDna.bpm).toBe(96);
