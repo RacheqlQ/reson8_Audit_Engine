@@ -135,6 +135,8 @@ const MAX_NETWORK_ATTEMPTS = 5;
 const MAX_COMPLETION_TOKENS = 1800;
 const MAX_TPM_RETRIES = 4;
 const MAX_SECTION_REQUEST_ATTEMPTS = 16;
+const GROQ_REQUEST_TIMEOUT_MS = 90_000;
+
 async function fetchGroqWithTimeout(
   fetchImpl: typeof fetch,
   url: string,
@@ -161,8 +163,6 @@ async function fetchGroqWithTimeout(
     clearTimeout(timeout);
   }
 }
-
-const GROQ_REQUEST_TIMEOUT_MS = 90_000;
 
 function retryCompletionTokenBudget(detail: string, currentBudget: number): number {
   const match = detail.match(/Limit\s+(\d+)\s*,\s*Requested\s+(\d+)/i);
