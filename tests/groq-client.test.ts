@@ -208,7 +208,7 @@ describe("GroqClient section groups",()=>{
     systemPrompts.push(body.messages[0].content);
     expect(body.response_format.json_schema.strict).toBe(true);
     expect(body.response_format.json_schema.schema.required).toContain("evidenceLabels");
-    if(evidenceScoreCalls===1){
+    if(evidenceScoreCalls<=2){
      return new Response(JSON.stringify({error:{
       message:"Generated JSON does not match the expected schema. Missing required property: evidenceLabels",
       type:"invalid_request_error",
@@ -221,7 +221,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{},sonicDna:null});
-  expect(evidenceScoreCalls).toBe(2);
+  expect(evidenceScoreCalls).toBe(3);
   expect(prompts[1]).toContain("json_validate_failed");
   expect(prompts[1]).toContain("evidenceLabels");
   expect(systemPrompts[0]).toContain("Always include the evidenceLabels array");
