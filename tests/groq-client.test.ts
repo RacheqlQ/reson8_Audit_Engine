@@ -41,7 +41,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{},sonicDna:null});
-  expect(evidenceScoreBudgets).toEqual([2500,1811]);
+  expect(evidenceScoreBudgets).toEqual([1800,1111]);
   expect(evidenceScoreCalls).toBe(2);
   expect(result.evidenceLabels).toHaveLength(1);
  });
