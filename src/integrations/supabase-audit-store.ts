@@ -122,7 +122,7 @@ export function createSupabaseAuditStore(
             owner_id: input.ownerId, status: "queued", original_filename: input.filename,
             mime_type: input.mimeType, size_bytes: input.sizeBytes, sha256: input.sha256,
             source_type: input.sourceType, catalog_url: input.catalogUrl,
-            catalog_metadata: input.catalogUrls?.length ? { submittedLinks: input.catalogUrls } : null,
+            catalog_metadata: input.catalogUrls?.length ? { submittedLinks: input.catalogUrls } : {},
             report_access_token_hash: input.reportAccessTokenHash,
           }).select("id").single();
           if (error || !data) throw new Error(`Unable to create audit job: ${error?.message ?? "unknown error"}`);
