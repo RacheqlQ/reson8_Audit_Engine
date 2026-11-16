@@ -119,7 +119,9 @@ async function submitAudit(){
     const urls=hasCatalog?getCatalogUrls():[];
     let response;
     if(hasMaster){
-      const headers={"Content-Type":selectedFile.type||"application/octet-stream","X-Audio-Filename":selectedFile.name};
+      const extension=extensionOf(selectedFile.name);
+      const audioMimeTypes={mp3:"audio/mpeg",wav:"audio/wav",flac:"audio/flac",aac:"audio/aac",ogg:"audio/ogg",m4a:"audio/mp4"};
+      const headers={"Content-Type":audioMimeTypes[extension]||selectedFile.type||"application/octet-stream","X-Audio-Filename":selectedFile.name};
       if(hasCatalog){headers["X-Catalog-Url"]=urls[0];headers["X-Catalog-Urls"]=JSON.stringify(urls);}
       response=await fetch("/v1/audits",{method:"POST",headers,body:selectedFile});
     }else if(hasCatalog){
