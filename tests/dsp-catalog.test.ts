@@ -130,3 +130,38 @@ describe("Audiomack commercial policy gate", () => {
     expect(result.raw.providerPolicy).toMatchObject({ reason: "disabled by data policy" });
   });
 });
+
+
+describe("Apple Music direct-song catalog lookup", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.PROVIDER_ENABLED_APPLE_MUSIC;
+  });
+
+  it("extracts direct song IDs from geo links and queries the submitted storefront", async () => {
+    process.env.PROVIDER_ENABLED_APPLE_MUSIC = "true";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toContain("itunes.apple.com/lookup?id=1234567890&entity=song&country=ng");
+      return new Response(JSON.stringify({
+        resultCount: 1,
+        results: [{ kind: "song", trackId: 1234567890, trackName: "Direct Song", artistName: "Test Artist" }]
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await collectCatalogMetadata("https://geo.music.apple.com/ng/song/example-track/1234567890");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ platform: "apple_music", catalogId: "1234567890", title: "Direct Song", artist: "Test Artist" });
+  });
+
+  it("recognizes geo links but preserves the Apple provider-policy gate", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await collectCatalogMetadata("https://geo.music.apple.com/gb/song/example-track/1234567890");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(detectDspPlatform("https://geo.music.apple.com/gb/song/example-track/1234567890")).toBe("apple_music");
+    expect(result).toMatchObject({
+      catalogId: "1234567890",
+      raw: { providerPolicy: { provider: "apple_music", reason: "disabled by data policy" } }
+    });
+  });
+});
