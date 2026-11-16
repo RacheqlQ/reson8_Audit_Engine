@@ -49,7 +49,7 @@ export interface SupabaseAuditStore {
     errorMessage?: string | null;
     full: { available: boolean; version?: number };
     catalogUrlsSubmitted?: string[];
-    catalogSources?: Array<{ platform: string; catalogId: string; canonicalUrl: string; status: string; reason: string }>;
+    catalogSources?: Array<{ platform: string; canonicalUrl: string; status: string; reason: string }>;
   }>;
   getAuditReport(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<{
     bytes: Uint8Array;
@@ -308,7 +308,6 @@ export function createSupabaseAuditStore(
         evidenceStatus: "unavailable",
         eventPayload: {
           platform: link.platform,
-          catalogId: link.catalogId,
           canonicalUrl: link.canonicalUrl,
           sourceUrl: link.canonicalUrl,
           status: "unavailable",
@@ -609,14 +608,13 @@ export function createSupabaseAuditStore(
       const catalogUrlsSubmitted = Array.isArray(submittedPayload?.submittedLinks)
         ? submittedPayload.submittedLinks.filter((value): value is string => typeof value === "string")
         : [];
-      const catalogStatusMap = new Map<string, { platform: string; catalogId: string; canonicalUrl: string; status: string; reason: string }>();
+      const catalogStatusMap = new Map<string, { platform: string; canonicalUrl: string; status: string; reason: string }>();
       for (const event of catalogEvents ?? []) {
         const payload = event.payload as Record<string, unknown> | null;
         if (typeof payload?.platform !== "string" || typeof payload?.canonicalUrl !== "string") continue;
         const key = `${payload.platform}:${payload.canonicalUrl}`;
         catalogStatusMap.set(key, {
           platform: payload.platform,
-          catalogId: typeof payload.catalogId === "string" ? payload.catalogId : "",
           canonicalUrl: payload.canonicalUrl,
           status: typeof payload.status === "string" ? payload.status : "recognized",
           reason: payload.status === "recognized" ? "Provider returned track metadata." : payload.status === "partial" ? "Provider returned incomplete metadata; some identity fields remain unresolved." : "Provider could not verify this submitted link.",
