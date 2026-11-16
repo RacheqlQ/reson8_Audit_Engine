@@ -21,6 +21,7 @@ export interface SupabaseAuditStore {
   admin: SupabaseClient;
   createJobDependencies(): CreateAuditJobDependencies;
   claimNextQueuedJob(): Promise<AuditJobRecord | null>;
+  failExpiredProcessingJobs(): Promise<number>;
   renewLease(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   markProcessing(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   downloadMaster(path: string, signal?: AbortSignal): Promise<Uint8Array>;
@@ -159,6 +160,32 @@ export function createSupabaseAuditStore(
           if (error) throw new Error(`Unable to clean up audit job: ${error.message}`);
         },
       };
+    },
+    async failExpiredProcessingJobs() {
+      const now = new Date();
+      const cutoff = new Date(now.getTime() - 10 * 60_000).toISOString();
+      const nowIso = now.toISOString();
+      const { data, error } = await admin.from("audit_jobs")
+        .select("id")
+        .eq("status", "processing")
+        .lt("created_at", cutoff)
+        .lt("lease_expires_at", nowIso)
+        .limit(50);
+      if (error) throw new Error("Unable to inspect expired audit jobs");
+      let failed = 0;
+      for (const row of data ?? []) {
+        const { error: updateError } = await admin.from("audit_jobs").update({
+          status: "failed",
+          error_code: "AUDIT_JOB_EXPIRED",
+          error_message: "This audit could not be completed within 10 minutes. Please submit it again.",
+          completed_at: nowIso,
+          lease_expires_at: null,
+          claim_token: null,
+          worker_id: null,
+        }).eq("id", row.id).eq("status", "processing").lt("lease_expires_at", nowIso);
+        if (!updateError) failed++;
+      }
+      return failed;
     },
     async claimNextQueuedJob() {
       const workerId = `audit-worker:${process.env.RENDER_INSTANCE_ID ?? process.env.HOSTNAME ?? "local"}:${randomUUID()}`;
