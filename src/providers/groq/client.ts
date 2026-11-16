@@ -221,7 +221,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         body:JSON.stringify({model,temperature:0.1,max_completion_tokens:completionTokenBudget,response_format:{type:"json_schema",json_schema:{name:"ar_"+groupName,strict:true,schema:z.toJSONSchema(schema)}},
           messages:[{role:"system",content:SYSTEM_PROMPT+" "+instructions},
             {role:"user",content:JSON.stringify({promptVersion:GROQ_PROMPT_VERSION,sectionGroup:groupName,evidence:input.evidence,
-              sonicDna:input.sonicDna,catalogMetadata:input.catalogMetadata??null,correction:validationRetryUsed?lastError:null})}]})
+              sonicDna:input.sonicDna,catalogMetadata:input.catalogMetadata??null,correction:attempt===0?null:lastError})}]})
       });
       if(response.ok)break;
       const transient=response.status===429||response.status>=500;
