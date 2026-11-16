@@ -200,11 +200,15 @@ describe("GroqClient section groups",()=>{
   let evidenceScoreCalls=0;
   const prompts:string[]=[];
   const systemPrompts:string[]=[];
+  const responseFormats:string[]=[];
+  const payloads:Array<Record<string,unknown>>=[];
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
    const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
    if(group==="evidence-score"){
     evidenceScoreCalls++;
     prompts.push(body.messages[1].content);
+    responseFormats.push(body.response_format.type);
+    payloads.push(JSON.parse(body.messages[1].content));
     systemPrompts.push(body.messages[0].content);
     expect(body.response_format.json_schema.strict).toBe(true);
     expect(body.response_format.json_schema.schema.required).toContain("evidenceLabels");
@@ -220,11 +224,16 @@ describe("GroqClient section groups",()=>{
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
-  const result=await client.assess({evidence:{},sonicDna:null});
+  const result=await client.assess({evidence:{artist:"Regression Artist",title:"Regression Track"},sonicDna:{provenance:"uploaded_audio_master",bpm:96},catalogMetadata:{apple_music:{title:"Regression Track",isrc:"USAAA2600001"}}});
   expect(evidenceScoreCalls).toBe(3);
   expect(prompts[1]).toContain("json_validate_failed");
   expect(prompts[1]).toContain("evidenceLabels");
   expect(systemPrompts[0]).toContain("Always include the evidenceLabels array");
+  expect(responseFormats).toEqual(["json_schema","json_schema","json_object"]);
+  expect(payloads[0].evidence).toEqual(payloads[1].evidence);
+  expect(payloads[1].evidence).toEqual(payloads[2].evidence);
+  expect(payloads[0].sonicDna).toEqual(payloads[2].sonicDna);
+  expect(payloads[0].catalogMetadata).toEqual(payloads[2].catalogMetadata);
   expect(result.evidenceLabels).toHaveLength(1);
  });
  it("does not retry unrelated non-transient Groq HTTP 400 errors",async()=>{
