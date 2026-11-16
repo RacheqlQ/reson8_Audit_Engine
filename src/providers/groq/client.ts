@@ -400,7 +400,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     return result.data;
   }
 
-  throw new Error("Groq " + groupName + " response failed Zod validation after bounded recovery: " + lastError);
+  throw new Error("Groq " + groupName + " response failed Zod validation after one retry: " + lastError);
 }
 
 export class GroqClient implements GroqAssessmentClient {
