@@ -267,7 +267,7 @@ describe("processAuditJob", () => {
     });
 
     expect(result.status).toBe("failed");
-    expect(failureMessage).toBe("AI assessment: the generated response did not meet the report's validation requirements. Please retry later.");
+    expect(failureMessage).toBe("AI assessment: the generated response did not meet the report validation requirements. Please retry later.");
     expect(events).toContain("recognition-saved");
     expect(events).toContain("evidence-saved");
     expect(events).toContain("sonic-dna-saved");
