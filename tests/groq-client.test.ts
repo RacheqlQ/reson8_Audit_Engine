@@ -38,9 +38,12 @@ describe("GroqClient section groups",()=>{
    },
   };
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
-  await client.assess({evidence:{artist:"Fixture Artist"},sonicDna});
+  await client.assess({evidence:{artist:"Fixture Artist",rawProviderPayload:{huge:Array(100).fill("provider-only payload")},catalogId:"private-id"},sonicDna});
   const firstBody=JSON.parse(String(mock.mock.calls[0][1]?.body));
   const payload=JSON.parse(firstBody.messages[1].content);
+  expect(payload.evidence).toMatchObject({artist:"Fixture Artist"});
+  expect(payload.evidence).not.toHaveProperty("rawProviderPayload");
+  expect(payload.evidence).not.toHaveProperty("catalogId");
   expect(payload.sonicDna).toMatchObject({
    provenance:"uploaded_audio_master",bpm:95,tempoConfidence:0.82,key:"A",mode:"minor",
    rhythmFeatures:{status:"measured",bpm:95,confidence:0.82,candidateBpms:[95,63,76]},

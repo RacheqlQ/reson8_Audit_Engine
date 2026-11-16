@@ -1,1 +1,0 @@
-ALTER TABLE public.audit_jobs ALTER COLUMN owner_id DROP NOT NULL;

@@ -130,6 +130,8 @@ describe("worker heartbeat lease-loss handling", () => {
 
     const shutdown = new AbortController();
     const processing = processNextQueuedAudit(shutdown.signal);
+    await Promise.resolve();
+    await Promise.resolve();
     expect(claimNextQueuedJob).toHaveBeenCalledTimes(1);
 
     shutdown.abort();

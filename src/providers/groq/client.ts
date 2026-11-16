@@ -197,6 +197,28 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string): Record<string, unknown> {
+  const common = [
+    "auditType", "artist", "title", "album", "releaseDate", "label", "isrc", "upc",
+    "genres", "sourceProviders", "fieldProvenance", "identity", "reconciliation",
+    "genreClassification", "catalogSources", "sourceCombination", "masterAudio",
+    "metadataSourcesChecked", "evidenceClass", "fixture",
+  ];
+  const groupFields: Record<string, string[]> = {
+    narrative: ["commercialEvidence", "commercialPerformance", "commercialMetrics", "audienceTelemetry", "catalogPopularity", "rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
+    positioning: ["commercialEvidence", "commercialPerformance", "commercialMetrics", "audienceTelemetry", "catalogPopularity"],
+    release: ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved", "releaseDate"],
+    "evidence-score": ["commercialEvidence", "commercialPerformance", "commercialMetrics", "audienceTelemetry", "rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
+    production: [],
+    comparables: [],
+    promotion: ["releaseDate", "releaseStatus"],
+    "label-fit": ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
+    timeline: ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
+  };
+  const allowed = new Set([...common, ...(groupFields[group] ?? [])]);
+  return Object.fromEntries(Object.entries(evidence).filter(([key]) => allowed.has(key)));
+}
+
 function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null): Record<string, unknown> | null {
   if (!sonicDna) return null;
   const compact: Record<string, unknown> = { ...sonicDna };
@@ -277,7 +299,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         content: JSON.stringify({
           promptVersion: GROQ_PROMPT_VERSION,
           sectionGroup: groupName,
-          evidence: input.evidence,
+          evidence: compactEvidenceForGroq(input.evidence, groupName),
           sonicDna: input.sonicDna,
           catalogMetadata: input.catalogMetadata ?? null,
           correction: attempt === 0 ? null : lastError,
