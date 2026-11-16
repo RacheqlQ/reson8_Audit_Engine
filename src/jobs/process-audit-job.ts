@@ -3,7 +3,8 @@ import type { CatalogMetadata } from "../providers/dsp/catalog.js";
 import type { ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { isPdf } from "../reports/pdf-output.js";
-import { analyzePcm, type SonicDnaFeatures } from "../audio/sonic-dna.js";
+import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
+import { analyzePcmWithTimeout } from "../audio/sonic-dna-worker-client.js";
 import { fuseGenreEvidence, type ProviderGenreTags } from "../genre/fusion.js";
 import { DEFAULT_GENRE_MODEL } from "../genre/model.js";
 import type { TrackIdentity } from "../metadata/MetadataEngine.js";
@@ -12,6 +13,7 @@ import { readAudioTags } from "../metadata/audio-tags.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
+import { withAbortTimeout } from "./with-abort-timeout.js";
 
 export interface AuditJobRecord {
   id: string;
@@ -71,6 +73,39 @@ function assertLeaseActive(deps: AuditProcessorDependencies): void {
   if (deps.signal?.aborted) throw leaseLostError(deps.signal);
 }
 
+function userSafeFailureMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (raw === "AI capacity reached for now, please try again later") return raw;
+  if (raw.startsWith("AUDIT_STAGE_TIMEOUT:")) {
+    const stage = raw.slice("AUDIT_STAGE_TIMEOUT:".length);
+    const messages: Record<string, string> = {
+      catalog_lookup: "Catalog lookup: a submitted DSP link could not be checked within the time limit. Verify the link and retry.",
+      catalog_persist: "Catalog lookup: the provider result could not be saved in time. Please retry the audit.",
+      audio_download: "Audio intake: the uploaded master could not be retrieved in time. Re-upload the master and retry.",
+      recognition_sample: "Audio recognition: the identification sample could not be prepared in time. Please retry.",
+      audio_recognition: "Audio recognition: track identification did not finish in time. Please retry.",
+      audio_decode: "Sonic DNA: the uploaded audio could not be decoded in time. Check the audio file and retry.",
+      catalog_preview_recognition: "Catalog recognition: optional preview identification timed out; the audit can continue without it.",
+      sonic_dna: "Sonic DNA: technical analysis exceeded its time limit. Please retry with a shorter or supported master.",
+      ai_assessment: "AI assessment: the analysis exceeded its four-minute time limit. Please retry later.",
+      sample_pdf_generation: "Sample report: PDF generation exceeded its time limit. Please retry.",
+      full_pdf_generation: "Full report: PDF generation exceeded its time limit. Please retry.",
+      sample_pdf_persistence: "Sample report: the PDF could not be saved in time. Please retry.",
+      full_pdf_persistence: "Full report: the PDF could not be saved in time. Please retry.",
+    };
+    return messages[stage] ?? "Audit processing: the " + stage.replace(/_/g, " ") + " stage exceeded its time limit. Please retry.";
+  }
+  if (raw === "GROQ_ASSESSMENT_TIMEOUT") return "AI assessment: the analysis exceeded its four-minute time limit. Please retry later.";
+  if (raw.startsWith("Combined audit is missing its uploaded master")) return "Audio intake: the combined audit is missing its uploaded master audio. Upload the master file and retry.";
+  if (raw === "master unavailable") return "Audio intake: the uploaded master could not be retrieved. Re-upload it and retry.";
+  if (raw.includes("evidenceGaps") || raw.includes("scorecard") || raw.includes("Zod validation")) return "AI assessment: the generated response did not meet the report's validation requirements. Please retry later.";
+  if (raw.includes("TIDAL credentials unavailable") || raw.includes("provider credentials unavailable")) return "Catalog lookup: the provider credentials or connection are unavailable. Check the submitted link and retry.";
+  if (raw.startsWith("GROQ_REQUEST_TOO_LARGE")) return "AI assessment: the request exceeded the supported input budget. Please retry later.";
+  if (raw.startsWith("GROQ_PROMPT_BUDGET_EXCEEDED")) return "AI assessment: the evidence is too large to process safely in one request. Please retry with a smaller source set.";
+  if (raw.includes("Zod validation") || raw.includes("json_validate_failed")) return "AI assessment: the generated response could not be validated. Please retry later.";
+  return "Audit processing: a required stage could not be completed. Please retry the audit.";
+}
+
 async function awaitWithLease<T>(
   deps: AuditProcessorDependencies,
   operation: (signal?: AbortSignal) => Promise<T>,
@@ -82,6 +117,34 @@ async function awaitWithLease<T>(
   const result = await operation(deps.signal);
   assertLeaseActive(deps);
   return result;
+}
+
+async function awaitWithStage<T>(
+  deps: AuditProcessorDependencies,
+  stage: string,
+  timeoutMs: number,
+  operation: (signal?: AbortSignal) => Promise<T>,
+): Promise<T> {
+  return await awaitWithLease(deps, async (leaseSignal) => {
+    let onAbort: (() => void) | undefined;
+    const leaseAbort = leaseSignal ? new Promise<never>((_resolve, reject) => {
+      onAbort = () => reject(leaseSignal.reason instanceof Error ? leaseSignal.reason : new Error("AUDIT_LEASE_LOST"));
+      if (leaseSignal.aborted) onAbort();
+      else leaseSignal.addEventListener("abort", onAbort, { once: true });
+    }) : new Promise<never>(() => undefined);
+    try {
+      return await Promise.race([
+        withAbortTimeout(
+          (timeoutSignal) => operation(leaseSignal ? AbortSignal.any([leaseSignal, timeoutSignal]) : timeoutSignal),
+          timeoutMs,
+          "AUDIT_STAGE_TIMEOUT:" + stage,
+        ),
+        leaseAbort,
+      ]);
+    } finally {
+      if (onAbort && leaseSignal) leaseSignal.removeEventListener("abort", onAbort);
+    }
+  });
 }
 
 function recognitionEvidence(recognition: AuditRecognition): Record<string, unknown> {
@@ -235,6 +298,13 @@ function identityEvidence(identity: TrackIdentity): Record<string, unknown> {
   };
 }
 
+function catalogLookupReason(status: string): string {
+  if (status === "recognized") return "Provider returned track metadata.";
+  if (status === "partial") return "Provider returned incomplete metadata; some identity fields remain unresolved.";
+  if (status === "unavailable") return "Provider could not verify this submitted link.";
+  return "Provider lookup is pending.";
+}
+
 function reconciliationEvidence(reconciliation: MetadataReconciliation): Record<string, unknown> {
   return {
     status: reconciliation.status,
@@ -333,12 +403,9 @@ async function generateAndSaveReport(
   tier: AuditReportTier,
   deps: AuditProcessorDependencies,
 ): Promise<void> {
-  const pdf = await awaitWithLease(deps, (signal) => deps.generateReport(reportInput, tier, signal));
+  const pdf = await awaitWithStage(deps, tier + "_pdf_generation", 90_000, (signal) => deps.generateReport(reportInput, tier, signal));
   if (!isPdf(pdf)) throw new Error(`${tier} report generator did not return a PDF`);
-  await awaitWithLease(
-    deps,
-    (signal) => deps.saveReport(jobId, claimToken, tier, pdf, tier === "full" ? reportInput : undefined, signal),
-  );
+  await awaitWithStage(deps, tier + "_pdf_persistence", 45_000, (signal) => deps.saveReport(jobId, claimToken, tier, pdf, tier === "full" ? reportInput : undefined, signal));
 }
 
 export async function processAuditJob(
@@ -348,9 +415,13 @@ export async function processAuditJob(
   const job = await awaitWithLease(deps, (signal) => deps.getJob(jobId, signal));
   if (!job) throw new Error("Audit job not found");
   if (job.status !== "processing") throw new Error(`Audit job is not actively claimed: ${job.status}`);
+  const previousSignal = deps.signal;
+  const jobDeadlineController = new AbortController();
+  const jobDeadlineTimer = setTimeout(() => jobDeadlineController.abort(new Error("AUDIT_JOB_DEADLINE_EXCEEDED")), 8 * 60_000);
+  deps.signal = previousSignal ? AbortSignal.any([previousSignal, jobDeadlineController.signal]) : jobDeadlineController.signal;
 
   try {
-    await awaitWithLease(deps, (signal) => deps.markProcessing(jobId, job.claimToken, signal));
+    await awaitWithStage(deps, "job_start", 15_000, (signal) => deps.markProcessing(jobId, job.claimToken, signal));
 
     const sourceReadinessError = getAuditSourceReadinessError(job);
     if (sourceReadinessError) throw new Error(sourceReadinessError);
@@ -363,7 +434,7 @@ export async function processAuditJob(
     let catalogResults: DspMetadataResult[] = [];
     if (hasCatalog) {
       const links = normalizeDspTrackLinks(job.catalogUrls?.length ? job.catalogUrls : [job.catalogUrl!]);
-      catalogResults = await awaitWithLease(deps, (signal) =>
+      catalogResults = await awaitWithStage(deps, "catalog_lookup", 45_000, (signal) =>
         collectDspMetadata(links, { collect: deps.collectCatalogMetadata }, signal),
       );
       metadataSources = catalogResults.flatMap((result) => result.status !== "unavailable" && result.metadata ? [result.metadata] : []);
@@ -371,14 +442,14 @@ export async function processAuditJob(
       // remains the job row's latest raw metadata snapshot.
       for (const result of catalogResults) {
         if (result.status === "unavailable" && result.error && deps.saveCatalogFailure) {
-          await awaitWithLease(deps, (signal) =>
+          await awaitWithStage(deps, "catalog_persist", 15_000, (signal) =>
             deps.saveCatalogFailure!(jobId, job.claimToken, result.link, result.error!, signal),
           );
         }
       }
       for (const result of catalogResults) {
         if (result.status !== "unavailable" && result.metadata) {
-          await awaitWithLease(deps, (signal) =>
+          await awaitWithStage(deps, "catalog_persist", 15_000, (signal) =>
             deps.saveCatalogMetadata(jobId, job.claimToken, result.metadata!, signal),
           );
         }
@@ -395,15 +466,17 @@ export async function processAuditJob(
     let masterTags: ReturnType<typeof readAudioTags> | null = null;
     const attemptedRecognitionProviders = new Set<string>();
     if (hasMaster) {
-      const master = await awaitWithLease(deps, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
+      const master = await awaitWithStage(deps, "audio_download", 30_000, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
       masterTags = readAudioTags(master);
-      const sample = await awaitWithLease(deps, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
-      masterRecognition = await awaitWithLease(deps, (signal) => {
+      const sample = await awaitWithStage(deps, "recognition_sample", 30_000, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
+      masterRecognition = await awaitWithStage(deps, "audio_recognition", 45_000, (signal) => {
         attemptedRecognitionProviders.add("audd");
         return deps.recognize(sample, signal);
       });
-      const decoded = await awaitWithLease(deps, (signal) => deps.decode(master, job.mimeType!, signal));
-      const dna = analyzePcm(decoded.samples, decoded.sampleRate, decoded.channels);
+      const decoded = await awaitWithStage(deps, "audio_decode", 90_000, (signal) => deps.decode(master, job.mimeType!, signal));
+      const dna = await awaitWithStage(deps, "sonic_dna", 90_000, (signal) =>
+        analyzePcmWithTimeout(decoded.samples, decoded.sampleRate, decoded.channels, 90_000, signal),
+      );
       masterDna = {
         ...dna,
         sampleRate: decoded.sampleRate,
@@ -416,7 +489,7 @@ export async function processAuditJob(
     const previewMetadata = metadataSources.find((source) => source.previewUrl);
     if (previewMetadata?.previewUrl) {
       try {
-        catalogRecognition = await awaitWithLease(deps, (signal) => {
+        catalogRecognition = await awaitWithStage(deps, "catalog_preview_recognition", 30_000, (signal) => {
           attemptedRecognitionProviders.add("audd");
           return deps.recognizeUrl(previewMetadata.previewUrl!, signal);
         });
@@ -432,7 +505,7 @@ export async function processAuditJob(
         ? catalogRecognition
         : masterRecognition ?? catalogRecognition ?? { matched: false };
     if (masterRecognition || catalogRecognition) {
-      await awaitWithLease(deps, (signal) => deps.saveRecognition(jobId, job.claimToken, recognition, signal));
+      await awaitWithStage(deps, "recognition_persist", 15_000, (signal) => deps.saveRecognition(jobId, job.claimToken, recognition, signal));
     }
 
     const metadataInput = {
@@ -442,7 +515,7 @@ export async function processAuditJob(
       audd: recognitionMetadataInput(recognition),
     };
     const reconciliation = reconcileMetadata(metadataInput);
-    await awaitWithLease(deps, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources));
+    await awaitWithStage(deps, "evidence_reconciliation_persist", 15_000, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources));
 
     const fusedGenreClassification = fuseGenreEvidence({
       providerTags: genreProviderTags(metadataSources, masterTags),
@@ -463,7 +536,7 @@ export async function processAuditJob(
         genreClassification,
         genreContext: genreClassification.genres.map((genre) => genre.label),
       };
-      await awaitWithLease(deps, (signal) => deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal));
+      await awaitWithStage(deps, "sonic_dna_persist", 15_000, (signal) => deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal));
     }
 
     const identity = reconciliation.identity;
@@ -479,7 +552,7 @@ export async function processAuditJob(
       reconciliation: reconciliationEvidence(reconciliation),
       genreClassification,
       metadataSourcesChecked: [...catalogResults.map((result) => result.link.platform), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...attemptedRecognitionProviders],
-      catalogSources: catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, error: result.error })),
+      catalogSources: catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
       sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
@@ -545,7 +618,7 @@ export async function processAuditJob(
       ],
       catalogSources: catalogResults
         .filter((result) => result.link.platform !== "spotify")
-        .map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, error: result.error })),
+        .map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
       sourceCombination: evidence.sourceCombination,
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
@@ -559,7 +632,7 @@ export async function processAuditJob(
       genreClassification,
       genreContext: genreClassification.genres.map((genre) => genre.label),
     } : null;
-    const assessment = await awaitWithLease(deps, (signal) => deps.generateAssessment({
+    const assessment = await awaitWithStage(deps, "ai_assessment", 4 * 60_000, (signal) => deps.generateAssessment({
       evidence: assessmentEvidence,
       sonicDna,
       catalogMetadata: assessmentMetadata
@@ -572,24 +645,35 @@ export async function processAuditJob(
           }
         : null,
     }, signal));
-    await awaitWithLease(deps, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
+    await awaitWithStage(deps, "assessment_persist", 15_000, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
 
     const generatedAt = new Date().toISOString();
     const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
-    await awaitWithLease(deps, (signal) => deps.markCompleted(jobId, job.claimToken, signal));
+    await awaitWithStage(deps, "job_completion", 15_000, (signal) => deps.markCompleted(jobId, job.claimToken, signal));
     return { status: "completed" };
   } catch (error) {
-    if (deps.signal?.aborted) throw leaseLostError(deps.signal);
-    const message = error instanceof Error ? error.message : "Unknown processing error";
-    await awaitWithLease(deps, (signal) => deps.markFailed(jobId, job.claimToken, message, signal));
+    const jobDeadlineExceeded = jobDeadlineController.signal.aborted && !previousSignal?.aborted;
+    if (deps.signal?.aborted && !jobDeadlineExceeded) throw leaseLostError(deps.signal);
+    const message = jobDeadlineExceeded
+      ? "Audit processing: the job exceeded its eight-minute time limit. Please submit it again."
+      : userSafeFailureMessage(error);
+    await withAbortTimeout(
+      (signal) => deps.markFailed(jobId, job.claimToken, message, signal),
+      15_000,
+      "AUDIT_TERMINAL_WRITE_TIMEOUT",
+    );
     return { status: "failed" };
   } finally {
     // Keep renewing the lease until the terminal database write has settled.
     // Otherwise a slow completion/failure RPC can strand the row in processing
     // after its heartbeat is stopped.
-    await deps.stopHeartbeat?.();
+    try { await deps.stopHeartbeat?.(); }
+    finally {
+      clearTimeout(jobDeadlineTimer);
+      deps.signal = previousSignal;
+    }
   }
 }

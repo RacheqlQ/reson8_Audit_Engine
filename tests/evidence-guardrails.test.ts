@@ -105,6 +105,43 @@ describe("Phillo evidence guardrails", () => {
     expect(result.commercialRead.marketability).toBe("high");
   });
 
+  it("blocks loudness optimisation claims near -11 LUFS and brightness claims below 2 kHz", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "The master measures -11 LUFS and needs loudness optimisation. The 1.9 kHz spectral centroid makes the recording bright.",
+      productionArrangementGuidance: "Increase loudness to reach a louder target and make the low-mid spectrum brighter.",
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      loudnessLufs: -11,
+      spectralCentroidHz: 1900,
+      channels: 2,
+      genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop" }] },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/loudness optimisation|increase loudness|1\.9 kHz.*bright|makes the recording bright|spectrum brighter/i);
+  });
+
+  it("flags a mono master as a delivery compatibility risk", () => {
+    const result = sanitizeAssessmentForEvidence(baseAssessment, {
+      provenance: "uploaded_audio_master",
+      channels: 1,
+      genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop" }] },
+    });
+    expect(result.risks.join(" ")).toMatch(/Mono master delivery risk/i);
+  });
+
+  it("restricts freeform A&R genre labels to taxonomy-backed labels", () => {
+    const assessment = {
+      ...baseAssessment,
+      aAndRPositioning: { primaryLane: "Afro-pop Fusion", adjacentLanes: ["Afro Soul"], rationale: "A provisional lane." },
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop" }] },
+    });
+    expect(result.aAndRPositioning.primaryLane).toBe("Pop");
+    expect(result.aAndRPositioning.adjacentLanes).toEqual([]);
+  });
+
   it("nulls tempo-derived scores and removes unsupported tempo claims when confidence is zero", () => {
     const result = sanitizeAssessmentForEvidence(baseAssessment, {
       provenance: "uploaded_audio_master",

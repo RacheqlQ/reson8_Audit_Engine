@@ -38,9 +38,12 @@ describe("GroqClient section groups",()=>{
    },
   };
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
-  await client.assess({evidence:{artist:"Fixture Artist"},sonicDna});
+  await client.assess({evidence:{artist:"Fixture Artist",rawProviderPayload:{huge:Array(100).fill("provider-only payload")},catalogId:"private-id"},sonicDna});
   const firstBody=JSON.parse(String(mock.mock.calls[0][1]?.body));
   const payload=JSON.parse(firstBody.messages[1].content);
+  expect(payload.evidence).toMatchObject({artist:"Fixture Artist"});
+  expect(payload.evidence).not.toHaveProperty("rawProviderPayload");
+  expect(payload.evidence).not.toHaveProperty("catalogId");
   expect(payload.sonicDna).toMatchObject({
    provenance:"uploaded_audio_master",bpm:95,tempoConfidence:0.82,key:"A",mode:"minor",
    rhythmFeatures:{status:"measured",bpm:95,confidence:0.82,candidateBpms:[95,63,76]},
@@ -65,81 +68,47 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   expect(body.max_completion_tokens).toBe(1800);
+   const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
+   expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
+   expect(body.max_completion_tokens).toBeLessThanOrEqual(1200);
+   expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
  });
- it("retries a Groq 413 once with a smaller completion reservation",async()=>{
-  const evidenceScoreBudgets:number[]=[];
-  let evidenceScoreCalls=0;
+ it("treats HTTP 413 as permanent and never retries the same request payload",async()=>{
+  let calls=0;
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
    const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
-   if(group==="evidence-score"){
-    evidenceScoreBudgets.push(body.max_completion_tokens);
-    evidenceScoreCalls++;
-    if(evidenceScoreCalls===1)return new Response(JSON.stringify({error:{message:"Request too large on tokens per minute. Limit 8000, Requested 8289."}}),{status:413});
-   }
+   if(group==="narrative"&&calls++===0)return new Response(JSON.stringify({error:{message:"Request too large for model in organization on tokens per minute (TPM): Limit 8000, Requested 8289."}}),{status:413});
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
-  const result=await client.assess({evidence:{},sonicDna:null});
-  expect(evidenceScoreBudgets).toEqual([1800,1111]);
-  expect(evidenceScoreCalls).toBe(2);
-  expect(result.evidenceLabels).toHaveLength(1);
+  await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("GROQ_REQUEST_TOO_LARGE");
+  expect(calls).toBe(1);
+  expect(mock).toHaveBeenCalledTimes(1);
  });
- it("progressively adapts repeated TPM 413 responses for production while preserving all evidence",async()=>{
-  const budgets:number[]=[];
-  const payloads:string[]=[];
-  let productionCalls=0;
-  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
-   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
-   if(group==="production"){
-    budgets.push(body.max_completion_tokens);
-    payloads.push(body.messages[1].content);
-    productionCalls++;
-    if(productionCalls<=2)return new Response(JSON.stringify({error:{message:"Request too large for model in organization on tokens per minute (TPM): Limit 8000, Requested 8198."}}),{status:413});
-   }
-   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
-  });
-  const input={evidence:{artist:"Fixture Artist",catalogSources:[{platform:"apple_music",status:"recognized",canonicalUrl:"https://music.example/track/1"}],reconciliation:{status:"reconciled",conflicts:[]}},sonicDna:{provenance:"uploaded_audio_master",bpm:96,tempoConfidence:0.82,rhythmFeatures:{onsetStability:0.91}},catalogMetadata:{apple_music:{artist:"Fixture Artist",title:"Fixture Track",isrc:"USAAA2600001"}}};
-  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
-  const result=await client.assess(input);
-  expect(budgets).toEqual([1800,1202,604]);
-  expect(productionCalls).toBe(3);
-  const first=JSON.parse(payloads[0]),second=JSON.parse(payloads[1]),third=JSON.parse(payloads[2]);
-  for(const retry of [second,third]){
-   expect(retry.evidence).toEqual(first.evidence);
-   expect(retry.sonicDna).toEqual(first.sonicDna);
-   expect(retry.catalogMetadata).toEqual(first.catalogMetadata);
-  }
-  expect(result.productionArrangementGuidance).toBeTruthy();
+ it("fails fast on a Groq tokens-per-day limit without sleeping or retrying",async()=>{
+  let calls=0;const sleeps:number[]=[];
+  const mock=vi.fn(async()=>{calls++;return new Response(JSON.stringify({error:{message:"Rate limit reached: tokens per day (TPD) limit exceeded. Try again tomorrow."}}),{status:429});});
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async(ms)=>{sleeps.push(ms);});
+  await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("AI capacity reached for now, please try again later");
+  expect(calls).toBe(1);expect(sleeps).toEqual([]);
  });
- it("adapts an 8,853-token TPM rejection while preserving the complete evidence payload",async()=>{
-  const budgets:number[]=[];
-  const userPayloads:string[]=[];
-  let evidenceScoreCalls=0;
+ it("resumes validated completed section groups without another provider request",async()=>{
+  const saved:string[]=[];const requested:string[]=[];
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
    const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
-   if(group==="evidence-score"){
-    budgets.push(body.max_completion_tokens);
-    userPayloads.push(body.messages[1].content);
-    evidenceScoreCalls++;
-    if(evidenceScoreCalls===1)return new Response(JSON.stringify({error:{message:"Request too large for model in organization on tokens per minute (TPM): Limit 8000, Requested 8853."}}),{status:413});
-   }
+   requested.push(group);
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
   });
-  const input={evidence:{artist:"Fixture Artist",catalogSources:[{platform:"apple_music",status:"recognized",canonicalUrl:"https://music.example/track/1"}],reconciliation:{status:"reconciled",conflicts:[]}},sonicDna:{provenance:"uploaded_audio_master",bpm:96,tempoConfidence:0.82,rhythmFeatures:{onsetStability:0.91}},catalogMetadata:{apple_music:{artist:"Fixture Artist",title:"Fixture Track",isrc:"USAAA2600001"}}};
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
-  const result=await client.assess(input);
-  expect(budgets).toEqual([1800,547]);
-  expect(evidenceScoreCalls).toBe(2);
-  const firstPayload=JSON.parse(userPayloads[0]);
-  const retryPayload=JSON.parse(userPayloads[1]);
-  expect(retryPayload.evidence).toEqual(firstPayload.evidence);
-  expect(retryPayload.sonicDna).toEqual(firstPayload.sonicDna);
-  expect(retryPayload.catalogMetadata).toEqual(firstPayload.catalogMetadata);
-  expect(retryPayload.correction).toContain("smaller completion-token reservation");
-  expect(retryPayload.evidence.catalogSources).toHaveLength(1);
-  expect(result.evidenceLabels).toHaveLength(1);
+  await client.assess({
+   evidence:{},sonicDna:null,
+   loadCompletedSectionGroup:async(group)=>group==="narrative"?p("narrative"):null,
+   saveCompletedSectionGroup:async(group)=>{saved.push(group);},
+  });
+  expect(requested).not.toContain("narrative");
+  expect(requested).toHaveLength(8);
+  expect(saved).toHaveLength(8);
  });
  it("requests and validates all nine Zod section groups with evidence guardrails",async()=>{
   let active=0,maxActive=0;
@@ -333,7 +302,7 @@ describe("GroqClient section groups",()=>{
   const result=await client.assess({evidence:{},sonicDna:null});
   expect(result.assessmentVersion).toBe("3.0");
   expect(narrativeCalls).toBe(2);
-  expect(sleeps).toContain(626400);
+  expect(sleeps).toContain(60_000);
  });
 
  it("stops after the corrective retry when evidenceGaps remains below eight words",async()=>{
@@ -359,53 +328,6 @@ describe("GroqClient section groups",()=>{
 });
 
 
-
-describe("Groq recovery across independent retry budgets", () => {
-  it("preserves TPM retries and reaches prompt-only JSON fallback after provider rejects both structured modes", async () => {
-    let evidenceScoreCalls = 0;
-    const formats: Array<string | undefined> = [];
-    const payloads: Array<Record<string, any>> = [];
-    const input = {
-      evidence: { artist: "Regression Artist", title: "Regression Track", sourceCombination: "master_and_dsp" },
-      sonicDna: { provenance: "uploaded_audio_master", bpm: 96, tempoConfidence: 0.82 },
-      catalogMetadata: { apple_music: { title: "Regression Track", isrc: "USAAA2600001" } },
-    };
-    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body));
-      const userPayload = JSON.parse(body.messages[1].content);
-      const group = userPayload.sectionGroup;
-      if (group === "evidence-score") {
-        evidenceScoreCalls++;
-        formats.push(body.response_format?.type);
-        payloads.push(userPayload);
-        if (evidenceScoreCalls === 1) {
-          return new Response(JSON.stringify({ error: { message: "TPM limit. Limit 8000, Requested 8289." } }), { status: 413 });
-        }
-        if (evidenceScoreCalls === 2) {
-          return new Response(JSON.stringify({ error: { message: "TPM limit. Limit 8000, Requested 8198." } }), { status: 413 });
-        }
-        if (evidenceScoreCalls <= 6) {
-          return new Response(JSON.stringify({ error: {
-            message: "Failed to validate JSON. Please adjust your prompt.",
-            code: "json_validate_failed",
-            failed_generation: ""
-          } }), { status: 400 });
-        }
-      }
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(group)) } }] }), { status: 200 });
-    });
-    const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
-    const result = await client.assess(input);
-    expect(evidenceScoreCalls).toBe(7);
-    expect(formats).toEqual(["json_schema", "json_schema", "json_schema", "json_schema", "json_object", "json_object", undefined]);
-    expect(payloads.every((payload) => JSON.stringify(payload.evidence) === JSON.stringify(input.evidence))).toBe(true);
-    expect(payloads.every((payload) => JSON.stringify(payload.sonicDna) === JSON.stringify(input.sonicDna))).toBe(true);
-    expect(payloads.every((payload) => JSON.stringify(payload.catalogMetadata) === JSON.stringify(input.catalogMetadata))).toBe(true);
-    expect(payloads[4].outputSchema).toBeDefined();
-    expect(payloads[6].outputSchema).toEqual(payloads[4].outputSchema);
-    expect(result.evidenceLabels).toHaveLength(1);
-  });
-});
 
 describe("GroqClient cancellation", () => {
   it("aborts an in-flight provider request when the audit signal is aborted", async () => {

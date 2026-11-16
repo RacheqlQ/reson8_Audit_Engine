@@ -5,7 +5,7 @@ import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 describe("professional report text and metadata coverage", () => {
   it("normalizes unsupported punctuation to printable PDF-safe characters", () => {
     expect(normalizeReportText("189–second • high‑energy “mix” — don’t…")).toBe("189-second - high-energy \"mix\" - don't...");
-    expect(normalizeReportText("Bend Et �")).toBe("Bend Et ?");
+    expect(normalizeReportText("Bend Et �")).toBe("Bend Et ");
   });
 
   it("keeps metric precision concise without changing integer values", () => {

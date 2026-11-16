@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
@@ -54,6 +54,31 @@ describe("A4 report layout and fixture coverage",()=>{
    expect(pdf.getPageCount()).toBeLessThanOrEqual(20);
   }
  });
+ it("normalizes extended Unicode without replacing unsupported glyphs with question marks",()=>{
+  const normalized=normalizeReportText("Café — mix… 4×4 ♯ ♭ � 🎧");
+  expect(normalized).toContain("Café - mix... 4x4 # b");
+  expect(normalized).not.toContain("?");
+ });
+ it("normalizes extended technical and typographic Unicode without question-mark substitution",()=>{
+  const normalized=normalizeReportText("LUFS −11.0 dB ≥ −1 dB; RMS × 2; arrow →; © ® ™; Café — “mix”…");
+  expect(normalized).toContain("LUFS -11.0 dB >= -1 dB");
+  expect(normalized).toContain("RMS x 2");
+  expect(normalized).toContain("(c) (R) TM");
+  expect(normalized).toContain("Café - \"mix\"...");
+  expect(normalized).not.toContain("?");
+ });
+ it("reports detected, tentative half/double and not-determined tempo tiers",()=>{
+  const tentative=structuredClone(fullAudioFixture) as any;
+  tentative.sonicDna.tempoConfidence=0.32;
+  tentative.sonicDna.bpm=96;
+  const tentativeBody=planAuditReportPages(tentative).flatMap(section=>section.text).join(" ");
+  expect(tentativeBody).toContain("Tentative — 96.0 BPM (half-time 48.0; double-time 192.0)");
+  const zero=structuredClone(fullAudioFixture) as any;
+  zero.sonicDna.tempoConfidence=0;
+  const zeroBody=planAuditReportPages(zero).flatMap(section=>section.text).join(" ");
+  expect(zeroBody).toContain("Tempo: Not determined");
+  expect(zeroBody).not.toMatch(/Tempo: Detected|Tempo: Tentative/);
+ });
  it("marks the audio fixture variants as synthetic, including partial null-key and low-confidence data",()=>{
   expect(fullAudioFixture.evidence.artist).toBe("Fixture Artist");
   expect(fullAudioFixture.sonicDna.bpm).toBe(96);
@@ -81,7 +106,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Apple Music — recognized");
   expect(report).toContain("YouTube Music — unavailable");
   expect(report).toContain("Conflict details: artist: Tems vs Wrong Artist");
-  expect(report).toContain("Confidence definition");
+  expect(report).toContain("Assessment confidence: a model-generated evidence-quality indicator");
   expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
@@ -163,8 +188,8 @@ describe("A4 report layout and fixture coverage",()=>{
  it("renders the generic ambiguous-audio regression fixture with tempo, key, genre and commercial claims withheld",()=>{
   const pages=planAuditReportPages(ambiguousAudioFixture as any,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Tempo: Not reported — insufficient confidence");
-  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
+  expect(report).toContain("Tempo: Not determined");
+  expect(report).not.toContain("Tempo confidence score");
   expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
@@ -209,8 +234,8 @@ describe("A4 report layout and fixture coverage",()=>{
   input.assessment.aAndRPositioning.adjacentLanes=[];
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Tempo: Not reported — insufficient confidence");
-  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
+  expect(report).toContain("Tempo: Not determined");
+  expect(report).not.toContain("Tempo confidence score");
   expect(report).not.toMatch(/128\s*BPM|high-energy/);
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
@@ -242,5 +267,18 @@ describe("A4 report layout and fixture coverage",()=>{
    expect(pdf.getForm().getTextField("ar_notes").acroField.getWidgets()).toHaveLength(1);
    expect(pdf.getPageCount()).toBeLessThanOrEqual(20);
   }
+ });
+});
+
+describe("extended Unicode report text normalization",()=>{
+ it("normalizes supported punctuation without question-mark substitutions",()=>{
+  const source="A’B “C”—D… E F G −2 × 3 ≤ 4 ≥ 1 ≠ 0 • item → next ™ © ®";
+  const normalized=normalizeReportText(source);
+  expect(normalized).toContain("A'B");
+  expect(normalized).toContain('"C"');
+  expect(normalized).toContain("-D...");
+  expect(normalized).toContain("E F G -2 x 3 <= 4 >= 1 != 0 - item");
+  expect(normalized).not.toContain("?");
+  expect(normalized).not.toContain("\uFFFD");
  });
 });

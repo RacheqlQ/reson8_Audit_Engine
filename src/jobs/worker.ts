@@ -3,7 +3,7 @@ import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
-import { GroqClient } from "../providers/groq/client.js";
+import { GeminiClient, GroqClient } from "../providers/groq/client.js";
 import { generateAuditReport } from "../reports/generate-audit-report.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
@@ -25,8 +25,11 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   const groqDecision = providerDecision("groq");
   if (!groqDecision.enabled) throw new Error("groq: disabled by data policy");
   const groq = new GroqClient();
+  const geminiDecision = providerDecision("gemini");
+  const gemini = geminiDecision.enabled && process.env.GEMINI_API_KEY ? new GeminiClient() : null;
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
+    await store.failExpiredProcessingJobs?.();
     job = await store.claimNextQueuedJob();
   } catch (error) {
     console.error(JSON.stringify({
@@ -83,7 +86,22 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     saveCatalogFailure: async (jobId, _claimToken, link, error, signal) =>
       store.saveCatalogFailure(jobId, _claimToken, link, error, signal),
     decode: async (bytes, _mimeType, signal) => decoder.decode(bytes, signal),
-    generateAssessment: (input, signal) => groq.assess(input, signal),
+    generateAssessment: async (input, signal) => {
+      const assessmentInput = {
+        ...input,
+        loadCompletedSectionGroup: (group: string) => store.loadAssessmentSectionGroup(job.id, group),
+        saveCompletedSectionGroup: (group: string, result: unknown) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, signal),
+      };
+      try {
+        return await groq.assess(assessmentInput, signal);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const retryableGroqFailure = /AI capacity reached|timed out|GROQ_ASSESSMENT_TIMEOUT|HTTP (?:429|5\d\d)|fetch failed|network|ECONNRESET|ETIMEDOUT/i.test(message);
+        if (!gemini || signal?.aborted || !retryableGroqFailure) throw error;
+        console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: /capacity/i.test(message) ? "capacity" : /timed out/i.test(message) ? "timeout" : "transient_provider_error" }));
+        return gemini.assess(assessmentInput, signal);
+      }
+    },
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
     generateReport: generateAuditReport,
     saveReport: async (jobId, _claimToken, tier, pdf, reportInput, signal) => store.saveReport(jobId, _claimToken, tier, pdf, reportInput, signal),

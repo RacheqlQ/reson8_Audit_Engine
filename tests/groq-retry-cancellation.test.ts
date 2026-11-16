@@ -36,7 +36,7 @@ describe("Groq retry cancellation", () => {
     expect(observedSleepSignal).not.toBe(controller.signal);
     expect(observedSleepSignal?.aborted).toBe(true);
     expect(observedSleepSignal?.reason).toBe(abortReason);
-    expect(sleepImpl).toHaveBeenCalledWith(900_000, observedSleepSignal);
+    expect(sleepImpl).toHaveBeenCalledWith(60_000, observedSleepSignal);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

@@ -95,6 +95,23 @@ const GENRE_UNCONFIRMED_RATIONALE =
 const ALBUM_CONFLICT_RATIONALE =
  "Album metadata is present but conflicting across supplied sources. Preserve the source-specific values and reconcile them before treating the album field as complete; do not describe the field as missing.";
 
+function stripUnsupportedTechnicalClaims(value: unknown, suppressLoudnessOptimisation: boolean, suppressBrightTimbre: boolean): unknown {
+  if (typeof value === "string") {
+    const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
+    const kept = sentences.filter((sentence) => {
+      if (suppressLoudnessOptimisation && /\b(?:LUFS|loudness)\b/i.test(sentence)
+        && /\b(?:optimis\w*|increas\w*|rais\w*|louder|target level|push the level)\b/i.test(sentence)) return false;
+      if (suppressBrightTimbre && /\bbright(?:ness)?\b/i.test(sentence)) return false;
+      return true;
+    });
+    return kept.join(" ").trim() || "Not asserted: the measured technical profile does not support that claim.";
+  }
+  if (Array.isArray(value)) return value.map((item) => stripUnsupportedTechnicalClaims(item, suppressLoudnessOptimisation, suppressBrightTimbre));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .map(([key, item]) => [key, stripUnsupportedTechnicalClaims(item, suppressLoudnessOptimisation, suppressBrightTimbre)]));
+  return value;
+}
+
 function hasAlbumConflict(evidence:Record<string,unknown>|null|undefined):boolean {
  if(!evidence)return false;
  const reconciliation=evidence.reconciliation;
@@ -152,6 +169,11 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       && genre.abstained !== true,
   );
   let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence), !hasVocalAnalysis(sonicDna), !isReliableKey(sonicDna)) as T;
+  const measuredLoudness = sonicDna?.loudnessLufs;
+  const suppressLoudnessOptimisation = typeof measuredLoudness === "number" && Number.isFinite(measuredLoudness) && Math.abs(measuredLoudness + 11) <= 0.6;
+  const measuredCentroid = sonicDna?.spectralCentroidHz;
+  const suppressBrightTimbre = typeof measuredCentroid === "number" && Number.isFinite(measuredCentroid) && measuredCentroid <= 2_000;
+  result = stripUnsupportedTechnicalClaims(result, suppressLoudnessOptimisation, suppressBrightTimbre) as T;
 
   if (hasAlbumConflict(evidence)) {
     result = sanitizeAlbumConflictClaims(result) as T;
@@ -171,6 +193,20 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     if (result.scorecard.tempoLaneFit) result.scorecard.tempoLaneFit = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
     if (result.scorecard.rhythmicConsistency) result.scorecard.rhythmicConsistency = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
   }
+  if (hasProviderGenre && result.aAndRPositioning && genre) {
+    const taxonomyLabels = new Set(GENRE_TAXONOMY.map((item) => item.label.toLocaleLowerCase()));
+    const allowed = new Set((Array.isArray(genre.genres) ? genre.genres : [])
+      .flatMap((item) => item && typeof item === "object" && typeof (item as Record<string, unknown>).label === "string"
+        ? [(item as Record<string, unknown>).label as string] : [])
+      .map((label) => label.toLocaleLowerCase()));
+    const primaryLane = typeof result.aAndRPositioning.primaryLane === "string" ? result.aAndRPositioning.primaryLane.trim() : "";
+    if (primaryLane && !taxonomyLabels.has(primaryLane.toLocaleLowerCase())) {
+      result.aAndRPositioning.primaryLane = typeof genre.primaryGenre === "string" && taxonomyLabels.has(genre.primaryGenre.toLocaleLowerCase())
+        ? genre.primaryGenre : "Unconfirmed — no taxonomy-backed genre label";
+    }
+    result.aAndRPositioning.adjacentLanes = result.aAndRPositioning.adjacentLanes.filter((label: string) =>
+      taxonomyLabels.has(label.toLocaleLowerCase()) && (allowed.size === 0 || allowed.has(label.toLocaleLowerCase())));
+  }
   if (!hasProviderGenre && result.aAndRPositioning) {
     result.aAndRPositioning.primaryLane = "Unconfirmed — insufficient provider-backed genre evidence";
     result.aAndRPositioning.adjacentLanes = [];
@@ -185,6 +221,10 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       dynamicRangeDimension.score = null;
       dynamicRangeDimension.rationale = "Not scored: direct dynamic-range and loudness/RMS measurements are unavailable from the uploaded master. No mastering-quality conclusion can be inferred.";
     }
+  }
+  if (sonicDna?.channels === 1 && Array.isArray(mutable.risks)
+    && !mutable.risks.some((risk: unknown) => typeof risk === "string" && /mono master delivery risk/i.test(risk))) {
+    mutable.risks.push("Mono master delivery risk: confirm the destination distributor and DSP delivery requirements accept a single-channel master before release.");
   }
   const zeroConfidence = typeof assessment.confidence === "number"
     && Number.isFinite(assessment.confidence)

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { claimNextQueuedJob, renewLease, observedSignal, observedHeartbeatSignal, processAuditJob } = vi.hoisted(() => ({
+const { claimNextQueuedJob, renewLease, failExpiredProcessingJobs, observedSignal, observedHeartbeatSignal, processAuditJob } = vi.hoisted(() => ({
   claimNextQueuedJob: vi.fn(),
   renewLease: vi.fn(),
+  failExpiredProcessingJobs: vi.fn(async () => 0),
   observedSignal: { current: null as AbortSignal | null },
   observedHeartbeatSignal: { current: null as AbortSignal | null },
   processAuditJob: vi.fn(async (_jobId: string, deps: unknown) => {
@@ -27,7 +28,7 @@ vi.mock("../src/providers/provider-policy.js", () => ({
 }));
 
 vi.mock("../src/integrations/supabase-audit-store.js", () => ({
-  createSupabaseAuditStore: () => ({ claimNextQueuedJob, renewLease }),
+  createSupabaseAuditStore: () => ({ claimNextQueuedJob, renewLease, failExpiredProcessingJobs }),
 }));
 
 vi.mock("../src/jobs/process-audit-job.js", () => ({ processAuditJob }));
@@ -55,6 +56,7 @@ describe("worker heartbeat lease-loss handling", () => {
       workerId: "heartbeat-timeout-test",
     });
     renewLease.mockReset().mockImplementation(() => new Promise<void>(() => undefined));
+    failExpiredProcessingJobs.mockReset().mockResolvedValue(0);
   });
 
   afterEach(() => {
@@ -128,6 +130,8 @@ describe("worker heartbeat lease-loss handling", () => {
 
     const shutdown = new AbortController();
     const processing = processNextQueuedAudit(shutdown.signal);
+    await Promise.resolve();
+    await Promise.resolve();
     expect(claimNextQueuedJob).toHaveBeenCalledTimes(1);
 
     shutdown.abort();

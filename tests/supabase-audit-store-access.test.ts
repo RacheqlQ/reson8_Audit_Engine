@@ -106,11 +106,28 @@ describe("DSP provider failure persistence", () => {
     expect(requestBody.p_operation).toBe("catalog_metadata");
     expect(requestBody.p_payload.eventPayload).toMatchObject({
       platform: "tidal",
-      catalogId: "tidal-456",
       canonicalUrl: "https://tidal.com/browse/track/tidal-456",
       status: "unavailable",
       error: "TIDAL track request failed with HTTP 503",
       evidenceClass: null,
+    });
+  });
+
+  it("fails an expired processing job older than ten minutes", async () => {
+    const jobId = "11111111-1111-4111-8111-111111111111";
+    const { store, fetchMock } = makeStore([{ id: jobId }]);
+    await expect(store.failExpiredProcessingJobs()).resolves.toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const selectUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const updateUrl = String(fetchMock.mock.calls[1]?.[0]);
+    expect(selectUrl).toContain("status=eq.processing");
+    expect(selectUrl).toContain("lease_expires_at=lt.");
+    expect(updateUrl).toContain("id=eq." + jobId);
+    const updateBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(updateBody).toMatchObject({
+      status: "failed",
+      error_code: "AUDIT_JOB_EXPIRED",
+      error_message: "This audit could not be completed within 10 minutes. Please submit it again.",
     });
   });
 

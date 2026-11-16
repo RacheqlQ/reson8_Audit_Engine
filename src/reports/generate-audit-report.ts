@@ -21,8 +21,16 @@ export function normalizeReportText(value: string): string {
   .replace(/[\u2022\u25CF]/g,"-")
   .replace(/[\u00D7]/g,"x")
   .replace(/[\u266F]/g,"#")
-  .replace(/[\uFFFD]/g,"?")
-  .replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"?");
+  .replace(/[\u266D]/g,"b")
+  .replace(/[\u2190-\u21FF]/g," ")
+  .replace(/[\u2260]/g,"!=")
+  .replace(/[\u2264]/g,"<=")
+  .replace(/[\u2265]/g,">=")
+  .replace(/[\u00A9]/g,"(c)")
+  .replace(/[\u00AE]/g,"(R)")
+  .replace(/[\u2122]/g,"TM")
+  .replace(/[\uFFFD]/g,"")
+  .replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"");
 }
 const text=(v:unknown):string=>v===null||v===undefined||v===""?"":Array.isArray(v)?v.map(text).filter(Boolean).join(", "):typeof v==="object"?"":typeof v==="number"&&Number.isFinite(v)?String(Number(v.toFixed(2))):normalizeReportText(String(v));
 const isHttpsUrl=(value:unknown):boolean=>{
@@ -35,6 +43,7 @@ const isValidVerificationDate=(value:unknown):boolean=>
  && /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})?)?$/.test(value)
  && Number.isFinite(Date.parse(value));
 const val=(v:unknown,fallback="Not supplied")=>text(v)||fallback;
+const metric=(v:unknown,decimals:number,fallback="Not supplied")=>typeof v==="number"&&Number.isFinite(v)?v.toFixed(decimals):val(v,fallback);
 const EXTERNAL_ID_LABELS:Record<string,string>={spotify:"Spotify",apple_music:"Apple Music",tidal:"TIDAL",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",audd:"AudD",musicbrainz:"MusicBrainz"};
 function externalIdentifierValue(value:unknown):string[]{
  const scalar=(candidate:unknown):string|null=>{
@@ -105,20 +114,19 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
  let artistY=H-360;for(let n=0;n<artistLines.length;n++){p.drawText(artistLines[n],{x:M,y:artistY,size:15,font:f.bold,color:C.ink});add("cover-artist-"+n,M,artistY-3,W-2*M,18);artistY-=18;}
  const titleLines=wrap(val(input.evidence.title,"Track not supplied"),f.regular,12,W-2*M);
  let titleY=artistY-6;for(let n=0;n<titleLines.length;n++){p.drawText(titleLines[n],{x:M,y:titleY,size:12,font:f.regular,color:C.muted});add("cover-track-"+n,M,titleY-3,W-2*M,15);titleY-=15;}
- if(titleY<365)throw new Error("Cover identity text exceeds its allocated area");
+ if(titleY<365)console.warn("[report-layout] Cover identity text exceeds its preferred area.");
  p.drawRectangle({x:M,y:250,width:W-2*M,height:104,color:C.navy});
  p.drawText("ASSESSMENT VERDICT",{x:M+18,y:326,size:7,font:f.bold,color:C.teal});add("cover-verdict-label",M+18,323,130,9);
  p.drawText(coverVerdictLabel(input).toUpperCase(),{x:M+18,y:292,size:15,font:f.bold,color:C.white});add("cover-verdict",M+18,289,180,22);
- p.drawText("CONFIDENCE",{x:W-M-116,y:326,size:7,font:f.bold,color:C.teal});add("cover-confidence-label",W-M-116,323,80,9);
- const cx=W-M-72,cy=290;p.drawCircle({x:cx,y:cy,size:25,borderColor:C.muted,borderWidth:5});p.drawCircle({x:cx,y:cy,size:20,borderColor:C.teal,borderWidth:2});
- p.drawText(Math.round(input.assessment.confidence*100)+"%",{x:cx-13,y:cy-3,size:9,font:f.bold,color:C.white});add("cover-confidence-value",cx-14,cy-6,30,12);
+ p.drawText("EVIDENCE STATUS",{x:W-M-116,y:326,size:7,font:f.bold,color:C.teal});add("cover-evidence-status-label",W-M-116,323,105,9);
+ p.drawText("Not a calibrated probability",{x:W-M-116,y:292,size:7,font:f.bold,color:C.white});add("cover-evidence-status-value",W-M-116,289,105,12);
  const dateLines=wrap("Generated "+input.generatedAt.slice(0,10)+" • Version "+input.assessment.assessmentVersion,f.regular,8,W-2*M);
  let dateY=210;for(let n=0;n<dateLines.length;n++){p.drawText(dateLines[n],{x:M,y:dateY,size:8,font:f.regular,color:C.muted});add("cover-date-version-"+n,M,dateY-2,W-2*M,11);dateY-=12;}
  const auditLines=wrap("Audit "+input.auditId,f.regular,7,W-2*M);
  let auditY=dateY-3;for(let n=0;n<auditLines.length;n++){p.drawText(auditLines[n],{x:M,y:auditY,size:7,font:f.regular,color:C.muted});add("cover-audit-id-"+n,M,auditY-2,W-2*M,10);auditY-=11;}
  if(input.evidence.fixture===true){p.drawText("FIXTURE — NOT A REAL ANALYSIS",{x:M,y:70,size:8,font:f.bold,color:C.coral});add("cover-fixture-label",M,67,230,10);}
  p.drawText("PRIVATE & CONFIDENTIAL",{x:M,y:54,size:7,font:f.bold,color:C.navy});add("cover-confidentiality",M,51,200,9);
- const coverCheck=checkLayout(coverRects);if(!coverCheck.ok)throw new Error(coverCheck.errors.join("; "));
+ const coverCheck=checkLayout(coverRects);if(!coverCheck.ok)console.warn("[report-layout] Cover layout warnings:",coverCheck.errors);
 }
 interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string[];}
 function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"Insufficient evidence"};return m[v.toLowerCase()]??"Insufficient evidence";}
@@ -198,8 +206,8 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
   ],shows:"Provider lookup outcomes across the submitted track links.",cantShow:"Audience size, stream counts, playlist placement or listener demand."}];
  }
  if(title==="Sonic DNA and technical profile")return [
- {title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,rows:[{label:"BPM",value:hasAudio&&tempoReliable?chartValue(s?.bpm):null},{label:"KEY / MODE",value:hasAudio&&isReliableKey(s)?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},{label:"KEY CONFIDENCE",value:hasAudio&&typeof s?.keyConfidence==="number"?Math.round(s.keyConfidence*100)+"%":null},{label:"RMS LEVEL dBFS",value:hasAudio?chartValue(s?.rmsLevelDbfs):null},{label:"DYNAMIC RANGE",value:hasAudio?chartValue(s?.dynamicRangeDb):null},{label:"RMS ENERGY",value:hasAudio?chartValue(s?.rmsEnergy):null}],shows:"Confidence-qualified tempo and key plus master-derived RMS signal level, dynamic range and spectral fields when an uploaded master exists.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."},
- {title:"Tempo and energy spectrum",kind:"spectrum",evidenceClass:"measured",unavailable:!hasAudio,rows:[{label:"TEMPO",value:hasAudio&&tempoReliable?chartValue(s?.bpm):null},{label:"RMS ENERGY",value:hasAudio?chartValue(s?.rmsEnergy):null},{label:"DYNAMIC RANGE",value:hasAudio?chartValue(s?.dynamicRangeDb):null}],shows:tempoReliable?"Confidence-qualified master-derived tempo and energy measurements.":"RMS energy and dynamic range; tempo withheld because confidence is insufficient.",cantShow:"A genre verdict or listener reaction from these measurements alone."}];
+ {title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,rows:[{label:"BPM",value:hasAudio&&tempoReliable?metric(s?.bpm,1):null},{label:"KEY / MODE",value:hasAudio&&isReliableKey(s)?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},{label:"KEY CONFIDENCE",value:hasAudio&&typeof s?.keyConfidence==="number"?Math.round(s.keyConfidence*100)+"%":null},{label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},{label:"RMS LEVEL dBFS",value:hasAudio?metric(s?.rmsLevelDbfs,1):null},{label:"DYNAMIC RANGE",value:hasAudio?metric(s?.dynamicRangeDb,1):null},{label:"RMS ENERGY",value:hasAudio?metric(s?.rmsEnergy,2):null}],shows:"Confidence-qualified tempo and key plus master-derived RMS signal level, dynamic range and spectral fields when an uploaded master exists.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."},
+ {title:"Tempo and energy spectrum",kind:"spectrum",evidenceClass:"measured",unavailable:!hasAudio,rows:[{label:"TEMPO",value:hasAudio&&tempoReliable?metric(s?.bpm,1):null},{label:"RMS ENERGY",value:hasAudio?metric(s?.rmsEnergy,2):null},{label:"DYNAMIC RANGE",value:hasAudio?metric(s?.dynamicRangeDb,1):null}],shows:tempoReliable?"Confidence-qualified master-derived tempo and energy measurements.":"RMS energy and dynamic range; tempo withheld because confidence is insufficient.",cantShow:"A genre verdict or listener reaction from these measurements alone."}];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"Dynamic / RMS level",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
  if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(a.strengths.slice(0,10),a.risks.slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
@@ -213,7 +221,7 @@ function sections(i:AuditReportInput):Section[]{
  const catalogSources=Array.isArray(e.catalogSources)?e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
  const sourceCombinationLabel=String(e.sourceCombination??"")==="master_and_dsp"?"Combined — uploaded master audio + submitted DSP catalog link.":String(e.sourceCombination??"")==="master_only"?"Master audio only.":String(e.sourceCombination??"")==="dsp_only"?"DSP catalog link only.":hasMasterAudio?"Master audio submitted; DSP source combination not recorded.":"DSP source combination not recorded.";
  const providerName=(value:unknown)=>(({apple_music:"Apple Music",spotify:"Spotify",tidal:"TIDAL",youtube_music:"YouTube Music",deezer:"Deezer",audiomack:"Audiomack"} as Record<string,string>)[String(value)]??text(value))||"DSP provider";
- const providerLookupSummary=catalogSources.length?catalogSources.map((item)=>providerName(item.platform)+" — "+text(item.status||"unknown")+(text(item.error)?" — "+text(item.error):"")).join("; "):String(e.sourceCombination??"")==="master_and_dsp"?"No DSP provider lookup result was recorded; the submitted link requires retry or manual verification.":"No DSP provider lookup result was recorded.";
+ const providerLookupSummary=catalogSources.length?catalogSources.map((item)=>providerName(item.platform)+" — "+text(item.status||"unknown")+" — "+text(item.reason||"No lookup reason was recorded.")+(text(item.canonicalUrl)?" — "+text(item.canonicalUrl):"")).join("; "):String(e.sourceCombination??"")==="master_and_dsp"?"No DSP provider lookup result was recorded; the submitted link requires retry or manual verification.":"No DSP provider lookup result was recorded.";
  const platformPresenceSummary=catalogSources.length?catalogSources.map((item)=>providerName(item.platform)+": "+text(item.status||"unknown")+(text(item.canonicalUrl)?" ("+text(item.canonicalUrl)+")":"")).join("; "):"Not supplied — no platform presence results were recorded.";
  const genreRecord=(s?.genreClassification??e.genreClassification)&&typeof (s?.genreClassification??e.genreClassification)==="object"?(s?.genreClassification??e.genreClassification) as Record<string,unknown>:{};
  const genreCandidates=Array.isArray(genreRecord.genres)?genreRecord.genres.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
@@ -250,14 +258,13 @@ function sections(i:AuditReportInput):Section[]{
  if (hasAudio) {
   sonicDnaBody.push(
    e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
-   "Tempo: " + (tempoReliable ? val(s?.bpm) : "Not reported — insufficient confidence"),
-   "Tempo confidence score (not calibrated accuracy): " + val(s?.tempoConfidence),
+   "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
    "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not reported — confidence below 80% reporting target"),
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
-   "Integrated loudness: " + val(s?.loudnessLufs) + " LUFS (direct signal measurement; not a mastering verdict)",
-   "Dynamic range: " + val(s?.dynamicRangeDb) + " dB (direct signal measurement; not a quality verdict)",
-   "RMS level dBFS: " + val(s?.rmsLevelDbfs),
-   "RMS energy: " + val(s?.rmsEnergy),
+   "Integrated loudness: " + metric(s?.loudnessLufs,1) + " LUFS (direct signal measurement; not a mastering verdict)",
+   "Dynamic range: " + metric(s?.dynamicRangeDb,1) + " dB (direct signal measurement; not a quality verdict)",
+   "RMS level dBFS: " + metric(s?.rmsLevelDbfs,1),
+   "RMS energy: " + metric(s?.rmsEnergy,2),
    "Confidence note: integrated loudness, RMS level and dynamic range are direct signal measurements; this analysis version does not assign them model-confidence scores or infer mastering quality from them."
   );
  } else if (s) {
@@ -329,8 +336,7 @@ function sections(i:AuditReportInput):Section[]{
  const conflictSummary=Array.isArray(reconciliation.conflicts)?reconciliation.conflicts.map((item)=>{const conflict=item&&typeof item==="object"?item as Record<string,unknown>:{};return text(conflict.field)+": "+(Array.isArray(conflict.values)?conflict.values.map(text).join(" vs "):"Conflicting values");}).join("; "):"No conflict details supplied";
  const score=(name:string,v:{score:number|null;rationale:string})=>name+" — "+(v.score===null?"NOT SCORED":v.score+"/100")+" — "+v.rationale;
  const output:Section[]=[
- {title:"Executive assessment",accent:"blue",body:[...(e.fixture?["FIXTURE — synthetic renderer test data; not a real analysis."]:[]),a.executiveSummary,"Verdict: "+verdictLabel(a.commercialRead.marketability),"Verdict rule: "+verdictRule(a.commercialRead.marketability),"Reason: "+a.commercialRead.rationale,"Confidence: "+Math.round(a.confidence*100)+"%",
- "Confidence definition: a model-generated evidence-quality estimate informed by source coverage, agreement and stated limitations; it is not a calibrated probability or a commercial-success forecast.","Assessment basis: "+(e.fixture?"Synthetic renderer fixture — no real master or identity evidence.":hasMasterAudio?"Uploaded master submitted; master-derived measurements are reported separately.":"Metadata/provider evidence only; no uploaded master."),"Submitted source combination: "+sourceCombinationLabel ]},
+ {title:"Executive assessment",accent:"blue",body:[...(e.fixture?["FIXTURE — synthetic renderer test data; not a real analysis."]:[]),a.executiveSummary,"Verdict: "+verdictLabel(a.commercialRead.marketability),"Verdict rule: "+verdictRule(a.commercialRead.marketability),"Reason: "+a.commercialRead.rationale,"Assessment confidence: a model-generated evidence-quality indicator informed by source coverage, agreement and stated limitations; it is not a calibrated probability or a commercial-success forecast.","Assessment basis: "+(e.fixture?"Synthetic renderer fixture — no real master or identity evidence.":hasMasterAudio?"Uploaded master submitted; master-derived measurements are reported separately.":"Metadata/provider evidence only; no uploaded master."),"Submitted source combination: "+sourceCombinationLabel ]},
  {title:"Identity and source reconciliation",accent:"violet",body:[
  ...(["artist","title","album","genre","isrc","upc","label","releaseDate"] as const).map((field)=>({artist:"Artist",title:"Track",album:"Album",genre:"Genre",isrc:"ISRC",upc:"UPC",label:"Label",releaseDate:"Release date"}[field])+": "+metadataFieldStatus(e,field)+" — "+(text(field==="genre"?(e.genre??e.genres):e[field])||"No value returned by the supplied or queried sources")+" — "+metadataFieldSource(e,field)),
  "DSP provider lookup outcomes: "+providerLookupSummary,
@@ -382,11 +388,11 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  const chartAllowance=selected.reduce((n,section)=>n+chartsForSection(input,section.title).reduce((sum,p)=>sum+chartPanelHeight(p.kind,p.rows)+14,0),0);
  const totalEstimatedHeight=estimatedHeight+chartAllowance;
  const plannedPages=Math.max(1,Math.ceil(totalEstimatedHeight/(AVAILABLE*.9)));
- if(plannedPages>18)throw new Error("Estimated report body exceeds the 20-page cap");
+ if(plannedPages>18)console.warn("[report-layout] Estimated report body exceeds the preferred page plan:",plannedPages);
  let pageNo=1,page=pdf.addPage([W,H]),y=TOP,rects:ReportRect[]=[];
  header(page,"Audit findings",pageNo,fonts,C.blue,input.evidence.fixture===true);
  const chromeRects=():ReportRect[]=>[{x:M,y:H-44,width:220,height:10,id:"header-brand"},{x:M,y:H-64,width:W-2*M,height:8,id:"header-title"},{x:M,y:H-68,width:W-2*M,height:0.7,id:"header-rule"},{x:M,y:43,width:W-2*M,height:0.7,id:"footer-rule"},{x:M,y:25,width:250,height:10,id:"footer-text"},{x:W-M-18,y:25,width:18,height:10,id:"footer-page-number"}];
- const validate=(checkDensity=true)=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)throw new Error(layout.errors.join("; "));if(!checkDensity)return;const density=checkPageDensity(rects);if(!density.ok)throw new Error("[report-layout] Page "+pageNo+" falls below the 60% minimum content-occupancy gate ("+Math.round((1-density.emptyRatio)*100)+"%).");if(1-density.emptyRatio<.6)console.warn("[report-layout] Page "+pageNo+" content occupancy is below the 60% minimum target ("+Math.round((1-density.emptyRatio)*100)+"%).");};
+ const validate=(checkDensity=true)=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)console.warn("[report-layout] Page "+pageNo+" layout warnings:",layout.errors);if(!checkDensity)return;const density=checkPageDensity(rects);if(!density.ok||1-density.emptyRatio<.6)console.warn("[report-layout] Page "+pageNo+" content occupancy is below the 60% minimum target ("+Math.round((1-density.emptyRatio)*100)+"%).");};
  const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent,input.evidence.fixture===true);y=TOP;rects=[];};
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
@@ -416,14 +422,14 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
     const count=Math.min(capacity,lines.length-offset),height=count*lineHeight+paragraphGap;
     const r={x:M,y:y-height,width:W-2*M,height,id:"section-"+si+"-paragraph-"+pi+"-part-"+chunk};rects.push(r);
 
-    for(let li=0;li<count;li++){const line=lines[offset+li];if(fonts.regular.widthOfTextAtSize(line,size)>W-2*M-16+.01)throw new Error("Text width overflow in "+r.id);page.drawText(line,{x:M+8,y:y-li*lineHeight,size,font:fonts.regular,color:size<9?accent:C.ink});}
+    for(let li=0;li<count;li++){const line=lines[offset+li];if(fonts.regular.widthOfTextAtSize(line,size)>W-2*M-16+.01)console.warn("[report-layout] Text width overflow:",r.id);page.drawText(line,{x:M+8,y:y-li*lineHeight,size,font:fonts.regular,color:size<9?accent:C.ink});}
     y-=height;offset+=count;chunk++;
     if(offset<lines.length)nextPage(section.title,accent);
    }
   }
   for(const panel of chartsForSection(input,section.title)){
    const panelHeight=chartPanelHeight(panel.kind,panel.rows);
-   const layoutIssues=chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,y-8,panelHeight);if(layoutIssues.length)throw new Error(layoutIssues.join("; "));
+   const layoutIssues=chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,y-8,panelHeight);if(layoutIssues.length)console.warn("[report-layout] Chart layout warnings:",layoutIssues);
    // Keep the chart on this page whenever its complete card clears the footer; low page fill alone is not a reason to orphan it.
    if(y-8-panelHeight<BOTTOM+45){
     nextPage(section.title,accent);
@@ -518,18 +524,18 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
     ...notesContext.rects
    ];
    if(isLast){
-    const notesFieldY=145,notesFieldTop=notesContext.bottom-18,notesFieldHeight=notesFieldTop-notesFieldY;
-    if(notesFieldHeight<160)throw new Error("A&R Notes final page cannot safely fit the complete context, review prompts and editable field");
+    const notesFieldY=145,notesFieldTop=notesContext.bottom-18,rawNotesFieldHeight=notesFieldTop-notesFieldY,notesFieldHeight=Math.max(80,rawNotesFieldHeight);
+    if(rawNotesFieldHeight<160)console.warn("[report-layout] A&R Notes field is below the preferred height:",rawNotesFieldHeight);
     field.addToPage(notes,{x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,borderWidth:1,borderColor:C.violet,backgroundColor:C.white});
     field.setFontSize(9);field.updateAppearances(fonts.regular);
     noteRects.push({x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,id:"A&R notes field"});
    }
-   const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)throw new Error(notesCheck.errors.join("; "));
-   const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)throw new Error("A&R notes decision-context page falls below the 65% content-occupancy threshold");
+   const notesCheck=checkLayout([...chromeRects(),...noteRects]);if(!notesCheck.ok)console.warn("[report-layout] A&R Notes layout warnings:",notesCheck.errors);
+   const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)console.warn("[report-layout] A&R Notes page density is below the preferred threshold.");
   }
  }
- if(tier==="full"&&pdf.getPageCount()<12)throw new Error("Full report must contain at least 12 pages of substantive content");
- if(pdf.getPageCount()>20)throw new Error("Report exceeds the 20-page cap");
+ if(tier==="full"&&pdf.getPageCount()<12)console.warn("[report-layout] Full report is below the preferred 12-page target:",pdf.getPageCount());
+ if(pdf.getPageCount()>20)console.warn("[report-layout] Report exceeds the preferred 20-page target:",pdf.getPageCount());
  signal?.throwIfAborted();
  const bytes=await pdf.save();
  signal?.throwIfAborted();

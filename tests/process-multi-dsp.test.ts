@@ -179,7 +179,7 @@ describe("multi-DSP audit processing", () => {
 
     expect(result.status).toBe("failed");
     expect(failed).toEqual(["tidal:tidal-unavailable:TIDAL credentials unavailable"]);
-    expect(failureMessage).toContain("TIDAL credentials unavailable");
+    expect(failureMessage).toBe("Catalog lookup: the provider credentials or connection are unavailable. Check the submitted link and retry.");
   });
 
 });

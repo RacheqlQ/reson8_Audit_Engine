@@ -267,7 +267,7 @@ describe("processAuditJob", () => {
     });
 
     expect(result.status).toBe("failed");
-    expect(failureMessage).toContain("evidenceGaps[0] must contain at least 8 words");
+    expect(failureMessage).toBe("AI assessment: the generated response did not meet the report's validation requirements. Please retry later.");
     expect(events).toContain("recognition-saved");
     expect(events).toContain("evidence-saved");
     expect(events).toContain("sonic-dna-saved");
@@ -320,7 +320,7 @@ describe("processAuditJob", () => {
     });
 
     expect(result.status).toBe("failed");
-    expect(failure).toBe("master unavailable");
+    expect(failure).toBe("Audio intake: the uploaded master could not be retrieved. Re-upload it and retry.");
   });
   it("aborts after lease loss and prevents assessment, report, and terminal persistence", async () => {
     const controller = new AbortController();
@@ -416,7 +416,7 @@ describe("processAuditJob", () => {
 
     const processing = processAuditJob("provider-abort-job", deps);
     await started;
-    expect(providerSignal).toBe(controller.signal);
+    expect(providerSignal).not.toBe(controller.signal);
     controller.abort(new Error("AUDIT_LEASE_LOST"));
 
     await expect(processing).rejects.toThrow("AUDIT_LEASE_LOST");

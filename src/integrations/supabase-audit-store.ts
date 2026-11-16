@@ -21,6 +21,7 @@ export interface SupabaseAuditStore {
   admin: SupabaseClient;
   createJobDependencies(): CreateAuditJobDependencies;
   claimNextQueuedJob(): Promise<AuditJobRecord | null>;
+  failExpiredProcessingJobs(): Promise<number>;
   renewLease(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   markProcessing(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   downloadMaster(path: string, signal?: AbortSignal): Promise<Uint8Array>;
@@ -36,6 +37,8 @@ export interface SupabaseAuditStore {
   ): Promise<void>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment, signal?: AbortSignal): Promise<void>;
+  loadAssessmentSectionGroup(jobId: string, group: string): Promise<unknown | null>;
+  saveAssessmentSectionGroup(jobId: string, claimToken: string, group: string, result: unknown, signal?: AbortSignal): Promise<void>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
@@ -46,7 +49,7 @@ export interface SupabaseAuditStore {
     errorMessage?: string | null;
     full: { available: boolean; version?: number };
     catalogUrlsSubmitted?: string[];
-    catalogSources?: Array<{ platform: string; catalogId: string; status: string; error: string | null }>;
+    catalogSources?: Array<{ platform: string; canonicalUrl: string; status: string; reason: string }>;
   }>;
   getAuditReport(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<{
     bytes: Uint8Array;
@@ -122,7 +125,7 @@ export function createSupabaseAuditStore(
             owner_id: input.ownerId, status: "queued", original_filename: input.filename,
             mime_type: input.mimeType, size_bytes: input.sizeBytes, sha256: input.sha256,
             source_type: input.sourceType, catalog_url: input.catalogUrl,
-            catalog_metadata: input.catalogUrls?.length ? { submittedLinks: input.catalogUrls } : null,
+            catalog_metadata: input.catalogUrls?.length ? { submittedLinks: input.catalogUrls } : {},
             report_access_token_hash: input.reportAccessTokenHash,
           }).select("id").single();
           if (error || !data) throw new Error(`Unable to create audit job: ${error?.message ?? "unknown error"}`);
@@ -157,6 +160,32 @@ export function createSupabaseAuditStore(
           if (error) throw new Error(`Unable to clean up audit job: ${error.message}`);
         },
       };
+    },
+    async failExpiredProcessingJobs() {
+      const now = new Date();
+      const cutoff = new Date(now.getTime() - 10 * 60_000).toISOString();
+      const nowIso = now.toISOString();
+      const { data, error } = await admin.from("audit_jobs")
+        .select("id")
+        .eq("status", "processing")
+        .lt("created_at", cutoff)
+        .lt("lease_expires_at", nowIso)
+        .limit(50);
+      if (error) throw new Error("Unable to inspect expired audit jobs");
+      let failed = 0;
+      for (const row of data ?? []) {
+        const { error: updateError } = await admin.from("audit_jobs").update({
+          status: "failed",
+          error_code: "AUDIT_JOB_EXPIRED",
+          error_message: "This audit could not be completed within 10 minutes. Please submit it again.",
+          completed_at: nowIso,
+          lease_expires_at: null,
+          claim_token: null,
+          worker_id: null,
+        }).eq("id", row.id).eq("status", "processing").lt("lease_expires_at", nowIso);
+        if (!updateError) failed++;
+      }
+      return failed;
     },
     async claimNextQueuedJob() {
       const workerId = `audit-worker:${process.env.RENDER_INSTANCE_ID ?? process.env.HOSTNAME ?? "local"}:${randomUUID()}`;
@@ -279,7 +308,6 @@ export function createSupabaseAuditStore(
         evidenceStatus: "unavailable",
         eventPayload: {
           platform: link.platform,
-          catalogId: link.catalogId,
           canonicalUrl: link.canonicalUrl,
           sourceUrl: link.canonicalUrl,
           status: "unavailable",
@@ -393,6 +421,39 @@ export function createSupabaseAuditStore(
           ...(genreFeatureCapture ? { genreFeatureCapture } : {}),
         },
       }, signal);
+    },
+    async loadAssessmentSectionGroup(jobId, group) {
+      const { data, error } = await admin.from("audit_events")
+        .select("payload")
+        .eq("audit_job_id", jobId)
+        .eq("event_type", "groq_section_completed")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw new Error("Unable to resume completed AI assessment section");
+      const match = (data ?? []).find((event) => {
+        const payload = event.payload as Record<string, unknown> | null;
+        return payload?.group === group && payload.result !== undefined
+          && payload.promptVersion === GROQ_PROMPT_VERSION
+          && payload.model === (process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL);
+      });
+      return match ? (match.payload as Record<string, unknown>).result : null;
+    },
+    async saveAssessmentSectionGroup(jobId, claimToken, group, result, signal) {
+      signal?.throwIfAborted();
+      const { data: activeJob, error: activeJobError } = await admin.from("audit_jobs")
+        .select("status,claim_token")
+        .eq("id", jobId)
+        .maybeSingle();
+      if (activeJobError || !activeJob || activeJob.status !== "processing" || activeJob.claim_token !== claimToken) {
+        throw new Error("AUDIT_LEASE_LOST");
+      }
+      const { error } = await admin.from("audit_events").insert({
+        audit_job_id: jobId,
+        event_type: "groq_section_completed",
+        status: "completed",
+        payload: { group, result, promptVersion: GROQ_PROMPT_VERSION, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL },
+      });
+      if (error) throw new Error("Unable to persist completed AI assessment section");
     },
     async saveAssessment(jobId, claimToken, assessment, signal) {
       await fencedStep(jobId, claimToken, "assessment", {
@@ -547,17 +608,16 @@ export function createSupabaseAuditStore(
       const catalogUrlsSubmitted = Array.isArray(submittedPayload?.submittedLinks)
         ? submittedPayload.submittedLinks.filter((value): value is string => typeof value === "string")
         : [];
-      const catalogStatusMap = new Map<string, { platform: string; catalogId: string; canonicalUrl: string; status: string; error: string | null }>();
+      const catalogStatusMap = new Map<string, { platform: string; canonicalUrl: string; status: string; reason: string }>();
       for (const event of catalogEvents ?? []) {
         const payload = event.payload as Record<string, unknown> | null;
         if (typeof payload?.platform !== "string" || typeof payload?.canonicalUrl !== "string") continue;
         const key = `${payload.platform}:${payload.canonicalUrl}`;
         catalogStatusMap.set(key, {
           platform: payload.platform,
-          catalogId: typeof payload.catalogId === "string" ? payload.catalogId : "",
           canonicalUrl: payload.canonicalUrl,
           status: typeof payload.status === "string" ? payload.status : "recognized",
-          error: typeof payload.error === "string" ? payload.error : null,
+          reason: payload.status === "recognized" ? "Provider returned track metadata." : payload.status === "partial" ? "Provider returned incomplete metadata; some identity fields remain unresolved." : "Provider could not verify this submitted link.",
         });
       }
       const catalogSources = catalogUrlsSubmitted.length ? normalizeDspTrackLinks(catalogUrlsSubmitted).map((link) =>
@@ -566,7 +626,7 @@ export function createSupabaseAuditStore(
           catalogId: link.catalogId,
           canonicalUrl: link.canonicalUrl,
           status: job.status === "completed" || job.status === "failed" ? "unavailable" : "pending",
-          error: null,
+          reason: "Provider lookup has not completed.",
         },
       ) : [];
 
@@ -607,7 +667,10 @@ export function createSupabaseAuditStore(
         jobId,
         status: job.status as "queued" | "processing" | "completed" | "failed",
         currentStepIndex,
-        errorMessage: job.error_message as string | null,
+        errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
+          : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
+          : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
+          : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
         full: full ? { available: true, version: full.version } : { available: false },
         catalogUrlsSubmitted,
         catalogSources,
