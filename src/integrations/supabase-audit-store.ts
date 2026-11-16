@@ -49,7 +49,7 @@ export interface SupabaseAuditStore {
     errorMessage?: string | null;
     full: { available: boolean; version?: number };
     catalogUrlsSubmitted?: string[];
-    catalogSources?: Array<{ platform: string; catalogId: string; status: string; error: string | null }>;
+    catalogSources?: Array<{ platform: string; catalogId: string; canonicalUrl: string; status: string; reason: string }>;
   }>;
   getAuditReport(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<{
     bytes: Uint8Array;
@@ -600,7 +600,7 @@ export function createSupabaseAuditStore(
       const catalogUrlsSubmitted = Array.isArray(submittedPayload?.submittedLinks)
         ? submittedPayload.submittedLinks.filter((value): value is string => typeof value === "string")
         : [];
-      const catalogStatusMap = new Map<string, { platform: string; catalogId: string; canonicalUrl: string; status: string; error: string | null }>();
+      const catalogStatusMap = new Map<string, { platform: string; catalogId: string; canonicalUrl: string; status: string; reason: string }>();
       for (const event of catalogEvents ?? []) {
         const payload = event.payload as Record<string, unknown> | null;
         if (typeof payload?.platform !== "string" || typeof payload?.canonicalUrl !== "string") continue;
@@ -610,7 +610,7 @@ export function createSupabaseAuditStore(
           catalogId: typeof payload.catalogId === "string" ? payload.catalogId : "",
           canonicalUrl: payload.canonicalUrl,
           status: typeof payload.status === "string" ? payload.status : "recognized",
-          error: typeof payload.error === "string" ? payload.error : null,
+          reason: payload.status === "recognized" ? "Provider returned track metadata." : payload.status === "partial" ? "Provider returned incomplete metadata; some identity fields remain unresolved." : "Provider could not verify this submitted link.",
         });
       }
       const catalogSources = catalogUrlsSubmitted.length ? normalizeDspTrackLinks(catalogUrlsSubmitted).map((link) =>
@@ -619,7 +619,7 @@ export function createSupabaseAuditStore(
           catalogId: link.catalogId,
           canonicalUrl: link.canonicalUrl,
           status: job.status === "completed" || job.status === "failed" ? "unavailable" : "pending",
-          error: null,
+          reason: "Provider lookup has not completed.",
         },
       ) : [];
 
@@ -660,7 +660,9 @@ export function createSupabaseAuditStore(
         jobId,
         status: job.status as "queued" | "processing" | "completed" | "failed",
         currentStepIndex,
-        errorMessage: job.error_message as string | null,
+        errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
+          : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
+          : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
         full: full ? { available: true, version: full.version } : { available: false },
         catalogUrlsSubmitted,
         catalogSources,
