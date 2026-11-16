@@ -377,7 +377,8 @@ describe("Groq release-section JSON schema recovery", () => {
       properties: { releaseStrategy: { type: "object" } }
     });
     expect(releasePayloads[3].outputSchema).toEqual(releasePayloads[2].outputSchema);
-    expect(releasePayloads[3].correction).toContain("release outputSchema");
+    expect(releasePayloads[3].correction).toContain("releaseStrategy");
+    expect(releasePayloads[3].correction).toContain("outputSchema");
     expect(result.releaseStrategy.priorities).toHaveLength(3);
   });
 });
