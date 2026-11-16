@@ -48,6 +48,7 @@ jobs:
           tests/process-audit-job.test.ts
           tests/main.test.ts
           tests/groq-client.test.ts
+          tests/groq-assessment-deadline.test.ts
 
       - name: Run test suite
         if: always()
