@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { claimNextQueuedJob, renewLease, observedSignal, observedHeartbeatSignal, processAuditJob } = vi.hoisted(() => ({
+const { claimNextQueuedJob, renewLease, failExpiredProcessingJobs, observedSignal, observedHeartbeatSignal, processAuditJob } = vi.hoisted(() => ({
   claimNextQueuedJob: vi.fn(),
   renewLease: vi.fn(),
   failExpiredProcessingJobs: vi.fn(async () => 0),
