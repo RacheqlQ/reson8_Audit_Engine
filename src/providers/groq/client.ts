@@ -85,6 +85,8 @@ export interface GroqAssessmentInput {
   evidence: Record<string, unknown>;
   sonicDna: Record<string, unknown> | null;
   catalogMetadata?: Record<string, unknown> | null;
+  loadCompletedSectionGroup?: (group: string) => Promise<unknown | null>;
+  saveCompletedSectionGroup?: (group: string, result: unknown) => Promise<void>;
 }
 export interface GroqAssessmentClient { assess(input: GroqAssessmentInput, signal?: AbortSignal): Promise<ArAssessment>; }
 
@@ -243,6 +245,11 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   let promptOnlyContentRetries = 0;
   let responseMode: "json_schema" | "json_object" | "prompt_only" = "json_schema";
   const outputSchema = z.toJSONSchema(schema);
+  const completed = await input.loadCompletedSectionGroup?.(groupName);
+  if (completed !== null && completed !== undefined) {
+    const cached = schema.safeParse(completed);
+    if (cached.success && !thresholdError(groupName, cached.data)) return cached.data;
+  }
 
   const scheduleCorrection = (reason: string): boolean => {
     lastError = reason;
@@ -443,6 +450,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (scheduleCorrection(wordError + " Repair the exact field and preserve the evidence-bounded meaning.")) continue;
       break;
     }
+    await input.saveCompletedSectionGroup?.(groupName, result.data);
     return result.data;
   }
 
