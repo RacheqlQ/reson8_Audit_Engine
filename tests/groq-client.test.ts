@@ -216,24 +216,29 @@ describe("GroqClient section groups",()=>{
     }
     if(evidenceScoreCalls<=2){
      return new Response(JSON.stringify({error:{
-      message:"Generated JSON does not match the expected schema. Missing required property: evidenceLabels",
+      message:"Failed to validate JSON. Please adjust your prompt.",
       type:"invalid_request_error",
       code:"json_validate_failed",
-      failed_generation:'{"evidenceGaps":["No verified audience evidence was supplied"],"confidence":0.5}'
+      failed_generation:""
      }}),{status:400});
+    }
+    if(evidenceScoreCalls===3){
+     return new Response(JSON.stringify({choices:[{message:{content:"{}"}}]}),{status:200});
     }
    }
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{artist:"Regression Artist",title:"Regression Track"},sonicDna:{provenance:"uploaded_audio_master",bpm:96},catalogMetadata:{apple_music:{title:"Regression Track",isrc:"USAAA2600001"}}});
-  expect(evidenceScoreCalls).toBe(3);
+  expect(evidenceScoreCalls).toBe(4);
   expect(prompts[1]).toContain("json_validate_failed");
   expect(prompts[1]).toContain("evidenceLabels");
   expect(systemPrompts[0]).toContain("Always include the evidenceLabels array");
-  expect(responseFormats).toEqual(["json_schema","json_schema","json_object"]);
+  expect(responseFormats).toEqual(["json_schema","json_schema","json_object","json_object"]);
   expect(payloads[0].evidence).toEqual(payloads[1].evidence);
   expect(payloads[1].evidence).toEqual(payloads[2].evidence);
+  expect(payloads[2].evidence).toEqual(payloads[3].evidence);
+  expect(prompts[3]).toContain("evidenceGaps");
   expect(payloads[0].sonicDna).toEqual(payloads[2].sonicDna);
   expect(payloads[0].catalogMetadata).toEqual(payloads[2].catalogMetadata);
   expect(result.evidenceLabels).toHaveLength(1);
