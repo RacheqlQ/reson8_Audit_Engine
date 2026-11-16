@@ -45,6 +45,26 @@ describe("GroqClient section groups",()=>{
   expect(evidenceScoreCalls).toBe(2);
   expect(result.evidenceLabels).toHaveLength(1);
  });
+ it("waits for Groq's token reset window before retrying a TPM 413 without dropping evidence",async()=>{
+  const budgets:number[]=[];
+  const sleeps:number[]=[];
+  let narrativeCalls=0;
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   if(group==="narrative"){
+    budgets.push(body.max_completion_tokens);
+    narrativeCalls++;
+    if(narrativeCalls===1)return new Response(JSON.stringify({error:{message:"Request too large for model in organization on tokens per minute (TPM): Limit 8000, Requested 8198."}}),{status:413,headers:{"x-ratelimit-reset-tokens":"2.5s"}});
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async(ms)=>{sleeps.push(ms);});
+  const result=await client.assess({evidence:{artist:"Reset Test Artist"},sonicDna:null});
+  expect(budgets).toEqual([2500,1902]);
+  expect(sleeps).toEqual([2500]);
+  expect(narrativeCalls).toBe(2);
+  expect(result.assessmentVersion).toBe("3.0");
+ });
  it("progressively adapts repeated TPM 413 responses for production while preserving all evidence",async()=>{
   const budgets:number[]=[];
   const payloads:string[]=[];
