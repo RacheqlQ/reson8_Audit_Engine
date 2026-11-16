@@ -478,3 +478,25 @@ describe("Groq JSON-object fallback schema contract", () => {
     }
   });
 });
+
+
+describe("Groq request deadline", () => {
+  it("aborts a provider request that never settles instead of holding an audit lease indefinitely", async () => {
+    vi.useFakeTimers();
+    try {
+      const stalledFetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("fetch aborted")), { once: true });
+        }),
+      );
+      const client = new GroqClient("test-key", "test-model", stalledFetch as typeof fetch);
+      const pending = client.assess({ evidence: {}, sonicDna: null });
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(90_000);
+      await expect(pending).rejects.toThrow("Groq narrative request timed out after 90000ms");
+      expect(stalledFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
