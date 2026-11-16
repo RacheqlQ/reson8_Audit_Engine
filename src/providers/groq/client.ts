@@ -481,7 +481,6 @@ export class GroqClient implements GroqAssessmentClient {
       () => deadlineController.abort(deadlineError),
       this.assessmentTimeoutMs,
     );
-    deadlineTimer.unref?.();
     const assessmentSignal = signal
       ? AbortSignal.any([signal, deadlineController.signal])
       : deadlineController.signal;
