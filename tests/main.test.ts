@@ -196,4 +196,16 @@ describe("startAuditEngine", () => {
     }
   });
 
+  it("starts the API without claiming queue work in the web process by default", async () => {
+    const app = Fastify();
+    const engine = await startAuditEngine({
+      app,
+      host: "127.0.0.1",
+      port: 0,
+      signals: new EventEmitter(),
+      onError: (error) => { throw error; },
+    });
+    await engine.shutdown();
+    expect(app.server.listening).toBe(false);
+  });
 });
