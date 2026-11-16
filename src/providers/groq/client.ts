@@ -254,8 +254,10 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         const generationNote=failedGeneration
           ? " Groq included failed_generation diagnostics; rely on the schema and supplied evidence rather than copying unsupported output."
           : " Groq supplied no failed_generation diagnostics.";
+        const schemaFields=Object.keys((z.toJSONSchema(schema) as {properties?:Record<string,unknown>}).properties??{});
+        const requiredFields=schemaFields.length?schemaFields.join(", "):"all required schema properties";
         if(providerSchemaRetries===1){
-          lastError="Groq returned json_validate_failed for the "+groupName+" section: "+message+"."+generationNote+" Retry once in strict structured-output mode with one complete JSON object containing every property required by the supplied "+groupName+" schema. Satisfy every field type, enum, nullable value, array bound and minimum length. Preserve evidence boundaries; do not invent missing evidence.";
+          lastError="Groq returned json_validate_failed for the "+groupName+" section: "+message+"."+generationNote+" Retry once in strict structured-output mode with one complete JSON object containing every property required by the supplied "+groupName+" schema, including: "+requiredFields+". Satisfy every field type, enum, nullable value, array bound and minimum length. Preserve evidence boundaries; do not invent missing evidence.";
         }else{
           jsonObjectFallback=true;
           lastError="Groq strict structured-output validation failed twice for the "+groupName+" section: "+message+"."+generationNote+" The next request uses JSON-object mode. Return one complete JSON object matching the exact "+groupName+" outputSchema supplied in the user payload. Include every required property and nested property, with correct types, enums, nullable values, array bounds and minimum lengths. Do not add prose or markdown. Preserve evidence boundaries and do not invent missing evidence; local Zod and section word-count validation remain mandatory.";
@@ -274,7 +276,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     const content=payload.choices?.[0]?.message?.content;
     if(!content){lastError="The response contained no JSON content.";if(validationRetryUsed)break;validationRetryUsed=true;continue;}
     let parsed:unknown;try{parsed=JSON.parse(content);}catch{lastError="The response was not valid JSON.";if(validationRetryUsed)break;validationRetryUsed=true;continue;}
-    const result=schema.safeParse(parsed);if(!result.success){lastError=result.error.message;if(validationRetryUsed)break;validationRetryUsed=true;continue;}
+    const result=schema.safeParse(parsed);if(!result.success){lastError=jsonObjectFallback?"The JSON-object response failed local validation: "+result.error.message+". Correct every reported issue and return a complete object matching the supplied "+groupName+" outputSchema.":result.error.message;if(validationRetryUsed)break;validationRetryUsed=true;continue;}
     const wordError=thresholdError(groupName,result.data);if(wordError){lastError=wordError;if(validationRetryUsed)break;validationRetryUsed=true;continue;}
     return result.data;
   }
