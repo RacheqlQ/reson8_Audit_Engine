@@ -80,6 +80,13 @@ describe("GroqClient section groups",()=>{
   expect(calls).toBe(1);
   expect(mock).toHaveBeenCalledTimes(1);
  });
+ it("fails fast on a Groq tokens-per-day limit without sleeping or retrying",async()=>{
+  let calls=0;const sleeps:number[]=[];
+  const mock=vi.fn(async()=>{calls++;return new Response(JSON.stringify({error:{message:"Rate limit reached: tokens per day (TPD) limit exceeded. Try again tomorrow."}}),{status:429});});
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async(ms)=>{sleeps.push(ms);});
+  await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("AI capacity reached for now, please try again later");
+  expect(calls).toBe(1);expect(sleeps).toEqual([]);
+ });
  it("requests and validates all nine Zod section groups with evidence guardrails",async()=>{
   let active=0,maxActive=0;
   const {mock:baseMock}=fetchMock();
