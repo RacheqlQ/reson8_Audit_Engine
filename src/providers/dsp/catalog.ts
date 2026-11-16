@@ -25,13 +25,13 @@ export interface CatalogMetadata {
 }
 
 const HOSTS: Record<string,DspPlatform> = {
-  "open.spotify.com":"spotify","play.spotify.com":"spotify","music.apple.com":"apple_music",
+  "open.spotify.com":"spotify","play.spotify.com":"spotify","music.apple.com":"apple_music","geo.music.apple.com":"apple_music",
   "itunes.apple.com":"apple_music","music.youtube.com":"youtube_music","deezer.com":"deezer",
   "www.deezer.com":"deezer","tidal.com":"tidal","listen.tidal.com":"tidal","audiomack.com":"audiomack","www.audiomack.com":"audiomack"
 };
 
 function normalizeUrl(input:string){const u=new URL(input.trim());if(u.protocol!=="https:")throw new Error("DSP URL must use HTTPS");if(u.username||u.password)throw new Error("DSP URL must not contain credentials");if(u.port)throw new Error("DSP URL must not use a custom port");if(!HOSTS[u.hostname.toLowerCase()])throw new Error("Unsupported DSP or catalog URL");return u;}
-function idFromPath(u:URL,p:DspPlatform){const a=u.pathname.split("/").filter(Boolean);if(p==="spotify"){const i=a.indexOf("track");return i>=0?a[i+1]??null:null;}if(p==="apple_music"){const i=a.indexOf("i");return i>=0?a[i+1]??null:u.searchParams.get("i");}if(p==="deezer"){const i=a.indexOf("track");return i>=0?a[i+1]??null:null;}if(p==="tidal"){const i=a.indexOf("track");return i>=0?a[i+1]??null:null;}if(p==="audiomack"){const artist=a[0],slug=a[1]==="song"?a[2]:a[1];return artist&&slug?`${artist}/${slug}`:null;}return u.searchParams.get("v")??(u.hostname==="youtu.be"?a[0]??null:null);}
+function idFromPath(u:URL,p:DspPlatform){const a=u.pathname.split("/").filter(Boolean);if(p==="spotify"){const i=a.indexOf("track");return i>=0?a[i+1]??null:null;}if(p==="apple_music"){const song=a.indexOf("song");if(song>=0){const first=a[song+1];const directId=/^\\d+$/.test(first??"")?first:a[song+2];if(directId&&/^\\d+$/.test(directId))return directId;}return u.searchParams.get("i");}if(p==="deezer"){const i=a.indexOf("track");return i>=0?a[i+1]??null:null;}if(p==="tidal"){const i=a.indexOf("track");return i>=0?a[i+1]??null:null;}if(p==="audiomack"){const artist=a[0],slug=a[1]==="song"?a[2]:a[1];return artist&&slug?`${artist}/${slug}`:null;}return u.searchParams.get("v")??(u.hostname==="youtu.be"?a[0]??null:null);}
 function base(p:DspPlatform,u:URL):CatalogMetadata{return{platform:p,sourceUrl:u.toString(),canonicalUrl:u.toString(),catalogId:idFromPath(u,p),artist:null,title:null,album:null,releaseDate:null,isrc:null,upc:null,catalogPopularity:null,catalogPopularityScale:null,label:null,genre:null,artworkUrl:null,previewUrl:null,externalIds:{},raw:{},evidenceStatus:"partial",sonicProfile:null};}
 
 async function spotify(u:URL, signal?:AbortSignal){
@@ -97,7 +97,9 @@ async function apple(u: URL, signal?: AbortSignal) {
   // Apple Music share URLs are storefront-specific. Querying the US default
   // for a track shared from another storefront can return no result even
   // when the track is available in that storefront.
-  const storefront = u.pathname.split("/").filter(Boolean)[0]?.toLowerCase();
+  const pathStorefront = u.pathname.split("/").filter(Boolean)[0]?.toLowerCase();
+  const queryStorefront = u.searchParams.get("country")?.toLowerCase();
+  const storefront = pathStorefront && /^[a-z]{2}$/.test(pathStorefront) ? pathStorefront : queryStorefront;
   const lookup = new URL("https://itunes.apple.com/lookup");
   lookup.searchParams.set("id", metadata.catalogId);
   lookup.searchParams.set("entity", "song");
