@@ -150,7 +150,7 @@ function retryCompletionTokenBudget(detail: string, currentBudget: number): numb
   return Math.max(256, Math.min(currentBudget - 1, currentBudget - (requested - limit) - headroom));
 }
 
-async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
+async function providerRetryDelayMs(response: Response, fallbackAttempt: number, errorDetail?: string): Promise<number> {
   const retryAfter = response.headers.get("retry-after");
   if (retryAfter) {
     const seconds = Number(retryAfter);
@@ -162,7 +162,18 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
     }
   }
 
-  const detail = await response.clone().text().catch(() => "");
+  const tokenReset = response.headers.get("x-ratelimit-reset-tokens");
+  if (tokenReset) {
+    const resetMatch = tokenReset.trim().match(/^(?:(\\d+(?:\\.\\d+)?)m)?\\s*(\\d+(?:\\.\\d+)?)s$/i);
+    const resetSeconds = resetMatch
+      ? Number(resetMatch[1] ?? 0) * 60 + Number(resetMatch[2])
+      : Number(tokenReset);
+    if (Number.isFinite(resetSeconds) && resetSeconds >= 0) {
+      return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(resetSeconds * 1000));
+    }
+  }
+
+  const detail = errorDetail ?? await response.clone().text().catch(() => "");
   try {
     const payload = JSON.parse(detail) as { error?: { message?: unknown } };
     if (typeof payload.error?.message === "string") {
@@ -243,7 +254,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if(response?.status===413&&tpmRetries<MAX_SECTION_ATTEMPTS-1){
         completionTokenBudget=retryCompletionTokenBudget(detail,completionTokenBudget);
         tpmRetries++;
-        lastError="Groq rejected the request with HTTP 413. Retry with a smaller completion-token reservation while preserving the complete supplied evidence.";
+        lastError="Groq rejected the request with HTTP 413. Retry after the provider token-reset window with a smaller completion-token reservation while preserving the complete supplied evidence.";
+        await sleepImpl(await providerRetryDelayMs(response,tpmRetries-1,detail),signal);
+        signal?.throwIfAborted();
         continue;
       }
       if(response?.status===400&&providerError.error?.code==="json_validate_failed"&&providerSchemaRetries<2){
