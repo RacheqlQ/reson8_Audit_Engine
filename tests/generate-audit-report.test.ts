@@ -226,8 +226,8 @@ describe("A4 report layout and fixture coverage",()=>{
   input.assessment.aAndRPositioning.adjacentLanes=[];
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Tempo: Not reported — insufficient confidence");
-  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0");
+  expect(report).toContain("Tempo: Not determined");
+  expect(report).toContain("Tempo confidence score (not calibrated accuracy): 0.00");
   expect(report).not.toMatch(/128\s*BPM|high-energy/);
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
