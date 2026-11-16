@@ -142,21 +142,6 @@ const MAX_COMPLETION_TOKENS = 1200;
 const MAX_GROQ_TOTAL_TOKENS = 6000;
 const MAX_SECTION_REQUEST_ATTEMPTS = 16;
 
-function retryCompletionTokenBudget(detail: string, currentBudget: number): number {
-  const match = detail.match(/Limit\s+(\d+)\s*,\s*Requested\s+(\d+)/i);
-  if (!match) return Math.max(256, Math.floor(currentBudget / 2));
-
-  const limit = Number(match[1]);
-  const requested = Number(match[2]);
-  if (!Number.isSafeInteger(limit) || !Number.isSafeInteger(requested) || limit <= 0 || requested <= limit) {
-    return Math.max(256, Math.floor(currentBudget / 2));
-  }
-
-  // Leave at least 5% of the provider's TPM allowance unused after accounting for the reported overage.
-  const headroom = Math.max(400, Math.ceil(limit * 0.05));
-  return Math.max(256, Math.min(currentBudget - 1, currentBudget - (requested - limit) - headroom));
-}
-
 async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
   const retryAfter = response.headers.get("retry-after");
   if (retryAfter) {
@@ -316,7 +301,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     }
     // prompt_only deliberately omits response_format. The exact schema is still
     // supplied to the model, and no response is accepted without local Zod checks.
-    const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 2) + 128;
+    const estimatedInputTokens = new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length + 256;
     completionTokenBudget = Math.min(MAX_COMPLETION_TOKENS, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens);
     if (completionTokenBudget < 256 || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS) {
       throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
