@@ -29,6 +29,12 @@ export const PROVIDER_POLICY = {
     retention: "Verify current Gemini API retention, training, regional processing and deletion terms before enabling.",
     enableFlag: "PROVIDER_ENABLED_GEMINI", decisionNote: "Operational fallback is opt-in and requires the exact enable flag plus GEMINI_API_KEY; verify applicable Google AI terms and data handling before use.",
   },
+  ollama: {
+    id: "ollama", commercialStatus: "allowed", termsUrl: "https://ollama.com/terms",
+    attribution: "Identify Ollama Cloud and the selected model as the fallback assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
+    retention: "Verify current Ollama Cloud data handling, retention, training and deletion terms before enabling.",
+    enableFlag: "PROVIDER_ENABLED_OLLAMA", decisionNote: "Operational fallback is opt-in and requires the exact enable flag plus OLLAMA_API_KEY; use only the hosted cloud API from the embedded worker.",
+  },
   audd: {
     id: "audd", commercialStatus: "allowed", termsUrl: "https://audd.io/terms/",
     attribution: "Name AudD and retrieval time for every recognition result.",

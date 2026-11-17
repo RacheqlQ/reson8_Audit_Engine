@@ -140,6 +140,11 @@ export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
 export const GROQ_ASSESSMENT_TIMEOUT_MS = 4 * 60_000;
 const MAX_COMPLETION_TOKENS = 1200;
 const MAX_GROQ_TOTAL_TOKENS = 6000;
+const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
+  narrative: 850, positioning: 650, release: 500, "evidence-score": 1000,
+  production: 650, comparables: 450, promotion: 900, "label-fit": 650, timeline: 500,
+};
+const MIN_COMPLETION_TOKENS = 256;
 const MAX_SECTION_REQUEST_ATTEMPTS = 16;
 
 async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
@@ -219,6 +224,20 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
   return Object.fromEntries(Object.entries(evidence).filter(([key]) => allowed.has(key)));
 }
 
+function compactPromptValue(value: unknown, depth = 0): unknown {
+  if (value === null || typeof value !== "object") {
+    return typeof value === "string" && value.length > 1200 ? value.slice(0, 1200) + " [truncated]" : value;
+  }
+  if (depth >= 5) {
+    if (Array.isArray(value)) return value.slice(0, 8).filter((item) => item === null || typeof item !== "object");
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 20)
+      .filter(([, item]) => item === null || typeof item !== "object"));
+  }
+  if (Array.isArray(value)) return value.slice(0, 16).map((item) => compactPromptValue(item, depth + 1));
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 40)
+    .map(([key, item]) => [key, compactPromptValue(item, depth + 1)]));
+}
+
 function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null): Record<string, unknown> | null {
   if (!sonicDna) return null;
   const compact: Record<string, unknown> = { ...sonicDna };
@@ -239,7 +258,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null): Recor
     compact.harmonicFeatures = summary;
   }
 
-  return compact;
+  return compactPromptValue(compact) as Record<string, unknown>;
 }
 
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
@@ -252,10 +271,11 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   let strictContentRetries = 0;
   let jsonObjectContentRetries = 0;
   let promptOnlyContentRetries = 0;
-  let responseMode: "json_schema" | "json_object" | "prompt_only" = providerName === "gemini" ? "json_object" : "json_schema";
+  // Ollama Cloud supports JSON mode, not schema-constrained structured outputs.
+  let responseMode: "json_schema" | "json_object" | "prompt_only" = providerName === "groq" ? "json_schema" : "json_object";
   const cacheGroupName = groupName;
-  const providerLabel = providerName === "gemini" ? "Gemini" : "Groq";
-  const tokenField = providerName === "gemini" ? "max_tokens" : "max_completion_tokens";
+  const providerLabel = providerName === "gemini" ? "Gemini" : providerName === "ollama" ? "Ollama" : "Groq";
+  const tokenField = providerName === "groq" ? "max_completion_tokens" : "max_tokens";
   const outputSchema = z.toJSONSchema(schema);
   const completed = await input.loadCompletedSectionGroup?.(cacheGroupName);
   if (completed !== null && completed !== undefined) {
@@ -302,9 +322,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         content: JSON.stringify({
           promptVersion: GROQ_PROMPT_VERSION,
           sectionGroup: groupName,
-          evidence: compactEvidenceForGroq(input.evidence, groupName),
-          sonicDna: input.sonicDna,
-          catalogMetadata: input.catalogMetadata ?? null,
+          evidence: compactPromptValue(compactEvidenceForGroq(input.evidence, groupName)),
+          sonicDna: compactPromptValue(input.sonicDna),
+          catalogMetadata: compactPromptValue(input.catalogMetadata ?? null),
           correction: attempt === 0 ? null : lastError,
           ...(fallbackMode ? { outputSchema } : {}),
         }),
@@ -327,12 +347,13 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // prompt_only deliberately omits response_format. The exact schema is still
     // supplied to the model, and no response is accepted without local Zod checks.
     const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 3) + 256;
-    completionTokenBudget = Math.min(MAX_COMPLETION_TOKENS, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens);
-    if (estimatedInputTokens > MAX_GROQ_TOTAL_TOKENS - 1200 || completionTokenBudget < 256 || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS) {
+    const sectionOutputBudget = Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
+    completionTokenBudget = Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens);
+    if (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS) {
       throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
-    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
+    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
     for (let networkAttempt = 0; networkAttempt < MAX_NETWORK_ATTEMPTS; networkAttempt++) {
@@ -489,7 +510,7 @@ export class GroqClient implements GroqAssessmentClient {
     endpoint = "https://api.groq.com/openai/v1/chat/completions",
     providerName = "groq",
   ) {
-    if (!apiKey) throw new Error(providerName === "gemini" ? "GEMINI_API_KEY is required" : "GROQ_API is required");
+    if (!apiKey) throw new Error(providerName === "gemini" ? "GEMINI_API_KEY is required" : providerName === "ollama" ? "OLLAMA_API_KEY is required" : "GROQ_API is required");
     if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
       throw new Error("Groq request timeout must be a positive finite number");
     }
@@ -589,5 +610,21 @@ export class GeminiClient extends GroqClient {
   ) {
     super(apiKey, model, fetchImpl, sleepImpl, requestTimeoutMs, assessmentTimeoutMs,
       "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini");
+  }
+}
+
+
+/** Ollama Cloud adapter. JSON mode is followed by local Zod and evidence validation. */
+export class OllamaClient extends GroqClient {
+  constructor(
+    apiKey = process.env.OLLAMA_API_KEY,
+    model = process.env.OLLAMA_MODEL ?? "gemma4:31b",
+    fetchImpl: typeof fetch = fetch,
+    sleepImpl: (ms: number, signal?: AbortSignal) => Promise<void> = abortableSleep,
+    requestTimeoutMs = GROQ_REQUEST_TIMEOUT_MS,
+    assessmentTimeoutMs = GROQ_ASSESSMENT_TIMEOUT_MS,
+  ) {
+    super(apiKey, model, fetchImpl, sleepImpl, requestTimeoutMs, assessmentTimeoutMs,
+      "https://ollama.com/v1/chat/completions", "ollama");
   }
 }
