@@ -14,7 +14,7 @@ describe("Groq TPM request budget", () => {
     const client = new GroqClient("test-key", "test-model", fetchImpl as typeof fetch, async () => {});
     await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow("GROQ_REQUEST_TOO_LARGE");
     expect(budgets).toHaveLength(1);
-    expect(budgets[0]).toBeLessThanOrEqual(1200);
+    expect(budgets[0]).toBeLessThanOrEqual(850);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
