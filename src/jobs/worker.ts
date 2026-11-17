@@ -113,20 +113,29 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       try {
         return await groq.assess(assessmentInput, signal);
       } catch (error) {
-        if (!gemini || signal?.aborted || !isFallbackEligible(error)) throw error;
-        console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: safeFailureCategory(error) }));
-        try {
-          return await gemini.assess(assessmentInput, signal);
-        } catch (geminiError) {
-          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_failed", reason: safeFailureCategory(geminiError) }));
-          if (!ollama || signal?.aborted || !isFallbackEligible(geminiError)) throw geminiError;
-          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_to_ollama", reason: safeFailureCategory(geminiError) }));
+        if (signal?.aborted || !isFallbackEligible(error)) throw error;
+        let fallbackError: unknown = error;
+        if (gemini) {
+          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: safeFailureCategory(error) }));
           try {
-            return await ollama.assess(assessmentInput, signal);
-          } catch (ollamaError) {
-            console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "ollama_fallback_failed", reason: safeFailureCategory(ollamaError) }));
-            throw ollamaError;
+            return await gemini.assess(assessmentInput, signal);
+          } catch (geminiError) {
+            fallbackError = geminiError;
+            console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_failed", reason: safeFailureCategory(geminiError) }));
           }
+        }
+        if (!ollama || signal?.aborted || !isFallbackEligible(fallbackError)) throw fallbackError;
+        console.warn(JSON.stringify({
+          worker: "audit",
+          jobId: job.id,
+          event: gemini ? "gemini_fallback_to_ollama" : "groq_fallback_to_ollama",
+          reason: safeFailureCategory(fallbackError),
+        }));
+        try {
+          return await ollama.assess(assessmentInput, signal);
+        } catch (ollamaError) {
+          console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "ollama_fallback_failed", reason: safeFailureCategory(ollamaError) }));
+          throw ollamaError;
         }
       }
     },
