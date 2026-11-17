@@ -225,11 +225,17 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
 }
 
 function compactPromptValue(value: unknown, depth = 0): unknown {
-  if (depth >= 5) return typeof value === "string" ? value.slice(0, 240) : null;
-  if (typeof value === "string") return value.length > 1200 ? value.slice(0, 1200) + " [truncated]" : value;
+  if (value === null || typeof value !== "object") {
+    return typeof value === "string" && value.length > 1200 ? value.slice(0, 1200) + " [truncated]" : value;
+  }
+  if (depth >= 5) {
+    if (Array.isArray(value)) return value.slice(0, 8).filter((item) => item === null || typeof item !== "object");
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 20)
+      .filter(([, item]) => item === null || typeof item !== "object"));
+  }
   if (Array.isArray(value)) return value.slice(0, 16).map((item) => compactPromptValue(item, depth + 1));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 40).map(([key, item]) => [key, compactPromptValue(item, depth + 1)]));
-  return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 40)
+    .map(([key, item]) => [key, compactPromptValue(item, depth + 1)]));
 }
 
 function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null): Record<string, unknown> | null {
