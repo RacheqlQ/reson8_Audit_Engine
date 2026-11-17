@@ -3,7 +3,7 @@ import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
-import { GeminiClient, GroqClient } from "../providers/groq/client.js";
+import { GeminiClient, GroqClient, OllamaClient } from "../providers/groq/client.js";
 import { generateAuditReport } from "../reports/generate-audit-report.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
@@ -16,6 +16,22 @@ const HEARTBEAT_INTERVAL_MS = 45_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
 const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
+function isFallbackEligible(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /AI capacity reached|timed out|HTTP (?:413|429|5\\d\\d)|json_validate_failed|failed to validate JSON|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
+}
+
+function safeFailureCategory(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/capacity|429|daily.limit|TPD/i.test(message)) return "capacity";
+  if (/timed out|ETIMEDOUT/i.test(message)) return "timeout";
+  if (/json_validate_failed|failed to validate JSON/i.test(message)) return "json_validation";
+  if (/HTTP 413/i.test(message)) return "request_too_large";
+  if (/HTTP 5\\d\\d|network|fetch failed|ECONNRESET/i.test(message)) return "transient_provider_error";
+  if (/HTTP 401|HTTP 403/i.test(message)) return "authentication";
+  return "provider_error";
+}
+
 export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jobId: string; status: "completed" | "failed" } | null> {
   if (signal?.aborted) return null;
   const store = createSupabaseAuditStore();
@@ -27,6 +43,8 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   const groq = new GroqClient();
   const geminiDecision = providerDecision("gemini");
   const gemini = geminiDecision.enabled && process.env.GEMINI_API_KEY ? new GeminiClient() : null;
+  const ollamaDecision = providerDecision("ollama");
+  const ollama = ollamaDecision.enabled && process.env.OLLAMA_API_KEY ? new OllamaClient() : null;
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
     await store.failExpiredProcessingJobs?.();
@@ -95,11 +113,21 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       try {
         return await groq.assess(assessmentInput, signal);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const retryableGroqFailure = /AI capacity reached|timed out|GROQ_ASSESSMENT_TIMEOUT|HTTP (?:429|5\d\d)|fetch failed|network|ECONNRESET|ETIMEDOUT/i.test(message);
-        if (!gemini || signal?.aborted || !retryableGroqFailure) throw error;
-        console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: /capacity/i.test(message) ? "capacity" : /timed out/i.test(message) ? "timeout" : "transient_provider_error" }));
-        return gemini.assess(assessmentInput, signal);
+        if (!gemini || signal?.aborted || !isFallbackEligible(error)) throw error;
+        console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: safeFailureCategory(error) }));
+        try {
+          return await gemini.assess(assessmentInput, signal);
+        } catch (geminiError) {
+          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_failed", reason: safeFailureCategory(geminiError) }));
+          if (!ollama || signal?.aborted || !isFallbackEligible(geminiError)) throw geminiError;
+          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_to_ollama", reason: safeFailureCategory(geminiError) }));
+          try {
+            return await ollama.assess(assessmentInput, signal);
+          } catch (ollamaError) {
+            console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "ollama_fallback_failed", reason: safeFailureCategory(ollamaError) }));
+            throw ollamaError;
+          }
+        }
       }
     },
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
