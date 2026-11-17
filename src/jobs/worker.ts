@@ -18,14 +18,14 @@ const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
 function isFallbackEligible(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /AI capacity reached|timed out|HTTP (?:413|429|5\d\d)|json_validate_failed|failed to validate JSON|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
+  return /AI capacity reached|timed out|HTTP (?:413|429|5\d\d)|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
 }
 
 function safeFailureCategory(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/capacity|429|daily.limit|TPD/i.test(message)) return "capacity";
   if (/timed out|ETIMEDOUT/i.test(message)) return "timeout";
-  if (/json_validate_failed|failed to validate JSON/i.test(message)) return "json_validation";
+  if (/json_validate_failed|failed to validate JSON|failed Zod validation/i.test(message)) return "json_validation";
   if (/HTTP 413/i.test(message)) return "request_too_large";
   if (/HTTP 5\d\d|network|fetch failed|ECONNRESET/i.test(message)) return "transient_provider_error";
   if (/HTTP 401|HTTP 403/i.test(message)) return "authentication";
