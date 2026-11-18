@@ -41,7 +41,7 @@ jobs:
         with:
           node-version: "22.12.0"
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       - name: Run focused report-quality regressions
         run: npx vitest run tests/charts.test.ts tests/generate-audit-report.test.ts tests/sample-report-script.test.ts
       - name: Run isolated PostgreSQL worker-fencing regressions
