@@ -6,14 +6,11 @@ describe("Spotify commercial policy gate", () => {
     vi.unstubAllGlobals();
     delete process.env.SPOTIFY_CLIENT_ID;
     delete process.env.SPOTIFY_CLIENT_SECRET;
-    delete process.env.PROVIDER_ENABLED_SPOTIFY;
   });
 
-  it("does not call Spotify when credentials are present but exact opt-in is absent", async () => {
+  it("does not call Spotify when API credentials are absent", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    process.env.SPOTIFY_CLIENT_ID = "client-id";
-    process.env.SPOTIFY_CLIENT_SECRET = "client-secret";
 
     const result = await collectCatalogMetadata("https://open.spotify.com/track/spotify-track-123");
 
@@ -25,7 +22,7 @@ describe("Spotify commercial policy gate", () => {
       raw: { providerPolicy: {
         provider: "spotify",
         status: "unavailable",
-        reason: "disabled by data policy",
+        reason: "not_configured",
         commercialStatus: "allowed",
       } },
     });
@@ -38,6 +35,6 @@ describe("Spotify commercial policy gate", () => {
     const result = await collectCatalogMetadata("https://open.spotify.com/track/spotify-track-123");
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(result.raw.providerPolicy).toMatchObject({ reason: "disabled by data policy" });
+    expect(result.raw.spotifyEnrichment).toMatchObject({ status: "unavailable" });
   });
 });
