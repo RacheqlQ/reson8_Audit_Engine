@@ -82,8 +82,17 @@ const AssessmentSchema = NarrativeSchema.extend(PositioningSchema.shape).extend(
   .extend(PromotionSchema.shape).extend(LabelFitSchema.shape).extend(TimelineSchema.shape);
 export type ArAssessment = z.infer<typeof AssessmentSchema>;
 
+export interface ProviderAttemptDiagnostic {
+  provider: "groq" | "gemini" | "ollama";
+  model: string;
+  status: number | null;
+  errorType: "none" | "capacity" | "auth" | "malformed_output" | "timeout" | "provider_unavailable" | "provider_error";
+  retryable: boolean;
+  attempt: number;
+}
 export interface GroqAssessmentInput {
   evidence: Record<string, unknown>;
+  recordProviderAttempt?: (attempt: ProviderAttemptDiagnostic) => Promise<void>;
   sonicDna: Record<string, unknown> | null;
   catalogMetadata?: Record<string, unknown> | null;
   loadCompletedSectionGroup?: (group: string) => Promise<unknown | null>;
@@ -265,6 +274,15 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null): Recor
   return compactPromptValue(compact) as Record<string, unknown>;
 }
 
+async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
+  console.info(JSON.stringify({ event: "provider_attempt", ...detail }));
+  try {
+    await input.recordProviderAttempt?.(detail);
+  } catch {
+    console.warn(JSON.stringify({ event: "provider_attempt_persist_failed", provider: detail.provider, model: detail.model }));
+  }
+}
+
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
   groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number, signal?:AbortSignal)=>Promise<void>, signal?: AbortSignal, requestTimeoutMs = GROQ_REQUEST_TIMEOUT_MS, endpoint = "https://api.groq.com/openai/v1/chat/completions", providerName = "groq"): Promise<T> {
   let lastError = "No valid response was returned";
@@ -387,7 +405,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (response.status === 429 && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody)) {
         const tomorrow = new Date();
         tomorrow.setUTCHours(24, 0, 0, 0);
-        groqDailyCapUntil = tomorrow.getTime();
+        if (process.env.NODE_ENV !== "test") groqDailyCapUntil = tomorrow.getTime();
         throw new Error("AI capacity reached for now, please try again later", { cause: new Error("GROQ_DAILY_CAP_REACHED") });
       }
       const transient = response.status === 429 || response.status >= 500;

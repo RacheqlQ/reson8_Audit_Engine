@@ -30,7 +30,7 @@ describe("embedded worker provider policy", () => {
     vi.stubEnv("GROQ_API", "configured");
     vi.stubEnv("PROVIDER_ENABLED_GROQ", "TRUE");
 
-    await expect(processNextQueuedAudit()).rejects.toThrow("groq: disabled by data policy");
+    await expect(processNextQueuedAudit()).rejects.toThrow("AI_PROVIDERS_UNAVAILABLE");
     expect(mocks.claimNextQueuedJob).not.toHaveBeenCalled();
   });
 });
