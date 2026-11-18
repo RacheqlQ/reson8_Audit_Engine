@@ -19,25 +19,25 @@ export const PROVIDER_POLICY = {
   groq: {
     id: "groq", commercialStatus: "allowed", termsUrl: "https://groq.com/terms-of-use/",
     attribution: "Identify Groq as the assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
-    retention: "Verify current API retention, training and deletion terms before enabling.",
+    retention: "Follow current API retention, training and deletion terms for every request.",
     decisionNote: "Operational enablement explicitly authorized by the product owner; this setting is not a legal determination and does not waive applicable terms or retention obligations.",
   },
   gemini: {
     id: "gemini", commercialStatus: "allowed", termsUrl: "https://ai.google.dev/gemini-api/terms",
     attribution: "Identify Google Gemini as the fallback assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
-    retention: "Verify current Gemini API retention, training, regional processing and deletion terms before enabling.",
+    retention: "Follow current Gemini API retention, training, regional processing and deletion terms for every request.",
     decisionNote: "Operationally authorized; call when GEMINI_API_KEY is configured and comply with applicable Google AI terms and data handling.",
   },
   ollama: {
     id: "ollama", commercialStatus: "allowed", termsUrl: "https://ollama.com/terms",
     attribution: "Identify Ollama Cloud and the selected model as the fallback assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
-    retention: "Verify current Ollama Cloud data handling, retention, training and deletion terms before enabling.",
+    retention: "Follow current Ollama Cloud data handling, retention, training and deletion terms for every request.",
     decisionNote: "Operationally authorized; call when OLLAMA_API_KEY is configured and use only the hosted cloud API from the embedded worker.",
   },
   audd: {
     id: "audd", commercialStatus: "allowed", termsUrl: "https://audd.io/terms/",
     attribution: "Name AudD and retrieval time for every recognition result.",
-    retention: "Verify audio upload, transient processing, caching and deletion terms before enabling.",
+    retention: "Follow current audio upload, transient processing, caching and deletion terms for every request.",
     decisionNote: "Operational enablement explicitly authorized by the product owner; this setting is not a legal determination and does not waive applicable terms, audio-processing, retention or deletion obligations.",
   },
   spotify: {
