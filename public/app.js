@@ -7,12 +7,13 @@ const catalogUrl=document.querySelector("#catalogUrl"),detectCatalog=document.qu
 const checks={type:document.querySelector("#checkType"),size:document.querySelector("#checkSize"),hash:document.querySelector("#checkHash")};
 const MAX_BYTES=50*1024*1024,AUDIO_EXTENSIONS=new Set(["mp3","wav","flac","aac","ogg","m4a"]);
 const EVIDENCE_STEPS=[
-  {number:"01",title:"Secure intake",description:"Private master + integrity hash"},
-  {number:"02",title:"Recognition",description:"AudD evidence sample"},
-  {number:"03",title:"Sonic measurement",description:"Full-master audio analysis"},
-  {number:"04",title:"Reconciliation",description:"Identifiers + source evidence"},
-  {number:"05",title:"A&R assessment",description:"Evidence-bound interpretation"},
-  {number:"06",title:"Report",description:"Song-specific PDF output"}
+  {id:"intake",number:"01",title:"Secure intake",description:"Private master + integrity hash"},
+  {id:"recognition",number:"02",title:"Recognition",description:"AudD and catalog identity evidence"},
+  {id:"sonic_dna",number:"03",title:"Sonic measurement",description:"Full-master audio analysis"},
+  {id:"reconciliation",number:"04",title:"Reconciliation",description:"Identifiers + source evidence"},
+  {id:"assessment",number:"05",title:"A&R assessment",description:"Evidence-bound interpretation"},
+  {id:"report",number:"06",title:"PDF reports",description:"Sample + full report persistence"},
+  {id:"finalization",number:"07",title:"Audit finalization",description:"Terminal completion + integrity checks"}
 ];
 let selectedFile=null,digest=null,catalogReady=false,currentAuditPayload=null,reportAccessToken=null,tokenRevealed=false;
 
@@ -85,21 +86,46 @@ function renderCatalogStatuses(payload){
   catalogSourceStatuses.appendChild(list);
   catalogSourceStatuses.classList.remove("hidden");
 }
-function renderEvidenceChain(currentStepIndex=0){
+function renderEvidenceChain(progress,currentStepIndex=0){
   if(!evidenceChain)return;
-  const active=Math.min(Math.max(Number(currentStepIndex)||0,0),EVIDENCE_STEPS.length-1);
-  evidenceChain.innerHTML=EVIDENCE_STEPS.map((step,index)=>{
-    const current=index===active,completed=index<active;
-    const classes=[current?"current":"",completed?"completed":""].filter(Boolean).join(" ");
-    return '<li class="'+classes+'" aria-current="'+(current?"step":"false")+'"><span>'+step.number+'</span><div><strong>'+step.title+'</strong><small>'+step.description+'</small></div></li>';
-  }).join("");
+  const stages=Array.isArray(progress?.stages)?progress.stages:null;
+  const fallbackActive=Math.min(Math.max(Number(currentStepIndex)||0,0),5);
+  const resolved=EVIDENCE_STEPS.map((step,index)=>{
+    const serverStage=stages?.find(stage=>stage.id===step.id);
+    const percent=serverStage?Math.max(0,Math.min(100,Number(serverStage.percent)||0)):(index<fallbackActive?100:0);
+    const status=serverStage?.status||(percent===100?"completed":index===fallbackActive?"in_progress":"pending");
+    return {...step,percent,status};
+  });
+  evidenceChain.replaceChildren();
+  for(const step of resolved){
+    const li=document.createElement("li");
+    li.className="pipeline-stage status-"+step.status;
+    if(step.status==="in_progress")li.setAttribute("aria-current","step");
+    const number=document.createElement("span");number.className="pipeline-number";number.textContent=step.number;
+    const content=document.createElement("div");content.className="pipeline-content";
+    const heading=document.createElement("div");heading.className="pipeline-heading";
+    const title=document.createElement("strong");title.textContent=step.title;
+    const percent=document.createElement("b");percent.className="pipeline-percent";percent.textContent=step.percent+"%";
+    heading.append(title,percent);
+    const description=document.createElement("small");description.textContent=step.description;
+    const track=document.createElement("div");track.className="progress-track stage-track";track.setAttribute("role","progressbar");track.setAttribute("aria-label",step.title+" completion");track.setAttribute("aria-valuemin","0");track.setAttribute("aria-valuemax","100");track.setAttribute("aria-valuenow",String(step.percent));
+    const fill=document.createElement("span");fill.className="progress-fill";fill.style.width=step.percent+"%";track.appendChild(fill);
+    const state=document.createElement("small");state.className="pipeline-state";state.textContent=step.status==="not_applicable"?"Not applicable":step.status==="completed"?"Complete":step.status==="failed"?"Failed":step.status==="in_progress"?"In progress":"Waiting";
+    content.append(heading,description,track,state);li.append(number,content);evidenceChain.appendChild(li);
+  }
+  const overall=Math.max(0,Math.min(100,Number(progress?.overallPercent)||0));
+  const overallPercent=document.querySelector("#overallProgressPercent"),overallBar=document.querySelector("#overallProgressBar"),overallFill=document.querySelector("#overallProgressFill"),overallCaption=document.querySelector("#overallProgressCaption");
+  if(overallPercent)overallPercent.textContent=overall+"%";
+  if(overallBar)overallBar.setAttribute("aria-valuenow",String(overall));
+  if(overallFill)overallFill.style.width=overall+"%";
+  if(overallCaption)overallCaption.textContent=(progress?.completedStages??resolved.filter(stage=>stage.percent===100).length)+" of "+(progress?.totalStages??resolved.length)+" stages complete";
 }
 function stopPolling(){auditPoller.stop();}
 function applyAuditPayload(payload){
   currentAuditPayload={...payload,displayName:currentAuditPayload?.displayName??payload.displayName};
   renderCatalogStatuses(payload);
   unlockFullReportButton.disabled=!(payload.status==="completed"&&payload.full?.available);
-  renderEvidenceChain(payload.currentStepIndex ?? (payload.status==="completed" ? 5 : 0));
+  renderEvidenceChain(payload.progress,payload.currentStepIndex ?? (payload.status==="completed" ? 5 : 0));
   auditStatus.textContent=(payload.status||"unknown").toUpperCase();
   auditStatus.className=payload.status==="failed"?"failed":payload.status==="completed"?"completed":"queued";
   if(payload.status==="completed"&&payload.full?.available){
@@ -195,5 +221,5 @@ unlockFullReportButton.addEventListener("click",unlockFullReport);
 ["dragenter","dragover"].forEach(type=>dropzone.addEventListener(type,e=>{e.preventDefault();dropzone.classList.add("dragover");}));
 ["dragleave","drop"].forEach(type=>dropzone.addEventListener(type,e=>{e.preventDefault();dropzone.classList.remove("dragover");}));
 dropzone.addEventListener("drop",e=>{const f=e.dataTransfer?.files?.[0];if(f)inspect(f);});
-renderEvidenceChain(0);
+renderEvidenceChain(null,0);
 updateSubmit();
