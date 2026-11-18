@@ -172,7 +172,7 @@ describe("DSP provider failure persistence", () => {
     expect(updateBody).toMatchObject({
       status: "failed",
       error_code: "AUDIT_JOB_EXPIRED",
-      error_message: "This audit could not be completed within 10 minutes. Please submit it again.",
+      error_message: "This audit could not be completed within the configured processing time limit. Please submit it again.",
     });
   });
 
