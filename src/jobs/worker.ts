@@ -7,6 +7,7 @@ import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, type Provid
 import { generateAuditReport } from "../reports/generate-audit-report.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
+import { runAssessmentProviderChain } from "./assessment-provider-chain.js";
 import { runQueueWorkerLoop } from "./worker-loop.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 import { startRenderFreeServiceKeepalive } from "./render-free-service-keepalive.js";
@@ -112,9 +113,8 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         { provider: "gemini" as const, model: readiness.find((item) => item.provider === "gemini")?.model ?? "gemini-3.5-flash-lite", client: gemini },
         { provider: "ollama" as const, model: process.env.OLLAMA_MODEL ?? "gemma4:31b", client: ollama },
       ];
-      let lastProviderError: unknown = null;
-      for (const candidate of providers) {
-        if (!candidate.client) {
+      return runAssessmentProviderChain(providers, assessmentInput, signal, {
+        onSkipped: async (candidate) => {
           const status = readiness.find((item) => item.provider === candidate.provider);
           await store.recordProviderAttempt(job.id, {
             provider: candidate.provider, model: candidate.model, status: null,
@@ -122,17 +122,11 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
             retryable: false, attempt: 1,
           });
           console.info(JSON.stringify({ worker: "audit", jobId: job.id, event: "provider_skipped", provider: candidate.provider, model: candidate.model, reason: status?.reason ?? "not_configured" }));
-          continue;
-        }
-        try {
-          return await candidate.client.assess(assessmentInput, signal);
-        } catch (error) {
-          if (signal?.aborted) throw error;
-          lastProviderError = error;
+        },
+        onFailure: (candidate, error) => {
           console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "provider_fallback", provider: candidate.provider, model: candidate.model, reason: safeFailureCategory(error) }));
-        }
-      }
-      throw lastProviderError ?? new Error("AI_PROVIDERS_UNAVAILABLE: no assessment provider could be attempted");
+        },
+      });
     },
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
     generateReport: generateAuditReport,
