@@ -85,8 +85,11 @@ export function parseEbur128Summary(stderr: string): Pick<DecodedAudio, "loudnes
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   };
-  const integrated = finite(stderr.match(/\bI:\s*(-?\d+(?:\.\d+)?)\s*LUFS/i)?.[1]);
-  const range = finite(stderr.match(/\bLRA:\s*(-?\d+(?:\.\d+)?)\s*LU\b/i)?.[1]);
+  const integratedMatches = [...stderr.matchAll(/\bI:\s*(-?\d+(?:\.\d+)?)\s*LUFS/gi)];
+  const rangeMatches = [...stderr.matchAll(/\bLRA:\s*(-?\d+(?:\.\d+)?)\s*LU\b/gi)];
+  // Frame logs begin at -70 LUFS; the final EBU R128 summary is the last match.
+  const integrated = finite(integratedMatches.at(-1)?.[1]);
+  const range = finite(rangeMatches.at(-1)?.[1]);
   const truePeakSection = stderr.match(/True peak:[\s\S]*?(?=\n\s*\n|$)/i)?.[0] ?? "";
   const peaks = [...truePeakSection.matchAll(/Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS/gi)]
     .map((match) => Number(match[1])).filter(Number.isFinite);
