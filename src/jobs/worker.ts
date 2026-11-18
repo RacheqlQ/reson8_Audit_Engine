@@ -10,7 +10,7 @@ import { processAuditJob, type AuditProcessorDependencies } from "./process-audi
 import { runQueueWorkerLoop } from "./worker-loop.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 import { classifyAuditFailure } from "./audit-failure.js";
-import { getProviderReadiness } from "../providers/provider-readiness.js";
+import { getProviderReadiness, markProviderUnavailable } from "../providers/provider-readiness.js";
 import { startRenderFreeServiceKeepalive } from "./render-free-service-keepalive.js";
 
 const POLL_INTERVAL_MS = 15_000;
@@ -115,6 +115,10 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       try {
         return await groq.assess(assessmentInput, signal);
       } catch (error) {
+        const groqDiagnostics = classifyAuditFailure(error, "groq");
+        if (groqDiagnostics.httpStatus === 401 || groqDiagnostics.httpStatus === 403) {
+          markProviderUnavailable("groq", "authentication_failed");
+        }
         if (signal?.aborted || !isFallbackEligible(error)) throw error;
         let fallbackError: unknown = error;
         if (gemini) {
@@ -124,6 +128,9 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
           } catch (geminiError) {
             fallbackError = geminiError;
             const diagnostics = classifyAuditFailure(geminiError, "gemini");
+            if (diagnostics.httpStatus === 401 || diagnostics.httpStatus === 403) {
+              markProviderUnavailable("gemini", "authentication_failed");
+            }
             console.warn(JSON.stringify({
               worker: "audit",
               jobId: job.id,
@@ -147,7 +154,21 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         try {
           return await ollama.assess(assessmentInput, signal);
         } catch (ollamaError) {
-          console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "ollama_fallback_failed", reason: safeFailureCategory(ollamaError) }));
+          const diagnostics = classifyAuditFailure(ollamaError, "ollama");
+          if (diagnostics.httpStatus === 401 || diagnostics.httpStatus === 403) {
+            markProviderUnavailable("ollama", "authentication_failed");
+          }
+          console.error(JSON.stringify({
+            worker: "audit",
+            jobId: job.id,
+            event: "ollama_fallback_failed",
+            reason: safeFailureCategory(ollamaError),
+            provider: diagnostics.provider,
+            model: diagnostics.model,
+            httpStatus: diagnostics.httpStatus,
+            errorType: diagnostics.errorType,
+            retryable: diagnostics.retryable,
+          }));
           throw ollamaError;
         }
       }
