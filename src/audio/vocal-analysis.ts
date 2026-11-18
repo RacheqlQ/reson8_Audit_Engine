@@ -105,8 +105,8 @@ function estimatePitch(samples: Float32Array, sampleRate: number): {
     if (energy / frameLength < 1e-7) continue;
     energyFrames++;
 
-    let selectedLag = 0;
-    for (let lag = lagMin + 1; lag < lagMax; lag++) {
+    const correlations = new Float32Array(lagMax + 1);
+    for (let lag = lagMin; lag <= lagMax; lag++) {
       let cross = 0;
       let left = 0;
       let right = 0;
@@ -117,8 +117,16 @@ function estimatePitch(samples: Float32Array, sampleRate: number): {
         left += a * a;
         right += b * b;
       }
-      const correlation = cross / Math.sqrt(Math.max(EPSILON, left * right));
-      if (correlation >= 0.55 && correlation >= 0.6) {
+      correlations[lag] = cross / Math.sqrt(Math.max(EPSILON, left * right));
+    }
+    let selectedLag = 0;
+    for (let lag = lagMin + 1; lag < lagMax; lag++) {
+      const correlation = correlations[lag] ?? 0;
+      if (
+        correlation >= 0.6
+        && correlation >= (correlations[lag - 1] ?? 0)
+        && correlation >= (correlations[lag + 1] ?? 0)
+      ) {
         selectedLag = lag;
         break;
       }
