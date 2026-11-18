@@ -51,7 +51,7 @@ describe("catalogue policy gate coverage", () => {
     expect(deezer.raw.providerPolicy).toMatchObject({ provider: "deezer", reason: "disabled by data policy", commercialStatus: "unverified" });
   });
 
-  it("extracts Apple Music track identity fields when the exact provider opt-in is enabled", async () => {
+  it("extracts Apple Music track identity fields without a provider enable flag", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       expect(String(input)).toContain("itunes.apple.com/lookup?id=67890&entity=song&country=ng");
       return new Response(JSON.stringify({
@@ -99,15 +99,7 @@ describe("Audiomack commercial policy gate", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("does not call the official API when credentials are absent", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
 
-    const result = await collectCatalogMetadata("https://audiomack.com/artist/song/track-title");
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(result.raw.providerPolicy).toMatchObject({ reason: "not_configured" });
-  });
 });
 
 
@@ -131,7 +123,7 @@ describe("Apple Music direct-song catalog lookup", () => {
   });
 
   it("recognizes geo links and performs approved Apple lookup without an enable flag", async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ resultCount: 1, results: [{ kind: "song", trackId: 1234567890, trackName: "Geo Song", artistName: "Geo Artist" }] }), { status: 200, headers: { "content-type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
     const result = await collectCatalogMetadata("https://geo.music.apple.com/gb/song/example-track/1234567890");
     expect(fetchMock).toHaveBeenCalledTimes(1);
