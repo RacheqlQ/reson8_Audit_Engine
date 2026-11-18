@@ -530,7 +530,6 @@ export async function processAuditJob(
       audd: recognitionMetadataInput(recognition),
     };
     const reconciliation = reconcileMetadata(metadataInput);
-    await awaitWithStage(deps, "evidence_reconciliation_persist", 15_000, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources));
 
     const fusedGenreClassification = fuseGenreEvidence({
       providerTags: genreProviderTags(metadataSources, masterTags),
@@ -553,6 +552,17 @@ export async function processAuditJob(
       };
       await awaitWithStage(deps, "sonic_dna_persist", 15_000, (signal) => deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal));
     }
+
+    // A submitted audio master must have durable Sonic DNA before reconciliation
+    // is persisted. This keeps the stored evidence chain in the same order as
+    // the actual processing prerequisites and prevents reconciliation from
+    // appearing complete while the required audio measurement is still pending.
+    if (hasMaster && !masterDna) {
+      throw new Error("SONIC_DNA_REQUIRED_BEFORE_RECONCILIATION");
+    }
+    await awaitWithStage(deps, "evidence_reconciliation_persist", 15_000, (signal) =>
+      deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources),
+    );
 
     const identity = reconciliation.identity;
     const evidence = {

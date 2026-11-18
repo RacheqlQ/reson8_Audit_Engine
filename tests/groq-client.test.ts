@@ -117,6 +117,27 @@ describe("GroqClient section groups",()=>{
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
  });
+ it("keeps Gemini and Ollama module output budgets independent of Groq's TPM ceiling",async()=>{
+  const identity=Object.fromEntries(Array.from({length:20},(_,index)=>["sourceField"+index,"verified source provenance detail ".repeat(25)]));
+  for(const provider of ["gemini","ollama"] as const){
+   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+    const body=JSON.parse(String(init?.body));
+    const payload=JSON.parse(body.messages[1].content);
+    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
+   });
+   const client=provider==="gemini"
+    ? new GeminiClient("test-gemini-key","test-model",mock as typeof fetch,async()=>{})
+    : new OllamaClient("test-ollama-key","test-model",mock as typeof fetch,async()=>{});
+   await client.assess({evidence:{identity},sonicDna:null});
+   const evidenceScoreCall=mock.mock.calls.find(call=>{
+    const body=JSON.parse(String(call[1]?.body));
+    return JSON.parse(body.messages[1].content).sectionGroup==="evidence-score";
+   });
+   expect(evidenceScoreCall).toBeDefined();
+   const evidenceScoreBody=JSON.parse(String(evidenceScoreCall?.[1]?.body));
+   expect(evidenceScoreBody.max_tokens).toBe(1000);
+  }
+ });
  it("classifies exhausted Groq JSON-schema rejection as malformed output",async()=>{
   const mock=vi.fn(async()=>new Response(JSON.stringify({error:{message:"Failed to validate JSON",code:"json_validate_failed"}}),{status:400}));
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
