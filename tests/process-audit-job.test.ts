@@ -38,7 +38,7 @@ describe("audit failure classification", () => {
 });
 
 describe("processAuditJob", () => {
-  it("moves a queued master through evidence, Sonic DNA, Groq assessment and completion", async () => {
+  it("persists Sonic DNA before reconciliation, then assesses and completes a queued master", async () => {
     const events: string[] = [];
     const result = await processAuditJob("job-123", {
       getJob: async () => ({
@@ -112,8 +112,8 @@ describe("processAuditJob", () => {
     expect(events).toEqual([
       "processing",
       "recognition",
-      "evidence",
       "dna",
+      "evidence",
       "assessment",
       "assessment-saved",
       "report-sample",
@@ -291,7 +291,8 @@ describe("processAuditJob", () => {
     expect(events).toContain("evidence-saved");
     expect(events).toContain("sonic-dna-saved");
     expect(events.indexOf("recognition-saved")).toBeLessThan(events.indexOf("sonic-dna-saved"));
-    expect(events.indexOf("sonic-dna-saved")).toBeLessThan(events.indexOf("audit_failed"));
+    expect(events.indexOf("sonic-dna-saved")).toBeLessThan(events.indexOf("evidence-saved"));
+    expect(events.indexOf("evidence-saved")).toBeLessThan(events.indexOf("audit_failed"));
     expect(events).toContain("audit_failed");
     expect(events).not.toContain("assessment-saved");
     expect(events).not.toContain("report-generated");
