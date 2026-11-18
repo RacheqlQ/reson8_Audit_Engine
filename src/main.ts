@@ -41,7 +41,7 @@ export async function startAuditEngine(
   const app = options.app ?? buildServer();
   const port = options.port ?? Number(process.env.PORT ?? 10000);
   const host = options.host ?? process.env.HOST ?? "0.0.0.0";
-  const runWorker = options.runWorker ?? runAuditQueueWorker;
+  const runWorker = options.runWorker ?? (process.env.RUN_WORKER_IN_API === "false" ? async () => {} : runAuditQueueWorker);
   const signals = options.signals ?? process;
   const reportError = options.onError ?? ((error: unknown) => {
     console.error(JSON.stringify({
