@@ -199,7 +199,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
   expect(report).toContain("Metadata completeness — NOT SCORED");
   expect(report).toContain("Album metadata is present but conflicting");
-  expect(report).not.toMatch(/128\\s*BPM|high-energy|album title is missing/i);
+  expect(report).not.toMatch(/128\s*BPM|high-energy|album title is missing/i);
  });
  it("reports present-but-conflicting generic release metadata instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
