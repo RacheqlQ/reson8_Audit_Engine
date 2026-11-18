@@ -639,7 +639,7 @@ export function createSupabaseAuditStore(
     async getAuditStatus(jobId) {
       const { data: job, error: jobError } = await admin
         .from("audit_jobs")
-        .select("id,status,error_message,catalog_metadata")
+        .select("id,status,error_code,error_message,catalog_metadata")
         .eq("id", jobId)
         .maybeSingle();
       if (jobError) throw new Error(`Unable to read audit status: ${jobError.message}`);
@@ -689,9 +689,20 @@ export function createSupabaseAuditStore(
         : currentAuditStepIndex(orderedEvents.filter((event) => event.event_type !== "audit_failed"));
       const failedEvent = orderedEvents.find((event) => event.event_type === "audit_failed");
       const failurePayload = failedEvent?.payload as Record<string, unknown> | null;
-      const errorDetails = failurePayload?.errorDetails && typeof failurePayload.errorDetails === "object"
+      const eventErrorDetails = failurePayload?.errorDetails && typeof failurePayload.errorDetails === "object"
         ? failurePayload.errorDetails as Record<string, unknown>
         : null;
+      const errorDetails = eventErrorDetails ?? (job.status === "failed" && typeof job.error_code === "string"
+        ? {
+          errorCode: job.error_code,
+          errorMessage: typeof job.error_message === "string" ? job.error_message : null,
+          provider: null,
+          model: null,
+          httpStatus: null,
+          errorType: null,
+          retryable: job.error_code === "AUDIT_JOB_EXPIRED",
+        }
+        : null);
 
       const { data: reports, error: reportError } = await admin
         .from("audit_reports")
