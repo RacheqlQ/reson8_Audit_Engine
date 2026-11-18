@@ -18,7 +18,7 @@ vi.mock("../src/integrations/supabase-audit-store.js", () => ({
   createSupabaseAuditStore: () => ({ claimNextQueuedJob }),
 }));
 
-import { processNextQueuedAudit } from "../src/jobs/worker.js";
+import { processNextQueuedAudit, runAuditQueueWorker } from "../src/jobs/worker.js";
 
 describe("audit worker provider preflight", () => {
   beforeEach(() => {
@@ -46,5 +46,14 @@ describe("audit worker provider preflight", () => {
   it("validates Groq configuration before claiming a queued job", async () => {
     await expect(processNextQueuedAudit()).rejects.toThrow("GROQ_API is required");
     expect(claimNextQueuedJob).not.toHaveBeenCalled();
+  });
+
+  it("stops worker startup instead of retrying every poll when Groq credentials are missing", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    await runAuditQueueWorker(new AbortController().signal);
+    expect(log).toHaveBeenCalledOnce();
+    expect(String(log.mock.calls[0]?.[0])).toContain('"event":"worker_start_blocked"');
+    expect(claimNextQueuedJob).not.toHaveBeenCalled();
+    log.mockRestore();
   });
 });
