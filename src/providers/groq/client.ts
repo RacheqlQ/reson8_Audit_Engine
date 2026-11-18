@@ -432,7 +432,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           continue;
         }
 
-        if (this.providerName === "gemini" && responseMode === "json_object" && jsonObjectProviderRetries < 1) {
+        if (providerName === "gemini" && responseMode === "json_object" && jsonObjectProviderRetries < 1) {
           jsonObjectProviderRetries++;
           if (jsonObjectProviderRetries === 1) {
             responseMode = "prompt_only";
