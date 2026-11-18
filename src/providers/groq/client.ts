@@ -380,15 +380,21 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // supplied to the model, and no response is accepted without local Zod checks.
     const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 3) + 256;
     const sectionOutputBudget = Math.floor(Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600) * (providerName === "groq" ? groqCompletionBudgetScale : 1));
-    completionTokenBudget = Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens);
-    if (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS) {
+    const groqTpmBudgetApplies = providerName === "groq";
+    // The 6,000-token ceiling is a Groq TPM safeguard, not a global model
+    // output limit. Applying it to Gemini/Ollama starved evidence-score of its
+    // 1,000-token module budget even when those providers had ample capacity.
+    completionTokenBudget = groqTpmBudgetApplies
+      ? Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens)
+      : sectionOutputBudget;
+    if (groqTpmBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS)) {
       throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
-    if (providerName === "groq" && process.env.NODE_ENV !== "test") {
+    if (groqTpmBudgetApplies && process.env.NODE_ENV !== "test") {
       await sharedGroqTokenLimiter.acquire(estimatedInputTokens + completionTokenBudget, sleepImpl, signal);
     }
-    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
+    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: groqTpmBudgetApplies ? MAX_GROQ_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
     for (let networkAttempt = 0; networkAttempt < MAX_NETWORK_ATTEMPTS; networkAttempt++) {
