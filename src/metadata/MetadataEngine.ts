@@ -12,7 +12,7 @@ export interface TrackIdentity {
   readonly releaseDate: string | null;
   readonly genres: readonly string[];
   readonly sourceProviders: readonly MetadataProvider[];
-  readonly fieldProvenance: Readonly<Record<MetadataIdentityField, MetadataProvider | "filename" | null>>;
+  readonly fieldProvenance: Readonly<Record<MetadataIdentityField, MetadataProvider | "filename" | null>> & { readonly genre?: MetadataProvider | null };
 }
 
 export interface StructuredMetadata {
@@ -175,6 +175,7 @@ export class MetadataEngine {
       upc: MetadataEngine.fieldSource(providers, "upc", null),
       label: MetadataEngine.fieldSource(providers, "label", null),
       releaseDate: MetadataEngine.fieldSource(providers, "releaseDate", null),
+      genre: PROVIDER_PRIORITY.find((provider) => cleanGenres(providers[provider]?.genres).length > 0) ?? null,
     });
 
     const identity: TrackIdentity = Object.freeze({
