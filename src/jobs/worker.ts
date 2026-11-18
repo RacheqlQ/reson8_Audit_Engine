@@ -57,11 +57,17 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     await store.failExpiredProcessingJobs?.();
     job = await store.claimNextQueuedJob();
   } catch (error) {
+    const diagnostics = classifyAuditFailure(error);
     console.error(JSON.stringify({
       worker: "audit",
       event: "queue_claim_failed",
       retryInMs: POLL_INTERVAL_MS,
-      error: error instanceof Error ? error.message : String(error),
+      errorCode: diagnostics.errorCode,
+      provider: diagnostics.provider,
+      model: diagnostics.model,
+      httpStatus: diagnostics.httpStatus,
+      errorType: diagnostics.errorType,
+      retryable: diagnostics.retryable,
     }));
     throw error;
   }
@@ -271,7 +277,8 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
           worker: "audit",
           jobId: job.id,
           event: "lease_lost",
-          reason: error instanceof Error ? error.message : String(error),
+          errorCode: "AUDIT_LEASE_LOST",
+          reason: "lease_renewal_failed",
         }));
       }
     })().finally(() => { heartbeatPromise = null; });
