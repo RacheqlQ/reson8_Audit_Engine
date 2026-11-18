@@ -74,7 +74,7 @@ function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.
 function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
 export function constellationLabelLineCount(row:ChartRow,width:number):number{
  const label=shown(row.value),columnWidth=Math.max(42,(width-36)/2);
- return Math.max(1,Math.ceil(label.length/Math.max(8,Math.floor(columnWidth/5.5))));
+ return Math.max(1,Math.ceil(label.length/Math.max(8,Math.floor(columnWidth/8.5))));
 }
 function constellationLabelRowHeights(rows:ChartRow[],width:number):number[]{
  const heights:number[]=[];

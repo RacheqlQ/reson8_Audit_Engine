@@ -22,7 +22,7 @@ describe("native PDF chart helpers", () => {
       expect(display).toContain(label);
     }
     expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" }))
-      .toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO · MEASURED");
+      .toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO");
     expect(chartPanelDisplayStatus({ unavailable: true, evidenceClass: "provider-recognized" }))
       .toBe("REQUIRES AUDIO · PROVIDER-RECOGNIZED");
   });
