@@ -9,6 +9,16 @@ export interface ProviderReadiness {
   reason: "disabled_by_data_policy" | "missing_credentials" | "authentication_failed" | null;
 }
 
+export class ProviderUnavailableError extends Error {
+  constructor(
+    readonly provider: AssessmentProvider,
+    readonly reason: "disabled_by_data_policy" | "missing_credentials" | "authentication_failed",
+  ) {
+    super(`${provider.toUpperCase()}_PROVIDER_UNAVAILABLE:${reason}`);
+    this.name = "ProviderUnavailableError";
+  }
+}
+
 const runtimeUnavailable = new Map<AssessmentProvider, "authentication_failed">();
 
 export function markProviderUnavailable(provider: AssessmentProvider, reason: "authentication_failed"): void {
