@@ -9,6 +9,7 @@ import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.j
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
 import { runQueueWorkerLoop } from "./worker-loop.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
+import { classifyAuditFailure } from "./audit-failure.js";
 import { startRenderFreeServiceKeepalive } from "./render-free-service-keepalive.js";
 
 const POLL_INTERVAL_MS = 15_000;
@@ -121,7 +122,18 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
             return await gemini.assess(assessmentInput, signal);
           } catch (geminiError) {
             fallbackError = geminiError;
-            console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_failed", reason: safeFailureCategory(geminiError) }));
+            const diagnostics = classifyAuditFailure(geminiError, "gemini");
+            console.warn(JSON.stringify({
+              worker: "audit",
+              jobId: job.id,
+              event: "gemini_fallback_failed",
+              reason: safeFailureCategory(geminiError),
+              provider: diagnostics.provider,
+              model: diagnostics.model,
+              httpStatus: diagnostics.httpStatus,
+              errorType: diagnostics.errorType,
+              retryable: diagnostics.retryable,
+            }));
           }
         }
         if (!ollama || signal?.aborted || !isFallbackEligible(fallbackError)) throw fallbackError;
@@ -145,7 +157,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     generateReport: generateAuditReport,
     saveReport: async (jobId, _claimToken, tier, pdf, reportInput, signal) => store.saveReport(jobId, _claimToken, tier, pdf, reportInput, signal),
     markCompleted: async (jobId, _claimToken, signal) => store.markCompleted(jobId, _claimToken, signal),
-    markFailed: async (jobId, _claimToken, message, signal) => store.markFailed(jobId, _claimToken, message, signal),
+    markFailed: async (jobId, _claimToken, message, signal, details) => store.markFailed(jobId, _claimToken, message, signal, details),
   };
 
   const leaseController = new AbortController();
