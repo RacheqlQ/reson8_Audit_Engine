@@ -205,7 +205,7 @@ export function analyzeVocalStem(
     frameLevels.push(Math.sqrt(energy / Math.max(1, end - start)));
   }
 
-  const threshold = Math.max(percentile(frameLevels, 0.9) * 0.08, percentile(frameLevels, 0.2) * 2.5, 1e-5);
+  const threshold = Math.max(percentile(frameLevels, 0.9) * 0.08, percentile(frameLevels, 0.2) * 0.5, 1e-5);
   const active = frameLevels.map((level) => level >= threshold && level >= 1e-5);
   const activeCount = active.filter(Boolean).length;
   const vocalActivityRatio = activeCount / Math.max(1, frameCount);
