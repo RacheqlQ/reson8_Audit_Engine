@@ -33,6 +33,7 @@ export interface VocalAnalysisResult {
   delivery: "not_classified";
   layering: "not_classified";
   lyrics: "not_requested";
+  reviewStatus: "not_human_reviewed" | "human_verified";
   limitations: string[];
   reason?: string;
 }
@@ -163,6 +164,7 @@ export function unavailableVocalAnalysis(reason: string, status: "unavailable" |
     delivery: "not_classified",
     layering: "not_classified",
     lyrics: "not_requested",
+    reviewStatus: "not_human_reviewed",
     limitations: ["No vocal conclusion is available because the separation model did not complete."],
     reason,
   };
