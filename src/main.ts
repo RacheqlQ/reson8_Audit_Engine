@@ -22,6 +22,7 @@ export interface StartAuditEngineOptions {
   port?: number;
   host?: string;
   runWorker?: WorkerRunner;
+  runWorkerInApi?: boolean;
   signals?: SignalSource;
   onError?: (error: unknown) => void;
 }
@@ -42,12 +43,13 @@ export async function startAuditEngine(
   const port = options.port ?? Number(process.env.PORT ?? 10000);
   const host = options.host ?? process.env.HOST ?? "0.0.0.0";
   const runWorker = options.runWorker ?? runAuditQueueWorker;
+  const runWorkerInApi = options.runWorkerInApi ?? process.env.RUN_WORKER_IN_API !== "false";
   const signals = options.signals ?? process;
   const reportError = options.onError ?? ((error: unknown) => {
     console.error(JSON.stringify({
       worker: "audit",
       event: "application_shutdown_failed",
-      error: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.name : "UnknownError",
     }));
     process.exitCode = 1;
   });
@@ -110,7 +112,9 @@ export async function startAuditEngine(
   signals.on("SIGTERM", onSigterm);
   signals.on("SIGINT", onSigint);
 
-  workerTask = Promise.resolve().then(() => runWorker(controller.signal));
+  workerTask = runWorkerInApi
+    ? Promise.resolve().then(() => runWorker(controller.signal))
+    : Promise.resolve();
   workerTask.catch(() => {
     // Shutdown observes and reports the worker rejection together with any
     // HTTP-close failure; do not report the same worker error twice.

@@ -10,6 +10,7 @@ const originalKey = process.env.SUPABASE_SECRET_KEY;
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   if (originalUrl === undefined) delete process.env.SUPABASE_URL;
   else process.env.SUPABASE_URL = originalUrl;
   if (originalKey === undefined) delete process.env.SUPABASE_SECRET_KEY;
@@ -67,6 +68,27 @@ describe("Supabase capability-token verification adapter", () => {
 });
 
 
+describe("audit job catalog metadata defaults", () => {
+  it("inserts an empty object when an audio-only job has no catalog metadata", async () => {
+    const { store, fetchMock } = makeStore({ id: "audio-only-job" });
+    const dependencies = store.createJobDependencies();
+
+    await dependencies.createJob({
+      ownerId: null,
+      filename: "master.wav",
+      mimeType: "audio/wav",
+      sizeBytes: 3,
+      sha256: "a".repeat(64),
+      sourceType: "master",
+      catalogUrl: null,
+      reportAccessTokenHash: "b".repeat(64),
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.catalog_metadata).toEqual({});
+  });
+});
+
 describe("DSP provider failure persistence", () => {
   it("persists Spotify API failure status and a bounded reason for audit polling", async () => {
     const { store, fetchMock, getRequestUrl } = makeStore({});
@@ -113,11 +135,26 @@ describe("DSP provider failure persistence", () => {
     });
   });
 
+  it("uses the configured stale-job timeout when reaping expired leases", async () => {
+    vi.stubEnv("AUDIT_JOB_STALE_TIMEOUT_MS", "120000");
+    const { store, fetchMock } = makeStore([{ id: "22222222-2222-4222-8222-222222222222" }]);
+
+    await expect(store.failExpiredProcessingJobs()).resolves.toBe(1);
+
+    const updateBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(updateBody.error_message).toContain("within 2 minutes");
+    const eventBody = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
+    expect(eventBody).toMatchObject({
+      event_type: "audit_failed",
+      payload: { errorDetails: { errorCode: "AUDIT_JOB_EXPIRED", retryable: true, errorType: "worker_lease_expired" } },
+    });
+  });
+
   it("fails an expired processing job older than ten minutes", async () => {
     const jobId = "11111111-1111-4111-8111-111111111111";
     const { store, fetchMock } = makeStore([{ id: jobId }]);
     await expect(store.failExpiredProcessingJobs()).resolves.toBe(1);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     const selectUrl = String(fetchMock.mock.calls[0]?.[0]);
     const updateUrl = String(fetchMock.mock.calls[1]?.[0]);
     expect(selectUrl).toContain("status=eq.processing");
@@ -133,6 +170,98 @@ describe("DSP provider failure persistence", () => {
 
 });
 
+
+describe("audit status aggregation", () => {
+  it("uses one event lookup for monotonic progress, DSP status and sanitized failure details", async () => {
+    process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
+    process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("/audit_jobs")) {
+        return new Response(JSON.stringify({
+          id: "status-job",
+          status: "failed",
+          error_message: "Audit processing: a required stage could not be completed. Please retry the audit.",
+          catalog_metadata: {},
+        }), { status: 200, headers: { "content-type": "application/json", "content-range": "0-0/1" } });
+      }
+      if (url.includes("/audit_events")) {
+        return new Response(JSON.stringify([
+          { event_type: "evidence_reconciliation", payload: {}, created_at: "2026-11-18T00:00:01Z" },
+          { event_type: "sonic_dna", payload: {}, created_at: "2026-11-18T00:00:02Z" },
+          { event_type: "groq_section_completed", payload: {}, created_at: "2026-11-18T00:00:03Z" },
+          { event_type: "audit_failed", payload: { errorDetails: { errorCode: "GEMINI_HTTP_403", provider: "gemini", httpStatus: 403, retryable: false } }, created_at: "2026-11-18T00:00:04Z" },
+        ]), { status: 200, headers: { "content-type": "application/json", "content-range": "0-3/4" } });
+      }
+      return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json", "content-range": "*/0" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createSupabaseAuditStore();
+
+    const status = await store.getAuditStatus("status-job");
+
+    expect(status.currentStepIndex).toBe(4);
+    expect(status.errorDetails).toMatchObject({
+      errorCode: "GEMINI_HTTP_403",
+      provider: "gemini",
+      httpStatus: 403,
+      retryable: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("audit progress event persistence", () => {
+  it("records assessment-started only for the active claim", async () => {
+    const { store, fetchMock } = makeStore({
+      status: "processing",
+      claim_token: "claim-token",
+      lease_expires_at: "2099-01-01T00:00:00.000Z",
+    });
+
+    await store.markAssessmentStarted("job-assessment", "claim-token");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("audit_jobs");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("audit_events");
+    const body = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(body).toMatchObject({
+      audit_job_id: "job-assessment",
+      event_type: "ar_assessment_started",
+      status: "processing",
+      payload: { stage: "ar_assessment" },
+    });
+  });
+
+  it("rejects progress writes from a stale claim token", async () => {
+    const { store, fetchMock } = makeStore({
+      status: "processing",
+      claim_token: "current-claim",
+      lease_expires_at: "2099-01-01T00:00:00.000Z",
+    });
+
+    await expect(store.markAssessmentStarted("job-stale", "old-claim")).rejects.toThrow("AUDIT_LEASE_LOST");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("records report-generation-started as a distinct progress stage", async () => {
+    const { store, fetchMock } = makeStore({
+      status: "processing",
+      claim_token: "claim-token",
+      lease_expires_at: "2099-01-01T00:00:00.000Z",
+    });
+
+    await store.markReportGenerationStarted("job-report", "claim-token");
+
+    const body = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(body).toMatchObject({
+      audit_job_id: "job-report",
+      event_type: "report_generation_started",
+      status: "processing",
+      payload: { stage: "report_generation" },
+    });
+  });
+});
 
 describe("Sonic DNA diagnostic event persistence", () => {
   it("stores bounded tempo and key diagnostics in audit_events without audio samples", async () => {

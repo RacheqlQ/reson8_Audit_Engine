@@ -14,6 +14,14 @@ describe("professional report text and metadata coverage", () => {
     expect(text).not.toMatch(/\d+\.\d{4,}/);
   });
 
+  it("normalizes repeated industry-practice prefixes in report sections", () => {
+    const pages = planAuditReportPages(fullAudioFixture as any, "full");
+    const text = pages.slice(10, 13).flatMap((page) => page.text).join(" ");
+    expect(text).toContain("General industry guidance");
+    expect(text).not.toMatch(/General industry guidance\s*[—:-]\s*General industry guidance/i);
+    expect(text).not.toMatch(/INDUSTRY PRACTICE\s*[—:-]\s*INDUSTRY PRACTICE/i);
+  });
+
   it("recognizes the actual exported fixture provenance without inventing checked-provider metadata", () => {
     expect(fullAudioFixture.evidence.fixture).toBe(true);
     expect(fullAudioFixture.evidence.sources).toContain("synthetic_audio_fixture");

@@ -14,6 +14,7 @@ import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
+import { classifyAuditFailure, type AuditFailureDetails } from "./audit-failure.js";
 
 export interface AuditJobRecord {
   id: string;
@@ -56,10 +57,12 @@ export interface AuditProcessorDependencies {
     catalogMetadata?: Record<string, unknown> | null;
   }, signal?: AbortSignal): Promise<ArAssessment>;
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment, signal?: AbortSignal): Promise<void>;
+  markAssessmentStarted?(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
+  markReportGenerationStarted?(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   generateReport(input: AuditReportInput, tier: AuditReportTier, signal?: AbortSignal): Promise<Uint8Array>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
-  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
+  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal, details?: AuditFailureDetails): Promise<void>;
   stopHeartbeat?(): Promise<void>;
   signal?: AbortSignal;
 }
@@ -515,7 +518,6 @@ export async function processAuditJob(
       audd: recognitionMetadataInput(recognition),
     };
     const reconciliation = reconcileMetadata(metadataInput);
-    await awaitWithStage(deps, "evidence_reconciliation_persist", 15_000, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources));
 
     const fusedGenreClassification = fuseGenreEvidence({
       providerTags: genreProviderTags(metadataSources, masterTags),
@@ -538,6 +540,12 @@ export async function processAuditJob(
       };
       await awaitWithStage(deps, "sonic_dna_persist", 15_000, (signal) => deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal));
     }
+
+    // Persist the reconciliation event after Sonic DNA so the ordered progress
+    // timeline cannot move backwards from reconciliation to Sonic measurement.
+    await awaitWithStage(deps, "evidence_reconciliation_persist", 15_000, (signal) =>
+      deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources),
+    );
 
     const identity = reconciliation.identity;
     const evidence = {
@@ -632,6 +640,11 @@ export async function processAuditJob(
       genreClassification,
       genreContext: genreClassification.genres.map((genre) => genre.label),
     } : null;
+    if (deps.markAssessmentStarted) {
+      await awaitWithStage(deps, "assessment_start", 15_000, (signal) =>
+        deps.markAssessmentStarted!(jobId, job.claimToken, signal),
+      );
+    }
     const assessment = await awaitWithStage(deps, "ai_assessment", 4 * 60_000, (signal) => deps.generateAssessment({
       evidence: assessmentEvidence,
       sonicDna,
@@ -646,6 +659,11 @@ export async function processAuditJob(
         : null,
     }, signal));
     await awaitWithStage(deps, "assessment_persist", 15_000, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
+    if (deps.markReportGenerationStarted) {
+      await awaitWithStage(deps, "report_generation_start", 15_000, (signal) =>
+        deps.markReportGenerationStarted!(jobId, job.claimToken, signal),
+      );
+    }
 
     const generatedAt = new Date().toISOString();
     const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
@@ -660,8 +678,9 @@ export async function processAuditJob(
     const message = jobDeadlineExceeded
       ? "Audit processing: the job exceeded its eight-minute time limit. Please submit it again."
       : userSafeFailureMessage(error);
+    const failureDetails = classifyAuditFailure(jobDeadlineExceeded ? new Error("AUDIT_JOB_DEADLINE_EXCEEDED") : error);
     await withAbortTimeout(
-      (signal) => deps.markFailed(jobId, job.claimToken, message, signal),
+      (signal) => deps.markFailed(jobId, job.claimToken, message, signal, failureDetails),
       15_000,
       "AUDIT_TERMINAL_WRITE_TIMEOUT",
     );

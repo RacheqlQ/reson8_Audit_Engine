@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runQueueWorkerLoop } from "../src/jobs/worker-loop.js";
+import { ProviderUnavailableError } from "../src/providers/provider-readiness.js";
 
 describe("runQueueWorkerLoop", () => {
   it("stops polling after its abort signal is raised", async () => {
@@ -38,6 +39,22 @@ describe("runQueueWorkerLoop", () => {
 
     expect(attempts).toBe(2);
     expect(errors).toEqual(["temporary database error"]);
+  });
+
+  it("stops polling after a non-retryable provider becomes unavailable", async () => {
+    let attempts = 0;
+    const errors: unknown[] = [];
+    await runQueueWorkerLoop({
+      processNext: async () => {
+        attempts += 1;
+        throw new ProviderUnavailableError("groq", "authentication_failed");
+      },
+      onError: (error) => errors.push(error),
+      pollIntervalMs: 0,
+      signal: new AbortController().signal,
+    });
+    expect(attempts).toBe(1);
+    expect(errors[0]).toBeInstanceOf(ProviderUnavailableError);
   });
 
   it("finishes an active job after abort and does not claim another job", async () => {

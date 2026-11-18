@@ -22,7 +22,7 @@ function id3Fixture(): Uint8Array {
 
 
 describe("processAuditJob", () => {
-  it("moves a queued master through evidence, Sonic DNA, Groq assessment and completion", async () => {
+  it("persists Sonic DNA before reconciliation so audit progress follows the displayed stage order", async () => {
     const events: string[] = [];
     const result = await processAuditJob("job-123", {
       getJob: async () => ({
@@ -79,6 +79,8 @@ describe("processAuditJob", () => {
         return assessment;
       },
       saveAssessment: async () => events.push("assessment-saved"),
+      markAssessmentStarted: async () => events.push("assessment-started"),
+      markReportGenerationStarted: async () => events.push("report-started"),
       generateReport: async (_input, tier) => {
         events.push(`report-${tier}`);
         return new Uint8Array([37, 80, 68, 70, 45]);
@@ -96,10 +98,12 @@ describe("processAuditJob", () => {
     expect(events).toEqual([
       "processing",
       "recognition",
-      "evidence",
       "dna",
+      "evidence",
+      "assessment-started",
       "assessment",
       "assessment-saved",
+      "report-started",
       "report-sample",
       "report-saved-sample",
       "report-full",

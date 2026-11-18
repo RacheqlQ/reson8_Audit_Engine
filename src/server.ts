@@ -7,6 +7,7 @@ import { MAX_AUDIO_FILE_BYTES } from "./jobs/audio-intake.js";
 import { createSupabaseAuditStore } from "./integrations/supabase-audit-store.js";
 import type { CreateAuditJobDependencies } from "./jobs/create-audit-job.js";
 import { ensurePdfReport } from "./reports/pdf-output.js";
+import { getProviderReadiness } from "./providers/provider-readiness.js";
 
 export interface AuditStore {
   createJobDependencies(): CreateAuditJobDependencies;
@@ -15,6 +16,7 @@ export interface AuditStore {
     status: "queued" | "processing" | "completed" | "failed";
     currentStepIndex: number;
     errorMessage?: string | null;
+    errorDetails?: Record<string, unknown> | null;
     full: { available: boolean; version?: number };
   }>;
   getAuditReport(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<{
@@ -155,6 +157,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
   app.get("/health", async () => ({
     status: "ok",
     service: "reson8-audit-engine",
+    providers: getProviderReadiness(),
   }));
   app.get<{
     Params: { jobId: string };

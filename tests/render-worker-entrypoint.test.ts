@@ -8,7 +8,10 @@ describe("Render worker entrypoint", () => {
     ) as { scripts?: Record<string, string> };
 
     expect(packageJson.scripts?.worker).toBe(
-      "node --env-file-if-exists=/etc/secrets/Secrets.env dist/main.js",
+      "node --env-file-if-exists=/etc/secrets/Secrets.env dist/worker-main.js",
     );
+    const workerSource = readFileSync(new URL("../src/worker-main.ts", import.meta.url), "utf8");
+    expect(workerSource).toContain('process.env.RUN_WORKER_IN_API !== "false"');
+    expect(workerSource).toContain("standalone_worker_blocked");
   });
 });

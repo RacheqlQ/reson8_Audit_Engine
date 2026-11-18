@@ -12,14 +12,14 @@ describe("Gemini assessment fallback transport", () => {
       });
       return new Response(JSON.stringify({ error: { message: "temporary unavailable" } }), { status: 503 });
     });
-    const client = new GeminiClient("test-gemini-key", "gemini-2.5-flash", fetchMock as typeof fetch, async () => {});
+    const client = new GeminiClient("test-gemini-key", undefined, fetchMock as typeof fetch, async () => {});
 
     await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow("Gemini narrative assessment failed with HTTP 503");
     expect(requests).toHaveLength(3);
     for (const request of requests) {
       expect(request.url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
       expect(request.headers.get("authorization")).toBe("Bearer test-gemini-key");
-      expect(request.body.model).toBe("gemini-2.5-flash");
+      expect(request.body.model).toBe("gemini-3.6-flash");
       expect(request.body.response_format).toEqual({ type: "json_object" });
       expect(request.body.max_tokens).toBeGreaterThanOrEqual(256);
       expect(request.body.max_tokens).toBeLessThanOrEqual(1200);

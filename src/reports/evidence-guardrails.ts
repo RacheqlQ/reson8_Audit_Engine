@@ -229,11 +229,24 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   const zeroConfidence = typeof assessment.confidence === "number"
     && Number.isFinite(assessment.confidence)
     && assessment.confidence <= 0;
+  const hasUploadedMasterMeasurements = Boolean(
+    sonicDna && sonicDna.provenance === "uploaded_audio_master",
+  );
+  if (!hasUploadedMasterMeasurements && Array.isArray(mutable.strengths)) {
+    const audioMeasurementClaim = /\b(?:\d{2,3}\s*bpm|beats per minute|tempo|key\s*\/\s*mode|harmonic key|rhythm|rhythmic|dynamic range|rms|lufs|loudness|spectral|vocal|instrumental|mix translation|mastering|low[- ]end|groove|arrangement|production quality)\b/i;
+    mutable.strengths = mutable.strengths.filter((strength: unknown) =>
+      typeof strength !== "string"
+        || (!audioMeasurementClaim.test(strength) && !/^Not asserted:/i.test(strength)),
+    );
+  }
   if (Array.isArray(mutable.evidenceLabels)) {
     mutable.evidenceLabels = mutable.evidenceLabels.filter((entry: unknown) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
       const record = entry as Record<string, unknown>;
       const claim = typeof record.claim === "string" ? record.claim : "";
+      if (!hasUploadedMasterMeasurements && record.label === "OBSERVED") return false;
+      if (!hasUploadedMasterMeasurements && (record.source === "synthetic_audio_fixture"
+        || (typeof record.source === "string" && record.source.startsWith("fixture.sonicDna.")))) return false;
       if (!reliableTempo && /\b(?:tempo|bpm|beats per minute)\b/i.test(claim)) return false;
       if (!isReliableKey(sonicDna as Record<string, unknown> | null | undefined) && /\b(?:key|mode|major|minor|tonic)\b/i.test(claim)) return false;
       if (!hasVocalAnalysis(sonicDna) && /\b(?:vocal|instrumental|singing|singer|voice)\b/i.test(claim)) return false;
