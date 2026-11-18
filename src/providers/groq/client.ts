@@ -151,7 +151,7 @@ let groqCompletionBudgetScale = 1;
 const MAX_NETWORK_ATTEMPTS = 3;
 export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
 // Keep the provider-local deadline below the 10-minute stage deadline so the worker can run fallbacks.
-export const GROQ_ASSESSMENT_TIMEOUT_MS = 8 * 60_000;
+export const GROQ_ASSESSMENT_TIMEOUT_MS = 9 * 60_000;
 const MAX_COMPLETION_TOKENS = 1200;
 const MAX_GROQ_TOTAL_TOKENS = 6000;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
