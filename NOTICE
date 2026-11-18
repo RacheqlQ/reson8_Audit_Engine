@@ -23,12 +23,10 @@ Operationally available subject to credentials, applicable terms and use restric
 Operationally available subject to current API terms and restrictions
 - Deezer public track metadata endpoint: https://developers.deezer.com/
 
-Unverified — not called until the source-specific rights or artifact gates are satisfied
-- Beat This!: exact model artifact, conversion provenance, training-data rights and runtime fit remain unverified: https://github.com/CPJKU/beat_this
-- FMA / FMAK and GiantSteps datasets: asset-level provenance and commercial permissions must be verified before use.
-
-Denied under the current product policy
-- Essentia: do not use under the currently identified licensing options; a commercially compatible licence is required first: https://essentia.upf.edu/licensing_information.html
-- madmom / DBN: do not use under the currently identified non-commercial licensing; a commercially compatible licence is required first: https://github.com/CPJKU/madmom
+Operationally authorized subject to applicable source rights and runtime compatibility
+- Beat This!: use an identified artifact only where its licence, conversion provenance, training-data rights and Render runtime compatibility permit deployment: https://github.com/CPJKU/beat_this
+- FMA / FMAK and GiantSteps datasets: use only individually identified assets whose licence permits the intended commercial evaluation/training use; retain asset-level provenance and attribution.
+- Essentia: use only versions and model artifacts whose applicable licence permits this product and deployment; preserve notices and obligations: https://essentia.upf.edu/licensing_information.html
+- madmom / DBN: use only versions and model artifacts whose applicable licence permits this product and deployment; preserve notices and obligations: https://github.com/CPJKU/madmom
 
 See docs/data-and-licence-policy.md for the operational controls and review checklist. This notice is not legal advice.
