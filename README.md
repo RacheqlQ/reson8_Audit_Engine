@@ -13,6 +13,6 @@ Environment variable names include NODE_ENV, PORT, provider credentials, SUPABAS
 
 The executable register is `src/providers/provider-policy.ts`; the full status register and source terms are in `docs/data-and-licence-policy.md`. Providers marked `allowed` are operationally available without a separate per-provider environment switch, subject to their required credentials, API limits and terms. Registry authorization does not waive provider terms or prove that an external commercial agreement exists; contract-dependent sources remain usable only within an applicable executed agreement. Groq and AudD are operationally authorized by the product owner; this is not a legal determination and does not waive applicable terms, data-use, audio-processing, retention or deletion obligations.
 
-DSP metadata enrichment runs for approved providers when the relevant credentials/configuration are present. Missing credentials are reported as `not_configured`; policy restrictions are reported as `disabled by data policy`.
+Implemented DSP metadata enrichment runs when its actual credentials/configuration are present; missing credentials are reported as `not_configured`. No `PROVIDER_ENABLED_<NAME>` switches are read. Registry authorization does not create integrations for providers whose clients or model runtimes are not yet implemented; see the integration-availability section in the data policy.
 
 Keep `PAYMENTS_ENABLED=false`. Provider-policy changes do not enable or alter payment processing.
