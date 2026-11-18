@@ -317,7 +317,7 @@ function drawSonic(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<ty
    if(n===null)text(p,"Not determined",x+41,y-27,f,6.2,C.muted);
   }else if(v!==null){
    const display=shown(row.value);
-   const unit=/LUFS/i.test(label)?"LUFS":/BPM/i.test(label)?"BPM":/RANGE|SPREAD/i.test(label)?"dB":/HZ|ROLLOFF|CENTROID/i.test(label)?"Hz":"";
+   const unit=/LUFS/i.test(label)?"LUFS":/\\bLRA\\b/i.test(label)?"LU":/BPM/i.test(label)?"BPM":/RANGE|SPREAD/i.test(label)?"dB":/HZ|ROLLOFF|CENTROID/i.test(label)?"Hz":"";
    let metricSize=25;
    const maxMetricWidth=unit?102:138;
    while(metricSize>11&&b.widthOfTextAtSize(display,metricSize)>maxMetricWidth)metricSize-=1;
