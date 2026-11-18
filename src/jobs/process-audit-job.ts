@@ -4,6 +4,7 @@ import type { ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { isPdf } from "../reports/pdf-output.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
+import { unavailableVocalAnalysis, type VocalAnalysisResult } from "../audio/vocal-analysis.js";
 import { analyzePcmWithTimeout } from "../audio/sonic-dna-worker-client.js";
 import { fuseGenreEvidence, type ProviderGenreTags } from "../genre/fusion.js";
 import { DEFAULT_GENRE_MODEL } from "../genre/model.js";
@@ -50,6 +51,7 @@ export interface AuditProcessorDependencies {
   ): Promise<void>;
   decode(bytes: Uint8Array, mimeType?: string, signal?: AbortSignal): Promise<{ samples: Float32Array; sampleRate: number; channels: number; loudnessLufs?: number | null; loudnessRangeLu?: number | null; truePeakDbfs?: number | null }>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
+  analyzeVocals?(samples: Float32Array, sampleRate: number, channels: number, signal?: AbortSignal): Promise<VocalAnalysisResult>;
   generateAssessment(input: {
     evidence: Record<string, unknown>;
     sonicDna: Record<string, unknown> | null;
@@ -494,14 +496,29 @@ export async function processAuditJob(
       const dna = await awaitWithStage(deps, "sonic_dna", 90_000, (signal) =>
         analyzePcmWithTimeout(decoded.samples, decoded.sampleRate, decoded.channels, 90_000, signal),
       );
+      let vocalFeatures: VocalAnalysisResult;
+      if (deps.analyzeVocals) {
+        try {
+          vocalFeatures = await awaitWithStage(deps, "vocal_analysis", 150_000, (signal) =>
+            deps.analyzeVocals!(decoded.samples, decoded.sampleRate, decoded.channels, signal),
+          );
+        } catch (error) {
+          if (deps.signal?.aborted) throw leaseLostError(deps.signal);
+          vocalFeatures = unavailableVocalAnalysis(error instanceof Error ? error.message : "Vocal analysis did not complete.");
+        }
+      } else {
+        vocalFeatures = unavailableVocalAnalysis("Vocal separation is not configured in this worker build.");
+      }
       masterDna = {
         ...dna,
+        vocalFeatures,
         loudnessLufs: decoded.loudnessLufs ?? dna.loudnessLufs,
         loudnessRangeLu: decoded.loudnessRangeLu ?? null,
         truePeakDbfs: decoded.truePeakDbfs ?? null,
         sampleRate: decoded.sampleRate,
         channels: decoded.channels,
         durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
+        limitations: [...dna.limitations, ...vocalFeatures.limitations],
       };
     }
 
