@@ -70,6 +70,31 @@ describe("Phillo evidence guardrails", () => {
     expect(result.commercialRead.rationale).toContain("No verified, source-attributed commercial-performance metrics");
   });
 
+  it("removes synthetic audio measurements and OBSERVED claims from metadata-only assessments", () => {
+    const assessment = {
+      ...baseAssessment,
+      strengths: [
+        "Observed tempo of 128 BPM supports a strong rhythmic lane.",
+        "Independent catalog sources agree on the artist and release title.",
+      ],
+      evidenceLabels: [
+        { label: "OBSERVED", claim: "Observed tempo: 128 BPM.", source: "synthetic_audio_fixture" },
+        { label: "OBSERVED", claim: "Measured dynamic range: 8 dB.", source: "synthetic_audio_fixture" },
+        { label: "RECOGNIZED", claim: "Spotify returned the artist and title.", source: "spotify" },
+      ],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, null, {
+      auditType: "METADATA-ONLY AUDIT",
+      sources: ["spotify", "synthetic_audio_fixture"],
+    });
+    expect(result.strengths).toEqual([
+      "Independent catalog sources agree on the artist and release title.",
+    ]);
+    expect(result.evidenceLabels).toEqual([
+      { label: "RECOGNIZED", claim: "Spotify returned the artist and title.", source: "spotify" },
+    ]);
+  });
+
   it("reconciles present-but-conflicting album metadata instead of calling it missing", () => {
     const assessment = {
       ...baseAssessment,
