@@ -3,12 +3,13 @@ import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
-import { GeminiClient, GroqClient, OllamaClient } from "../providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient } from "../providers/groq/client.js";
 import { generateAuditReport } from "../reports/generate-audit-report.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
 import { runQueueWorkerLoop } from "./worker-loop.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
+import { classifyAuditFailure } from "./audit-failure.js";
 import { startRenderFreeServiceKeepalive } from "./render-free-service-keepalive.js";
 
 const POLL_INTERVAL_MS = 15_000;
@@ -16,20 +17,31 @@ const HEARTBEAT_INTERVAL_MS = 45_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
 const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
-function isFallbackEligible(error: unknown): boolean {
+export function isFallbackEligible(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /AI capacity reached|timed out|HTTP (?:413|429|5\d\d)|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
 }
 
-function safeFailureCategory(error: unknown): string {
+export function safeFailureCategory(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/capacity|429|daily.limit|TPD/i.test(message)) return "capacity";
   if (/timed out|ETIMEDOUT/i.test(message)) return "timeout";
   if (/json_validate_failed|failed to validate JSON|failed Zod validation/i.test(message)) return "json_validation";
-  if (/HTTP 413/i.test(message)) return "request_too_large";
+  if (/HTTP 413|GROQ_REQUEST_TOO_LARGE/i.test(message)) return "request_too_large";
   if (/HTTP 5\d\d|network|fetch failed|ECONNRESET/i.test(message)) return "transient_provider_error";
   if (/HTTP 401|HTTP 403/i.test(message)) return "authentication";
   return "provider_error";
+}
+
+function providerFailureTelemetry(provider: "groq" | "gemini" | "ollama", model: string, error: unknown) {
+  const failure = classifyAuditFailure(error);
+  return {
+    provider,
+    model,
+    httpStatus: failure.httpStatus,
+    errorType: failure.errorType,
+    retryable: failure.retryable,
+  };
 }
 
 export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jobId: string; status: "completed" | "failed" } | null> {
@@ -116,12 +128,20 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         if (signal?.aborted || !isFallbackEligible(error)) throw error;
         let fallbackError: unknown = error;
         if (gemini) {
-          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: safeFailureCategory(error) }));
+          console.warn(JSON.stringify({
+            worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini",
+            reason: safeFailureCategory(error),
+            ...providerFailureTelemetry("groq", process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, error),
+          }));
           try {
             return await gemini.assess(assessmentInput, signal);
           } catch (geminiError) {
             fallbackError = geminiError;
-            console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_failed", reason: safeFailureCategory(geminiError) }));
+            console.warn(JSON.stringify({
+              worker: "audit", jobId: job.id, event: "gemini_fallback_failed",
+              reason: safeFailureCategory(geminiError),
+              ...providerFailureTelemetry("gemini", process.env.GEMINI_MODEL ?? "gemini-2.5-flash", geminiError),
+            }));
           }
         }
         if (!ollama || signal?.aborted || !isFallbackEligible(fallbackError)) throw fallbackError;
@@ -130,11 +150,16 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
           jobId: job.id,
           event: gemini ? "gemini_fallback_to_ollama" : "groq_fallback_to_ollama",
           reason: safeFailureCategory(fallbackError),
+          ...providerFailureTelemetry(gemini ? "gemini" : "groq", gemini ? process.env.GEMINI_MODEL ?? "gemini-2.5-flash" : process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, fallbackError),
         }));
         try {
           return await ollama.assess(assessmentInput, signal);
         } catch (ollamaError) {
-          console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "ollama_fallback_failed", reason: safeFailureCategory(ollamaError) }));
+          console.error(JSON.stringify({
+            worker: "audit", jobId: job.id, event: "ollama_fallback_failed",
+            reason: safeFailureCategory(ollamaError),
+            ...providerFailureTelemetry("ollama", process.env.OLLAMA_MODEL ?? "gemma4:31b", ollamaError),
+          }));
           throw ollamaError;
         }
       }
