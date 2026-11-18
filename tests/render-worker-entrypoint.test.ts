@@ -8,7 +8,7 @@ describe("Render worker entrypoint", () => {
     ) as { scripts?: Record<string, string> };
 
     expect(packageJson.scripts?.worker).toBe(
-      "node --env-file-if-exists=/etc/secrets/Secrets.env dist/main.js",
+      "node --env-file-if-exists=/etc/secrets/Secrets.env dist/worker-main.js",
     );
   });
 });
