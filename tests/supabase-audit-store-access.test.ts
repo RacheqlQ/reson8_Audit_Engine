@@ -74,8 +74,9 @@ describe("audit status query efficiency", () => {
     process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
     const job = { id: "job-status", status: "failed", error_code: "capacity", error_message: "AI assessment: capacity exhausted.", catalog_metadata: {} };
     const events = [
+      { event_type: "sonic_dna", status: "completed", created_at: "2026-11-18T10:00:05.000Z", payload: {} },
       { event_type: "audit_failed", status: "failed", created_at: "2026-11-18T10:00:04.000Z", payload: { errorCode: "capacity", retryable: true } },
-      { event_type: "ar_assessment", status: "completed", created_at: "2026-11-18T10:00:03.000Z", payload: {} },
+      { event_type: "evidence_reconciliation", status: "completed", created_at: "2026-11-18T10:00:03.000Z", payload: {} },
       { event_type: "catalog_ingestion", status: "completed", created_at: "2026-11-18T10:00:02.000Z", payload: { platform: "spotify", canonicalUrl: "https://open.spotify.com/track/123", status: "recognized" } },
       { event_type: "catalog_links_submitted", status: "recognized", created_at: "2026-11-18T10:00:01.000Z", payload: { submittedLinks: ["https://open.spotify.com/track/123"] } },
     ];
@@ -90,7 +91,7 @@ describe("audit status query efficiency", () => {
     const status = await store.getAuditStatus("job-status");
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(status).toMatchObject({
-      errorCode: "capacity", errorRetryable: true, currentStepIndex: 4, full: { available: true, version: 2 },
+      errorCode: "capacity", errorRetryable: true, currentStepIndex: 3, full: { available: true, version: 2 },
       catalogUrlsSubmitted: ["https://open.spotify.com/track/123"],
       catalogSources: [{ platform: "spotify", status: "recognized" }],
     });
