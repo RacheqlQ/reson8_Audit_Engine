@@ -10,7 +10,7 @@
 1. Use submitter-supplied audio and metadata only for the requested audit, subject to the submitter's authority to provide them. Do not train models on submitted masters.
 2. Prefer first-party analysis implemented in this repository. Record algorithm/model, version, inputs, confidence tier and limitations for every audio-derived claim.
 3. The executable status in `src/providers/provider-policy.ts` is authoritative. `allowed` means operationally authorized for this product's workflow; it does not waive provider terms, require no contract, or prove commercial rights beyond those terms.
-4. An approved provider is called when its integration is implemented and its actual credentials/configuration are present. No per-provider environment switches are required. Missing credentials/configuration are reported as `not_configured`; unverified or denied providers are blocked with `disabled by data policy`.
+4. An approved provider is called when its integration is implemented and its actual credentials/configuration are present. No per-provider environment switches are required. Missing credentials/configuration are reported as `not_configured`; providers marked `allowed` are operationally authorized; any source-specific licence, API contract, credential, rate-limit, attribution, retention or deletion requirement still applies.
 5. Never silently substitute fabricated or stale values. Reports identify data sources and methods, distinguish submitter-supplied/unverified information from provider observations and measured analysis, and include retrieval timestamps where applicable.
 6. Do not retain third-party audio or provider payloads beyond the documented operational need. Diagnostic events contain derived features only: a normalized onset envelope capped at 128 values, beat markers capped at 512, heuristic four-beat downbeat candidates capped at 128, and up to 12 normalized 12-bin chroma segments. Never store PCM samples, audio bytes, access tokens or reconstructable audio in diagnostics.
 7. Payment controls are separate from data-provider controls. `PAYMENTS_ENABLED` remains false by default and must not be enabled as part of this policy work.
@@ -36,17 +36,17 @@
 | Last.fm | Catalogue/listening metadata | allowed | Requires valid Last.fm API credentials; comply with API terms, attribution, caching and deletion requirements. |
 | Chartmetric / Soundcharts / Luminate | Paid market intelligence | allowed, contract-dependent | Call only when the applicable executed commercial agreement and approved credentials exist; follow contract-specific attribution, storage and deletion clauses. |
 | Deezer | Public track metadata cross-reference | allowed | Product-owner operational authorization; use the implemented track endpoint only within current Deezer API terms, rate limits, availability and applicable restrictions. |
-| Beat This! | Optional tempo/beat inference | unverified | Do not enable until exact model artifact, commit, SHA-256, licence, conversion provenance, training-data rights, Node compatibility and measured peak memory on the Render service are documented. |
-| FMAK / Free Music Archive datasets | Model training/evaluation data | unverified | Do not ingest/use until per-asset provenance, rights and commercial permissions are verified. |
-| GiantSteps datasets | Model training/evaluation data | unverified | Do not ingest/use until per-asset provenance, rights and commercial permissions are verified. |
-| Essentia | Audio analysis library/models | denied | Do not add or use under the currently identified licensing options; a commercially compatible licence must be established first. |
-| madmom / DBN | Beat tracking | denied | Do not add or use under the currently identified non-commercial licensing; a commercially compatible licence must be established first. |
+| Beat This! | Optional tempo/beat inference | allowed for evaluation/use subject to source rights | Operationally authorized; call only with an identified model artifact whose licence, conversion provenance, training-data rights and Render runtime compatibility permit this deployment. Record commit and SHA-256. |
+| FMAK / Free Music Archive datasets | Model training/evaluation data | allowed for evaluation/use subject to per-asset rights | Operationally authorized; use only individually identified assets whose licence permits the intended commercial evaluation/training use; retain asset-level provenance and attribution. |
+| GiantSteps datasets | Model training/evaluation data | allowed for evaluation/use subject to per-asset rights | Operationally authorized; use only individually identified assets whose licence permits the intended commercial evaluation/training use; retain asset-level provenance and attribution. |
+| Essentia | Audio analysis library/models | allowed subject to applicable licence | Operationally authorized; use a version and model artifact only where the applicable licence permits this product and deployment; preserve licence notices and obligations. |
+| madmom / DBN | Beat tracking | allowed subject to applicable licence | Operationally authorized; use a version and model artifact only where the applicable licence permits this product and deployment; preserve licence notices and obligations. |
 
 ## Runtime policy implementation
 
 The executable register is `src/providers/provider-policy.ts`. The registry is the sole provider authorization switch. The DSP catalogue dispatcher and embedded worker consult it before third-party calls. There are no `PROVIDER_ENABLED_<NAME>` variables or per-provider true/false opt-ins. Credentials are checked by each integration; a missing credential must be reported as `not_configured` and must never be represented as a policy denial.
 
-There are no per-provider environment variables in the runtime configuration. Provider authorization comes from this registry; credentials, authentication, API rate limits, vendor contracts, licensing restrictions and implementation readiness remain mandatory. Entries marked `unverified` or `denied` remain unavailable. Provider readiness for Groq, Gemini and Ollama requires both an `allowed` registry status and the relevant API credential.
+There are no per-provider `PROVIDER_ENABLED_<NAME>` environment variables in the runtime configuration. Provider authorization comes from this registry; credentials, authentication, API rate limits, vendor contracts, licensing restrictions and implementation readiness remain mandatory. Registry entries are operationally authorized for use when implemented and configured. Required credentials and source-specific licence/contract restrictions remain mandatory. The registry status does not itself grant rights, install a dependency, create a provider integration or prove an external contract exists.
 
 Audio diagnostics are persisted in the existing fenced `sonic_dna` audit event payload; no database migration is required. `scripts/diagnostics-to-fixture.mjs` converts one exported event payload from stdin into a bounded Vitest fixture and deliberately selects only diagnostic fields. The downbeat grid is explicitly a four-beat diagnostic hypothesis, not a meter or downbeat detection claim.
 
@@ -66,6 +66,6 @@ Tempo and key must additionally carry method and confidence tier: **Detected**, 
 - [ ] Retention, caching, attribution, refresh and deletion requirements recorded.
 - [ ] Data use in reports and in any LLM prompt explicitly permitted.
 - [ ] Registry status matches the documented permission and integration state.
-- [ ] Tests verify denied/unverified sources are never called and approved sources work without per-provider flags.
+- [ ] Tests verify all operationally authorized sources are called when implemented and configured, with no per-provider enable flags; source-specific contractual and licence restrictions remain enforced.
 - [ ] Report displays source, retrieval date, limitations and evidence label.
 - [ ] Legal review completed where required.
