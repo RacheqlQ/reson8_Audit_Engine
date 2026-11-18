@@ -49,7 +49,7 @@ export async function startAuditEngine(
     console.error(JSON.stringify({
       worker: "audit",
       event: "application_shutdown_failed",
-      error: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.name : "UnknownError",
     }));
     process.exitCode = 1;
   });
