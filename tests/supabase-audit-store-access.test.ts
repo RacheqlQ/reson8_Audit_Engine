@@ -67,6 +67,34 @@ describe("Supabase capability-token verification adapter", () => {
 });
 
 
+describe("audit status query efficiency", () => {
+  it("uses three database round trips and returns structured failures and catalog state", async () => {
+    process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
+    process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
+    const job = { id: "job-status", status: "failed", error_code: "capacity", error_message: "AI assessment: capacity exhausted.", catalog_metadata: {} };
+    const events = [
+      { event_type: "ar_assessment", status: "completed", created_at: "2026-11-18T10:00:03.000Z", payload: {} },
+      { event_type: "catalog_ingestion", status: "completed", created_at: "2026-11-18T10:00:02.000Z", payload: { platform: "spotify", canonicalUrl: "https://open.spotify.com/track/123", status: "recognized" } },
+      { event_type: "catalog_links_submitted", status: "recognized", created_at: "2026-11-18T10:00:01.000Z", payload: { submittedLinks: ["https://open.spotify.com/track/123"] } },
+    ];
+    const reports = [{ tier: "full", version: 2, access_status: "available" }];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes("/audit_jobs?") ? job : url.includes("/audit_events?") ? events : reports;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createSupabaseAuditStore();
+    const status = await store.getAuditStatus("job-status");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(status).toMatchObject({
+      errorCode: "capacity", currentStepIndex: 4, full: { available: true, version: 2 },
+      catalogUrlsSubmitted: ["https://open.spotify.com/track/123"],
+      catalogSources: [{ platform: "spotify", status: "recognized" }],
+    });
+  });
+});
+
 describe("DSP provider failure persistence", () => {
   it("uses a validated configurable stuck-job timeout", () => {
     expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "300000" })).toBe(300_000);
