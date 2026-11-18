@@ -244,6 +244,12 @@ function sections(i:AuditReportInput):Section[]{
  const genreRegions=Array.isArray(genreRecord.regionTags)?genreRecord.regionTags.map(text).filter(Boolean):[];
  const genreScenes=Array.isArray(genreRecord.sceneTags)?genreRecord.sceneTags.map(text).filter(Boolean):[];
  const genreUnmapped=Array.isArray(genreRecord.unmappedTags)?genreRecord.unmappedTags.length:0;
+ const genreUnmappedDetails=Array.isArray(genreRecord.unmappedTags)?genreRecord.unmappedTags.flatMap((item)=>{
+  if(!item||typeof item!=="object")return [];
+  const record=item as Record<string,unknown>,provider=text(record.provider),tag=text(record.tag);
+  return provider&&tag?[provider+" — "+tag]:[];
+ }):[];
+ const genreModel=genreRecord.model&&typeof genreRecord.model==="object"?genreRecord.model as Record<string,unknown>:{};
  const primaryGenre=text(genreRecord.primaryGenre)||"No primary genre asserted — insufficient or conflicting provider evidence";
 
  const verifiedCuratorTargets=Array.isArray(e.curatorTargets)?e.curatorTargets.filter((item):item is Record<string,unknown>=>{
@@ -322,7 +328,7 @@ function sections(i:AuditReportInput):Section[]{
    + (genreSources.length ? "; sources: " + genreSources.join(", ") : "")
    + (genreRegions.length ? "; regions: " + genreRegions.join(", ") : "")
    + (genreScenes.length ? "; scenes: " + genreScenes.join(", ") : "")
-   + "; unmapped tags: " + String(genreUnmapped ?? "none")
+   + "; unmapped provider tags: " + (genreUnmappedDetails.join(", ") || "none") + "; learned audio model: " + val(genreModel.status,"not recorded")
   );
  }
  const curatorCampaignBody=verifiedCuratorTargets.length
@@ -372,7 +378,7 @@ function sections(i:AuditReportInput):Section[]{
 ]},
  {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>(({OBSERVED:"Measured from the uploaded master",RECOGNIZED:"Returned by an external identification source",RECONCILED:"Cross-checked across independent sources",INFERRED:"Analytical hypothesis — not independently verified","INDUSTRY PRACTICE":"General industry guidance"} as Record<string,string>)[x.label]??"Evidence item")+" — "+x.claim+" [Source: "+x.source+"]")},
  {title:"Sonic DNA and technical profile",accent:"blue",body:sonicDnaBody},
- {title:"Creative identity and A&R positioning",accent:"violet",body:[a.creativeIdentity,"Primary lane: "+a.aAndRPositioning.primaryLane,"Adjacent lanes: "+a.aAndRPositioning.adjacentLanes.join(", "),a.aAndRPositioning.rationale]},
+ {title:"Creative identity and A&R positioning",accent:"violet",body:["Provider-backed genre evidence: "+primaryGenre+(genreSources.length?"; contributing sources: "+genreSources.join(", "):""),"Learned audio-genre model status: "+val(genreModel.status,"not recorded")+". Provider tags are catalog/metadata evidence, not an audio-only genre prediction.",a.creativeIdentity,"Primary lane: "+a.aAndRPositioning.primaryLane,"Adjacent lanes: "+a.aAndRPositioning.adjacentLanes.join(", "),a.aAndRPositioning.rationale]},
  {title:"Strengths and creative leverage",accent:"teal",body:a.strengths.length?a.strengths:["No audio-measured strengths are asserted without an uploaded master."]},
  {title:"Risks and diligence",accent:"coral",body:a.risks},
  {title:"Evidence-derived scorecard",accent:"blue",body:[score("Tempo and lane fit",a.scorecard.tempoLaneFit),score("Rhythmic consistency",a.scorecard.rhythmicConsistency),score("Dynamic range and RMS signal level",a.scorecard.dynamicRangeLoudness),score("Metadata completeness",a.scorecard.metadataCompleteness),score("Release readiness",a.scorecard.releaseReadiness)]},
