@@ -101,7 +101,7 @@ describe("A4 report layout and fixture coverage",()=>{
    voicePresence:"likely_present",vocalStemRmsDbfs:-18.4,vocalEnergyShare:0.12,vocalActivityRatio:0.35,activeDurationSeconds:42.0,
    activitySegments:[{startSeconds:4.2,endSeconds:12.6,meanLevelDbfs:-19.2,peakLevelDbfs:-12.4}],
    pitch:{medianHz:220,lowerHz:110,upperHz:440,voicedFrameRatio:0.82,track:[{timeSeconds:4.2,fundamentalHz:220}]},
-   delivery:"not_classified",layering:"not_classified",lyrics:"not_requested",
+   delivery:"not_classified",layering:"not_classified",lyrics:"not_requested",reviewStatus:"not_human_reviewed",
    limitations:["Vocal presence is a conservative separated-stem estimate, not a calibrated probability."]
   };
   const body=planAuditReportPages(input).flatMap((section)=>section.text).join(" ");
@@ -110,6 +110,8 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(body).toContain("Estimated fundamental-frequency range: 110–440 Hz (median 220 Hz)");
   expect(body).toContain("Delivery classification: not_classified; vocal layering: not_classified");
   expect(body).toContain("Lyrics / transcription: not_requested");
+  expect(body).toContain("Human review status: not_human_reviewed");
+  expect(body).toContain("automated vocal analysis has not been human-validated");
   expect(body).toContain("not a calibrated probability");
  });
  it("marks the audio fixture variants as synthetic, including partial null-key and low-confidence data",()=>{
