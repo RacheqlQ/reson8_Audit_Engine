@@ -149,33 +149,38 @@ const MAX_SECTION_REQUEST_ATTEMPTS = 16;
 
 async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
   const retryAfter = response.headers.get("retry-after");
+  let baseDelay: number | null = null;
   if (retryAfter) {
     const seconds = Number(retryAfter);
     const headerDelay = Number.isFinite(seconds)
       ? seconds * 1000
       : Date.parse(retryAfter) - Date.now();
     if (Number.isFinite(headerDelay) && headerDelay >= 0) {
-      return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(headerDelay));
+      baseDelay = Math.ceil(headerDelay);
     }
   }
 
-  const detail = await response.clone().text().catch(() => "");
-  try {
-    const payload = JSON.parse(detail) as { error?: { message?: unknown } };
-    if (typeof payload.error?.message === "string") {
-      const match = payload.error.message.match(/try again in\s+(?:(\d+(?:\.\d+)?)m)?\s*(\d+(?:\.\d+)?)s/i);
-      if (match) {
-        const minutes = Number(match[1] ?? 0);
-        const seconds = Number(match[2]);
-        const delayMs = (minutes * 60 + seconds) * 1000;
-        return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(delayMs));
+  if (baseDelay === null) {
+    const detail = await response.clone().text().catch(() => "");
+    try {
+      const payload = JSON.parse(detail) as { error?: { message?: unknown } };
+      if (typeof payload.error?.message === "string") {
+        const match = payload.error.message.match(/try again in\s+(?:(\d+(?:\.\d+)?)m)?\s*(\d+(?:\.\d+)?)s/i);
+        if (match) {
+          const minutes = Number(match[1] ?? 0);
+          const seconds = Number(match[2]);
+          baseDelay = Math.ceil((minutes * 60 + seconds) * 1000);
+        }
       }
+    } catch {
+      // Non-JSON provider errors use bounded exponential backoff below.
     }
-  } catch {
-    // Non-JSON provider errors use bounded exponential backoff below.
   }
 
-  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, 1000 * (2 ** fallbackAttempt));
+  baseDelay ??= 1000 * (2 ** fallbackAttempt);
+  const boundedBase = Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.max(0, baseDelay));
+  const jitter = Math.floor(Math.random() * Math.min(1000, Math.max(1, boundedBase * 0.2)));
+  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, boundedBase + jitter);
 }
 
 function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -380,7 +385,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (response.status === 429 && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody)) {
         throw new Error("AI capacity reached for now, please try again later", { cause: new Error("GROQ_DAILY_CAP_REACHED") });
       }
-      const transient = response.status === 429 || response.status >= 500;
+      const transient = response.status === 429 || response.status >= 500
+        || (response.status === 413 && Boolean(response.headers.get("retry-after")));
       if (!transient || networkAttempt >= 2) break;
       await sleepImpl(Math.min(60_000, await providerRetryDelayMs(response, networkAttempt)), signal);
       signal?.throwIfAborted();
@@ -396,7 +402,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 413) {
-        throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; the same payload was not retried");
+        throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request after bounded retry handling");
       }
 
       if (response?.status === 400 && providerError.error?.code === "json_validate_failed") {
