@@ -515,7 +515,6 @@ export async function processAuditJob(
       audd: recognitionMetadataInput(recognition),
     };
     const reconciliation = reconcileMetadata(metadataInput);
-    await awaitWithStage(deps, "evidence_reconciliation_persist", 15_000, (signal) => deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources));
 
     const fusedGenreClassification = fuseGenreEvidence({
       providerTags: genreProviderTags(metadataSources, masterTags),
@@ -538,6 +537,12 @@ export async function processAuditJob(
       };
       await awaitWithStage(deps, "sonic_dna_persist", 15_000, (signal) => deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal));
     }
+
+    // Persist the reconciliation event after Sonic DNA so the ordered progress
+    // timeline cannot move backwards from reconciliation to Sonic measurement.
+    await awaitWithStage(deps, "evidence_reconciliation_persist", 15_000, (signal) =>
+      deps.saveEvidence(jobId, job.claimToken, recognition, reconciliation, metadata, signal, metadataSources),
+    );
 
     const identity = reconciliation.identity;
     const evidence = {
