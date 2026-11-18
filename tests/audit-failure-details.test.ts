@@ -27,6 +27,17 @@ describe("sanitized audit failure details", () => {
     expect(details.error_message).not.toContain("credential");
   });
 
+  it("sanitizes TIDAL authentication failures without retrying them", () => {
+    const details = getAuditFailureDetails(new Error("TIDAL token request failed with HTTP 401"));
+    expect(details).toMatchObject({
+      error_code: "TIDAL_PROVIDER_HTTP_401",
+      error_message: "TIDAL catalog provider failed with HTTP 401.",
+      provider: "tidal",
+      http_status: 401,
+      retryable: false,
+    });
+  });
+
   it("marks rate limits and TPM capacity exhaustion as retryable", () => {
     const error = Object.assign(new Error("Groq evidence-score assessment failed with HTTP 429"), {
       provider: "groq",
