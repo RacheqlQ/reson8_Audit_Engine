@@ -281,4 +281,14 @@ describe("extended Unicode report text normalization",()=>{
   expect(normalized).not.toContain("?");
   expect(normalized).not.toContain("\uFFFD");
  });
+
+ it("marks absent key/mode as not measured and excludes synthetic sources from metadata-only reports",()=>{
+  const input=structuredClone(metadataOnlyFixture) as any;
+  input.evidence.metadataSourcesChecked=["tidal","synthetic_audio_fixture"];
+  input.evidence.sources=["tidal","synthetic_audio_fixture"];
+  const body=planAuditReportPages(input).flatMap(section=>section.text).join(" ");
+  expect(body).toContain("Key / mode: Not measured");
+  expect(body).not.toContain("Synthetic report fixture (layout testing only)");
+  expect(body).not.toContain("synthetic_audio_fixture");
+ });
 });
