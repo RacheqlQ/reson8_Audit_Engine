@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { CreateAuditJobDependencies } from "../jobs/create-audit-job.js";
-import type { AuditJobRecord } from "../jobs/process-audit-job.js";
+import type { AuditFailureCode, AuditJobRecord } from "../jobs/process-audit-job.js";
 import type { AuditRecognition } from "../providers/audd/normalize.js";
 import { type CatalogMetadata } from "../providers/dsp/catalog.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
@@ -41,12 +41,13 @@ export interface SupabaseAuditStore {
   saveAssessmentSectionGroup(jobId: string, claimToken: string, group: string, result: unknown, signal?: AbortSignal): Promise<void>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
-  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
+  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal, errorCode?: AuditFailureCode): Promise<void>;
   getAuditStatus(jobId: string): Promise<{
     jobId: string;
     status: "queued" | "processing" | "completed" | "failed";
     currentStepIndex: number;
     errorMessage?: string | null;
+    errorCode?: string | null;
     full: { available: boolean; version?: number };
     catalogUrlsSubmitted?: string[];
     catalogSources?: Array<{ platform: string; canonicalUrl: string; status: string; reason: string }>;
@@ -574,7 +575,7 @@ export function createSupabaseAuditStore(
     async getAuditStatus(jobId) {
       const { data: job, error: jobError } = await admin
         .from("audit_jobs")
-        .select("id,status,error_message,catalog_metadata")
+        .select("id,status,error_code,error_message,catalog_metadata")
         .eq("id", jobId)
         .maybeSingle();
       if (jobError) throw new Error(`Unable to read audit status: ${jobError.message}`);
@@ -667,6 +668,7 @@ export function createSupabaseAuditStore(
         jobId,
         status: job.status as "queued" | "processing" | "completed" | "failed",
         currentStepIndex,
+        errorCode: typeof job.error_code === "string" ? job.error_code : null,
         errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
           : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
@@ -722,8 +724,16 @@ export function createSupabaseAuditStore(
     async getAuditReportPayload(jobId) {
       return readAuditReportPayload(jobId);
     },
-    async markFailed(jobId, claimToken, message, signal) {
-      await fencedStep(jobId, claimToken, "fail", { message }, signal);
+    async markFailed(jobId, claimToken, message, signal, errorCode = "processing_error") {
+      await fencedStep(jobId, claimToken, "fail", {
+        message,
+        eventPayload: { errorCode },
+      }, signal);
+      const { error } = await admin.from("audit_jobs")
+        .update({ error_code: errorCode, error_message: message })
+        .eq("id", jobId)
+        .eq("status", "failed");
+      if (error) throw new Error("Unable to persist structured audit failure code");
     },
   };
 }
