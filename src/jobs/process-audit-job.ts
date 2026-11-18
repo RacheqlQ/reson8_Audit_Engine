@@ -551,6 +551,9 @@ export async function processAuditJob(
         vocalFeatures: vocalFeatures as unknown as Record<string, unknown>,
         limitations: [...masterDna.limitations, ...vocalFeatures.limitations],
       };
+      // The vocal worker now owns the decoded PCM allocation. Do not retain
+      // the detached sample view through the report/reconciliation stages.
+      decodedMaster = null;
     }
 
     const metadataInput = {
