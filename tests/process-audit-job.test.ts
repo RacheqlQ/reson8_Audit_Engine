@@ -118,7 +118,7 @@ describe("processAuditJob", () => {
       markFailed: async (_jobId, _claimToken, message) => { failureMessage = message; events.push("failed"); },
     });
 
-    expect(result.status, failureMessage).toBe("completed");
+    expect(result.status, failureMessage + " | events: " + events.join(",")).toBe("completed");
     expect(events).toEqual([
       "processing",
       "recognition",
