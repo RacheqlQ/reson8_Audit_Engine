@@ -1,34 +1,32 @@
 Reson8 Audit Engine — Third-party notices
 
-This file records the current engineering policy position. It is not a complete bill of materials and does not itself grant rights. Re-check each upstream licence and the applicable commercial/API terms before release.
+This file records the current engineering policy position. It is not a complete bill of materials and does not itself grant rights. Re-check each upstream licence and applicable commercial/API terms before release.
 
 First-party code
-- Reson8-owned analysis and report-generation code: repository owner-controlled; verify ownership and any contributor obligations before commercial distribution.
+- Reson8-owned analysis and report-generation code: repository owner-controlled; verify ownership and contributor obligations before commercial distribution.
 
-Potentially permitted with conditions / pending implementation gates
-- MusicBrainz: public database/API use subject to its applicable licence, attribution and API policy. https://musicbrainz.org/doc/MusicBrainz_Database/License
-- ListenBrainz: use subject to current project/API terms, rate limits and attribution. https://listenbrainz.org/
-- YouTube Data API: use subject to YouTube API Services Terms and Developer Policies. https://developers.google.com/youtube/terms/api-services-terms-of-service
-
-Operationally enabled by explicit product-owner authorization (not a legal determination; applicable terms, retention and deletion obligations remain in force)
+Operationally available subject to credentials, applicable terms and use restrictions
 - Groq API assessment processing: https://groq.com/terms-of-use/
-
-Unverified — disabled by data policy until commercial terms are confirmed
+- Google Gemini API: https://ai.google.dev/gemini-api/terms
+- Ollama Cloud: https://ollama.com/terms
+- AudD: https://audd.io/terms/
 - Spotify: https://developer.spotify.com/terms
 - Apple Music / iTunes lookup: https://developer.apple.com/musickit/
-- YouTube Music oEmbed: https://developers.google.com/youtube/terms/api-services-terms-of-service
+- YouTube Music oEmbed and YouTube Data API: https://developers.google.com/youtube/terms/api-services-terms-of-service
 - TIDAL: https://developer.tidal.com/
-- Audiomack Data API: https://api.audiomack.com/
-- AudD: https://audd.io/terms/
-- Last.fm: https://www.last.fm/api/tos
-- FMA / FMAK datasets: https://github.com/mdeff/fma
-- GiantSteps datasets: https://www.audiolabs-erlangen.de/resources/MIR/2016-GiantSteps
-- Chartmetric, Soundcharts and Luminate: vendor contracts required.
-- Beat This!: model artifact, conversion provenance, training-data caveat and runtime fit remain unverified: https://github.com/CPJKU/beat_this
+- Audiomack official Data API: https://api.audiomack.com/
+- MusicBrainz: applicable database/API licence, attribution and rate limits: https://musicbrainz.org/doc/MusicBrainz_Database/License
+- ListenBrainz: current project/API terms, rate limits and attribution: https://listenbrainz.org/
+- Last.fm: API terms and attribution: https://www.last.fm/api/tos
+- Chartmetric, Soundcharts and Luminate: only under the applicable executed commercial vendor agreements.
+
+Unverified — not called until the source-specific rights or artifact gates are satisfied
+- Deezer: current API/commercial permissions for this product remain unverified: https://developers.deezer.com/
+- Beat This!: exact model artifact, conversion provenance, training-data rights and runtime fit remain unverified: https://github.com/CPJKU/beat_this
+- FMA / FMAK and GiantSteps datasets: asset-level provenance and commercial permissions must be verified before use.
 
 Denied under the current product policy
-- Essentia: do not use. https://essentia.upf.edu/licensing_information.html
-- madmom / DBN: do not use. https://github.com/CPJKU/madmom
-- Deezer: do not use absent a new written commercial grant. https://developers.deezer.com/
+- Essentia: do not use under the currently identified licensing options; a commercially compatible licence is required first: https://essentia.upf.edu/licensing_information.html
+- madmom / DBN: do not use under the currently identified non-commercial licensing; a commercially compatible licence is required first: https://github.com/CPJKU/madmom
 
 See docs/data-and-licence-policy.md for the operational controls and review checklist. This notice is not legal advice.
