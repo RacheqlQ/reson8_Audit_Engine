@@ -320,35 +320,32 @@ function sections(i:AuditReportInput):Section[]{
    "Rhythm scope: onset periodicity and candidate beat timestamps are measured; groove, swing, syncopation, verified bar structure and section boundaries are not independently classified in this analysis version.",
    "Rule-based signal descriptors (not an emotion or mood classifier): " + val(s?.moodTags)
   );
-  const vocalSegments = Array.isArray(vocalFeatures?.activitySegments)
-   ? vocalFeatures.activitySegments.filter((item): item is Record<string,unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
-   : [];
-  const vocalPitch = vocalFeatures?.pitch && typeof vocalFeatures.pitch === "object" ? vocalFeatures.pitch as Record<string,unknown> : {};
-  const vocalSegmentSummary = vocalSegments.slice(0, 12).map((segment) =>
-   metric(segment.startSeconds, 2) + "–" + metric(segment.endSeconds, 2) + " s"
-  ).join("; ");
-  const vocalPitchRange = typeof vocalPitch.lowerHz === "number" && typeof vocalPitch.upperHz === "number"
-   ? metric(vocalPitch.lowerHz, 0) + "–" + metric(vocalPitch.upperHz, 0) + " Hz (median " + metric(vocalPitch.medianHz, 0) + " Hz)"
-   : "Not determined";
-  const vocalEnergyShare = typeof vocalFeatures?.vocalEnergyShare === "number"
-   ? (vocalFeatures.vocalEnergyShare * 100).toFixed(1) + "%"
-   : "Not measured";
-  const vocalActivityRatio = typeof vocalFeatures?.vocalActivityRatio === "number"
-   ? (vocalFeatures.vocalActivityRatio * 100).toFixed(1) + "%"
-   : "Not measured";
-  sonicDnaBody.push(
-   "VOCAL ANALYSIS — separated vocal-stem evidence",
-   "Vocal presence: " + val(vocalFeatures?.voicePresence, "Unknown"),
-   "Separation method / model: " + val(vocalFeatures?.method) + " / " + val((vocalFeatures?.model as Record<string,unknown>|undefined)?.name),
-   "Estimated vocal-stem energy ratio to master (heuristic): " + vocalEnergyShare + "; vocal stem RMS: " + metric(vocalFeatures?.vocalStemRmsDbfs, 1) + " dBFS",
-   "Estimated vocal activity: " + vocalActivityRatio + " of analysed frames; active duration: " + metric(vocalFeatures?.activeDurationSeconds, 2) + " s",
-   "Vocal activity timestamps (first 12): " + (vocalSegmentSummary || "No activity intervals detected"),
-   "Estimated fundamental-frequency range: " + vocalPitchRange + "; voiced-frame ratio: " + (typeof vocalPitch.voicedFrameRatio === "number" ? (vocalPitch.voicedFrameRatio * 100).toFixed(1) + "%" : "Not determined"),
-   "Delivery classification: " + val(vocalFeatures?.delivery, "Not classified") + "; vocal layering: " + val(vocalFeatures?.layering, "Not classified"),
-   "Lyrics / transcription: " + val(vocalFeatures?.lyrics, "Not requested"),
-   "Human review status: " + val(vocalFeatures?.reviewStatus, "Not recorded"),
-   "Vocal-analysis limitations: " + (Array.isArray(vocalFeatures?.limitations) ? vocalFeatures.limitations.map(text).filter(Boolean).join(" ") : "No limitation record supplied")
-  );
+  if (vocalAnalysisPerformed) {
+   const vocalSegments = Array.isArray(vocalFeatures?.activitySegments)
+    ? vocalFeatures.activitySegments.filter((item): item is Record<string,unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+    : [];
+   const vocalPitch = vocalFeatures?.pitch && typeof vocalFeatures.pitch === "object" ? vocalFeatures.pitch as Record<string,unknown> : {};
+   const vocalSegmentSummary = vocalSegments.slice(0, 12).map((segment) =>
+    metric(segment.startSeconds, 2) + "–" + metric(segment.endSeconds, 2) + " s"
+   ).join("; ");
+   const vocalPitchRange = typeof vocalPitch.lowerHz === "number" && typeof vocalPitch.upperHz === "number"
+    ? metric(vocalPitch.lowerHz, 0) + "–" + metric(vocalPitch.upperHz, 0) + " Hz (median " + metric(vocalPitch.medianHz, 0) + " Hz)"
+    : "Not determined";
+   const vocalEnergyShare = typeof vocalFeatures?.vocalEnergyShare === "number"
+    ? (vocalFeatures.vocalEnergyShare * 100).toFixed(1) + "%"
+    : "Not measured";
+   const vocalActivityRatio = typeof vocalFeatures?.vocalActivityRatio === "number"
+    ? (vocalFeatures.vocalActivityRatio * 100).toFixed(1) + "%"
+    : "Not measured";
+   sonicDnaBody.push(
+    "Vocal presence: " + val(vocalFeatures?.voicePresence, "Unknown") + "; separated-stem method/model: " + val(vocalFeatures?.method) + " / " + val((vocalFeatures?.model as Record<string,unknown>|undefined)?.name),
+    "Estimated vocal-stem energy ratio: " + vocalEnergyShare + "; stem RMS: " + metric(vocalFeatures?.vocalStemRmsDbfs, 1) + " dBFS; estimated activity: " + vocalActivityRatio + "; active duration: " + metric(vocalFeatures?.activeDurationSeconds, 2) + " s",
+    "Vocal activity timestamps (first 12): " + (vocalSegmentSummary || "No activity intervals detected"),
+    "Estimated fundamental-frequency candidates: " + vocalPitchRange + "; voiced-frame ratio: " + (typeof vocalPitch.voicedFrameRatio === "number" ? (vocalPitch.voicedFrameRatio * 100).toFixed(1) + "%" : "Not determined"),
+    "Delivery: " + val(vocalFeatures?.delivery, "Not classified") + "; layering: " + val(vocalFeatures?.layering, "Not classified") + "; human review: " + val(vocalFeatures?.reviewStatus, "Not recorded") + "; lyrics: " + val(vocalFeatures?.lyrics, "Not requested"),
+    "Vocal-analysis limitations: " + (Array.isArray(vocalFeatures?.limitations) ? vocalFeatures.limitations.map(text).filter(Boolean).join(" ") : "No limitation record supplied")
+   );
+  }
  } else if (s) {
   sonicDnaBody.push(
    "Provider-supplied sonic context (not master-measured)",
