@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { processAuditJob } from "../src/jobs/process-audit-job.js";
+import { classifyAuditFailure, processAuditJob } from "../src/jobs/process-audit-job.js";
 
 const assessment = {} as import("../src/providers/groq/client.js").ArAssessment;
 
@@ -20,6 +20,13 @@ function id3Fixture(): Uint8Array {
 }
 
 
+
+describe("audit failure classification", () => {
+  it("classifies exhausted upstream 5xx responses as provider unavailable", () => {
+    expect(classifyAuditFailure(new Error("Gemini assessment failed with HTTP 503"))).toBe("provider_unavailable");
+    expect(classifyAuditFailure(new Error("provider_error: Ollama returned HTTP 502"))).toBe("provider_unavailable");
+  });
+});
 
 describe("processAuditJob", () => {
   it("moves a queued master through evidence, Sonic DNA, Groq assessment and completion", async () => {
