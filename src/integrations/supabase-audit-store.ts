@@ -687,7 +687,8 @@ export function createSupabaseAuditStore(
         jobId,
         status: job.status as "queued" | "processing" | "completed" | "failed",
         currentStepIndex,
-        errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
+        errorMessage: typeof errorDetails?.errorMessage === "string" ? errorDetails.errorMessage
+          : typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
           : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
           : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
