@@ -197,7 +197,12 @@ export function createSupabaseAuditStore(
     },
     async failExpiredProcessingJobs() {
       const now = new Date();
-      const cutoff = new Date(now.getTime() - 10 * 60_000).toISOString();
+      const configuredTimeout = Number(process.env.AUDIT_JOB_STALE_TIMEOUT_MS ?? 10 * 60_000);
+      const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout >= 60_000
+        ? Math.min(configuredTimeout, 60 * 60_000)
+        : 10 * 60_000;
+      const timeoutMinutes = Math.ceil(timeoutMs / 60_000);
+      const cutoff = new Date(now.getTime() - timeoutMs).toISOString();
       const nowIso = now.toISOString();
       const { data, error } = await admin.from("audit_jobs")
         .select("id")
@@ -211,7 +216,7 @@ export function createSupabaseAuditStore(
         const { error: updateError } = await admin.from("audit_jobs").update({
           status: "failed",
           error_code: "AUDIT_JOB_EXPIRED",
-          error_message: "This audit could not be completed within 10 minutes. Please submit it again.",
+          error_message: `This audit could not be completed within ${timeoutMinutes} minutes. Please submit it again.`,
           completed_at: nowIso,
           lease_expires_at: null,
           claim_token: null,
