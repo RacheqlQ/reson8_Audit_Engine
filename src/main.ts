@@ -10,6 +10,10 @@ type ShutdownSignal = "SIGTERM" | "SIGINT";
 const WORKER_DRAIN_TIMEOUT_MS = 24_000;
 const HTTP_CLOSE_TIMEOUT_MS = 24_000;
 
+export function isEmbeddedWorkerEnabled(value = process.env.RUN_WORKER_IN_API): boolean {
+  return value !== "false";
+}
+
 interface SignalSource {
   on(event: ShutdownSignal, listener: () => void): unknown;
   off(event: ShutdownSignal, listener: () => void): unknown;
@@ -41,7 +45,7 @@ export async function startAuditEngine(
   const app = options.app ?? buildServer();
   const port = options.port ?? Number(process.env.PORT ?? 10000);
   const host = options.host ?? process.env.HOST ?? "0.0.0.0";
-  const runWorker = options.runWorker ?? (process.env.RUN_WORKER_IN_API === "false" ? async () => {} : runAuditQueueWorker);
+  const runWorker = options.runWorker ?? (isEmbeddedWorkerEnabled() ? runAuditQueueWorker : async () => {});
   const signals = options.signals ?? process;
   const reportError = options.onError ?? ((error: unknown) => {
     console.error(JSON.stringify({
