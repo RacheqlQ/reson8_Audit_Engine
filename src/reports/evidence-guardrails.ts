@@ -235,7 +235,8 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   if (!hasUploadedMasterMeasurements && Array.isArray(mutable.strengths)) {
     const audioMeasurementClaim = /\b(?:\d{2,3}\s*bpm|beats per minute|tempo|key\s*\/\s*mode|harmonic key|rhythm|rhythmic|dynamic range|rms|lufs|loudness|spectral|vocal|instrumental|mix translation|mastering|low[- ]end|groove|arrangement|production quality)\b/i;
     mutable.strengths = mutable.strengths.filter((strength: unknown) =>
-      typeof strength !== "string" || !audioMeasurementClaim.test(strength),
+      typeof strength !== "string"
+        || (!audioMeasurementClaim.test(strength) && !/^Not asserted:/i.test(strength)),
     );
   }
   if (Array.isArray(mutable.evidenceLabels)) {
