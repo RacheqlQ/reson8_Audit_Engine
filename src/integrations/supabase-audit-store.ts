@@ -14,6 +14,12 @@ import { sha256 } from "../jobs/content-hash.js";
 import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
 import { persistUploadedReport } from "../jobs/report-persistence.js";
 
+export const DEFAULT_STUCK_JOB_TIMEOUT_MS = 10 * 60_000;
+export function configuredStuckJobTimeoutMs(env: Record<string, string | undefined> = process.env): number {
+  const configured = Number(env.AUDIT_STUCK_JOB_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured >= 60_000 ? Math.floor(configured) : DEFAULT_STUCK_JOB_TIMEOUT_MS;
+}
+
 const REPORT_RECONCILIATION_TIMEOUT_MS = 2_000;
 const REPORT_CLEANUP_TIMEOUT_MS = 2_000;
 
@@ -164,7 +170,9 @@ export function createSupabaseAuditStore(
     },
     async failExpiredProcessingJobs() {
       const now = new Date();
-      const cutoff = new Date(now.getTime() - 10 * 60_000).toISOString();
+      const timeoutMs = configuredStuckJobTimeoutMs();
+      const timeoutMinutes = Math.ceil(timeoutMs / 60_000);
+      const cutoff = new Date(now.getTime() - timeoutMs).toISOString();
       const nowIso = now.toISOString();
       const { data, error } = await admin.from("audit_jobs")
         .select("id")
@@ -178,7 +186,7 @@ export function createSupabaseAuditStore(
         const { error: updateError } = await admin.from("audit_jobs").update({
           status: "failed",
           error_code: "AUDIT_JOB_EXPIRED",
-          error_message: "This audit could not be completed within 10 minutes. Please submit it again.",
+          error_message: "This audit could not be completed within " + timeoutMinutes + " minutes. Please submit it again.",
           completed_at: nowIso,
           lease_expires_at: null,
           claim_token: null,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
-import { createSupabaseAuditStore } from "../src/integrations/supabase-audit-store.js";
+import { configuredStuckJobTimeoutMs, createSupabaseAuditStore } from "../src/integrations/supabase-audit-store.js";
 
 const TOKEN_A = "a".repeat(64);
 const TOKEN_B = "b".repeat(64);
@@ -68,6 +68,12 @@ describe("Supabase capability-token verification adapter", () => {
 
 
 describe("DSP provider failure persistence", () => {
+  it("uses a validated configurable stuck-job timeout", () => {
+    expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "300000" })).toBe(300_000);
+    expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "invalid" })).toBe(600_000);
+    expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "1000" })).toBe(600_000);
+  });
+
   it("persists Spotify API failure status and a bounded reason for audit polling", async () => {
     const { store, fetchMock, getRequestUrl } = makeStore({});
     const metadata = {
