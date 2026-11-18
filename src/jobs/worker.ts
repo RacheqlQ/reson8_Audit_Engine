@@ -140,6 +140,8 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       }
     },
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
+    markAssessmentStarted: async (jobId, _claimToken, signal) => store.markAssessmentStarted(jobId, _claimToken, signal),
+    markReportGenerationStarted: async (jobId, _claimToken, signal) => store.markReportGenerationStarted(jobId, _claimToken, signal),
     generateReport: generateAuditReport,
     saveReport: async (jobId, _claimToken, tier, pdf, reportInput, signal) => store.saveReport(jobId, _claimToken, tier, pdf, reportInput, signal),
     markCompleted: async (jobId, _claimToken, signal) => store.markCompleted(jobId, _claimToken, signal),
