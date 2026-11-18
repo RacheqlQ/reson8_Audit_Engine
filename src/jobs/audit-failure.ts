@@ -10,7 +10,7 @@ export interface AuditFailureDetails {
 
 function safeIdentifier(value: string | null | undefined): string | null {
   if (!value) return null;
-  const safe = value.replace(/[^A-Za-z0-9._:/-]/g, "").slice(0, 80);
+  const safe = value.replace(/[^A-Za-z0-9._:\\/-]/g, "").slice(0, 80);
   return safe || null;
 }
 
@@ -47,7 +47,7 @@ export function classifyAuditFailure(
   const httpStatus = statusMatch ? Number(statusMatch[1]) : null;
   const retryable = httpStatus !== null
     ? httpStatus === 408 || httpStatus === 409 || httpStatus === 425 || httpStatus === 429 || httpStatus >= 500
-    : /capacity|timed out|timeout|network|fetch failed|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
+    : /capacity|timed out|timeout|network|fetch failed|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT|AUDIT_JOB_DEADLINE_EXCEEDED/i.test(message);
   const errorType = responseErrorType(message);
   const model = providerModel(provider, env);
   const errorCode = provider && httpStatus
