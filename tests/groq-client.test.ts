@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_GROQ_MODEL, GroqClient, GROQ_PROMPT_VERSION } from "../src/providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, GROQ_PROMPT_VERSION } from "../src/providers/groq/client.js";
 
 const long=(s:string,n=65)=>{let v=s;while(v.trim().split(/\s+/).length<n)v+=" "+s;return v;};
 const p=(group:string):Record<string,unknown>=>{
@@ -81,7 +81,8 @@ describe("GroqClient section groups",()=>{
   expect(url).toContain("/v1beta/openai/chat/completions");
   expect((init.headers as Record<string,string>).authorization).toBe("Bearer test-gemini-key");
   expect(body.model).toBe("gemini-3.5-flash-lite");
-  expect(body.response_format).toMatchObject({type:"json_schema",json_schema:{strict:true}});
+  expect(JSON.stringify(body.messages[0].content)).toContain("outputSchema");
+  expect(body.response_format).toEqual({type:"json_object"});
  });
  it("passes the completion-token budget on every Groq request",async()=>{
   const {mock}=fetchMock();
