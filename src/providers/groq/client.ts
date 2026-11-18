@@ -81,8 +81,17 @@ const AssessmentSchema = NarrativeSchema.extend(PositioningSchema.shape).extend(
   .extend(PromotionSchema.shape).extend(LabelFitSchema.shape).extend(TimelineSchema.shape);
 export type ArAssessment = z.infer<typeof AssessmentSchema>;
 
+export interface ProviderAttemptDiagnostic {
+  provider: "groq" | "gemini" | "ollama";
+  model: string;
+  status: number | null;
+  errorType: "none" | "capacity" | "auth" | "malformed_output" | "timeout" | "provider_unavailable" | "provider_error";
+  retryable: boolean;
+  attempt: number;
+}
 export interface GroqAssessmentInput {
   evidence: Record<string, unknown>;
+  recordProviderAttempt?: (attempt: ProviderAttemptDiagnostic) => Promise<void>;
   sonicDna: Record<string, unknown> | null;
   catalogMetadata?: Record<string, unknown> | null;
   loadCompletedSectionGroup?: (group: string) => Promise<unknown | null>;
@@ -261,6 +270,22 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null): Recor
   return compactPromptValue(compact) as Record<string, unknown>;
 }
 
+async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
+  console.info(JSON.stringify({ event: "provider_attempt", ...detail }));
+  try {
+    await input.recordProviderAttempt?.(detail);
+  } catch {
+    console.warn(JSON.stringify({ event: "provider_attempt_persist_failed", provider: detail.provider, model: detail.model }));
+  }
+}
+
+function providerErrorType(status: number): ProviderAttemptDiagnostic["errorType"] {
+  if (status === 401 || status === 403) return "auth";
+  if (status === 413 || status === 429) return "capacity";
+  if (status >= 500) return "provider_error";
+  return "provider_error";
+}
+
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
   groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number, signal?:AbortSignal)=>Promise<void>, signal?: AbortSignal, requestTimeoutMs = GROQ_REQUEST_TIMEOUT_MS, endpoint = "https://api.groq.com/openai/v1/chat/completions", providerName = "groq"): Promise<T> {
   let lastError = "No valid response was returned";
@@ -370,11 +395,24 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           body: JSON.stringify(requestBody),
         });
       } catch (error) {
-        if (requestTimeoutSignal.aborted && !signal?.aborted) {
+        const timedOut = requestTimeoutSignal.aborted && !signal?.aborted;
+        await recordProviderAttempt(input, {
+          provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
+          errorType: timedOut ? "timeout" : "provider_unavailable", retryable: !signal?.aborted, attempt: networkAttempt + 1,
+        });
+        if (timedOut) {
           throw new Error(providerLabel + " " + groupName + " request timed out after " + requestTimeoutMs + "ms", { cause: error });
         }
         throw error;
       }
+      const responseErrorType = response.ok ? "none" : providerErrorType(response.status);
+      const dailyLimit = response.status === 429 && /tokens?\\s+per\\s+day|\\bTPD\\b|daily[\\s_-]*limit|limit[\\s_-]*reached.*daily/i.test(await response.clone().text().catch(() => ""));
+      await recordProviderAttempt(input, {
+        provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
+        errorType: dailyLimit ? "capacity" : responseErrorType,
+        retryable: !response.ok && !dailyLimit && (response.status === 429 || response.status >= 500),
+        attempt: networkAttempt + 1,
+      });
       if (response.ok) break;
       const errorBody = response.status === 429 ? await response.clone().text().catch(() => "") : "";
       if (response.status === 429 && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody)) {
