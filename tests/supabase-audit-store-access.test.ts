@@ -143,13 +143,18 @@ describe("DSP provider failure persistence", () => {
 
     const updateBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
     expect(updateBody.error_message).toContain("within 2 minutes");
+    const eventBody = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
+    expect(eventBody).toMatchObject({
+      event_type: "audit_failed",
+      payload: { errorDetails: { errorCode: "AUDIT_JOB_EXPIRED", retryable: true, errorType: "worker_lease_expired" } },
+    });
   });
 
   it("fails an expired processing job older than ten minutes", async () => {
     const jobId = "11111111-1111-4111-8111-111111111111";
     const { store, fetchMock } = makeStore([{ id: jobId }]);
     await expect(store.failExpiredProcessingJobs()).resolves.toBe(1);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     const selectUrl = String(fetchMock.mock.calls[0]?.[0]);
     const updateUrl = String(fetchMock.mock.calls[1]?.[0]);
     expect(selectUrl).toContain("status=eq.processing");
