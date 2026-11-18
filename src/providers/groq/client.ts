@@ -150,7 +150,8 @@ let groqDailyCapUntil = 0;
 let groqCompletionBudgetScale = 1;
 const MAX_NETWORK_ATTEMPTS = 3;
 export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
-export const GROQ_ASSESSMENT_TIMEOUT_MS = 4 * 60_000;
+// Keep the provider-local deadline below the 10-minute stage deadline so the worker can run fallbacks.
+export const GROQ_ASSESSMENT_TIMEOUT_MS = 8 * 60_000;
 const MAX_COMPLETION_TOKENS = 1200;
 const MAX_GROQ_TOTAL_TOKENS = 6000;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
@@ -508,7 +509,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           continue;
         }
 
-        throw new Error("" + providerLabel + " " + groupName + " assessment failed with HTTP 400 after bounded JSON recovery: " + detail.slice(0, 300));
+        throw new Error("json_validate_failed: " + providerLabel + " " + groupName + " assessment failed with HTTP 400 after bounded JSON recovery: " + detail.slice(0, 300));
       }
 
       throw new Error("" + providerLabel + " " + groupName + " assessment failed with HTTP " + (response?.status ?? "unknown")
