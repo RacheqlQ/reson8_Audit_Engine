@@ -481,6 +481,7 @@ export async function processAuditJob(
     }
 
     let masterDna: SonicDnaFeatures | null = null;
+    let decodedMaster: Awaited<ReturnType<AuditProcessorDependencies["decode"]>> | null = null;
     let masterRecognition: AuditRecognition | null = null;
     let masterTags: ReturnType<typeof readAudioTags> | null = null;
     const attemptedRecognitionProviders = new Set<string>();
@@ -496,29 +497,15 @@ export async function processAuditJob(
       const dna = await awaitWithStage(deps, "sonic_dna", 90_000, (signal) =>
         analyzePcmWithTimeout(decoded.samples, decoded.sampleRate, decoded.channels, 90_000, signal),
       );
-      let vocalFeatures: VocalAnalysisResult;
-      if (deps.analyzeVocals) {
-        try {
-          vocalFeatures = await awaitWithStage(deps, "vocal_analysis", 150_000, (signal) =>
-            deps.analyzeVocals!(decoded.samples, decoded.sampleRate, decoded.channels, signal),
-          );
-        } catch (error) {
-          if (deps.signal?.aborted) throw leaseLostError(deps.signal);
-          vocalFeatures = unavailableVocalAnalysis(error instanceof Error ? error.message : "Vocal analysis did not complete.");
-        }
-      } else {
-        vocalFeatures = unavailableVocalAnalysis("Vocal separation is not configured in this worker build.");
-      }
+      decodedMaster = decoded;
       masterDna = {
         ...dna,
-        vocalFeatures,
         loudnessLufs: decoded.loudnessLufs ?? dna.loudnessLufs,
         loudnessRangeLu: decoded.loudnessRangeLu ?? null,
         truePeakDbfs: decoded.truePeakDbfs ?? null,
         sampleRate: decoded.sampleRate,
         channels: decoded.channels,
         durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
-        limitations: [...dna.limitations, ...vocalFeatures.limitations],
       };
     }
 
@@ -543,6 +530,27 @@ export async function processAuditJob(
         : masterRecognition ?? catalogRecognition ?? { matched: false };
     if (masterRecognition || catalogRecognition) {
       await awaitWithStage(deps, "recognition_persist", 15_000, (signal) => deps.saveRecognition(jobId, job.claimToken, recognition, signal));
+    }
+
+    if (masterDna && decodedMaster) {
+      let vocalFeatures: VocalAnalysisResult;
+      if (deps.analyzeVocals) {
+        try {
+          vocalFeatures = await awaitWithStage(deps, "vocal_analysis", 150_000, (signal) =>
+            deps.analyzeVocals!(decodedMaster!.samples, decodedMaster!.sampleRate, decodedMaster!.channels, signal),
+          );
+        } catch (error) {
+          if (deps.signal?.aborted) throw leaseLostError(deps.signal);
+          vocalFeatures = unavailableVocalAnalysis(error instanceof Error ? error.message : "Vocal analysis did not complete.");
+        }
+      } else {
+        vocalFeatures = unavailableVocalAnalysis("Vocal separation is not configured in this worker build.");
+      }
+      masterDna = {
+        ...masterDna,
+        vocalFeatures,
+        limitations: [...masterDna.limitations, ...vocalFeatures.limitations],
+      };
     }
 
     const metadataInput = {
