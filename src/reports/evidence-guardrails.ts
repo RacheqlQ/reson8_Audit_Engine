@@ -74,8 +74,8 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
         || /\b(?:key|mode|tonic)\s*(?:is|of|:|at|centered on)\s+[A-G]\s*(?:major|minor)\b/i.test(sentence)
         || /\bin\s+[A-G]\s*(?:major|minor)\b/.test(sentence);
       const hasUnsupportedKeyClaim = suppressKey && keyClaim;
-      const audioMeasurementTerms = /\\b(?:BPM|beats per minute|tempo|key|mode|LUFS|loudness|RMS|dynamic range|spectral (?:centroid|bandwidth|rolloff)|zero[- ]crossing|rhythm|harmonic|sample rate|audio measurement|Sonic DNA)\\b/i;
-      const cautionaryAudioContext = /\\b(?:not measured|not available|not supplied|no master|without uploaded|cannot be measured|not asserted|not reported|not scored|not determined|unconfirmed|unavailable|insufficient evidence|withheld)\\b/i.test(sentence);
+      const audioMeasurementTerms = /\b(?:BPM|beats per minute|tempo|key|mode|LUFS|loudness|RMS|dynamic range|spectral (?:centroid|bandwidth|rolloff)|zero[- ]crossing|rhythm|harmonic|sample rate|audio measurement|Sonic DNA)\b/i;
+      const cautionaryAudioContext = /\b(?:not measured|not available|not supplied|no master|without uploaded|cannot be measured|not asserted|not reported|not scored|not determined|unconfirmed|unavailable|insufficient evidence|withheld)\b/i.test(sentence);
       const hasUnsupportedAudioMeasurement = suppressAudioMeasurements && audioMeasurementTerms.test(sentence) && !cautionaryAudioContext;
       return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim && !hasUnsupportedVocalClaim && !hasUnsupportedKeyClaim && !hasUnsupportedAudioMeasurement;
     });
