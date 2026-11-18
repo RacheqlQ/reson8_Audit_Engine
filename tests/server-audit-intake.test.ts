@@ -55,9 +55,14 @@ describe("GET /health", () => {
     const response = await app.inject({ method: "GET", url: "/health" });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       status: "ok",
       service: "reson8-audit-engine",
+      providers: expect.arrayContaining([
+        expect.objectContaining({ provider: "groq", enabled: expect.any(Boolean), ready: expect.any(Boolean) }),
+        expect.objectContaining({ provider: "gemini", enabled: expect.any(Boolean), ready: expect.any(Boolean) }),
+        expect.objectContaining({ provider: "ollama", enabled: expect.any(Boolean), ready: expect.any(Boolean) }),
+      ]),
     });
 
     await app.close();
