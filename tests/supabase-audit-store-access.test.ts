@@ -97,6 +97,27 @@ describe("audit status query efficiency", () => {
   });
 });
 
+
+  it("keeps audit progress monotonic when Sonic DNA is saved after reconciliation", async () => {
+    process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
+    process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
+    const job = { id: "job-monotonic", status: "processing", error_code: null, error_message: null, catalog_metadata: {} };
+    const events = [
+      { event_type: "sonic_dna", status: "completed", created_at: "2026-11-18T10:00:03.000Z", payload: {} },
+      { event_type: "evidence_reconciliation", status: "completed", created_at: "2026-11-18T10:00:02.000Z", payload: {} },
+      { event_type: "catalog_ingestion", status: "completed", created_at: "2026-11-18T10:00:01.000Z", payload: {} },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes("/audit_jobs?") ? job : url.includes("/audit_events?") ? events : [];
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createSupabaseAuditStore();
+    const status = await store.getAuditStatus("job-monotonic");
+    expect(status.currentStepIndex).toBe(3);
+  });
+
 describe("DSP provider failure persistence", () => {
   it("uses a validated configurable stuck-job timeout", () => {
     expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "300000" })).toBe(300_000);
