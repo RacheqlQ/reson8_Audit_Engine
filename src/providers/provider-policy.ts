@@ -154,6 +154,16 @@ export const PROVIDER_POLICY = {
 
 export type ProviderId = keyof typeof PROVIDER_POLICY;
 
+const runtimeUnavailable = new Map<ProviderId, "authentication_failed">();
+
+export function markAssessmentProviderUnavailable(provider: "groq" | "gemini" | "ollama", reason: "authentication_failed"): void {
+  runtimeUnavailable.set(provider, reason);
+}
+
+export function resetAssessmentProviderRuntimeState(): void {
+  runtimeUnavailable.clear();
+}
+
 export interface ProviderDecision {
   provider: ProviderId;
   enabled: boolean;
@@ -170,11 +180,12 @@ export function providerDecision(
   const policy: ProviderPolicy = PROVIDER_POLICY[provider];
   const flagsSatisfied = env[policy.enableFlag] === "true"
     && (policy.requiredFlags ?? []).every((flag) => env[flag] === "true");
-  const enabled = policy.commercialStatus === "allowed" && flagsSatisfied;
+  const runtimeFailure = runtimeUnavailable.get(provider);
+  const enabled = policy.commercialStatus === "allowed" && flagsSatisfied && !runtimeFailure;
   return {
     provider,
     enabled,
-    reason: enabled ? null : "disabled by data policy",
+    reason: runtimeFailure ?? (enabled ? null : "disabled by data policy"),
     commercialStatus: policy.commercialStatus,
     enableFlag: policy.enableFlag,
   };
@@ -192,7 +203,7 @@ export interface AssessmentProviderReadiness {
   enabled: boolean;
   credentialsConfigured: boolean;
   ready: boolean;
-  reason: "ready" | "disabled_by_data_policy" | "credentials_missing";
+  reason: "ready" | "disabled_by_data_policy" | "credentials_missing" | "authentication_failed";
 }
 
 /** Readiness reports configuration state only; it never returns credential values. */
@@ -206,13 +217,14 @@ export function getAssessmentProviderReadiness(
   ];
   return definitions.map(({ provider, credentials }) => {
     const decision = providerDecision(provider, env);
+    const runtimeFailure = runtimeUnavailable.get(provider);
     const ready = decision.enabled && credentials;
     return {
       provider,
       enabled: decision.enabled,
       credentialsConfigured: credentials,
       ready,
-      reason: ready ? "ready" : !decision.enabled ? "disabled_by_data_policy" : "credentials_missing",
+      reason: runtimeFailure ?? (ready ? "ready" : !decision.enabled ? "disabled_by_data_policy" : "credentials_missing"),
     };
   });
 }
