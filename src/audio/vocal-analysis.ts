@@ -70,8 +70,8 @@ function channelSample(channels: Float32Array[], index: number): number {
   if (!channels.length) return 0;
   if (channels.length === 1) return channels[0]?.[index] ?? 0;
   let sum = 0;
-  for (const channel of channels) sum += channel[index] ?? 0;
-  return sum / channels.length;
+  for (const channel of channels) sum += (channel[index] ?? 0) / channels.length;
+  return sum;
 }
 
 function estimatePitchFromChannels(channels: Float32Array[], sampleCount: number, sampleRate: number): {
