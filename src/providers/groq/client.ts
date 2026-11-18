@@ -590,7 +590,7 @@ export class GroqClient implements GroqAssessmentClient {
     try {
       return await this.assessWithinDeadline(input, assessmentSignal);
     } catch (error) {
-      if (error instanceof ProviderAssessmentError) throw error;
+      if (signal?.aborted || error instanceof ProviderAssessmentError) throw error;
       throw new ProviderAssessmentError(this.providerName, this.model, error);
     } finally {
       clearTimeout(deadlineTimer);
