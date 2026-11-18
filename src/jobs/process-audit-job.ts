@@ -59,7 +59,7 @@ export interface AuditProcessorDependencies {
   generateReport(input: AuditReportInput, tier: AuditReportTier, signal?: AbortSignal): Promise<Uint8Array>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
-  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
+  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal, errorCode?: AuditFailureCode): Promise<void>;
   stopHeartbeat?(): Promise<void>;
   signal?: AbortSignal;
 }
@@ -71,6 +71,18 @@ function leaseLostError(signal?: AbortSignal): Error {
 
 function assertLeaseActive(deps: AuditProcessorDependencies): void {
   if (deps.signal?.aborted) throw leaseLostError(deps.signal);
+}
+
+export type AuditFailureCode = "capacity" | "auth" | "malformed_output" | "timeout" | "provider_unavailable" | "processing_error";
+
+export function classifyAuditFailure(error: unknown): AuditFailureCode {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/AI_PROVIDERS_UNAVAILABLE|provider unavailable|not configured|fetch failed|ECONNRESET|ENOTFOUND|EHOSTUNREACH/i.test(message)) return "provider_unavailable";
+  if (/HTTP 401|HTTP 403|unauthorized|forbidden|authentication/i.test(message)) return "auth";
+  if (/capacity|HTTP 413|HTTP 429|TPD|tokens per day|GROQ_REQUEST_TOO_LARGE/i.test(message)) return "capacity";
+  if (/timed out|timeout|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT|AUDIT_STAGE_TIMEOUT|AUDIT_JOB_DEADLINE_EXCEEDED/i.test(message)) return "timeout";
+  if (/json_validate_failed|failed to validate JSON|Zod validation|malformed JSON|not valid JSON/i.test(message)) return "malformed_output";
+  return "processing_error";
 }
 
 function userSafeFailureMessage(error: unknown): string {
@@ -660,8 +672,9 @@ export async function processAuditJob(
     const message = jobDeadlineExceeded
       ? "Audit processing: the job exceeded its eight-minute time limit. Please submit it again."
       : userSafeFailureMessage(error);
+    const errorCode = classifyAuditFailure(error);
     await withAbortTimeout(
-      (signal) => deps.markFailed(jobId, job.claimToken, message, signal),
+      (signal) => deps.markFailed(jobId, job.claimToken, message, signal, errorCode),
       15_000,
       "AUDIT_TERMINAL_WRITE_TIMEOUT",
     );
