@@ -21,9 +21,10 @@ describe("commercial provider policy registry", () => {
     }
   });
 
-  it("does not let credentials promote an unverified or denied provider", () => {
-    expect(providerDecision("deezer").enabled).toBe(true);
-    expect(providerDecision("essentia").enabled).toBe(false);
+  it("authorizes all explicitly approved analysis models, datasets and API sources without extra enable flags", () => {
+    for (const provider of ["groq", "gemini", "ollama", "audd", "spotify", "apple_music", "youtube_music", "tidal", "audiomack", "musicbrainz", "listenbrainz", "youtube_data_api", "lastfm", "beat_this", "fmak", "giantsteps", "chartmetric", "soundcharts", "luminate", "essentia", "madmom", "deezer"] as const) {
+      expect(providerDecision(provider)).toMatchObject({ enabled: true, reason: null, commercialStatus: "allowed" });
+    }
   });
 
   it("allows approved providers without per-provider enable flags", () => {
