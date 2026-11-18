@@ -45,10 +45,10 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     throw new ProviderUnavailableError("groq", groqReadiness.reason ?? "disabled_by_data_policy");
   }
   const groq = new GroqClient();
-  const geminiDecision = providerDecision("gemini");
-  const gemini = geminiDecision.enabled && process.env.GEMINI_API_KEY ? new GeminiClient() : null;
-  const ollamaDecision = providerDecision("ollama");
-  const ollama = ollamaDecision.enabled && process.env.OLLAMA_API_KEY ? new OllamaClient() : null;
+  const geminiReadiness = getProviderReadiness().gemini;
+  const gemini = geminiReadiness.ready ? new GeminiClient() : null;
+  const ollamaReadiness = getProviderReadiness().ollama;
+  const ollama = ollamaReadiness.ready ? new OllamaClient() : null;
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
     await store.failExpiredProcessingJobs?.();
