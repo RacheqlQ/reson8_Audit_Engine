@@ -54,7 +54,7 @@ describe("audio decoder", () => {
 
   it("extracts EBU R128 integrated loudness, loudness range and true peak", () => {
     const summary = parseEbur128Summary([
-      "Integrated loudness:", "I: -12.3 LUFS", "Threshold: -22.4 LUFS", "",
+      "frame I: -70.0 LUFS", "frame I: -15.4 LUFS", "Integrated loudness:", "I: -12.3 LUFS", "Threshold: -22.4 LUFS", "",
       "Loudness range:", "LRA: 4.2 LU", "", "True peak:", "Peak: -1.1 dBFS",
     ].join("\n"));
     expect(summary).toEqual({ loudnessLufs: -12.3, loudnessRangeLu: 4.2, truePeakDbfs: -1.1 });
