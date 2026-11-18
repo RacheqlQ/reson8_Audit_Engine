@@ -286,6 +286,7 @@ function sections(i:AuditReportInput):Section[]{
   sonicDnaBody.push(
    "Requires audio upload",
    "Not measured: no master audio supplied.",
+   "Key / mode: Not measured.",
    "Required next input: upload the actual master audio file in WAV, FLAC or a high-quality MP3 so the worker can inspect the recording rather than relying on catalogue metadata.",
    "Analysis plan: after ingestion, estimate BPM with confidence and segment stability, estimate key/mode with confidence and agreement, measure integrated loudness and dynamic range, and run vocal-activity analysis.",
    "Evidence boundary: DSP metadata can support artist, title, album and release reconciliation, but cannot establish sonic attributes, production quality or mastering readiness.",
