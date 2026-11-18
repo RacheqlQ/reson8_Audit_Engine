@@ -78,9 +78,13 @@ export function parseFloatPcmWav(buffer: Buffer): Pick<DecodedAudio, "samples" |
   // concatenated WAV allocation and avoids another audio-sized PCM copy.
   const absoluteDataOffset = buffer.byteOffset + dataOffset;
   const littleEndian = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
-  const samples = buffer.buffer instanceof ArrayBuffer && littleEndian && absoluteDataOffset % 4 === 0
-    ? new Float32Array(buffer.buffer, absoluteDataOffset, sampleCount)
-    : Float32Array.from({ length: sampleCount }, (_, index) => buffer.readFloatLE(dataOffset + index * 4));
+  let samples: Float32Array;
+  if (buffer.buffer instanceof ArrayBuffer && littleEndian && absoluteDataOffset % 4 === 0) {
+    samples = new Float32Array(buffer.buffer, absoluteDataOffset, sampleCount);
+  } else {
+    samples = new Float32Array(sampleCount);
+    for (let index = 0; index < sampleCount; index++) samples[index] = buffer.readFloatLE(dataOffset + index * 4);
+  }
   if (samples.length % channels !== 0) throw new Error("Decoded PCM frame is incomplete");
   return { samples, sampleRate, channels };
 }
