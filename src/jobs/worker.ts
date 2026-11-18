@@ -18,7 +18,8 @@ const HEARTBEAT_INTERVAL_MS = 45_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
 const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
-export function isFallbackEligible(error: unknown): boolean {
+export function isFallbackEligible(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return false;
   const message = error instanceof Error ? error.message : String(error);
   return /AI capacity reached|disabled by data policy|unauthorized|forbidden|timed out|HTTP (?:4\d\d|5\d\d)|GROQ_REQUEST_TOO_LARGE|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
 }
@@ -125,7 +126,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
           if (diagnostics.httpStatus === 401 || diagnostics.httpStatus === 403) {
             markProviderUnavailable("groq", "authentication_failed");
           }
-          if (signal?.aborted || !isFallbackEligible(error)) throw error;
+          if (!isFallbackEligible(error, signal)) throw error;
           fallbackError = error;
         }
       } else {
@@ -164,7 +165,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
             errorType: diagnostics.errorType,
             retryable: diagnostics.retryable,
           }));
-          if (signal?.aborted || !isFallbackEligible(geminiError)) throw geminiError;
+          if (!isFallbackEligible(geminiError, signal)) throw geminiError;
           fallbackError = geminiError;
         }
       } else {
