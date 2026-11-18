@@ -33,6 +33,17 @@ describe("classifyAuditFailure", () => {
     });
   });
 
+  it("records Groq capacity as retryable without losing the provider identity", () => {
+    const result = classifyAuditFailure(new Error("AI capacity reached for now"));
+    expect(result).toMatchObject({
+      errorCode: "GROQ_CAPACITY_EXCEEDED",
+      provider: "groq",
+      model: "openai/gpt-oss-120b",
+      errorType: "capacity",
+      retryable: true,
+    });
+  });
+
   it("does not treat authentication failures as retryable", () => {
     const result = classifyAuditFailure(new Error("Gemini narrative assessment failed with HTTP 401"));
     expect(result.retryable).toBe(false);
