@@ -16,7 +16,7 @@ export function analyzePcmWithTimeout(
   const transferable = prepared.samples;
   const worker = new Worker(new URL("./sonic-dna-worker.js", import.meta.url), {
     workerData: { samples: transferable, sampleRate: prepared.sampleRate, channels: prepared.channels },
-    transferList: [transferable.buffer],
+    transferList: [transferable.buffer as ArrayBuffer],
   });
   return new Promise((resolve, reject) => {
     let settled = false;
