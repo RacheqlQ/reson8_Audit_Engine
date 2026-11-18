@@ -1,7 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { getProviderReadiness } from "../src/providers/provider-readiness.js";
+import { clearProviderUnavailable, getProviderReadiness, markProviderUnavailable } from "../src/providers/provider-readiness.js";
 
 describe("provider readiness", () => {
+  it("marks an authenticated provider unavailable in runtime readiness", () => {
+    const env = {
+      PROVIDER_ENABLED_GROQ: "true",
+      GROQ_API_KEY: "configured",
+      PROVIDER_ENABLED_GEMINI: "true",
+      GEMINI_API_KEY: "configured",
+      PROVIDER_ENABLED_OLLAMA: "true",
+      OLLAMA_API_KEY: "configured",
+    };
+    markProviderUnavailable("gemini", "authentication_failed");
+    expect(getProviderReadiness(env).gemini).toMatchObject({
+      enabled: true,
+      configured: true,
+      ready: false,
+      reason: "authentication_failed",
+    });
+    clearProviderUnavailable("gemini");
+    expect(getProviderReadiness(env).gemini.ready).toBe(true);
+  });
+
   it("reports policy and credential readiness without exposing credential values", () => {
     const result = getProviderReadiness({
       PROVIDER_ENABLED_GROQ: "true",
