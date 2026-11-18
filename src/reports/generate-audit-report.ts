@@ -261,11 +261,15 @@ function sections(i:AuditReportInput):Section[]{
    "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
    "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not measured"),
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
-   "Integrated loudness: " + metric(s?.loudnessLufs,1) + " LUFS (direct signal measurement; not a mastering verdict)",
+   "Integrated loudness (EBU R128): " + metric(s?.loudnessLufs,1) + " LUFS (gated programme loudness; not a mastering verdict)",
+   "Loudness range (EBU R128 LRA): " + metric(s?.loudnessRangeLu,1) + " LU (programme loudness variation; not the same as sample-peak dynamic range)",
+   "True peak: " + metric(s?.truePeakDbfs,1) + " dBFS (oversampled peak estimate from FFmpeg EBU R128)",
    "Dynamic range: " + metric(s?.dynamicRangeDb,1) + " dB (direct signal measurement; not a quality verdict)",
    "RMS level dBFS: " + metric(s?.rmsLevelDbfs,1),
    "RMS energy: " + metric(s?.rmsEnergy,2),
-   "Confidence note: integrated loudness, RMS level and dynamic range are direct signal measurements; this analysis version does not assign them model-confidence scores or infer mastering quality from them."
+   "Source format: " + val(s?.sampleRate) + " Hz; " + val(s?.channels) + " channel(s); " + metric(s?.durationSeconds,2) + " seconds",
+   "Spectral profile: centroid " + metric(s?.spectralCentroidHz,0) + " Hz; bandwidth " + metric(s?.spectralBandwidthHz,0) + " Hz; 85% rolloff " + metric(s?.spectralRolloffHz,0) + " Hz; zero-crossing rate " + metric(s?.zeroCrossingRate,4),
+   "Measurement note: EBU R128 LUFS/LRA and true peak are separate from the internal RMS-envelope spread; RMS level, RMS energy and spectral descriptors are signal measurements, not subjective mastering-quality scores."
   );
  } else if (s) {
   sonicDnaBody.push(
