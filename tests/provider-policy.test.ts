@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROVIDER_POLICY, providerDecision } from "../src/providers/provider-policy.js";
+import { getAssessmentProviderReadiness, PROVIDER_POLICY, providerDecision } from "../src/providers/provider-policy.js";
 import { collectDspMetadata } from "../src/providers/dsp/registry.js";
 import { normalizeDspTrackLinks } from "../src/providers/dsp/intake.js";
 
@@ -47,6 +47,23 @@ describe("commercial provider policy registry", () => {
     expect(decision.enabled).toBe(false);
     expect(decision.commercialStatus).toBe("allowed");
     expect(decision.reason).toBe("disabled by data policy");
+  });
+
+  it("reports assessment provider readiness without exposing credentials", () => {
+    const readiness = getAssessmentProviderReadiness({
+      PROVIDER_ENABLED_GROQ: "true",
+      GROQ_API: "secret-groq-token",
+      PROVIDER_ENABLED_GEMINI: "true",
+      GEMINI_API_KEY: "",
+      PROVIDER_ENABLED_OLLAMA: "false",
+      OLLAMA_API_KEY: "secret-ollama-token",
+    });
+    expect(readiness).toEqual([
+      { provider: "groq", enabled: true, credentialsConfigured: true, ready: true, reason: "ready" },
+      { provider: "gemini", enabled: true, credentialsConfigured: false, ready: false, reason: "credentials_missing" },
+      { provider: "ollama", enabled: false, credentialsConfigured: true, ready: false, reason: "disabled_by_data_policy" },
+    ]);
+    expect(JSON.stringify(readiness)).not.toContain("secret-");
   });
 
   it("surfaces a provider without its opt-in flag as unavailable", async () => {
