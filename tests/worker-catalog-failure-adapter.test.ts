@@ -26,6 +26,7 @@ vi.mock("../src/integrations/supabase-audit-store.js", () => ({
 }));
 
 vi.mock("../src/providers/provider-policy.js", () => ({
+  markAssessmentProviderUnavailable: vi.fn(),
   providerDecision: (id: string) => ({
     provider: id,
     enabled: id === "groq",

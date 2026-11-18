@@ -159,7 +159,7 @@ export function coverVerdictLabel(input:AuditReportInput):string {
  return verdictLabel(val(safeAssessment.commercialRead?.marketability,"undetermined"));
 }
 function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready to pitch requires verified commercial-performance evidence, a defined reporting period and a supportable release proposition.",moderate:"Develop applies when evidence supports a credible direction but important execution or positioning work remains.",low:"Needs work applies when supplied evidence identifies material gaps that should be addressed before pitching.",undetermined:"Insufficient evidence applies when source-attributed commercial or release evidence is missing; no demand or partner interest is inferred."};return m[v.toLowerCase()]??m.undetermined;}
-function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
+export function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
 function professionalEvidenceLanguage(value:string):string {
  return value
   .replace(/\bOBSERVED\b/g,"Measured from the uploaded master")
@@ -259,7 +259,7 @@ function sections(i:AuditReportInput):Section[]{
   sonicDnaBody.push(
    e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
    "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
-   "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not reported — confidence below 80% reporting target"),
+   "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not measured — confidence below 80% reporting target"),
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
    "Integrated loudness: " + metric(s?.loudnessLufs,1) + " LUFS (direct signal measurement; not a mastering verdict)",
    "Dynamic range: " + metric(s?.dynamicRangeDb,1) + " dB (direct signal measurement; not a quality verdict)",
@@ -344,7 +344,7 @@ function sections(i:AuditReportInput):Section[]{
  "Conflict policy: values that disagree across providers remain visible as conflicts; a preferred identity value is not treated as proof that the other provider was wrong.",
  "Conflict details: "+conflictSummary,
  "External identifiers: "+(externalIdentifiers(e.externalIds)?(e.fixture?"Synthetic test identifiers — ":"Available — ")+externalIdentifiers(e.externalIds):"Unavailable — no external identifiers returned"),
- "Sources checked: "+val((Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked:Array.isArray(e.sourceProviders)?e.sourceProviders:Array.isArray(e.sources)?e.sources:null)?.map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition",synthetic_audio_fixture:"Synthetic report fixture (layout testing only)"} as Record<string,string>)[String(provider)]??String(provider)).join(", ")??e.source),
+ "Sources checked: "+val((Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked:Array.isArray(e.sourceProviders)?e.sourceProviders:Array.isArray(e.sources)?e.sources:null)?.filter((provider)=>hasMasterAudio || provider!=="synthetic_audio_fixture").map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition",synthetic_audio_fixture:"Synthetic report fixture (layout testing only)"} as Record<string,string>)[String(provider)]??String(provider)).join(", ")??e.source),
  "Coverage status: "+val(e.evidenceStatus??e.status,"Partial — one or more identity fields remain unavailable"),
  "Verification note: unavailable fields are not inferred or fabricated. Analytical recommendations remain hypotheses and are never presented as verified identity metadata."
 ]},
@@ -397,7 +397,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
   const sonicBlock=section.title==="Sonic DNA and technical profile";
-  const keepTogetherCount=section.title==="Curator campaign and target verification"?Math.min(3,section.body.length):chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
+  const keepTogetherCount=section.title==="Curator campaign and target verification"?Math.min(3,section.body.length):section.title==="Human listening checklist (unscored)"?section.body.length:chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
   const openingHeight=section.body.slice(0,keepTogetherCount).reduce((sum,para)=>{
    const size=para===para.toUpperCase()&&para.length<100?8:9.7;
    return sum+wrap(para,fonts.regular,size,W-2*M-16).length*size*1.4+8;

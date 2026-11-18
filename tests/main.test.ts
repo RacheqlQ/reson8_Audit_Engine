@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { EventEmitter } from "node:events";
 import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { startAuditEngine } from "../src/main.js";
+import { isEmbeddedWorkerEnabled, startAuditEngine } from "../src/main.js";
 
 const runningEngines: Array<{ shutdown(): Promise<void> }> = [];
 
@@ -16,6 +16,12 @@ function waitForAbort(signal: AbortSignal): Promise<void> {
 }
 
 describe("startAuditEngine", () => {
+  it("supports an API-only mode that does not start the embedded queue worker", () => {
+    expect(isEmbeddedWorkerEnabled("false")).toBe(false);
+    expect(isEmbeddedWorkerEnabled("true")).toBe(true);
+    expect(isEmbeddedWorkerEnabled(undefined)).toBe(true);
+  });
+
   it("closes the HTTP listener and drains the embedded worker on repeated signals", async () => {
     const app = Fastify();
     const signals = new EventEmitter();

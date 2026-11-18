@@ -175,7 +175,9 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
     // Non-JSON provider errors use bounded exponential backoff below.
   }
 
-  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, 1000 * (2 ** fallbackAttempt));
+  const exponentialDelay = Math.min(MAX_PROVIDER_RETRY_DELAY_MS, 1000 * (2 ** fallbackAttempt));
+  const jitter = Math.floor(Math.random() * Math.min(1000, exponentialDelay * 0.25));
+  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, exponentialDelay + jitter);
 }
 
 function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -291,7 +293,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       return true;
     }
     if (responseMode === "json_schema") return false;
-    if (responseMode === "json_object" && jsonObjectContentRetries < 2) {
+    if (responseMode === "json_object" && jsonObjectContentRetries < (providerName === "gemini" ? 1 : 2)) {
       jsonObjectContentRetries++;
       lastError += " Correct every reported issue and return one complete object matching outputSchema.";
       return true;
@@ -376,11 +378,12 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         throw error;
       }
       if (response.ok) break;
-      const errorBody = response.status === 429 ? await response.clone().text().catch(() => "") : "";
+      const errorBody = response.status === 429 || response.status === 413 ? await response.clone().text().catch(() => "") : "";
       if (response.status === 429 && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody)) {
         throw new Error("AI capacity reached for now, please try again later", { cause: new Error("GROQ_DAILY_CAP_REACHED") });
       }
-      const transient = response.status === 429 || response.status >= 500;
+      const tpmCapacity = response.status === 413 && /tokens?\s+per\s+minute|\bTPM\b/i.test(errorBody);
+      const transient = response.status === 429 || response.status >= 500 || tpmCapacity;
       if (!transient || networkAttempt >= 2) break;
       await sleepImpl(Math.min(60_000, await providerRetryDelayMs(response, networkAttempt)), signal);
       signal?.throwIfAborted();
@@ -396,6 +399,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 413) {
+        if (/tokens?\s+per\s+minute|\bTPM\b/i.test(detail)) {
+          throw new Error("GROQ_TPM_CAPACITY_EXHAUSTED: provider token-per-minute capacity remained exhausted after bounded retries");
+        }
         throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; the same payload was not retried");
       }
 
@@ -426,7 +432,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           continue;
         }
 
-        if (responseMode === "json_object" && jsonObjectProviderRetries < 2) {
+        if (responseMode === "json_object" && jsonObjectProviderRetries < (providerName === "gemini" ? 1 : 2)) {
           jsonObjectProviderRetries++;
           if (jsonObjectProviderRetries === 2) {
             responseMode = "prompt_only";

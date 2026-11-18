@@ -341,4 +341,44 @@ describe("Phillo evidence guardrails", () => {
     expect(result.strengths).toEqual([]);
   });
 
+
+  it("withholds master-measurement claims and OBSERVED labels for metadata-only Sonic DNA", () => {
+    const metadataOnlySonic = {
+      provenance: "catalog_metadata",
+      bpm: 156,
+      tempoConfidence: 0.95,
+      key: "C",
+      mode: "major",
+      keyConfidence: 0.95,
+      keySegmentAgreement: 0.95,
+      dynamicRangeDb: 8,
+      loudnessLufs: -11,
+      rmsLevelDbfs: -12,
+      rmsEnergy: 0.4,
+      spectralCentroidHz: 1900,
+      vocalFeatures: { status: "analyzed" },
+      genreClassification: { primaryGenre: "Afrobeats", abstained: false, genres: [{ label: "Afrobeats" }] },
+    };
+    const assessment = {
+      ...baseAssessment,
+      scorecard: {
+        ...baseAssessment.scorecard,
+        dynamicRangeLoudness: { score: 65, rationale: "The measured RMS level supports the mix." },
+      },
+      executiveSummary: "The master measures 156 BPM, -11 LUFS and 8 dB dynamic range.",
+      strengths: ["The 156 BPM tempo and RMS energy support a high-energy dance-floor identity."],
+      evidenceLabels: [
+        { label: "OBSERVED", claim: "The uploaded master measures 156 BPM.", source: "uploaded_audio_master" },
+        { label: "RECOGNIZED", claim: "The provider returned an Afrobeats genre label.", source: "catalog_metadata" },
+      ],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, metadataOnlySonic);
+
+    expect(result.scorecard.tempoLaneFit.score).toBeNull();
+    expect(result.scorecard.rhythmicConsistency.score).toBeNull();
+    expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();
+    expect(result.evidenceLabels.some((entry) => entry.label === "OBSERVED")).toBe(false);
+    expect(JSON.stringify(result)).not.toMatch(/156\s*BPM|-11\s*LUFS|8 dB dynamic range|RMS energy support/i);
+    expect(result.evidenceLabels.some((entry) => entry.label === "RECOGNIZED")).toBe(true);
+  });
 });

@@ -18,6 +18,7 @@ const { claimNextQueuedJob, renewLease, failExpiredProcessingJobs, observedSigna
 }));
 
 vi.mock("../src/providers/provider-policy.js", () => ({
+  markAssessmentProviderUnavailable: vi.fn(),
   providerDecision: (provider: string) => ({
     provider,
     enabled: provider === "groq",

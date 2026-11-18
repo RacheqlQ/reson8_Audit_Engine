@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GroqClient } from "../src/providers/groq/client.js";
 
 describe("Groq TPM request budget", () => {
-  it("fails permanently on HTTP 413 without retrying the same payload", async () => {
+  it("retries TPM 413 responses within a bounded attempt count", async () => {
     const budgets: number[] = [];
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
@@ -12,9 +12,9 @@ describe("Groq TPM request budget", () => {
       }), { status: 413 });
     });
     const client = new GroqClient("test-key", "test-model", fetchImpl as typeof fetch, async () => {});
-    await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow("GROQ_REQUEST_TOO_LARGE");
-    expect(budgets).toHaveLength(1);
+    await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow("GROQ_TPM_CAPACITY_EXHAUSTED");
+    expect(budgets).toHaveLength(3);
     expect(budgets[0]).toBeLessThanOrEqual(850);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 });

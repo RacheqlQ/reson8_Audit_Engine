@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,industryPractice,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
@@ -190,7 +190,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not determined");
   expect(report).not.toContain("Tempo confidence score");
-  expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
+  expect(report).toContain("Key / mode: Not measured — confidence below 80% reporting target");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
@@ -222,7 +222,7 @@ describe("A4 report layout and fixture coverage",()=>{
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
+  expect(report).toContain("Key / mode: Not measured — confidence below 80% reporting target");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).not.toContain("Key / mode: C major");
  });
@@ -280,5 +280,25 @@ describe("extended Unicode report text normalization",()=>{
   expect(normalized).toContain("E F G -2 x 3 <= 4 >= 1 != 0 - item");
   expect(normalized).not.toContain("?");
   expect(normalized).not.toContain("\uFFFD");
+ });
+
+ it("marks absent key/mode as not measured and excludes synthetic sources from metadata-only reports",()=>{
+  const partial=structuredClone(partialAudioFixture) as any;
+  partial.sonicDna.key=null;
+  partial.sonicDna.mode=null;
+  const partialBody=planAuditReportPages(partial).flatMap(section=>section.text).join(" ");
+  expect(partialBody).toContain("Key / mode: Not measured");
+
+  const metadataOnly=structuredClone(metadataOnlyFixture) as any;
+  metadataOnly.evidence.metadataSourcesChecked=["tidal","synthetic_audio_fixture"];
+  metadataOnly.evidence.sources=["tidal","synthetic_audio_fixture"];
+  const metadataBody=planAuditReportPages(metadataOnly).flatMap(section=>section.text).join(" ");
+  expect(metadataBody).not.toContain("Synthetic report fixture (layout testing only)");
+  expect(metadataBody).not.toContain("synthetic_audio_fixture");
+ });
+
+ it("normalizes repeated industry-practice prefixes to one professional label",()=>{
+  expect(industryPractice("INDUSTRY PRACTICE — INDUSTRY PRACTICE — General lane craft guidance."))
+   .toBe("General industry guidance — General lane craft guidance.");
  });
 });
