@@ -10,7 +10,7 @@ import { processAuditJob, type AuditProcessorDependencies } from "./process-audi
 import { runQueueWorkerLoop } from "./worker-loop.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 import { classifyAuditFailure } from "./audit-failure.js";
-import { getProviderReadiness, markProviderUnavailable } from "../providers/provider-readiness.js";
+import { getProviderReadiness, markProviderUnavailable, ProviderUnavailableError } from "../providers/provider-readiness.js";
 import { startRenderFreeServiceKeepalive } from "./render-free-service-keepalive.js";
 
 const POLL_INTERVAL_MS = 15_000;
@@ -40,8 +40,10 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   if (signal?.aborted) return null;
   // Validate required provider configuration before claiming work so a
   // misconfigured worker cannot strand a queued job in processing.
-  const groqDecision = providerDecision("groq");
-  if (!groqDecision.enabled) throw new Error("groq: disabled by data policy");
+  const groqReadiness = getProviderReadiness().groq;
+  if (!groqReadiness.ready) {
+    throw new ProviderUnavailableError("groq", groqReadiness.reason ?? "disabled_by_data_policy");
+  }
   const groq = new GroqClient();
   const geminiDecision = providerDecision("gemini");
   const gemini = geminiDecision.enabled && process.env.GEMINI_API_KEY ? new GeminiClient() : null;
