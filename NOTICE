@@ -20,8 +20,10 @@ Operationally available subject to credentials, applicable terms and use restric
 - Last.fm: API terms and attribution: https://www.last.fm/api/tos
 - Chartmetric, Soundcharts and Luminate: only under the applicable executed commercial vendor agreements.
 
+Operationally available subject to current API terms and restrictions
+- Deezer public track metadata endpoint: https://developers.deezer.com/
+
 Unverified — not called until the source-specific rights or artifact gates are satisfied
-- Deezer: current API/commercial permissions for this product remain unverified: https://developers.deezer.com/
 - Beat This!: exact model artifact, conversion provenance, training-data rights and runtime fit remain unverified: https://github.com/CPJKU/beat_this
 - FMA / FMAK and GiantSteps datasets: asset-level provenance and commercial permissions must be verified before use.
 
