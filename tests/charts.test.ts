@@ -60,6 +60,18 @@ describe("native PDF chart helpers", () => {
     expect(rects.some((rect) => rect.id === "label-spectrum-value-0")).toBe(true);
   });
 
+
+  it("wraps long lane-constellation labels without clipping or overlapping the caption", () => {
+    const rows: ChartRow[] = [
+      { label: "Primary lane", value: "Afro-R&B (fixture primary lane)" },
+      { label: "Adjacent lane", value: "Alternative R&B (fixture adjacent lane)" },
+      { label: "Adjacent lane", value: "Contemporary African Soul and R&B" },
+    ];
+    const height = chartPanelHeight("constellation", rows);
+    expect(height).toBeGreaterThan(218);
+    expect(chartPanelLayoutErrors("constellation", rows, 48, 700, height)).toEqual([]);
+  });
+
   it("renders complete, partial and null data without throwing", async () => {
     const pdf = await PDFDocument.create();
     const font = await pdf.embedFont(StandardFonts.Helvetica);
