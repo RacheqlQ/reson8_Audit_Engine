@@ -159,7 +159,7 @@ export function coverVerdictLabel(input:AuditReportInput):string {
  return verdictLabel(val(safeAssessment.commercialRead?.marketability,"undetermined"));
 }
 function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready to pitch requires verified commercial-performance evidence, a defined reporting period and a supportable release proposition.",moderate:"Develop applies when evidence supports a credible direction but important execution or positioning work remains.",low:"Needs work applies when supplied evidence identifies material gaps that should be addressed before pitching.",undetermined:"Insufficient evidence applies when source-attributed commercial or release evidence is missing; no demand or partner interest is inferred."};return m[v.toLowerCase()]??m.undetermined;}
-function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
+function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:(?:INDUSTRY PRACTICE|General industry guidance)\s*[—:-]\s*)+/i,"").trim();}
 function professionalEvidenceLanguage(value:string):string {
  return value
   .replace(/\bOBSERVED\b/g,"Measured from the uploaded master")
