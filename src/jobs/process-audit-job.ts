@@ -48,7 +48,7 @@ export interface AuditProcessorDependencies {
     error: string,
     signal?: AbortSignal,
   ): Promise<void>;
-  decode(bytes: Uint8Array, mimeType?: string, signal?: AbortSignal): Promise<{ samples: Float32Array; sampleRate: number; channels: number }>;
+  decode(bytes: Uint8Array, mimeType?: string, signal?: AbortSignal): Promise<{ samples: Float32Array; sampleRate: number; channels: number; loudnessLufs?: number | null; loudnessRangeLu?: number | null; truePeakDbfs?: number | null }>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
   generateAssessment(input: {
     evidence: Record<string, unknown>;
