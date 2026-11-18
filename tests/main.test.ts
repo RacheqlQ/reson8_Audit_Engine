@@ -108,6 +108,27 @@ describe("startAuditEngine", () => {
     expect(signals.listenerCount("SIGINT")).toBe(0);
   });
 
+  it("does not start the embedded worker when RUN_WORKER_IN_API is false", async () => {
+    const app = Fastify();
+    const signals = new EventEmitter();
+    const runWorker = vi.fn(async () => undefined);
+    const engine = await startAuditEngine({
+      app,
+      host: "127.0.0.1",
+      port: 0,
+      signals,
+      runWorker,
+      runWorkerInApi: false,
+      onError: (error) => { throw error; },
+    });
+    runningEngines.push(engine);
+
+    await engine.shutdown();
+
+    expect(runWorker).not.toHaveBeenCalled();
+    expect(app.server.listening).toBe(false);
+  });
+
   it("does not start the worker when the HTTP listener cannot start", async () => {
     const blocker = createServer();
     await new Promise<void>((resolve) => blocker.listen(0, "127.0.0.1", resolve));

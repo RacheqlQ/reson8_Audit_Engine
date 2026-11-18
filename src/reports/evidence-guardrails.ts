@@ -47,7 +47,7 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
     && agreement >= 0.8 && agreement <= 1;
 }
 
-function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean, suppressVocal: boolean, suppressKey: boolean): unknown {
+function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean, suppressVocal: boolean, suppressKey: boolean, suppressAudioMeasurements = false): unknown {
   if (typeof value === "string") {
     const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
@@ -74,14 +74,17 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
         || /\b(?:key|mode|tonic)\s*(?:is|of|:|at|centered on)\s+[A-G]\s*(?:major|minor)\b/i.test(sentence)
         || /\bin\s+[A-G]\s*(?:major|minor)\b/.test(sentence);
       const hasUnsupportedKeyClaim = suppressKey && keyClaim;
-      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim && !hasUnsupportedVocalClaim && !hasUnsupportedKeyClaim;
+      const audioMeasurementTerms = /\b(?:BPM|beats per minute|tempo|key|mode|LUFS|loudness|RMS|dynamic range|spectral (?:centroid|bandwidth|rolloff)|zero[- ]crossing|rhythm|harmonic|sample rate|audio measurement|Sonic DNA)\b/i;
+      const cautionaryAudioContext = /\b(?:not measured|not available|not supplied|no master|no uploaded audio master|without uploaded|cannot be measured|not asserted|not reported|not scored|not determined|unconfirmed|unavailable|insufficient evidence|withheld)\b/i.test(sentence);
+      const hasUnsupportedAudioMeasurement = suppressAudioMeasurements && audioMeasurementTerms.test(sentence) && !cautionaryAudioContext;
+      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim && !hasUnsupportedVocalClaim && !hasUnsupportedKeyClaim && !hasUnsupportedAudioMeasurement;
     });
     return kept.join(" ").trim() || "Not asserted: the supporting measurement confidence is insufficient.";
   }
-  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial, suppressVocal, suppressKey));
+  if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial, suppressVocal, suppressKey, suppressAudioMeasurements));
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-      .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial, suppressVocal, suppressKey)]));
+      .map(([key, item]) => [key, stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial, suppressVocal, suppressKey, suppressAudioMeasurements)]));
   }
   return value;
 }
@@ -168,7 +171,8 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     genre && typeof genre.primaryGenre === "string" && genre.primaryGenre.trim()
       && genre.abstained !== true,
   );
-  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence), !hasVocalAnalysis(sonicDna), !isReliableKey(sonicDna)) as T;
+  const hasMasterMeasurements = Boolean(sonicDna && sonicDna.provenance === "uploaded_audio_master");
+  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence), !hasVocalAnalysis(sonicDna), !isReliableKey(sonicDna), !hasMasterMeasurements) as T;
   const measuredLoudness = sonicDna?.loudnessLufs;
   const suppressLoudnessOptimisation = typeof measuredLoudness === "number" && Number.isFinite(measuredLoudness) && Math.abs(measuredLoudness + 11) <= 0.6;
   const measuredCentroid = sonicDna?.spectralCentroidHz;

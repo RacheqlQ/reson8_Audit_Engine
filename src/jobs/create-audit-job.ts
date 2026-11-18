@@ -27,12 +27,18 @@ export async function createAuditJob(
   input: CreateAuditJobInput,
   deps: CreateAuditJobDependencies,
 ) {
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
+  let phaseStartedAt = performance.now();
   const validated = validateAudioUpload({
     filename: input.filename,
     mimeType: input.mimeType,
     sizeBytes: input.bytes.byteLength,
   });
+  timings.validationMs = performance.now() - phaseStartedAt;
+  phaseStartedAt = performance.now();
   const digest = await sha256(input.bytes);
+  timings.audioHashMs = performance.now() - phaseStartedAt;
   const submittedLinks = input.catalogUrls?.length
     ? normalizeDspTrackLinks(input.catalogUrls).map((link) => link.canonicalUrl)
     : input.catalogUrl?.trim()
@@ -43,8 +49,11 @@ export async function createAuditJob(
   if (classifiedSource === "dsp_link") throw new Error("A master upload must include a master source");
   const sourceType: "master" | "combined" = classifiedSource;
   const reportAccessToken = randomBytes(32).toString("hex");
+  phaseStartedAt = performance.now();
   const reportAccessTokenHash = await sha256(new TextEncoder().encode(reportAccessToken));
+  timings.accessTokenHashMs = performance.now() - phaseStartedAt;
 
+  phaseStartedAt = performance.now();
   const jobId = await deps.createJob({
     ownerId: input.ownerId,
     filename: validated.filename,
@@ -56,12 +65,17 @@ export async function createAuditJob(
     ...(submittedLinks.length ? { catalogUrls: submittedLinks } : {}),
     reportAccessTokenHash,
   });
+  timings.createJobMs = performance.now() - phaseStartedAt;
 
   const sourceAudioPath = `${input.ownerId ?? "anonymous"}/${jobId}/${validated.filename}`;
 
   try {
+    phaseStartedAt = performance.now();
     await deps.uploadMaster(sourceAudioPath, input.bytes, validated.mimeType);
+    timings.storageUploadMs = performance.now() - phaseStartedAt;
+    phaseStartedAt = performance.now();
     await deps.setSourcePath(jobId, sourceAudioPath);
+    timings.sourcePathFinalizeMs = performance.now() - phaseStartedAt;
   } catch (error) {
     try {
       await deps.deleteMaster(sourceAudioPath);
@@ -76,5 +90,15 @@ export async function createAuditJob(
     throw error;
   }
 
+  if (process.env.NODE_ENV !== "test") {
+    console.info(JSON.stringify({
+      event: "audit_job_creation_timing",
+      jobId,
+      sourceType,
+      audioBytes: input.bytes.byteLength,
+      ...timings,
+      totalMs: performance.now() - startedAt,
+    }));
+  }
   return { jobId, sourceAudioPath, sha256: digest, sourceType, reportAccessToken };
 }

@@ -47,3 +47,10 @@ curl --fail --show-error --silent --write-out '\nHTTP %{http_code}\n' https://<w
 ```
 
 Expected HTTP status: `200`; expected body: `{"status":"ok","service":"reson8-audit-worker"}`.
+
+
+## Worker role selection
+
+The API embeds one queue consumer by default (`RUN_WORKER_IN_API=true`). The standalone `npm run worker` entrypoint is separate and refuses to start unless `RUN_WORKER_IN_API=false` is explicitly set in its environment. Before ever resuming or enabling a standalone worker service, the API service must also be configured with `RUN_WORKER_IN_API=false`; configure both roles first, verify the API health response, then enable only the standalone consumer. Do not run both consumers intentionally. The database claim RPC remains the final atomic fence, but it is not a substitute for choosing one worker role.
+
+The `/health` response exposes provider readiness as status/boolean metadata only. It never returns provider credential values. A provider that returns HTTP 401/403 is marked unavailable for the lifetime of that process and is not retried for subsequent jobs. Restart the service only after the provider credentials or policy configuration has been corrected.

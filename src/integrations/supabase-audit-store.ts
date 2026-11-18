@@ -13,6 +13,9 @@ import { ensurePdfReport, isPdf } from "../reports/pdf-output.js";
 import { sha256 } from "../jobs/content-hash.js";
 import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
 import { persistUploadedReport } from "../jobs/report-persistence.js";
+import { AUDIT_EVENT_STEP, getAuditProgressStep } from "../jobs/audit-progress.js";
+import type { AuditFailureDetails } from "../jobs/failure-details.js";
+import { getStuckJobTimeoutMs } from "../jobs/worker-config.js";
 
 const REPORT_RECONCILIATION_TIMEOUT_MS = 2_000;
 const REPORT_CLEANUP_TIMEOUT_MS = 2_000;
@@ -41,12 +44,13 @@ export interface SupabaseAuditStore {
   saveAssessmentSectionGroup(jobId: string, claimToken: string, group: string, result: unknown, signal?: AbortSignal): Promise<void>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
-  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
+  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal, failure?: AuditFailureDetails): Promise<void>;
   getAuditStatus(jobId: string): Promise<{
     jobId: string;
     status: "queued" | "processing" | "completed" | "failed";
     currentStepIndex: number;
     errorMessage?: string | null;
+    failure?: AuditFailureDetails | null;
     full: { available: boolean; version?: number };
     catalogUrlsSubmitted?: string[];
     catalogSources?: Array<{ platform: string; canonicalUrl: string; status: string; reason: string }>;
@@ -163,7 +167,9 @@ export function createSupabaseAuditStore(
     },
     async failExpiredProcessingJobs() {
       const now = new Date();
-      const cutoff = new Date(now.getTime() - 10 * 60_000).toISOString();
+      const timeoutMs = getStuckJobTimeoutMs();
+      const cutoff = new Date(now.getTime() - timeoutMs).toISOString();
+      const timeoutMinutes = Math.ceil(timeoutMs / 60_000);
       const nowIso = now.toISOString();
       const { data, error } = await admin.from("audit_jobs")
         .select("id")
@@ -177,7 +183,7 @@ export function createSupabaseAuditStore(
         const { error: updateError } = await admin.from("audit_jobs").update({
           status: "failed",
           error_code: "AUDIT_JOB_EXPIRED",
-          error_message: "This audit could not be completed within 10 minutes. Please submit it again.",
+          error_message: `This audit could not be completed within ${timeoutMinutes} minutes. Please submit it again.`,
           completed_at: nowIso,
           lease_expires_at: null,
           claim_token: null,
@@ -582,28 +588,14 @@ export function createSupabaseAuditStore(
 
       const { data: events, error: eventError } = await admin
         .from("audit_events")
-        .select("event_type,status,created_at")
+        .select("event_type,status,created_at,payload")
         .eq("audit_job_id", jobId)
-        .neq("event_type", "audit_failed")
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .in("event_type", [...Object.keys(AUDIT_EVENT_STEP), "audit_failed", "catalog_ingestion", "catalog_links_submitted"])
+        .order("created_at", { ascending: true });
       if (eventError) throw new Error(`Unable to read audit events: ${eventError.message}`);
 
-      const { data: catalogEvents, error: catalogEventError } = await admin
-        .from("audit_events")
-        .select("payload")
-        .eq("audit_job_id", jobId)
-        .eq("event_type", "catalog_ingestion")
-        .order("created_at", { ascending: true });
-      if (catalogEventError) throw new Error(`Unable to read DSP source statuses: ${catalogEventError.message}`);
-      const { data: submittedEvent, error: submittedError } = await admin.from("audit_events")
-        .select("payload")
-        .eq("audit_job_id", jobId)
-        .eq("event_type", "catalog_links_submitted")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (submittedError) throw new Error(`Unable to read submitted DSP links: ${submittedError.message}`);
+      const catalogEvents = (events ?? []).filter((event) => event.event_type === "catalog_ingestion");
+      const submittedEvent = (events ?? []).find((event) => event.event_type === "catalog_links_submitted");
       const submittedPayload = submittedEvent?.payload as Record<string, unknown> | null;
       const catalogUrlsSubmitted = Array.isArray(submittedPayload?.submittedLinks)
         ? submittedPayload.submittedLinks.filter((value): value is string => typeof value === "string")
@@ -630,23 +622,13 @@ export function createSupabaseAuditStore(
         },
       ) : [];
 
-      const latestEvent = events?.[0];
-      const eventStep: Record<string, number> = {
-        processing_claimed: 0,
-        processing_started: 0,
-        recognition: 1,
-        catalog_ingestion: 1,
-        sonic_dna: 2,
-        evidence_reconciliation: 3,
-        ar_assessment: 4,
-        report_generated: 5,
-        audit_completed: 5,
-      };
-      const currentStepIndex = latestEvent?.event_type && latestEvent.event_type in eventStep
-        ? eventStep[latestEvent.event_type]
-        : job.status === "completed"
-          ? 5
-          : 0;
+      const currentStepIndex = getAuditProgressStep(events ?? [], String(job.status));
+      const failedEvent = (events ?? []).find((event) => event.event_type === "audit_failed");
+      const failedPayload = failedEvent?.payload as Record<string, unknown> | null;
+      const failureValue = failedPayload?.failure;
+      const failure = failureValue && typeof failureValue === "object"
+        ? failureValue as AuditFailureDetails
+        : null;
 
       const { data: reports, error: reportError } = await admin
         .from("audit_reports")
@@ -667,10 +649,12 @@ export function createSupabaseAuditStore(
         jobId,
         status: job.status as "queued" | "processing" | "completed" | "failed",
         currentStepIndex,
-        errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
-          : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
-          : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
-          : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
+        errorMessage: failure?.error_message
+          ?? (typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
+            : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
+            : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
+            : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null),
+        failure,
         full: full ? { available: true, version: full.version } : { available: false },
         catalogUrlsSubmitted,
         catalogSources,
@@ -722,8 +706,11 @@ export function createSupabaseAuditStore(
     async getAuditReportPayload(jobId) {
       return readAuditReportPayload(jobId);
     },
-    async markFailed(jobId, claimToken, message, signal) {
-      await fencedStep(jobId, claimToken, "fail", { message }, signal);
+    async markFailed(jobId, claimToken, message, signal, failure) {
+      await fencedStep(jobId, claimToken, "fail", {
+        message,
+        eventPayload: { failure: failure ?? { error_code: "AUDIT_PROCESSING_FAILED", error_message: message, retryable: false } },
+      }, signal);
     },
   };
 }

@@ -14,6 +14,7 @@ import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
+import { getAuditFailureDetails } from "./failure-details.js";
 
 export interface AuditJobRecord {
   id: string;
@@ -59,7 +60,7 @@ export interface AuditProcessorDependencies {
   generateReport(input: AuditReportInput, tier: AuditReportTier, signal?: AbortSignal): Promise<Uint8Array>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
-  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
+  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal, failure?: ReturnType<typeof getAuditFailureDetails>): Promise<void>;
   stopHeartbeat?(): Promise<void>;
   signal?: AbortSignal;
 }
@@ -660,8 +661,11 @@ export async function processAuditJob(
     const message = jobDeadlineExceeded
       ? "Audit processing: the job exceeded its eight-minute time limit. Please submit it again."
       : userSafeFailureMessage(error);
+    const failure = getAuditFailureDetails(jobDeadlineExceeded ? new Error("AUDIT_JOB_DEADLINE_EXCEEDED") : error);
+    if (!failure.provider) failure.error_message = message;
+    const persistedMessage = failure.provider ? failure.error_message : message;
     await withAbortTimeout(
-      (signal) => deps.markFailed(jobId, job.claimToken, message, signal),
+      (signal) => deps.markFailed(jobId, job.claimToken, persistedMessage, signal, failure),
       15_000,
       "AUDIT_TERMINAL_WRITE_TIMEOUT",
     );

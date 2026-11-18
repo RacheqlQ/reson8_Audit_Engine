@@ -8,7 +8,7 @@ describe("Groq TPM request budget", () => {
       const body = JSON.parse(String(init?.body));
       budgets.push(body.max_completion_tokens);
       return new Response(JSON.stringify({
-        error: { message: "Request too large on tokens per minute. Limit 8000, Requested 8524." },
+        error: { message: "Request payload exceeds the model's maximum request size." },
       }), { status: 413 });
     });
     const client = new GroqClient("test-key", "test-model", fetchImpl as typeof fetch, async () => {});

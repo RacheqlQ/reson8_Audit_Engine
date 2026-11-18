@@ -7,6 +7,8 @@ import { MAX_AUDIO_FILE_BYTES } from "./jobs/audio-intake.js";
 import { createSupabaseAuditStore } from "./integrations/supabase-audit-store.js";
 import type { CreateAuditJobDependencies } from "./jobs/create-audit-job.js";
 import { ensurePdfReport } from "./reports/pdf-output.js";
+import type { AuditFailureDetails } from "./jobs/failure-details.js";
+import { getProviderReadiness } from "./providers/provider-readiness.js";
 
 export interface AuditStore {
   createJobDependencies(): CreateAuditJobDependencies;
@@ -15,6 +17,7 @@ export interface AuditStore {
     status: "queued" | "processing" | "completed" | "failed";
     currentStepIndex: number;
     errorMessage?: string | null;
+    failure?: AuditFailureDetails | null;
     full: { available: boolean; version?: number };
   }>;
   getAuditReport(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<{
@@ -155,6 +158,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
   app.get("/health", async () => ({
     status: "ok",
     service: "reson8-audit-engine",
+    providers: getProviderReadiness(),
   }));
   app.get<{
     Params: { jobId: string };
@@ -164,15 +168,28 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
     if (!accessToken || !store.verifyAuditAccessToken) {
       return reply.code(404).send({ error: "AUDIT_NOT_FOUND", message: "Audit job not found" });
     }
+    const requestStartedAt = performance.now();
+    const tokenVerificationStartedAt = performance.now();
+    let tokenVerificationMs = 0;
     try {
       const authorized = await store.verifyAuditAccessToken(request.params.jobId, accessToken);
+      tokenVerificationMs = performance.now() - tokenVerificationStartedAt;
       if (!authorized) return reply.code(404).send({ error: "AUDIT_NOT_FOUND", message: "Audit job not found" });
     } catch (error) {
       request.log.error({ err: error }, "audit access token verification failed");
       return reply.code(500).send({ error: "AUDIT_ACCESS_VERIFICATION_FAILED", message: "Unable to verify audit access" });
     }
     try {
-      return reply.send(await store.getAuditStatus(request.params.jobId));
+      const statusReadStartedAt = performance.now();
+      const status = await store.getAuditStatus(request.params.jobId);
+      request.log.info({
+        event: "audit_status_timing",
+        jobId: request.params.jobId,
+        tokenVerificationMs,
+        statusReadMs: performance.now() - statusReadStartedAt,
+        totalMs: performance.now() - requestStartedAt,
+      });
+      return reply.send(status);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to read audit status";
       if (message === "Audit job not found") {
@@ -286,6 +303,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         }
       }
 
+      const createRequestStartedAt = performance.now();
       const result = await createAuditJob(
         {
           ownerId,
@@ -298,6 +316,12 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         store.createJobDependencies(),
       );
 
+      request.log.info({
+        event: "audit_create_request_timing",
+        jobId: result.jobId,
+        audioBytes: bytes.byteLength,
+        totalMs: performance.now() - createRequestStartedAt,
+      });
       return reply.code(201).send({
         jobId: result.jobId,
         status: "queued",

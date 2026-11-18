@@ -55,10 +55,19 @@ describe("GET /health", () => {
     const response = await app.inject({ method: "GET", url: "/health" });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      status: "ok",
-      service: "reson8-audit-engine",
-    });
+    const payload = response.json() as {
+      status: string;
+      service: string;
+      providers: Array<{ provider: string; enabled: boolean; status: string; credentialConfigured: boolean }>;
+    };
+    expect(payload).toMatchObject({ status: "ok", service: "reson8-audit-engine" });
+    expect(payload.providers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: "groq", enabled: expect.any(Boolean), status: expect.any(String), credentialConfigured: expect.any(Boolean) }),
+      expect.objectContaining({ provider: "gemini", enabled: expect.any(Boolean), status: expect.any(String), credentialConfigured: expect.any(Boolean) }),
+      expect.objectContaining({ provider: "ollama", enabled: expect.any(Boolean), status: expect.any(String), credentialConfigured: expect.any(Boolean) }),
+      expect.objectContaining({ provider: "tidal", enabled: expect.any(Boolean), status: expect.any(String), credentialConfigured: expect.any(Boolean) }),
+    ]));
+    expect(JSON.stringify(payload)).not.toContain("GROQ_API");
 
     await app.close();
   });
