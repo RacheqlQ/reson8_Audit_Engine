@@ -29,4 +29,22 @@ describe("Gemini assessment fallback transport", () => {
       expect(messages[0].content).toContain("Return JSON only");
     }
   });
+
+  it("stops after one Gemini JSON schema validation retry", async () => {
+    let narrativeCalls = 0;
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const group = body.messages[1].content.includes('"sectionGroup":"narrative"');
+      if (group) narrativeCalls++;
+      return new Response(JSON.stringify({ error: {
+        message: "Failed to validate JSON. Please adjust your prompt.",
+        code: "json_validate_failed",
+        failed_generation: "",
+      } }), { status: 400 });
+    });
+    const client = new GeminiClient("test-gemini-key", "gemini-2.5-flash", fetchMock as typeof fetch, async () => {});
+    await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow("Gemini narrative assessment failed with HTTP 400");
+    expect(narrativeCalls).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
