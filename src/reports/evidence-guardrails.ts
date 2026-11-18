@@ -115,10 +115,10 @@ function stripUnsupportedTechnicalClaims(value: unknown, suppressLoudnessOptimis
 
 function stripUnsupportedAudioMeasurementClaims(value: unknown): unknown {
   if (typeof value === "string") {
-    const sentences = value.split(/(?<=[.!?])\\s+(?=[A-Z])/);
+    const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
-      const audioMeasurement = /\\b(?:\\d+(?:\\.\\d+)?\\s*(?:BPM|LUFS|dBFS|Hz)|tempo|key|mode|major|minor|dynamic range|RMS(?: energy| level)?|spectral (?:centroid|bandwidth|rolloff)|zero[- ]crossing|vocal (?:analysis|features))\\b/i.test(sentence);
-      const cautious = /\\b(?:not|no|without|insufficient|unavailable|unverified|cannot|withheld|requires? review|not measured|not determined|not reported|not scored)\\b/i.test(sentence);
+      const audioMeasurement = /\b(?:\d+(?:\.\d+)?\s*(?:BPM|LUFS|dBFS|Hz)|tempo|key|mode|major|minor|dynamic range|RMS(?: energy| level)?|spectral (?:centroid|bandwidth|rolloff)|zero[- ]crossing|vocal (?:analysis|features))\b/i.test(sentence);
+      const cautious = /\b(?:not|no|without|insufficient|unavailable|unverified|cannot|withheld|requires? review|not measured|not determined|not reported|not scored)\b/i.test(sentence);
       return !audioMeasurement || cautious;
     });
     return kept.join(" ").trim() || "Not asserted: uploaded-master measurements are unavailable for this metadata-only assessment.";
