@@ -1,7 +1,7 @@
 import { createAudioDecoder } from "../audio/decoder.js";
 import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
-import { providerDecision } from "../providers/provider-policy.js";
+import { getAssessmentProviderReadiness, providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
 import { GeminiClient, GroqClient, OllamaClient } from "../providers/groq/client.js";
 import { generateAuditReport } from "../reports/generate-audit-report.js";
@@ -36,15 +36,15 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   if (signal?.aborted) return null;
   const store = createSupabaseAuditStore();
   if (signal?.aborted) return null;
-  // Validate required provider configuration before claiming work so a
-  // misconfigured worker cannot strand a queued job in processing.
-  const groqDecision = providerDecision("groq");
-  if (!groqDecision.enabled) throw new Error("groq: disabled by data policy");
-  const groq = new GroqClient();
-  const geminiDecision = providerDecision("gemini");
-  const gemini = geminiDecision.enabled && process.env.GEMINI_API_KEY ? new GeminiClient() : null;
-  const ollamaDecision = providerDecision("ollama");
-  const ollama = ollamaDecision.enabled && process.env.OLLAMA_API_KEY ? new OllamaClient() : null;
+  // Any enabled and credentialed provider can serve as the first provider in the chain.
+  const readiness = getAssessmentProviderReadiness();
+  if (!readiness.some((provider) => provider.usable)) {
+    console.error(JSON.stringify({ worker: "audit", event: "provider_chain_unavailable", code: "AI_PROVIDERS_UNAVAILABLE", providers: readiness.map(({ provider, model, reason }) => ({ provider, model, reason })) }));
+    throw new Error("AI_PROVIDERS_UNAVAILABLE: no enabled assessment provider has usable credentials");
+  }
+  const groq = readiness.find((provider) => provider.provider === "groq")?.usable ? new GroqClient() : null;
+  const gemini = readiness.find((provider) => provider.provider === "gemini")?.usable ? new GeminiClient() : null;
+  const ollama = readiness.find((provider) => provider.provider === "ollama")?.usable ? new OllamaClient() : null;
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
     await store.failExpiredProcessingJobs?.();
