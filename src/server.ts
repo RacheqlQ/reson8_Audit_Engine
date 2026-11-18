@@ -8,6 +8,7 @@ import { createSupabaseAuditStore } from "./integrations/supabase-audit-store.js
 import type { CreateAuditJobDependencies } from "./jobs/create-audit-job.js";
 import { ensurePdfReport } from "./reports/pdf-output.js";
 import type { AuditFailureDetails } from "./jobs/failure-details.js";
+import { getProviderReadiness } from "./providers/provider-readiness.js";
 
 export interface AuditStore {
   createJobDependencies(): CreateAuditJobDependencies;
@@ -157,6 +158,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
   app.get("/health", async () => ({
     status: "ok",
     service: "reson8-audit-engine",
+    providers: getProviderReadiness(),
   }));
   app.get<{
     Params: { jobId: string };
