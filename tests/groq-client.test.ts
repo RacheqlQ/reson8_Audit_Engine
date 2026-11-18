@@ -224,7 +224,7 @@ describe("GroqClient section groups",()=>{
      expect(body.response_format.json_schema.strict).toBe(true);
      expect(body.response_format.json_schema.schema.required).toContain("evidenceLabels");
     }
-    if(evidenceScoreCalls<=2){
+    if(evidenceScoreCalls===1){
      return new Response(JSON.stringify({error:{
       message:"Failed to validate JSON. Please adjust your prompt.",
       type:"invalid_request_error",
@@ -232,7 +232,7 @@ describe("GroqClient section groups",()=>{
       failed_generation:""
      }}),{status:400});
     }
-    if(evidenceScoreCalls===3){
+    if(evidenceScoreCalls===2){
      return new Response(JSON.stringify({choices:[{message:{content:"{}"}}]}),{status:200});
     }
    }
@@ -240,15 +240,14 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{artist:"Regression Artist",title:"Regression Track"},sonicDna:{provenance:"uploaded_audio_master",bpm:96},catalogMetadata:{apple_music:{title:"Regression Track",isrc:"USAAA2600001"}}});
-  expect(evidenceScoreCalls).toBe(4);
+  expect(evidenceScoreCalls).toBe(3);
   expect(prompts[1]).toContain("json_validate_failed");
   expect(prompts[1]).toContain("evidenceLabels");
   expect(systemPrompts[0]).toContain("Always include the evidenceLabels array");
-  expect(responseFormats).toEqual(["json_schema","json_schema","json_object","json_object"]);
+  expect(responseFormats).toEqual(["json_schema","json_object","json_object"]);
   expect(payloads[0].evidence).toEqual(payloads[1].evidence);
   expect(payloads[1].evidence).toEqual(payloads[2].evidence);
-  expect(payloads[2].evidence).toEqual(payloads[3].evidence);
-  expect(prompts[3]).toContain("evidenceGaps");
+  expect(prompts[2]).toContain("evidenceGaps");
   expect(payloads[0].sonicDna).toEqual(payloads[2].sonicDna);
   expect(payloads[0].catalogMetadata).toEqual(payloads[2].catalogMetadata);
   expect(result.evidenceLabels).toHaveLength(1);
