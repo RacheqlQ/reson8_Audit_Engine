@@ -256,9 +256,11 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
       const record = entry as Record<string, unknown>;
       const claim = typeof record.claim === "string" ? record.claim : "";
+      if (!hasUploadedMaster && record.label === "OBSERVED") return false;
+      if (!hasUploadedMaster && record.source === "synthetic_audio_fixture") return false;
       if (!reliableTempo && /\b(?:tempo|bpm|beats per minute)\b/i.test(claim)) return false;
       if (!reliableKey && /\b(?:key|mode|major|minor|tonic)\b/i.test(claim)) return false;
-      if (!hasVocalAnalysis(sonicDna) && /\b(?:vocal|instrumental|singing|singer|voice)\b/i.test(claim)) return false;
+      if ((!hasUploadedMaster || !hasVocalAnalysis(sonicDna)) && /\b(?:vocal|instrumental|singing|singer|voice)\b/i.test(claim)) return false;
       if (zeroConfidence && record.label === "INFERRED") return false;
       return true;
     });
