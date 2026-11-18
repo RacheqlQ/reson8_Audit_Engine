@@ -47,12 +47,13 @@ export function classifyAuditFailure(
   const httpStatus = statusMatch ? Number(statusMatch[1]) : null;
   const retryable = httpStatus !== null
     ? httpStatus === 408 || httpStatus === 409 || httpStatus === 425 || httpStatus === 429 || httpStatus >= 500
-    : /capacity|timed out|timeout|network|fetch failed|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT|AUDIT_JOB_DEADLINE_EXCEEDED/i.test(message);
+    : /capacity|timed out|timeout|network|fetch failed|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT|AUDIT_JOB_DEADLINE_EXCEEDED|GROQ_REQUEST_TOO_LARGE/i.test(message);
   const errorType = responseErrorType(message);
   const model = providerModel(provider, env);
   const errorCode = provider && httpStatus
     ? `${provider.toUpperCase()}_HTTP_${httpStatus}`
-    : /GROQ_ASSESSMENT_TIMEOUT/.test(message) ? "AI_ASSESSMENT_TIMEOUT"
+    : /GROQ_REQUEST_TOO_LARGE/.test(message) ? "GROQ_REQUEST_TOO_LARGE"
+      : /GROQ_ASSESSMENT_TIMEOUT/.test(message) ? "AI_ASSESSMENT_TIMEOUT"
       : /GROQ_PROMPT_BUDGET_EXCEEDED/.test(message) ? "AI_PROMPT_BUDGET_EXCEEDED"
         : errorType ? `AI_PROVIDER_${errorType.toUpperCase()}`
           : provider ? `${provider.toUpperCase()}_PROVIDER_ERROR` : "AUDIT_PROCESSING_FAILED";
