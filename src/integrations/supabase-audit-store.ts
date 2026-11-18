@@ -212,16 +212,37 @@ export function createSupabaseAuditStore(
       if (error) throw new Error("Unable to inspect expired audit jobs");
       let failed = 0;
       for (const row of data ?? []) {
-        const { error: updateError } = await admin.from("audit_jobs").update({
+        const errorMessage = `This audit could not be completed within ${timeoutMinutes} minutes. Please submit it again.`;
+        const { data: updatedJob, error: updateError } = await admin.from("audit_jobs").update({
           status: "failed",
           error_code: "AUDIT_JOB_EXPIRED",
-          error_message: `This audit could not be completed within ${timeoutMinutes} minutes. Please submit it again.`,
+          error_message: errorMessage,
           completed_at: nowIso,
           lease_expires_at: null,
           claim_token: null,
           worker_id: null,
-        }).eq("id", row.id).eq("status", "processing").lt("lease_expires_at", nowIso);
-        if (!updateError) failed++;
+        }).eq("id", row.id).eq("status", "processing").lt("lease_expires_at", nowIso).select("id").maybeSingle();
+        if (updateError) throw new Error("Unable to mark expired audit job as failed");
+        if (!updatedJob) continue;
+        const { error: eventError } = await admin.from("audit_events").insert({
+          audit_job_id: row.id,
+          event_type: "audit_failed",
+          status: "failed",
+          message: errorMessage,
+          payload: {
+            errorDetails: {
+              errorCode: "AUDIT_JOB_EXPIRED",
+              errorMessage,
+              provider: null,
+              model: null,
+              httpStatus: null,
+              errorType: "worker_lease_expired",
+              retryable: true,
+            },
+          },
+        });
+        if (eventError) throw new Error("Unable to record expired audit failure details");
+        failed++;
       }
       return failed;
     },
