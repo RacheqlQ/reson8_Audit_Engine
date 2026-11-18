@@ -18,8 +18,8 @@ describe("professional report text and metadata coverage", () => {
     const pages = planAuditReportPages(fullAudioFixture as any, "full");
     const text = pages.slice(10, 13).flatMap((page) => page.text).join(" ");
     expect(text).toContain("General industry guidance");
-    expect(text).not.toMatch(/General industry guidance\\s*[—:-]\\s*General industry guidance/i);
-    expect(text).not.toMatch(/INDUSTRY PRACTICE\\s*[—:-]\\s*INDUSTRY PRACTICE/i);
+    expect(text).not.toMatch(/General industry guidance\s*[—:-]\s*General industry guidance/i);
+    expect(text).not.toMatch(/INDUSTRY PRACTICE\s*[—:-]\s*INDUSTRY PRACTICE/i);
   });
 
   it("recognizes the actual exported fixture provenance without inventing checked-provider metadata", () => {
