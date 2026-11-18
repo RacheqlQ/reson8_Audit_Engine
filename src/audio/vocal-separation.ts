@@ -110,7 +110,7 @@ export async function separateVocalsFromPcm(
       return await load(await bytes, {
         backend: "node",
         sessionOptions: { enableCpuMemArena: false, enableMemPattern: false },
-      });
+      }) as unknown as Session;
     } catch (error) {
       modelBytesPromise = null;
       throw error;
@@ -127,7 +127,8 @@ export async function separateVocalsFromPcm(
       targets: ["vocals"],
       // Keep CPU memory bounded on Render. The raw model estimate is sufficient
       // for conservative vocal activity analysis; full Wiener refinement is costlier.
-      wiener: 0,
+      wiener: 1,
+      wienerWindow: 120,
       chunk: 20,
       overlap: 2,
       session: sessionLoader,
