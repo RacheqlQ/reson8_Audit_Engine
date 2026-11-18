@@ -139,6 +139,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         },
       );
 
+      request.log.info({ event: "audit_submission_completed", sourceType: "dsp_link", durationMs: Date.now() - requestStartedAt, submittedLinkCount: result.catalogUrls.length }, "catalog audit intake completed");
       return reply.code(201).send({
         jobId: result.jobId,
         status: "queued",
@@ -256,6 +257,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
       "x-catalog-urls"?: string;
     };
   }>("/v1/audits", async (request, reply) => {
+    const requestStartedAt = Date.now();
     try {
       if (!allowPublicRequest(request.ip)) {
         return reply.code(429).send({
@@ -304,6 +306,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         store.createJobDependencies(),
       );
 
+      request.log.info({ event: "audit_submission_completed", sourceType: result.sourceType, durationMs: Date.now() - requestStartedAt, uploadBytes: bytes.length }, "audio audit intake completed");
       return reply.code(201).send({
         jobId: result.jobId,
         status: "queued",
