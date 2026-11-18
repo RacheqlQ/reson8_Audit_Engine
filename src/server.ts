@@ -14,6 +14,7 @@ export interface AuditStore {
     jobId: string;
     status: "queued" | "processing" | "completed" | "failed";
     currentStepIndex: number;
+    errorCode?: string | null;
     errorMessage?: string | null;
     full: { available: boolean; version?: number };
   }>;
