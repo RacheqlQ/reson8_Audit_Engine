@@ -2,6 +2,30 @@ import { describe, expect, it, vi } from "vitest";
 import { GroqClient } from "../src/providers/groq/client.js";
 
 describe("Groq assessment deadline", () => {
+  it("defers to the parent stage deadline when one is supplied", async () => {
+    const controller = new AbortController();
+    const parentError = new Error("AUDIT_STAGE_TIMEOUT:ai_assessment");
+    let observedSignal: AbortSignal | undefined;
+    let notifySleep!: () => void;
+    const sleeping = new Promise<void>((resolve) => { notifySleep = resolve; });
+    const fetchImpl = vi.fn(async () => new Response(
+      JSON.stringify({ error: { message: "rate limited" } }),
+      { status: 429, headers: { "retry-after": "900" } },
+    ));
+    const sleepImpl = vi.fn((_ms: number, signal?: AbortSignal) => new Promise<void>((_resolve, reject) => {
+      observedSignal = signal;
+      notifySleep();
+      signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+    }));
+    const client = new GroqClient("test-key", "test-model", fetchImpl as typeof fetch, sleepImpl, 90_000, 25);
+    const pending = client.assess({ evidence: {}, sonicDna: null }, controller.signal);
+    await sleeping;
+    controller.abort(parentError);
+    await expect(pending).rejects.toThrow("AUDIT_STAGE_TIMEOUT:ai_assessment");
+    expect(observedSignal?.aborted).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("aborts a long provider Retry-After wait within the overall assessment deadline", async () => {
     let observedSleepSignal: AbortSignal | undefined;
     let signalRetryWaitStarted!: () => void;
