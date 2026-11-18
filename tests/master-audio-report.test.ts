@@ -146,7 +146,7 @@ describe("uploaded master provenance in reports", () => {
       .flatMap((section) => [section.title, ...section.text])
       .join(" ");
     expect(report).toContain("Limited signal-periodicity diagnostics were performed");
-    expect(report).toContain("voice-range periodicity diagnostic (not vocal detection)");
+    expect(report).toContain("Voice-range periodicity diagnostic (not vocal detection)");
     expect(report).toContain("median 220.0 Hz");
     expect(report).toContain("singing, speech, vocal presence/absence and vocal arrangement remain undetermined");
     expect(report).not.toContain("Vocal analysis: Performed");
