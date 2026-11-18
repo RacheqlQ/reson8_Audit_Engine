@@ -198,7 +198,7 @@ export function getAssessmentProviderReadiness(env: Record<string, string | unde
     { provider: "ollama" as const, key: env.OLLAMA_API_KEY, model: env.OLLAMA_MODEL ?? "gemma4:31b" },
   ];
   return specs.map((spec) => {
-    const enabled = providerDecision(spec.provider, env).enabled;
+    const enabled = providerDecision(spec.provider).enabled;
     const configured = typeof spec.key === "string" && spec.key.trim().length > 0;
     const runtime = runtimeUnavailable.get(spec.provider);
     if (runtime && runtime.until <= Date.now()) runtimeUnavailable.delete(spec.provider);
