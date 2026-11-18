@@ -50,6 +50,12 @@ There are no per-provider `PROVIDER_ENABLED_<NAME>` environment variables in the
 
 Audio diagnostics are persisted in the existing fenced `sonic_dna` audit event payload; no database migration is required. `scripts/diagnostics-to-fixture.mjs` converts one exported event payload from stdin into a bounded Vitest fixture and deliberately selects only diagnostic fields. The downbeat grid is explicitly a four-beat diagnostic hypothesis, not a meter or downbeat detection claim.
 
+## Integration availability
+
+Registry authorization removes policy-based blocking; it does not manufacture a client or install a model. The integrations currently wired for calls in this repository are Groq, Gemini, Ollama Cloud, AudD, Spotify, Apple/iTunes lookup, YouTube Music oEmbed, TIDAL, Audiomack official Data API and Deezer public track metadata. They are called when their required credentials/configuration are present, without any `PROVIDER_ENABLED_<NAME>` variable.
+
+The following entries are authorized in the registry but do not currently have a callable integration/model packaged in this Node service: MusicBrainz, ListenBrainz, YouTube Data API, Last.fm, Chartmetric, Soundcharts, Luminate, Beat This!, Essentia, madmom, FMAK and GiantSteps. They are not blocked by a policy flag; no API/model call can occur until a real integration or compatible model runtime is implemented. Do not report them as measured or provider-observed until such an integration has actually run. Third-party model/data rights and executed vendor agreements remain conditions of actual use.
+
 ## Evidence labels in reports
 
 - **MEASURED:** derived by a documented first-party algorithm from the submitted audio.
