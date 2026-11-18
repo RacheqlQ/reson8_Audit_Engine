@@ -42,7 +42,9 @@ export function classifyAuditFailure(
 ): AuditFailureDetails {
   const message = error instanceof Error ? error.message : String(error);
   const provider = providerHint
-    ?? (/\bgemini\b/i.test(message) ? "gemini" : /\bollama\b/i.test(message) ? "ollama" : /\bgroq\b/i.test(message) ? "groq" : null);
+    ?? (/\bgemini\b|GEMINI_/i.test(message) ? "gemini"
+      : /\bollama\b|OLLAMA_/i.test(message) ? "ollama"
+        : /\bgroq\b|GROQ_|AI capacity reached/i.test(message) ? "groq" : null);
   const statusMatch = message.match(/HTTP\s+(\d{3})/i);
   const httpStatus = statusMatch ? Number(statusMatch[1]) : null;
   const retryable = httpStatus !== null
@@ -53,7 +55,8 @@ export function classifyAuditFailure(
   const errorCode = provider && httpStatus
     ? `${provider.toUpperCase()}_HTTP_${httpStatus}`
     : /GROQ_REQUEST_TOO_LARGE/.test(message) ? "GROQ_REQUEST_TOO_LARGE"
-      : /GROQ_ASSESSMENT_TIMEOUT/.test(message) ? "AI_ASSESSMENT_TIMEOUT"
+      : /AI capacity reached|capacity/i.test(message) && provider === "groq" ? "GROQ_CAPACITY_EXCEEDED"
+        : /GROQ_ASSESSMENT_TIMEOUT/.test(message) ? "AI_ASSESSMENT_TIMEOUT"
       : /GROQ_PROMPT_BUDGET_EXCEEDED/.test(message) ? "AI_PROMPT_BUDGET_EXCEEDED"
         : errorType ? `AI_PROVIDER_${errorType.toUpperCase()}`
           : provider ? `${provider.toUpperCase()}_PROVIDER_ERROR` : "AUDIT_PROCESSING_FAILED";
