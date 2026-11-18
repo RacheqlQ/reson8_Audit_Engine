@@ -27,7 +27,7 @@ function safeFailureCategory(error: unknown): string {
   if (/capacity|429|daily.limit|TPD/i.test(message)) return "capacity";
   if (/timed out|ETIMEDOUT/i.test(message)) return "timeout";
   if (/json_validate_failed|failed to validate JSON|failed Zod validation/i.test(message)) return "json_validation";
-  if (/HTTP 413/i.test(message)) return "request_too_large";
+  if (/HTTP 413|GROQ_REQUEST_TOO_LARGE/i.test(message)) return "request_too_large";
   if (/HTTP 5\d\d|network|fetch failed|ECONNRESET/i.test(message)) return "transient_provider_error";
   if (/HTTP 401|HTTP 403/i.test(message)) return "authentication";
   return "provider_error";
