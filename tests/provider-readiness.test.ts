@@ -39,7 +39,11 @@ describe("provider readiness", () => {
   it("exposes provider readiness from the HTTP health endpoint without returning credentials", async () => {
     vi.stubEnv("PROVIDER_ENABLED_GROQ", "true");
     vi.stubEnv("GROQ_API", "never-return-this");
-    const app = buildServer();
+    const app = buildServer({
+      createJobDependencies: () => ({} as never),
+      getAuditStatus: async () => ({ jobId: "unused", status: "queued", currentStepIndex: 0, full: { available: false } }),
+      getAuditReport: async () => ({ bytes: new Uint8Array(), contentType: "application/pdf", filename: "unused.pdf" }),
+    });
     try {
       const response = await app.inject({ method: "GET", url: "/health" });
       const payload = response.json() as { providers: Array<{ provider: string; status: string; credentialConfigured: boolean; [key: string]: unknown }> };
