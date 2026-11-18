@@ -107,10 +107,10 @@ describe("A4 report layout and fixture coverage",()=>{
   const body=planAuditReportPages(input).flatMap((section)=>section.text).join(" ");
   expect(body).toContain("Vocal presence: likely_present");
   expect(body).toContain("Vocal activity timestamps (first 12): 4.20–12.60 s");
-  expect(body).toContain("Estimated fundamental-frequency range: 110–440 Hz (median 220 Hz)");
-  expect(body).toContain("Delivery classification: not_classified; vocal layering: not_classified");
-  expect(body).toContain("Lyrics / transcription: not_requested");
-  expect(body).toContain("Human review status: not_human_reviewed");
+  expect(body).toContain("Estimated fundamental-frequency candidates: 110–440 Hz (median 220 Hz)");
+  expect(body).toContain("Delivery: not_classified; layering: not_classified");
+  expect(body).toContain("lyrics: not_requested");
+  expect(body).toContain("human review: not_human_reviewed");
   expect(body).toContain("automated vocal analysis has not been human-validated");
   expect(body).toContain("not a calibrated probability");
  });
