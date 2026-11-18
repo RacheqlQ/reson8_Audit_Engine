@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,industryPractice,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
@@ -290,5 +290,10 @@ describe("extended Unicode report text normalization",()=>{
   expect(body).toContain("Key / mode: Not measured");
   expect(body).not.toContain("Synthetic report fixture (layout testing only)");
   expect(body).not.toContain("synthetic_audio_fixture");
+ });
+
+ it("normalizes repeated industry-practice prefixes to one professional label",()=>{
+  expect(industryPractice("INDUSTRY PRACTICE — INDUSTRY PRACTICE — General lane craft guidance."))
+   .toBe("General industry guidance — General lane craft guidance.");
  });
 });
