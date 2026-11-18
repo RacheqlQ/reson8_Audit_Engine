@@ -16,6 +16,7 @@ const POLL_INTERVAL_MS = 15_000;
 const HEARTBEAT_INTERVAL_MS = 45_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
 const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
+let providerUnavailableLogged = false;
 
 export function isFallbackEligible(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -48,15 +49,30 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   if (signal?.aborted) return null;
   const store = createSupabaseAuditStore();
   if (signal?.aborted) return null;
-  // Validate required provider configuration before claiming work so a
-  // misconfigured worker cannot strand a queued job in processing.
+  // Only claim work when at least one policy-enabled assessment provider has credentials.
+  // A disabled primary provider must not create a noisy 15-second worker failure loop.
   const groqDecision = providerDecision("groq");
-  if (!groqDecision.enabled) throw new Error("groq: disabled by data policy");
-  const groq = new GroqClient();
+  const groq = groqDecision.enabled && (process.env.GROQ_API_KEY || process.env.GROQ_API) ? new GroqClient() : null;
   const geminiDecision = providerDecision("gemini");
   const gemini = geminiDecision.enabled && process.env.GEMINI_API_KEY ? new GeminiClient() : null;
   const ollamaDecision = providerDecision("ollama");
   const ollama = ollamaDecision.enabled && process.env.OLLAMA_API_KEY ? new OllamaClient() : null;
+  if (!groq && !gemini && !ollama) {
+    if (!providerUnavailableLogged) {
+      console.warn(JSON.stringify({
+        worker: "audit",
+        event: "assessment_provider_chain_unavailable",
+        providers: [
+          { provider: "groq", enabled: groqDecision.enabled, credentialsConfigured: Boolean(process.env.GROQ_API_KEY || process.env.GROQ_API) },
+          { provider: "gemini", enabled: geminiDecision.enabled, credentialsConfigured: Boolean(process.env.GEMINI_API_KEY) },
+          { provider: "ollama", enabled: ollamaDecision.enabled, credentialsConfigured: Boolean(process.env.OLLAMA_API_KEY) },
+        ],
+      }));
+      providerUnavailableLogged = true;
+    }
+    return null;
+  }
+  providerUnavailableLogged = false;
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
     await store.failExpiredProcessingJobs?.();
@@ -122,35 +138,46 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         loadCompletedSectionGroup: (group: string) => store.loadAssessmentSectionGroup(job.id, group),
         saveCompletedSectionGroup: (group: string, result: unknown) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, signal),
       };
-      try {
-        return await groq.assess(assessmentInput, signal);
-      } catch (error) {
-        if (signal?.aborted || !isFallbackEligible(error)) throw error;
-        let fallbackError: unknown = error;
-        if (gemini) {
-          console.warn(JSON.stringify({
-            worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini",
-            reason: safeFailureCategory(error),
-            ...providerFailureTelemetry("groq", process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, error),
-          }));
-          try {
-            return await gemini.assess(assessmentInput, signal);
-          } catch (geminiError) {
-            fallbackError = geminiError;
+      let lastError: unknown;
+      if (groq) {
+        try {
+          return await groq.assess(assessmentInput, signal);
+        } catch (error) {
+          if (signal?.aborted || !isFallbackEligible(error)) throw error;
+          lastError = error;
+          if (gemini || ollama) {
             console.warn(JSON.stringify({
-              worker: "audit", jobId: job.id, event: "gemini_fallback_failed",
-              reason: safeFailureCategory(geminiError),
-              ...providerFailureTelemetry("gemini", process.env.GEMINI_MODEL ?? "gemini-2.5-flash", geminiError),
+              worker: "audit", jobId: job.id, event: gemini ? "groq_fallback_to_gemini" : "groq_fallback_to_ollama",
+              reason: safeFailureCategory(error),
+              ...providerFailureTelemetry("groq", process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, error),
             }));
           }
         }
-        if (!ollama || signal?.aborted || !isFallbackEligible(fallbackError)) throw fallbackError;
+      }
+
+      if (gemini && (!groq || !lastError || isFallbackEligible(lastError))) {
+        try {
+          return await gemini.assess(assessmentInput, signal);
+        } catch (geminiError) {
+          if (signal?.aborted || !isFallbackEligible(geminiError)) throw geminiError;
+          lastError = geminiError;
+          console.warn(JSON.stringify({
+            worker: "audit", jobId: job.id, event: "gemini_fallback_failed",
+            reason: safeFailureCategory(geminiError),
+            ...providerFailureTelemetry("gemini", process.env.GEMINI_MODEL ?? "gemini-2.5-flash", geminiError),
+          }));
+        }
+      }
+
+      if (ollama && (!lastError || isFallbackEligible(lastError))) {
         console.warn(JSON.stringify({
           worker: "audit",
           jobId: job.id,
           event: gemini ? "gemini_fallback_to_ollama" : "groq_fallback_to_ollama",
-          reason: safeFailureCategory(fallbackError),
-          ...providerFailureTelemetry(gemini ? "gemini" : "groq", gemini ? process.env.GEMINI_MODEL ?? "gemini-2.5-flash" : process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, fallbackError),
+          reason: lastError ? safeFailureCategory(lastError) : "primary_provider_unavailable",
+          ...(lastError
+            ? providerFailureTelemetry(gemini ? "gemini" : "groq", gemini ? process.env.GEMINI_MODEL ?? "gemini-2.5-flash" : process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, lastError)
+            : { provider: "groq", model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, httpStatus: null, errorType: "provider_unavailable", retryable: false }),
         }));
         try {
           return await ollama.assess(assessmentInput, signal);
@@ -163,6 +190,9 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
           throw ollamaError;
         }
       }
+
+      if (lastError) throw lastError;
+      throw new Error("No assessment provider is ready");
     },
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
     generateReport: generateAuditReport,
