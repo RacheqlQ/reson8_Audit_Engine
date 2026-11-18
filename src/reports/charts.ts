@@ -24,7 +24,11 @@ const C = {
 const PALETTE=[C.blue,C.violet,C.teal,C.coral,C.gold,C.sky,C.green];
 const CARD_X=48,CARD_W=499,HEADER_H=29,CAPTION_H=43,PAD=12;
 function color(index:number){return PALETTE[index%PALETTE.length];}
-function validNumber(v:ChartRow["value"]):number|null{return typeof v==="number"&&Number.isFinite(v)?v:null;}
+function validNumber(v:ChartRow["value"]):number|null{
+ if(typeof v==="number")return Number.isFinite(v)?v:null;
+ if(typeof v==="string"&&/^-?\\d+(?:\\.\\d+)?$/.test(v.trim())){const parsed=Number(v);return Number.isFinite(parsed)?parsed:null;}
+ return null;
+}
 export function compactChartItemSummary(value:string,maxLength=58):string{
  const clean=value.replace(/\s+/g," ").trim();
  const first=clean.split(/(?<=[.!?])\s+/)[0]??clean;
@@ -301,30 +305,30 @@ function ring(p:PDFPage,cx:number,cy:number,r:number,value:number|null,c:ReturnT
 }
 function drawSonic(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const cols=[g.x+18,g.x+184,g.x+350],top=g.contentTop-22;
- rows.slice(0,6).forEach((row,i)=>{
-  const col=i%3,r=Math.floor(i/3),x=cols[col],y=top-r*69,c=color(i),v=validNumber(row.value);
+ rows.slice(0,9).forEach((row,i)=>{
+  const col=i%3,r=Math.floor(i/3),x=cols[col],y=top-r*43,c=color(i),v=validNumber(row.value);
   const label=row.label.toUpperCase();
   tracked(p,label,x,y,b,6.3,C.muted,.35);
   const isPercent=/CONFIDENCE|SCORE|PERCENT/i.test(label)||typeof row.value==="string"&&/%$/.test(row.value);
   if(isPercent){
    const parsed=v??(typeof row.value==="string"&&/%$/.test(row.value)?Number.parseFloat(row.value):null),n=typeof parsed==="number"&&Number.isFinite(parsed)?parsed:null;
-   ring(p,x+22,y-29,15,n===null?null:n,c,f,b);
-   if(n===null)text(p,"Not determined",x+45,y-32,f,6.5,C.muted);
+   ring(p,x+22,y-24,13,n===null?null:n,c,f,b);
+   if(n===null)text(p,"Not determined",x+41,y-27,f,6.2,C.muted);
   }else if(v!==null){
    const display=shown(row.value);
    const unit=/LUFS/i.test(label)?"LUFS":/BPM/i.test(label)?"BPM":/RANGE/i.test(label)?"dB":"";
    let metricSize=25;
    const maxMetricWidth=unit?102:138;
    while(metricSize>11&&b.widthOfTextAtSize(display,metricSize)>maxMetricWidth)metricSize-=1;
-   text(p,display,x,y-34,b,metricSize,c);
+   text(p,display,x,y-28,b,metricSize,c);
    const unitX=x+b.widthOfTextAtSize(display,metricSize)+5;
-   if(unit&&unitX+b.widthOfTextAtSize(unit,7)<=x+150)text(p,unit,unitX,y-32,b,7,C.muted);
+   if(unit&&unitX+b.widthOfTextAtSize(unit,7)<=x+150)text(p,unit,unitX,y-26,b,7,C.muted);
   }else if(/KEY/i.test(label)&&shown(row.value)!=="Not determined"){
    let keySize=15;const keyText=shown(row.value);while(keySize>9&&b.widthOfTextAtSize(keyText,keySize)>138)keySize-=1;
-   text(p,keyText,x,y-33,b,keySize,c);
+   text(p,keyText,x,y-27,b,keySize,c);
   }else{
-   ring(p,x+14,y-30,13,null,c,f,b);
-   text(p,"Not determined",x+35,y-32,f,6.2,C.muted);
+   ring(p,x+14,y-24,11,null,c,f,b);
+   text(p,"Not determined",x+33,y-26,f,6.0,C.muted);
   }
  });
 }
