@@ -14,6 +14,7 @@ import { sha256 } from "../jobs/content-hash.js";
 import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
 import { persistUploadedReport } from "../jobs/report-persistence.js";
 import { currentAuditStepIndex } from "../jobs/audit-progress.js";
+import type { AuditFailureDetails } from "../jobs/audit-failure.js";
 
 const REPORT_RECONCILIATION_TIMEOUT_MS = 2_000;
 const REPORT_CLEANUP_TIMEOUT_MS = 2_000;
@@ -44,12 +45,13 @@ export interface SupabaseAuditStore {
   saveAssessmentSectionGroup(jobId: string, claimToken: string, group: string, result: unknown, signal?: AbortSignal): Promise<void>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
-  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
+  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal, details?: AuditFailureDetails): Promise<void>;
   getAuditStatus(jobId: string): Promise<{
     jobId: string;
     status: "queued" | "processing" | "completed" | "failed";
     currentStepIndex: number;
     errorMessage?: string | null;
+    errorDetails?: Record<string, unknown> | null;
     full: { available: boolean; version?: number };
     catalogUrlsSubmitted?: string[];
     catalogSources?: Array<{ platform: string; canonicalUrl: string; status: string; reason: string }>;
@@ -741,8 +743,11 @@ export function createSupabaseAuditStore(
     async getAuditReportPayload(jobId) {
       return readAuditReportPayload(jobId);
     },
-    async markFailed(jobId, claimToken, message, signal) {
-      await fencedStep(jobId, claimToken, "fail", { message }, signal);
+    async markFailed(jobId, claimToken, message, signal, details) {
+      await fencedStep(jobId, claimToken, "fail", {
+        message,
+        ...(details ? { eventPayload: { errorDetails: details } } : {}),
+      }, signal);
     },
   };
 }
