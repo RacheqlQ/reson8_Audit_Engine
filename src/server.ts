@@ -168,15 +168,28 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
     if (!accessToken || !store.verifyAuditAccessToken) {
       return reply.code(404).send({ error: "AUDIT_NOT_FOUND", message: "Audit job not found" });
     }
+    const requestStartedAt = performance.now();
+    const tokenVerificationStartedAt = performance.now();
+    let tokenVerificationMs = 0;
     try {
       const authorized = await store.verifyAuditAccessToken(request.params.jobId, accessToken);
+      tokenVerificationMs = performance.now() - tokenVerificationStartedAt;
       if (!authorized) return reply.code(404).send({ error: "AUDIT_NOT_FOUND", message: "Audit job not found" });
     } catch (error) {
       request.log.error({ err: error }, "audit access token verification failed");
       return reply.code(500).send({ error: "AUDIT_ACCESS_VERIFICATION_FAILED", message: "Unable to verify audit access" });
     }
     try {
-      return reply.send(await store.getAuditStatus(request.params.jobId));
+      const statusReadStartedAt = performance.now();
+      const status = await store.getAuditStatus(request.params.jobId);
+      request.log.info({
+        event: "audit_status_timing",
+        jobId: request.params.jobId,
+        tokenVerificationMs,
+        statusReadMs: performance.now() - statusReadStartedAt,
+        totalMs: performance.now() - requestStartedAt,
+      });
+      return reply.send(status);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to read audit status";
       if (message === "Audit job not found") {
@@ -290,6 +303,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         }
       }
 
+      const createRequestStartedAt = performance.now();
       const result = await createAuditJob(
         {
           ownerId,
@@ -302,6 +316,12 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         store.createJobDependencies(),
       );
 
+      request.log.info({
+        event: "audit_create_request_timing",
+        jobId: result.jobId,
+        audioBytes: bytes.byteLength,
+        totalMs: performance.now() - createRequestStartedAt,
+      });
       return reply.code(201).send({
         jobId: result.jobId,
         status: "queued",
