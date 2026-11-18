@@ -589,7 +589,7 @@ export function createSupabaseAuditStore(
         .in("event_type", [
           "processing_claimed", "processing_started", "recognition", "catalog_ingestion",
           "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated",
-          "audit_completed", "catalog_links_submitted",
+          "audit_completed", "catalog_links_submitted", "audit_failed",
         ])
         .order("created_at", { ascending: true });
       if (eventError) throw new Error(`Unable to read audit events: ${eventError.message}`);
@@ -622,6 +622,17 @@ export function createSupabaseAuditStore(
         },
       ) : [];
 
+      const failedEvent = (events ?? []).find((event) => event.event_type === "audit_failed");
+      const failedPayload = failedEvent?.payload as Record<string, unknown> | null;
+      const rawFailure = failedPayload?.failure && typeof failedPayload.failure === "object"
+        ? failedPayload.failure as Record<string, unknown> : null;
+      const failureDetails = rawFailure ? {
+        provider: typeof rawFailure.provider === "string" ? rawFailure.provider : null,
+        httpStatus: typeof rawFailure.httpStatus === "number" ? rawFailure.httpStatus : null,
+        errorType: typeof rawFailure.errorType === "string" ? rawFailure.errorType : "unknown",
+        retryable: rawFailure.retryable === true,
+      } : null;
+
       const currentStepIndex = getAuditProgressStepIndex(
         (events ?? []).map((event) => String(event.event_type)),
         job.status as "queued" | "processing" | "completed" | "failed",
@@ -647,6 +658,7 @@ export function createSupabaseAuditStore(
         status: job.status as "queued" | "processing" | "completed" | "failed",
         currentStepIndex,
         errorCode: typeof job.error_code === "string" ? job.error_code : null,
+        failureDetails,
         errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
           : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
