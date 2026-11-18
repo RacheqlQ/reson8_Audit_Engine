@@ -24,11 +24,12 @@ const C = {
 const PALETTE=[C.blue,C.violet,C.teal,C.coral,C.gold,C.sky,C.green];
 const CARD_X=48,CARD_W=499,HEADER_H=29,CAPTION_H=43,PAD=12;
 function color(index:number){return PALETTE[index%PALETTE.length];}
-function validNumber(v:ChartRow["value"]):number|null{
+export function parseChartMetricValue(v:ChartRow["value"]):number|null{
  if(typeof v==="number")return Number.isFinite(v)?v:null;
- if(typeof v==="string"&&/^-?\d+(?:\\.\d+)?$/.test(v.trim())){const parsed=Number(v);return Number.isFinite(parsed)?parsed:null;}
+ if(typeof v==="string"&&/^-?\d+(?:\.\d+)?$/.test(v.trim())){const parsed=Number(v);return Number.isFinite(parsed)?parsed:null;}
  return null;
 }
+const validNumber=parseChartMetricValue;
 export function compactChartItemSummary(value:string,maxLength=58):string{
  const clean=value.replace(/\s+/g," ").trim();
  const first=clean.split(/(?<=[.!?])\s+/)[0]??clean;
