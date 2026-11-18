@@ -1,6 +1,5 @@
 export interface AuditProgressEvent {
   event_type: string;
-  payload?: Record<string, unknown> | null;
 }
 
 const EVENT_STEP: Readonly<Record<string, number>> = {
