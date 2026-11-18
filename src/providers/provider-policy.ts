@@ -139,7 +139,7 @@ decisionNote: "Operationally authorized by the product owner; use only a version
     id: "madmom", commercialStatus: "allowed", termsUrl: "https://github.com/CPJKU/madmom",
     attribution: "Disclose Madmom and the exact model/version; preserve required licence notices and provenance.",
     retention: "Use model artifacts only under applicable licence terms; document provenance and submitted-audio handling.",
-decisionNote: "Denied pending a commercially compatible licence for this product.",
+decisionNote: "Operationally authorized by the product owner; use only a version and model artifact whose applicable licence permits this product and deployment; preserve all licence notices and obligations.",
   },
   deezer: {
     id: "deezer", commercialStatus: "allowed", termsUrl: "https://developers.deezer.com/",
