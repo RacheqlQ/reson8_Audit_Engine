@@ -47,7 +47,7 @@ describe("audit worker provider preflight", () => {
   it("validates Groq configuration before claiming a queued job", async () => {
     const error = await processNextQueuedAudit().catch((value) => value);
     expect(error).toBeInstanceOf(ProviderUnavailableError);
-    expect(error.reason).toBe("missing_credentials");
+    expect((error as ProviderUnavailableError).reason).toBe("missing_credentials");
     expect(claimNextQueuedJob).not.toHaveBeenCalled();
   });
 
