@@ -62,18 +62,19 @@ function percentile(values: number[], fraction: number): number {
   return (sorted[lower] ?? 0) + ((sorted[upper] ?? 0) - (sorted[lower] ?? 0)) * (index - lower);
 }
 
-function mono(channels: Float32Array[]): Float32Array {
-  if (!channels.length) return new Float32Array();
-  if (channels.length === 1) return channels[0] ?? new Float32Array();
-  const length = Math.min(...channels.map((channel) => channel.length));
-  const output = new Float32Array(length);
-  for (const channel of channels) {
-    for (let index = 0; index < length; index++) output[index] += (channel[index] ?? 0) / channels.length;
-  }
-  return output;
+function channelLength(channels: Float32Array[]): number {
+  return channels.length ? Math.min(...channels.map((channel) => channel.length)) : 0;
 }
 
-function estimatePitch(samples: Float32Array, sampleRate: number): {
+function channelSample(channels: Float32Array[], index: number): number {
+  if (!channels.length) return 0;
+  if (channels.length === 1) return channels[0]?.[index] ?? 0;
+  let sum = 0;
+  for (const channel of channels) sum += (channel[index] ?? 0) / channels.length;
+  return sum;
+}
+
+function estimatePitchFromChannels(channels: Float32Array[], sampleCount: number, sampleRate: number): {
   medianHz: number | null;
   lowerHz: number | null;
   upperHz: number | null;
@@ -82,7 +83,7 @@ function estimatePitch(samples: Float32Array, sampleRate: number): {
 } {
   const frameLength = Math.max(256, Math.round(sampleRate * PITCH_FRAME_SECONDS));
   const hop = Math.max(1, Math.round(sampleRate * FRAME_SECONDS));
-  const available = samples.length < frameLength ? 0 : Math.floor((samples.length - frameLength) / hop) + 1;
+  const available = sampleCount < frameLength ? 0 : Math.floor((sampleCount - frameLength) / hop) + 1;
   if (!available) return { medianHz: null, lowerHz: null, upperHz: null, voicedFrameRatio: null, track: [] };
 
   const sampled = Math.min(MAX_PITCH_FRAMES, available);
@@ -90,18 +91,23 @@ function estimatePitch(samples: Float32Array, sampleRate: number): {
   const lagMax = Math.min(frameLength - 2, Math.ceil(sampleRate / MIN_PITCH_HZ));
   const frequencies: number[] = [];
   const track: VocalPitchPoint[] = [];
+  const frameSamples = new Float32Array(frameLength);
   let energyFrames = 0;
 
   for (let frame = 0; frame < sampled; frame++) {
     const frameIndex = sampled === 1 ? 0 : Math.floor(frame * (available - 1) / (sampled - 1));
     const start = frameIndex * hop;
     let mean = 0;
-    for (let index = 0; index < frameLength; index++) mean += samples[start + index] ?? 0;
+    for (let index = 0; index < frameLength; index++) {
+      const value = channelSample(channels, start + index);
+      frameSamples[index] = value;
+      mean += value;
+    }
     mean /= frameLength;
 
     let energy = 0;
     for (let index = 0; index < frameLength; index++) {
-      const centered = (samples[start + index] ?? 0) - mean;
+      const centered = (frameSamples[index] ?? 0) - mean;
       energy += centered * centered;
     }
     if (energy / frameLength < 1e-7) continue;
@@ -113,8 +119,8 @@ function estimatePitch(samples: Float32Array, sampleRate: number): {
       let left = 0;
       let right = 0;
       for (let index = 0; index < frameLength - lag; index++) {
-        const a = (samples[start + index] ?? 0) - mean;
-        const b = (samples[start + index + lag] ?? 0) - mean;
+        const a = (frameSamples[index] ?? 0) - mean;
+        const b = (frameSamples[index + lag] ?? 0) - mean;
         cross += a * b;
         left += a * a;
         right += b * b;
@@ -176,9 +182,7 @@ export function analyzeVocalStem(
   mixChannels: Float32Array[],
   sampleRate: number,
 ): VocalAnalysisResult {
-  const vocal = mono(vocalChannels);
-  const mix = mono(mixChannels);
-  const length = Math.min(vocal.length, mix.length);
+  const length = Math.min(channelLength(vocalChannels), channelLength(mixChannels));
   if (!Number.isFinite(sampleRate) || sampleRate < 4000 || length < sampleRate * 0.5) {
     return unavailableVocalAnalysis("At least half a second of decoded master and vocal-stem PCM at 4 kHz or higher is required.", "insufficient_evidence", "open_unmix_umxhq_vocal_stem");
   }
@@ -186,8 +190,8 @@ export function analyzeVocalStem(
   let vocalEnergy = 0;
   let mixEnergy = 0;
   for (let index = 0; index < length; index++) {
-    const v = vocal[index] ?? 0;
-    const m = mix[index] ?? 0;
+    const v = channelSample(vocalChannels, index);
+    const m = channelSample(mixChannels, index);
     vocalEnergy += v * v;
     mixEnergy += m * m;
   }
@@ -202,7 +206,7 @@ export function analyzeVocalStem(
     const start = frame * frameLength;
     const end = Math.min(length, start + frameLength);
     let energy = 0;
-    for (let index = start; index < end; index++) energy += (vocal[index] ?? 0) ** 2;
+    for (let index = start; index < end; index++) energy += channelSample(vocalChannels, index) ** 2;
     frameLevels.push(Math.sqrt(energy / Math.max(1, end - start)));
   }
 
@@ -242,7 +246,7 @@ export function analyzeVocalStem(
     }
   }
 
-  const pitch = estimatePitch(vocal, sampleRate);
+  const pitch = estimatePitchFromChannels(vocalChannels, length, sampleRate);
   const energyShare = Math.max(0, Math.min(1, vocalEnergyShare));
   const voicePresence = energyShare >= 0.025 && vocalActivityRatio >= 0.08 && (pitch.voicedFrameRatio ?? 0) >= 0.15
     ? "likely_present" as const

@@ -21,7 +21,9 @@ export interface SonicDnaFeatures {
  loudnessLufs:number|null; loudnessRangeLu?:number|null; truePeakDbfs?:number|null; rmsLevelDbfs:number; rmsEnergy:number; dynamicRangeDb:number; spectralCentroidHz:number; spectralBandwidthHz:number;
  spectralRolloffHz:number; zeroCrossingRate:number; moodTags:string[]; genreContext:string[]; genreClassification?: GenreFusionResult;
 }
-const EPSILON=1e-12, MAX_ANALYSIS_SAMPLES=3_000_000, NOTES=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const EPSILON=1e-12;
+export const MAX_ANALYSIS_SAMPLES=3_000_000;
+const NOTES=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 function rms(s:Float32Array):number { if(!s.length)return 0; let sum=0; for(const x of s)sum+=x*x; return Math.sqrt(sum/s.length); }
 function percentile(a:number[],p:number):number { if(!a.length)return 0; const i=(a.length-1)*p,l=Math.floor(i),u=Math.ceil(i); return l===u?a[l]:a[l]+(a[u]-a[l])*(i-l); }
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));
@@ -52,6 +54,21 @@ function prepareAnalysisPcm(samples:Float32Array,sampleRate:number,channels:numb
   mono[out]=blockSum/Math.max(1,last-first);
  }
  return {samples:mono,sampleRate:sampleRate/stride,durationSeconds};
+}
+
+/** Build a detached, bounded mono copy for the Sonic DNA worker while preserving the full-resolution source for vocal analysis. */
+export function preparePcmForWorker(
+ samples:Float32Array,
+ sampleRate:number,
+ channels:number,
+):{samples:Float32Array;sampleRate:number;channels:1;durationSeconds:number} {
+ const prepared=prepareAnalysisPcm(samples,sampleRate,channels);
+ return {
+  samples:new Float32Array(prepared.samples),
+  sampleRate:prepared.sampleRate,
+  channels:1,
+  durationSeconds:prepared.durationSeconds,
+ };
 }
 
 

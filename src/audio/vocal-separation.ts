@@ -131,6 +131,19 @@ export async function separateVocalsFromPcm(
       wienerWindow: 120,
       chunk: 20,
       overlap: 2,
+      progress: ({ chunk, totalChunks }) => {
+        const usage = process.memoryUsage();
+        console.info(JSON.stringify({
+          worker: "audit",
+          event: "vocal_separation_chunk_memory",
+          chunk,
+          totalChunks,
+          rssBytes: usage.rss,
+          heapUsedBytes: usage.heapUsed,
+          externalBytes: usage.external,
+          arrayBuffersBytes: usage.arrayBuffers,
+        }));
+      },
       session: sessionLoader,
     });
     signal?.throwIfAborted();
