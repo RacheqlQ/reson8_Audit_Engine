@@ -134,6 +134,46 @@ describe("DSP provider failure persistence", () => {
 });
 
 
+describe("audit status aggregation", () => {
+  it("uses one event lookup for monotonic progress, DSP status and sanitized failure details", async () => {
+    process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
+    process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("/audit_jobs")) {
+        return new Response(JSON.stringify({
+          id: "status-job",
+          status: "failed",
+          error_message: "Audit processing: a required stage could not be completed. Please retry the audit.",
+          catalog_metadata: {},
+        }), { status: 200, headers: { "content-type": "application/json", "content-range": "0-0/1" } });
+      }
+      if (url.includes("/audit_events")) {
+        return new Response(JSON.stringify([
+          { event_type: "evidence_reconciliation", payload: {}, created_at: "2026-11-18T00:00:01Z" },
+          { event_type: "sonic_dna", payload: {}, created_at: "2026-11-18T00:00:02Z" },
+          { event_type: "groq_section_completed", payload: {}, created_at: "2026-11-18T00:00:03Z" },
+          { event_type: "audit_failed", payload: { errorDetails: { errorCode: "GEMINI_HTTP_403", provider: "gemini", httpStatus: 403, retryable: false } }, created_at: "2026-11-18T00:00:04Z" },
+        ]), { status: 200, headers: { "content-type": "application/json", "content-range": "0-3/4" } });
+      }
+      return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json", "content-range": "*/0" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createSupabaseAuditStore();
+
+    const status = await store.getAuditStatus("status-job");
+
+    expect(status.currentStepIndex).toBe(4);
+    expect(status.errorDetails).toMatchObject({
+      errorCode: "GEMINI_HTTP_403",
+      provider: "gemini",
+      httpStatus: 403,
+      retryable: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});
+
 describe("audit progress event persistence", () => {
   it("records assessment-started only for the active claim", async () => {
     const { store, fetchMock } = makeStore({
