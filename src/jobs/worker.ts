@@ -300,11 +300,17 @@ export async function runAuditQueueWorker(signal: AbortSignal): Promise<void> {
         }));
         return;
       }
+      const diagnostics = classifyAuditFailure(error);
       console.error(JSON.stringify({
         worker: "audit",
         event: "worker_cycle_failed",
         retryInMs: POLL_INTERVAL_MS,
-        error: error instanceof Error ? error.message : String(error),
+        errorCode: diagnostics.errorCode,
+        provider: diagnostics.provider,
+        model: diagnostics.model,
+        httpStatus: diagnostics.httpStatus,
+        errorType: diagnostics.errorType,
+        retryable: diagnostics.retryable,
       }));
     },
   });
