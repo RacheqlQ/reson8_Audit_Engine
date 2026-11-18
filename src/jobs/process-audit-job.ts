@@ -673,7 +673,7 @@ export async function processAuditJob(
     const jobDeadlineExceeded = jobDeadlineController.signal.aborted && !previousSignal?.aborted;
     if (deps.signal?.aborted && !jobDeadlineExceeded) throw leaseLostError(deps.signal);
     const message = jobDeadlineExceeded
-      ? "Audit processing: the job exceeded its eight-minute time limit. Please submit it again."
+      ? "Audit processing: the job exceeded its twenty-minute safety deadline. Please submit it again."
       : userSafeFailureMessage(error);
     const errorCode = classifyAuditFailure(error);
     await withAbortTimeout(
