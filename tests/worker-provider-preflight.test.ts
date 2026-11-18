@@ -13,9 +13,9 @@ vi.mock("../src/providers/provider-policy.js", () => ({
     enableFlag: "PROVIDER_ENABLED_" + provider.toUpperCase(),
   }),
   getAssessmentProviderReadiness: () => [
-    { provider: "groq", model: "openai/gpt-oss-120b", enabled: process.env.PROVIDER_ENABLED_GROQ === "true", configured: Boolean(process.env.GROQ_API), usable: process.env.PROVIDER_ENABLED_GROQ === "true" && Boolean(process.env.GROQ_API), reason: "disabled_by_data_policy" },
-    { provider: "gemini", model: "gemini-3.5-flash-lite", enabled: process.env.PROVIDER_ENABLED_GEMINI === "true", configured: Boolean(process.env.GEMINI_API_KEY), usable: process.env.PROVIDER_ENABLED_GEMINI === "true" && Boolean(process.env.GEMINI_API_KEY), reason: "disabled_by_data_policy" },
-    { provider: "ollama", model: "gemma4:31b", enabled: process.env.PROVIDER_ENABLED_OLLAMA === "true", configured: Boolean(process.env.OLLAMA_API_KEY), usable: process.env.PROVIDER_ENABLED_OLLAMA === "true" && Boolean(process.env.OLLAMA_API_KEY), reason: "disabled_by_data_policy" },
+    { provider: "groq", model: "openai/gpt-oss-120b", enabled: process.env.PROVIDER_ENABLED_GROQ === "true", configured: Boolean(process.env.GROQ_API), usable: process.env.PROVIDER_ENABLED_GROQ === "true" && Boolean(process.env.GROQ_API), reason: process.env.PROVIDER_ENABLED_GROQ === "true" && process.env.GROQ_API ? null : process.env.PROVIDER_ENABLED_GROQ === "true" ? "not_configured" : "disabled_by_data_policy" },
+    { provider: "gemini", model: "gemini-3.5-flash-lite", enabled: process.env.PROVIDER_ENABLED_GEMINI === "true", configured: Boolean(process.env.GEMINI_API_KEY), usable: process.env.PROVIDER_ENABLED_GEMINI === "true" && Boolean(process.env.GEMINI_API_KEY), reason: process.env.PROVIDER_ENABLED_GEMINI === "true" && process.env.GEMINI_API_KEY ? null : process.env.PROVIDER_ENABLED_GEMINI === "true" ? "not_configured" : "disabled_by_data_policy" },
+    { provider: "ollama", model: "gemma4:31b", enabled: process.env.PROVIDER_ENABLED_OLLAMA === "true", configured: Boolean(process.env.OLLAMA_API_KEY), usable: process.env.PROVIDER_ENABLED_OLLAMA === "true" && Boolean(process.env.OLLAMA_API_KEY), reason: process.env.PROVIDER_ENABLED_OLLAMA === "true" && process.env.OLLAMA_API_KEY ? null : process.env.PROVIDER_ENABLED_OLLAMA === "true" ? "not_configured" : "disabled_by_data_policy" },
   ],
 }));
 
