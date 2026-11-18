@@ -29,7 +29,7 @@ describe("commercial provider policy registry", () => {
   it("allows approved providers without per-provider enable flags", () => {
     expect(providerDecision("spotify").enabled).toBe(true);
     expect(providerDecision("groq").enabled).toBe(true);
-    expect(providerDecision("musicbrainz", {}).enabled).toBe(true);
+    expect(providerDecision("musicbrainz").enabled).toBe(true);
   });
 
   it("surfaces provider status as unavailable only when its registry status is not allowed", async () => {
