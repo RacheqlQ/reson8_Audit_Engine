@@ -16,7 +16,7 @@ function safeIdentifier(value: string | null | undefined): string | null {
 
 function providerModel(provider: AuditFailureDetails["provider"], env: Record<string, string | undefined>): string | null {
   if (provider === "groq") return safeIdentifier(env.GROQ_MODEL ?? "openai/gpt-oss-120b");
-  if (provider === "gemini") return safeIdentifier(env.GEMINI_MODEL ?? "gemini-2.5-flash");
+  if (provider === "gemini") return safeIdentifier(env.GEMINI_MODEL ?? "gemini-3.6-flash");
   if (provider === "ollama") return safeIdentifier(env.OLLAMA_MODEL ?? "gemma4:31b");
   return null;
 }
