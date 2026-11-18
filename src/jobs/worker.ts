@@ -240,5 +240,6 @@ export async function runAuditQueueWorker(signal: AbortSignal): Promise<void> {
         error: error instanceof Error ? error.message : String(error),
       }));
     },
+    stopOnError: (error) => error instanceof Error && error.message.startsWith("AI_PROVIDERS_UNAVAILABLE"),
   });
 }
