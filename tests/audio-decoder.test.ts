@@ -28,6 +28,30 @@ describe("audio decoder", () => {
     expect([...decoded.samples]).toEqual([0.25, -0.25, 0.5, -0.5]);
   });
 
+  it("decodes a real stereo WAV without downmixing and returns EBU R128 measurements", async () => {
+    const sampleRate = 48000, channels = 2, frames = sampleRate * 2;
+    const dataBytes = frames * channels * 2;
+    const wav = Buffer.alloc(44 + dataBytes);
+    wav.write("RIFF", 0); wav.writeUInt32LE(36 + dataBytes, 4); wav.write("WAVE", 8);
+    wav.write("fmt ", 12); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(channels, 22); wav.writeUInt32LE(sampleRate, 24);
+    wav.writeUInt32LE(sampleRate * channels * 2, 28); wav.writeUInt16LE(channels * 2, 32);
+    wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(dataBytes, 40);
+    for (let frame = 0; frame < frames; frame++) {
+      const sample = Math.round(Math.sin(2 * Math.PI * 440 * frame / sampleRate) * 0.2 * 32767);
+      wav.writeInt16LE(sample, 44 + frame * 4);
+      wav.writeInt16LE(Math.round(sample * 0.8), 46 + frame * 4);
+    }
+    const decoded = await createAudioDecoder().decode(wav);
+    expect(decoded.sampleRate).toBe(sampleRate);
+    expect(decoded.channels).toBe(channels);
+    expect(decoded.samples.length).toBe(frames * channels);
+    expect(decoded.loudnessLufs).toBeTypeOf("number");
+    expect(decoded.loudnessLufs).toBeGreaterThan(-30);
+    expect(decoded.loudnessLufs).toBeLessThan(-5);
+    expect(decoded.truePeakDbfs).toBeTypeOf("number");
+  });
+
   it("extracts EBU R128 integrated loudness, loudness range and true peak", () => {
     const summary = parseEbur128Summary([
       "Integrated loudness:", "I: -12.3 LUFS", "Threshold: -22.4 LUFS", "",
