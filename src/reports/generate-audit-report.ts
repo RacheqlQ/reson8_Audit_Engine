@@ -267,13 +267,14 @@ function sections(i:AuditReportInput):Section[]{
  const curatorGenreConfirmed=Boolean(text(genreRecord.primaryGenre)&&genreRecord.abstained!==true);
  const vocalFeatures=s?.vocalFeatures&&typeof s.vocalFeatures==="object"&&!Array.isArray(s.vocalFeatures)?s.vocalFeatures as Record<string,unknown>:null;
  const vocalStatus=String(vocalFeatures?.status??"not_recorded");
- const curatorVocalAnalyzed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
+ const vocalAnalysisPerformed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
+ const curatorVocalAnalyzed=vocalAnalysisPerformed&&vocalFeatures?.reviewStatus==="human_verified";
  const vocalAnalysisDisclosure=!vocalFeatures||["not_analyzed","not_recorded","unavailable","not_configured"].includes(vocalStatus)
   ? "Vocal analysis: Not performed — "+(text(vocalFeatures?.reason)||"no vocal-analysis result is recorded")+"; vocal presence/absence is unknown and is not inferred."
   : vocalStatus==="signal_diagnostics_only"
    ? "Vocal analysis: Limited signal-periodicity diagnostics were performed. They do not detect or confirm human vocals; singing, speech, vocal presence/absence and vocal arrangement remain undetermined."
-   : curatorVocalAnalyzed
-    ? "Vocal analysis: Performed (status: "+vocalStatus+"). Only explicitly returned vocal measurements may be reported; unmeasured vocal attributes remain unknown."
+   : vocalAnalysisPerformed
+    ? "Vocal analysis: Automated separated-stem analysis performed (status: "+vocalStatus+"). The presence result is provisional, not calibrated and not human-reviewed; speech/singing, lead/backing and vocal arrangement remain unclassified."
     : "Vocal analysis: Status "+vocalStatus+"; no conclusion about vocal presence or absence is established.";
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
@@ -345,6 +346,7 @@ function sections(i:AuditReportInput):Section[]{
    "Estimated fundamental-frequency range: " + vocalPitchRange + "; voiced-frame ratio: " + (typeof vocalPitch.voicedFrameRatio === "number" ? (vocalPitch.voicedFrameRatio * 100).toFixed(1) + "%" : "Not determined"),
    "Delivery classification: " + val(vocalFeatures?.delivery, "Not classified") + "; vocal layering: " + val(vocalFeatures?.layering, "Not classified"),
    "Lyrics / transcription: " + val(vocalFeatures?.lyrics, "Not requested"),
+   "Human review status: " + val(vocalFeatures?.reviewStatus, "Not recorded"),
    "Vocal-analysis limitations: " + (Array.isArray(vocalFeatures?.limitations) ? vocalFeatures.limitations.map(text).filter(Boolean).join(" ") : "No limitation record supplied")
   );
  } else if (s) {
@@ -411,7 +413,8 @@ function sections(i:AuditReportInput):Section[]{
    "Evidence gaps blocking target selection: "+[
     ...(unresolvedCuratorIdentity.length?["unresolved identity fields: "+unresolvedCuratorIdentity.join(", ")]:[]),
     ...(!curatorGenreConfirmed?["no confirmed provider-backed genre classification"]:[]),
-    ...(!curatorVocalAnalyzed?["vocal analysis was not performed"]:[]),
+    ...(!vocalAnalysisPerformed?["vocal analysis was not performed"]:[]),
+    ...(vocalAnalysisPerformed&&!curatorVocalAnalyzed?["automated vocal analysis has not been human-validated"]:[]),
     ...(!catalogSources.length?["no usable DSP catalog lookup results"]:[])
    ].join("; "),
    "Playlist categories are discovery hypotheses, not named playlists, curator contacts, relationships or evidence of acceptance.",
