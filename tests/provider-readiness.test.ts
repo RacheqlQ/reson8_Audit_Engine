@@ -8,6 +8,7 @@ afterEach(() => {
   markProviderAvailable("gemini");
   markProviderAvailable("ollama");
   markProviderAvailable("audd");
+  markProviderAvailable("tidal");
 });
 
 describe("provider readiness", () => {
