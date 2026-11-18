@@ -118,9 +118,9 @@ describe("uploaded master provenance in reports", () => {
     const report = planAuditReportPages(input, "full")
       .flatMap((section) => [section.title, ...section.text])
       .join(" ");
-    expect(report).toContain("Tentative candidate - 190 BPM");
+    expect(report).toContain("Tempo: Tentative candidate — 190.0 BPM");
     expect(report).toContain("abstention: Tempo candidate prominence is too weak");
-    expect(report).toContain("Tentative segment candidate - A minor (3/4 analysed windows; not verified)");
+    expect(report).toContain("Key / mode: Tentative segment candidate — A minor (3/4 analysed windows; not verified)");
     expect(report).toContain("Key and mode confidence was below threshold");
     expect(report).not.toContain("Key / mode: A minor");
   });
