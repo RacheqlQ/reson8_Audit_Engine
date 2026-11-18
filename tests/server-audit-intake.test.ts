@@ -55,10 +55,16 @@ describe("GET /health", () => {
     const response = await app.inject({ method: "GET", url: "/health" });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       status: "ok",
       service: "reson8-audit-engine",
+      providers: {
+        groq: { enabled: expect.any(Boolean), configured: expect.any(Boolean), ready: expect.any(Boolean) },
+        gemini: { enabled: expect.any(Boolean), configured: expect.any(Boolean), ready: expect.any(Boolean) },
+        ollama: { enabled: expect.any(Boolean), configured: expect.any(Boolean), ready: expect.any(Boolean) },
+      },
     });
+    expect(JSON.stringify(response.json())).not.toContain("API_KEY");
 
     await app.close();
   });
