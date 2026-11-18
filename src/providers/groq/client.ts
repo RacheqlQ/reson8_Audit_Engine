@@ -147,6 +147,11 @@ const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
 const MIN_COMPLETION_TOKENS = 256;
 const MAX_SECTION_REQUEST_ATTEMPTS = 16;
 
+function addRetryJitter(delayMs: number, attempt: number): number {
+  const jitterWindow = Math.min(5_000, Math.max(100, Math.ceil(1_000 * (2 ** attempt) * 0.25)));
+  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(delayMs + Math.random() * jitterWindow));
+}
+
 async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
   const retryAfter = response.headers.get("retry-after");
   if (retryAfter) {
@@ -155,7 +160,7 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
       ? seconds * 1000
       : Date.parse(retryAfter) - Date.now();
     if (Number.isFinite(headerDelay) && headerDelay >= 0) {
-      return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(headerDelay));
+      return addRetryJitter(Math.ceil(headerDelay), fallbackAttempt);
     }
   }
 
@@ -168,14 +173,14 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
         const minutes = Number(match[1] ?? 0);
         const seconds = Number(match[2]);
         const delayMs = (minutes * 60 + seconds) * 1000;
-        return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(delayMs));
+        return addRetryJitter(Math.ceil(delayMs), fallbackAttempt);
       }
     }
   } catch {
     // Non-JSON provider errors use bounded exponential backoff below.
   }
 
-  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, 1000 * (2 ** fallbackAttempt));
+  return addRetryJitter(1000 * (2 ** fallbackAttempt), fallbackAttempt);
 }
 
 function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -356,6 +361,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
+    let lastTpmCapacityResponse = false;
     for (let networkAttempt = 0; networkAttempt < MAX_NETWORK_ATTEMPTS; networkAttempt++) {
       signal?.throwIfAborted();
       const requestTimeoutSignal = AbortSignal.timeout(requestTimeoutMs);
@@ -376,11 +382,14 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         throw error;
       }
       if (response.ok) break;
-      const errorBody = response.status === 429 ? await response.clone().text().catch(() => "") : "";
+      const errorBody = response.status === 429 || response.status === 413
+        ? await response.clone().text().catch(() => "")
+        : "";
+      lastTpmCapacityResponse = response.status === 413 && /tokens?\s+per\s+minute|\bTPM\b|capacity/i.test(errorBody);
       if (response.status === 429 && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody)) {
         throw new Error("AI capacity reached for now, please try again later", { cause: new Error("GROQ_DAILY_CAP_REACHED") });
       }
-      const transient = response.status === 429 || response.status >= 500;
+      const transient = response.status === 429 || response.status >= 500 || lastTpmCapacityResponse;
       if (!transient || networkAttempt >= 2) break;
       await sleepImpl(Math.min(60_000, await providerRetryDelayMs(response, networkAttempt)), signal);
       signal?.throwIfAborted();
@@ -396,6 +405,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 413) {
+        if (lastTpmCapacityResponse) {
+          throw new Error("GROQ_TPM_CAPACITY_EXHAUSTED: provider TPM capacity remained unavailable after bounded retries");
+        }
         throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; the same payload was not retried");
       }
 
@@ -490,6 +502,37 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   throw new Error("" + providerLabel + " " + groupName + " response failed Zod validation after one retry: " + lastError);
 }
 
+export class ProviderAssessmentError extends Error {
+  readonly provider: "groq" | "gemini" | "ollama";
+  readonly model: string;
+  readonly httpStatus?: number;
+  readonly providerErrorType?: string;
+  readonly providerCode?: string;
+  readonly retryable: boolean;
+
+  constructor(provider: string, model: string, original: unknown) {
+    const message = original instanceof Error ? original.message : String(original ?? "Provider request failed");
+    super(message, { cause: original });
+    this.name = "ProviderAssessmentError";
+    this.provider = provider === "gemini" ? "gemini" : provider === "ollama" ? "ollama" : "groq";
+    this.model = model;
+    const statusMatch = message.match(/HTTP (\d{3})/i);
+    const status = statusMatch ? Number(statusMatch[1]) : undefined;
+    if (status && Number.isInteger(status)) this.httpStatus = status;
+    const jsonStart = message.indexOf("{");
+    let providerError: { error?: { type?: unknown; code?: unknown } } = {};
+    if (jsonStart >= 0) {
+      try { providerError = JSON.parse(message.slice(jsonStart)) as typeof providerError; }
+      catch { /* Provider response bodies are not needed for safe diagnostics. */ }
+    }
+    if (typeof providerError.error?.type === "string") this.providerErrorType = providerError.error.type.slice(0, 80);
+    if (typeof providerError.error?.code === "string") this.providerCode = providerError.error.code.slice(0, 80);
+    this.retryable = /GROQ_TPM_CAPACITY_EXHAUSTED|timed out|timeout|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message)
+      || status === 408 || status === 425 || status === 429 || (status !== undefined && status >= 500)
+      || (status === 413 && /tokens?\s+per\s+minute|\bTPM\b|capacity/i.test(message));
+  }
+}
+
 export class GroqClient implements GroqAssessmentClient {
   private readonly apiKey: string;
   private readonly model: string;
@@ -526,6 +569,9 @@ export class GroqClient implements GroqAssessmentClient {
     this.endpoint = endpoint;
     this.providerName = providerName;
   }
+  get modelId(): string { return this.model; }
+  get providerId(): string { return this.providerName; }
+
   async assess(input:GroqAssessmentInput, signal?:AbortSignal):Promise<ArAssessment>{
     const deadlineController = new AbortController();
     const deadlineError = new Error("GROQ_ASSESSMENT_TIMEOUT");
@@ -538,6 +584,9 @@ export class GroqClient implements GroqAssessmentClient {
       : deadlineController.signal;
     try {
       return await this.assessWithinDeadline(input, assessmentSignal);
+    } catch (error) {
+      if (error instanceof ProviderAssessmentError) throw error;
+      throw new ProviderAssessmentError(this.providerName, this.model, error);
     } finally {
       clearTimeout(deadlineTimer);
     }
