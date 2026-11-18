@@ -30,7 +30,7 @@ jobs:
           node-version: 22
 
       - name: Upgrade npm
-        run: npm install --global npm@11.21.0
+        run: npm ci --global npm@11.21.0
 
       - name: Verify toolchain
         run: |
