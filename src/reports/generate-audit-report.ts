@@ -397,7 +397,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
   const sonicBlock=section.title==="Sonic DNA and technical profile";
-  const keepTogetherCount=section.title==="Curator campaign and target verification"?Math.min(3,section.body.length):chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
+  const keepTogetherCount=section.title==="Curator campaign and target verification"?Math.min(3,section.body.length):section.title==="Human listening checklist (unscored)"?section.body.length:chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
   const openingHeight=section.body.slice(0,keepTogetherCount).reduce((sum,para)=>{
    const size=para===para.toUpperCase()&&para.length<100?8:9.7;
    return sum+wrap(para,fonts.regular,size,W-2*M-16).length*size*1.4+8;
