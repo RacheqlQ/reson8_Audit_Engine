@@ -51,5 +51,8 @@ export function classifyAuditFailure(error: unknown): SanitizedAuditFailure {
   if (/fetch failed|network|ECONNRESET/i.test(message)) {
     return { errorCode: "AI_PROVIDER_NETWORK_ERROR", provider, httpStatus: null, errorType: "provider_error", retryable: true };
   }
+  if (provider) {
+    return { errorCode: "AI_PROVIDER_ERROR", provider, httpStatus, errorType: "provider_error", retryable: false };
+  }
   return { errorCode: "AUDIT_PROCESSING_FAILED", provider, httpStatus, errorType: "unknown", retryable: false };
 }
