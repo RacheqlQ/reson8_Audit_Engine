@@ -48,7 +48,7 @@ describe("catalogue policy gate coverage", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(apple.title).toBe("Approved Track");
-    expect(deezer.raw.providerPolicy).toMatchObject({ provider: "deezer", reason: "not_configured", commercialStatus: "unverified" });
+    expect(deezer.raw.providerPolicy).toMatchObject({ provider: "deezer", reason: "disabled by data policy", commercialStatus: "unverified" });
   });
 
   it("extracts Apple Music track identity fields when the exact provider opt-in is enabled", async () => {
@@ -92,19 +92,11 @@ describe("Audiomack commercial policy gate", () => {
     delete process.env.AUDIOMACK_CONSUMER_SECRET;
   });
 
-  it("does not call the official API when credentials are absent", async () => {
+  it("requires Audiomack credentials but does not require a separate enable flag", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-
-    const result = await collectCatalogMetadata("https://audiomack.com/justa-test/song/last-in-class");
-
+    await expect(collectCatalogMetadata("https://audiomack.com/artist/song/track-title")).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(result.raw.providerPolicy).toMatchObject({
-      provider: "audiomack",
-      status: "unavailable",
-      reason: "disabled by data policy",
-      commercialStatus: "allowed",
-    });
   });
 
   it("does not call the official API when credentials are absent", async () => {
@@ -125,7 +117,6 @@ describe("Apple Music direct-song catalog lookup", () => {
   });
 
   it("extracts direct song IDs from geo links and queries the submitted storefront", async () => {
-    process.env.PROVIDER_ENABLED_APPLE_MUSIC = "true";
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       expect(String(input)).toContain("itunes.apple.com/lookup?id=1234567890&entity=song&country=ng");
       return new Response(JSON.stringify({
