@@ -420,7 +420,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           strictSchemaRetries++;
           if (strictSchemaRetries === 1) {
             responseMode = "json_object";
-            lastError = "" + providerLabel + " strict JSON-schema validation failed twice for " + groupName + ": " + message + "." + diagnostic
+            lastError = "" + providerLabel + " strict JSON-schema validation failed (json_validate_failed) on the first attempt for " + groupName + ": " + message + "." + diagnostic
               + " Switch to JSON-object mode and return one complete object matching the exact outputSchema.";
           } else {
             const requiredFields = Object.keys((outputSchema as { properties?: Record<string, unknown> }).properties ?? {}).join(", ")
@@ -432,7 +432,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           continue;
         }
 
-        if (responseMode === "json_object" && jsonObjectProviderRetries < 1) {
+        if (this.providerName === "gemini" && responseMode === "json_object" && jsonObjectProviderRetries < 1) {
           jsonObjectProviderRetries++;
           if (jsonObjectProviderRetries === 1) {
             responseMode = "prompt_only";
