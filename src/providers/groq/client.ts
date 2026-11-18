@@ -457,6 +457,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, actualPromptTokens: payload.usage?.prompt_tokens ?? null, actualCompletionTokens: payload.usage?.completion_tokens ?? null, actualTotalTokens: payload.usage?.total_tokens ?? null }));
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1 });
       if (scheduleCorrection("The response contained no JSON content. Return one complete JSON object matching outputSchema.")) continue;
       break;
     }
@@ -465,12 +466,14 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     try {
       parsed = JSON.parse(content);
     } catch {
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1 });
       if (scheduleCorrection("The response was not valid JSON. Return raw JSON only, without markdown or surrounding prose.")) continue;
       break;
     }
 
     const result = schema.safeParse(parsed);
     if (!result.success) {
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1 });
       const detail = responseMode === "json_object" || responseMode === "prompt_only"
         ? "The " + responseMode + " response failed local Zod validation: " + result.error.message + "."
         : "Strict structured output failed local Zod validation: " + result.error.message + ".";
