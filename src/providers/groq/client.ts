@@ -406,7 +406,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 
       if (response?.status === 413) {
         if (lastTpmCapacityResponse) {
-          throw new Error("GROQ_TPM_CAPACITY_EXHAUSTED: provider TPM capacity remained unavailable after bounded retries");
+          throw new Error("Groq request failed with HTTP 413: GROQ_TPM_CAPACITY_EXHAUSTED (TPM capacity remained unavailable after bounded retries)");
         }
         throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; the same payload was not retried");
       }
@@ -525,8 +525,12 @@ export class ProviderAssessmentError extends Error {
       try { providerError = JSON.parse(message.slice(jsonStart)) as typeof providerError; }
       catch { /* Provider response bodies are not needed for safe diagnostics. */ }
     }
-    if (typeof providerError.error?.type === "string") this.providerErrorType = providerError.error.type.slice(0, 80);
-    if (typeof providerError.error?.code === "string") this.providerCode = providerError.error.code.slice(0, 80);
+    const typeMatch = message.match(/"type"\s*:\s*"([^"]+)"/i);
+    const codeMatch = message.match(/"code"\s*:\s*"([^"]+)"/i);
+    const providerErrorType = typeof providerError.error?.type === "string" ? providerError.error.type : typeMatch?.[1];
+    const providerCode = typeof providerError.error?.code === "string" ? providerError.error.code : codeMatch?.[1];
+    if (providerErrorType) this.providerErrorType = providerErrorType.slice(0, 80);
+    if (providerCode) this.providerCode = providerCode.slice(0, 80);
     this.retryable = /GROQ_TPM_CAPACITY_EXHAUSTED|timed out|timeout|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message)
       || status === 408 || status === 425 || status === 429 || (status !== undefined && status >= 500)
       || (status === 413 && /tokens?\s+per\s+minute|\bTPM\b|capacity/i.test(message));
