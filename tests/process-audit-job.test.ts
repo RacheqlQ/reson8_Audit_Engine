@@ -41,6 +41,7 @@ describe("audit failure classification", () => {
 describe("processAuditJob", () => {
   it("persists Sonic DNA before reconciliation, then assesses and completes a queued master", async () => {
     const events: string[] = [];
+    let failureMessage = "";
     const result = await processAuditJob("job-123", {
       getJob: async () => ({
         id: "job-123",
@@ -114,10 +115,10 @@ describe("processAuditJob", () => {
         events.push(`report-saved-${tier}`);
       },
       markCompleted: async () => events.push("completed"),
-      markFailed: async () => events.push("failed"),
+      markFailed: async (_jobId, _claimToken, message) => { failureMessage = message; events.push("failed"); },
     });
 
-    expect(result.status).toBe("completed");
+    expect(result.status, failureMessage).toBe("completed");
     expect(events).toEqual([
       "processing",
       "recognition",
