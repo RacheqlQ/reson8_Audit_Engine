@@ -291,6 +291,15 @@ export async function runAuditQueueWorker(signal: AbortSignal): Promise<void> {
     signal,
     pollIntervalMs: POLL_INTERVAL_MS,
     onError: (error) => {
+      if (error instanceof ProviderUnavailableError) {
+        console.error(JSON.stringify({
+          worker: "audit",
+          event: "worker_stopped",
+          provider: error.provider,
+          reason: error.reason,
+        }));
+        return;
+      }
       console.error(JSON.stringify({
         worker: "audit",
         event: "worker_cycle_failed",
