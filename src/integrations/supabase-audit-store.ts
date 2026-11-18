@@ -13,6 +13,7 @@ import { ensurePdfReport, isPdf } from "../reports/pdf-output.js";
 import { sha256 } from "../jobs/content-hash.js";
 import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
 import { persistUploadedReport } from "../jobs/report-persistence.js";
+import { getAuditProgressStepIndex } from "../jobs/audit-progress.js";
 
 const REPORT_RECONCILIATION_TIMEOUT_MS = 2_000;
 const REPORT_CLEANUP_TIMEOUT_MS = 2_000;
@@ -582,11 +583,12 @@ export function createSupabaseAuditStore(
 
       const { data: events, error: eventError } = await admin
         .from("audit_events")
-        .select("event_type,status,created_at")
+        .select("event_type")
         .eq("audit_job_id", jobId)
-        .neq("event_type", "audit_failed")
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .in("event_type", [
+          "processing_claimed", "processing_started", "recognition", "catalog_ingestion",
+          "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated", "audit_completed",
+        ]);
       if (eventError) throw new Error(`Unable to read audit events: ${eventError.message}`);
 
       const { data: catalogEvents, error: catalogEventError } = await admin
@@ -630,23 +632,10 @@ export function createSupabaseAuditStore(
         },
       ) : [];
 
-      const latestEvent = events?.[0];
-      const eventStep: Record<string, number> = {
-        processing_claimed: 0,
-        processing_started: 0,
-        recognition: 1,
-        catalog_ingestion: 1,
-        sonic_dna: 2,
-        evidence_reconciliation: 3,
-        ar_assessment: 4,
-        report_generated: 5,
-        audit_completed: 5,
-      };
-      const currentStepIndex = latestEvent?.event_type && latestEvent.event_type in eventStep
-        ? eventStep[latestEvent.event_type]
-        : job.status === "completed"
-          ? 5
-          : 0;
+      const currentStepIndex = getAuditProgressStepIndex(
+        (events ?? []).map((event) => String(event.event_type)),
+        job.status as "queued" | "processing" | "completed" | "failed",
+      );
 
       const { data: reports, error: reportError } = await admin
         .from("audit_reports")
