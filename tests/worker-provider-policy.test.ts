@@ -10,6 +10,7 @@ vi.mock("../src/providers/groq/client.js", () => ({
 }));
 
 import { processNextQueuedAudit } from "../src/jobs/worker.js";
+import { ProviderUnavailableError } from "../src/providers/provider-readiness.js";
 
 describe("embedded worker provider policy", () => {
   afterEach(() => {
@@ -30,7 +31,9 @@ describe("embedded worker provider policy", () => {
     vi.stubEnv("GROQ_API", "configured");
     vi.stubEnv("PROVIDER_ENABLED_GROQ", "TRUE");
 
-    await expect(processNextQueuedAudit()).rejects.toThrow("groq: disabled by data policy");
+    const error = await processNextQueuedAudit().catch((value) => value);
+    expect(error).toBeInstanceOf(ProviderUnavailableError);
+    expect((error as ProviderUnavailableError).reason).toBe("disabled_by_data_policy");
     expect(mocks.claimNextQueuedJob).not.toHaveBeenCalled();
   });
 });
