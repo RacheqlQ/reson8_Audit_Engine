@@ -22,6 +22,10 @@ function id3Fixture(): Uint8Array {
 
 
 describe("audit failure classification", () => {
+  it("classifies Groq bounded JSON recovery failures as malformed output", () => {
+    expect(classifyAuditFailure(new Error('Groq narrative assessment failed with HTTP 400 after bounded JSON recovery: {"error":{"code":"json_validate_failed"}}'))).toBe("malformed_output");
+  });
+
   it("classifies exhausted upstream 5xx responses as provider unavailable", () => {
     expect(classifyAuditFailure(new Error("Gemini assessment failed with HTTP 503"))).toBe("provider_unavailable");
     expect(classifyAuditFailure(new Error("provider_error: Ollama returned HTTP 502"))).toBe("provider_unavailable");
