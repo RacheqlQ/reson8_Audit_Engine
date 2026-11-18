@@ -361,6 +361,10 @@ describe("Phillo evidence guardrails", () => {
     };
     const assessment = {
       ...baseAssessment,
+      scorecard: {
+        ...baseAssessment.scorecard,
+        dynamicRangeLoudness: { score: 65, rationale: "The measured RMS level supports the mix." },
+      },
       executiveSummary: "The master measures 156 BPM, -11 LUFS and 8 dB dynamic range.",
       strengths: ["The 156 BPM tempo and RMS energy support a high-energy dance-floor identity."],
       evidenceLabels: [
