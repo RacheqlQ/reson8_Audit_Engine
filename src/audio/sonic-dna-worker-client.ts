@@ -1,5 +1,5 @@
 import { Worker } from "node:worker_threads";
-import { analyzePcm, type SonicDnaFeatures } from "./sonic-dna.js";
+import { analyzePcm, preparePcmForWorker, type SonicDnaFeatures } from "./sonic-dna.js";
 
 export function analyzePcmWithTimeout(
   samples: Float32Array,
@@ -12,9 +12,10 @@ export function analyzePcmWithTimeout(
     if (signal?.aborted) return Promise.reject(signal.reason);
     return Promise.resolve().then(() => analyzePcm(samples, sampleRate, channels));
   }
-  const transferable = new Float32Array(samples);
+  const prepared = preparePcmForWorker(samples, sampleRate, channels);
+  const transferable = prepared.samples;
   const worker = new Worker(new URL("./sonic-dna-worker.js", import.meta.url), {
-    workerData: { samples: transferable, sampleRate, channels },
+    workerData: { samples: transferable, sampleRate: prepared.sampleRate, channels: prepared.channels },
     transferList: [transferable.buffer],
   });
   return new Promise((resolve, reject) => {
