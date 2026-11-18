@@ -13,9 +13,7 @@ describe("assessment provider readiness", () => {
 
   it("marks authentication failures unavailable while preserving a usable fallback", () => {
     const env = {
-      PROVIDER_ENABLED_GROQ: "true", GROQ_API_KEY: "groq-key",
-      PROVIDER_ENABLED_GEMINI: "true", GEMINI_API_KEY: "gemini-key",
-      PROVIDER_ENABLED_OLLAMA: "", OLLAMA_API_KEY: "",
+      GROQ_API_KEY: "groq-key", GEMINI_API_KEY: "gemini-key", OLLAMA_API_KEY: "",
     };
     markAssessmentProviderUnavailable("groq", "auth_error");
     const readiness = getAssessmentProviderReadiness(env);
@@ -24,7 +22,7 @@ describe("assessment provider readiness", () => {
   });
 
   it("marks daily token exhaustion unavailable until the UTC-day expiry", () => {
-    const env = { PROVIDER_ENABLED_GROQ: "true", GROQ_API_KEY: "groq-key" };
+    const env = { GROQ_API_KEY: "groq-key" };
     markAssessmentProviderUnavailable("groq", "daily_capacity", Date.now() + 60_000);
     expect(getAssessmentProviderReadiness(env).find((item) => item.provider === "groq")).toMatchObject({ usable: false, reason: "daily_capacity" });
   });
