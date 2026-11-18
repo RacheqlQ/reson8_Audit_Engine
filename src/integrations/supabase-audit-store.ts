@@ -589,10 +589,6 @@ export function createSupabaseAuditStore(
       if (jobError) throw new Error("Unable to read audit status");
       if (!job) throw new Error("Audit job not found");
 
-      const eventStep: Record<string, number> = {
-        processing_claimed: 0, processing_started: 0, recognition: 1, catalog_ingestion: 1,
-        sonic_dna: 2, evidence_reconciliation: 3, ar_assessment: 4, report_generated: 5, audit_completed: 5,
-      };
       const { data: events, error: eventError } = await admin.from("audit_events")
         .select("event_type,status,created_at,payload").eq("audit_job_id", jobId)
         .in("event_type", ["processing_claimed", "processing_started", "recognition", "catalog_ingestion", "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated", "audit_completed", "catalog_links_submitted", "audit_failed"])
