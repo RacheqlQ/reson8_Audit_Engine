@@ -131,7 +131,7 @@ describe("A4 report layout and fixture coverage",()=>{
  it("collapses all missing audio measurements into one empty state without master-derived provenance claims",()=>{
   const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");
   expect(report).toContain("Not measured: no master audio supplied.");
-  expect(report).not.toContain("Key / mode: Not measured");
+  expect(report).toContain("Key / mode: Not measured");
   expect(report).not.toContain("Measured from the uploaded master");
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
@@ -190,7 +190,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not determined");
   expect(report).not.toContain("Tempo confidence score");
-  expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
+  expect(report).toContain("Key / mode: Not measured");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
@@ -222,9 +222,23 @@ describe("A4 report layout and fixture coverage",()=>{
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
+  expect(report).toContain("Key / mode: Not measured");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).not.toContain("Key / mode: C major");
+ });
+ it("withholds synthetic audio sources and measurement-based strengths from metadata-only reports",()=>{
+  const input=structuredClone(metadataOnlyFixture) as any;
+  input.assessment.strengths=[
+   "The recording has a 128 BPM pulse and high RMS energy that support an energetic lane.",
+   "A measured dynamic range of 8 dB demonstrates consistent mastering quality.",
+   "The reconciled artist and title fields are supported by the submitted catalogue metadata."
+  ];
+  const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Key / mode: Not measured");
+  expect(report).not.toContain("Synthetic report fixture (layout testing only)");
+  expect(report).not.toContain("synthetic_audio_fixture");
+  expect(report).not.toMatch(/128\\s*BPM|high RMS energy|measured dynamic range of 8 dB/i);
+  expect(report).toContain("The reconciled artist and title fields are supported by the submitted catalogue metadata.");
  });
  it("withholds zero-confidence BPM and tempo-derived A&R assertions from the rendered report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
