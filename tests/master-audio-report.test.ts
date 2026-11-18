@@ -85,4 +85,71 @@ describe("uploaded master provenance in reports", () => {
     expect(report).toContain("No DSP provider lookup result was recorded");
   });
 
+  it("shows low-confidence key and tempo candidates with their detector abstention diagnostics", () => {
+    const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      bpm: 190,
+      tempoConfidence: 0.28,
+      rhythmFeatures: {
+        status: "insufficient_evidence",
+        method: "high_frequency_transient_autocorrelation",
+        candidateBpms: [190, 95],
+        abstentionReason: "Tempo candidate prominence is too weak to support a reliable result.",
+      },
+      key: null,
+      mode: null,
+      keyConfidence: 0.17,
+      keySegmentAgreement: 0.75,
+      harmonicFeatures: {
+        status: "insufficient_evidence",
+        method: "fft_harmonic_chroma_ensemble",
+        limitation: "Key and mode confidence was below threshold; no key is asserted.",
+        segmentChroma: [
+          { winningKey: "A", winningMode: "minor" },
+          { winningKey: "A", winningMode: "minor" },
+          { winningKey: "A", winningMode: "minor" },
+          { winningKey: "C", winningMode: "major" },
+        ],
+      },
+      limitations: ["Key and mode confidence was below threshold; no key is asserted."],
+    };
+    const report = planAuditReportPages(input, "full")
+      .flatMap((section) => [section.title, ...section.text])
+      .join(" ");
+    expect(report).toContain("Tempo: Tentative candidate — 190.0 BPM");
+    expect(report).toContain("abstention: Tempo candidate prominence is too weak");
+    expect(report).toContain("Key / mode: Tentative segment candidate — A minor (3/4 analysed windows; not verified)");
+    expect(report).toContain("Key and mode confidence was below threshold");
+    expect(report).not.toContain("Key / mode: A minor");
+  });
+
+  it("reports periodicity measurements without promoting them to vocal detection", () => {
+    const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.sonicDna = {
+      ...input.sonicDna,
+      vocalFeatures: {
+        status: "signal_diagnostics_only",
+        method: "autocorrelation_voiced_periodicity",
+        voicePresence: "undetermined",
+        sampledFrames: 100,
+        periodicFrames: 62,
+        periodicityActivityRatio: 0.62,
+        medianFundamentalHz: 220,
+        lowerFundamentalHz: 196,
+        upperFundamentalHz: 247,
+        limitations: ["Periodic energy is not proof of human vocals."],
+      },
+    };
+    const report = planAuditReportPages(input, "full")
+      .flatMap((section) => [section.title, ...section.text])
+      .join(" ");
+    expect(report).toContain("Limited signal-periodicity diagnostics were performed");
+    expect(report).toContain("Voice-range periodicity diagnostic (not vocal detection)");
+    expect(report).toContain("median 220.0 Hz");
+    expect(report).toContain("singing, speech, vocal presence/absence and vocal arrangement remain undetermined");
+    expect(report).not.toContain("Vocal analysis: Performed");
+  });
+
 });

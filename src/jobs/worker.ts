@@ -1,4 +1,5 @@
 import { createAudioDecoder } from "../audio/decoder.js";
+import { analyzeVocalsWithTimeout } from "../audio/vocal-analysis-worker-client.js";
 import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
 import { getAssessmentProviderReadiness, providerDecision } from "../providers/provider-policy.js";
@@ -101,6 +102,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     saveCatalogFailure: async (jobId, _claimToken, link, error, signal) =>
       store.saveCatalogFailure(jobId, _claimToken, link, error, signal),
     decode: async (bytes, _mimeType, signal) => decoder.decode(bytes, signal),
+    analyzeVocals: (samples, sampleRate, channels, signal) => analyzeVocalsWithTimeout(samples, sampleRate, channels, undefined, signal),
     generateAssessment: async (input, signal) => {
       const assessmentInput = {
         ...input,

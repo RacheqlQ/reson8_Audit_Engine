@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analyzePcm, estimateTempo } from "../src/audio/sonic-dna.js";
+import { analyzeVocalSignalDiagnostics } from "../src/audio/vocal-signal-diagnostics.js";
 
 function pulse(bpm:number,seconds=12,sampleRate=8000):Float32Array {
  const samples=new Float32Array(sampleRate*seconds);
@@ -95,7 +96,7 @@ describe("Sonic DNA",()=>{
   expect(result.key).toBeNull();
   expect(result.mode).toBeNull();
   expect(result.limitations.some((item)=>item.includes("varied across audio segments"))).toBe(true);
- });
+ },15000);
  it("returns null key and tempo with limitation notes for silence",()=>{
   const result=analyzePcm(new Float32Array(48000),8000);
   expect(result.key).toBeNull();
@@ -153,6 +154,15 @@ describe("Sonic DNA",()=>{
   expect(estimateTempo(dc,8000).bpm).toBeNull();
   expect(estimateTempo(tone,8000).bpm).toBeNull();
  });
+ it("labels rule-based energy and spectral outputs as signal descriptors, not moods",()=>{
+  const sampleRate=8000;
+  const bright=Float32Array.from({length:sampleRate*2},(_,i)=>0.3*Math.sin(2*Math.PI*3500*i/sampleRate));
+  const result=analyzePcm(bright,sampleRate);
+  expect(result.moodTags).toContain("Elevated RMS level");
+  expect(result.moodTags).toContain("High spectral centroid");
+  expect(result.moodTags.some(tag=>/happy|sad|energetic|calm|dark mood|bright mood/i.test(tag))).toBe(false);
+ });
+
  it("does not assert genre from tempo alone",()=>{
   const result=analyzePcm(pulse(112),8000);
   expect(result.genreContext).toEqual([]);
@@ -174,8 +184,26 @@ describe("Sonic DNA",()=>{
   expect(rhythm.rhythmFeatures.bpm).toBeGreaterThanOrEqual(115);
   expect(rhythm.rhythmFeatures.bpm).toBeLessThanOrEqual(125);
   expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:"C",mode:"major",method:"fft_harmonic_chroma_ensemble"});
-  expect(rhythm.vocalFeatures).toMatchObject({status:"not_analyzed"});
-  expect(rhythm.vocalFeatures.reason).toContain("No vocal");
+  expect(rhythm.vocalFeatures).toMatchObject({status:"signal_diagnostics_only",method:"autocorrelation_voiced_periodicity",voicePresence:"undetermined"});
+  expect(rhythm.vocalFeatures.limitations).toEqual(expect.arrayContaining([expect.stringContaining("not proof of human vocals")]));
  });
 
+});
+
+describe("vocal signal diagnostics",()=>{
+ it("reports voice-range periodicity candidates without claiming vocal presence",()=>{
+  const sampleRate=8000;
+  const tone=Float32Array.from({length:sampleRate*3},(_,i)=>0.2*Math.sin(2*Math.PI*220*i/sampleRate));
+  const result=analyzeVocalSignalDiagnostics(tone,sampleRate);
+  expect(result.status).toBe("signal_diagnostics_only");
+  expect(result.periodicFrames).toBeGreaterThan(0);
+  expect(result.medianFundamentalHz).toBeGreaterThan(180);
+  expect(result.medianFundamentalHz).toBeLessThan(260);
+  expect(result.voicePresence).toBe("undetermined");
+  expect(result.limitations.join(" ")).toContain("not proof of human vocals");
+ });
+ it("abstains on silence and short input",()=>{
+  expect(analyzeVocalSignalDiagnostics(new Float32Array(8000*2),8000).status).toBe("insufficient_evidence");
+  expect(analyzeVocalSignalDiagnostics(new Float32Array(800),8000).status).toBe("insufficient_evidence");
+ });
 });

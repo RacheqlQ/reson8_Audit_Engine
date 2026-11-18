@@ -23,7 +23,10 @@
     "ffmpeg-static": "5.3.0",
     "@types/node": "^24.0.0",
     "typescript": "^5.9.0",
-    "@cantoo/pdf-lib": "2.11.1"
+    "@cantoo/pdf-lib": "2.11.1",
+    "@audio/neural-separate": "0.7.1",
+    "@audio/neural-runtime": "0.2.1",
+    "onnxruntime-node": "1.31.1"
   },
   "devDependencies": {
     "vitest": "^5.0.3"

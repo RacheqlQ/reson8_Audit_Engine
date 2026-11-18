@@ -267,18 +267,42 @@ function sections(i:AuditReportInput):Section[]{
  const curatorGenreConfirmed=Boolean(text(genreRecord.primaryGenre)&&genreRecord.abstained!==true);
  const vocalFeatures=s?.vocalFeatures&&typeof s.vocalFeatures==="object"&&!Array.isArray(s.vocalFeatures)?s.vocalFeatures as Record<string,unknown>:null;
  const vocalStatus=String(vocalFeatures?.status??"not_recorded");
- const curatorVocalAnalyzed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
+ const vocalAnalysisPerformed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
+ const curatorVocalAnalyzed=vocalAnalysisPerformed&&vocalFeatures?.reviewStatus==="human_verified";
  const vocalAnalysisDisclosure=!vocalFeatures||["not_analyzed","not_recorded","unavailable","not_configured"].includes(vocalStatus)
   ? "Vocal analysis: Not performed — "+(text(vocalFeatures?.reason)||"no vocal-analysis result is recorded")+"; vocal presence/absence is unknown and is not inferred."
-  : curatorVocalAnalyzed
-   ? "Vocal analysis: Performed (status: "+vocalStatus+"). Only explicitly returned vocal measurements may be reported; unmeasured vocal attributes remain unknown."
-   : "Vocal analysis: Status "+vocalStatus+"; no conclusion about vocal presence or absence is established.";
+  : vocalStatus==="signal_diagnostics_only"
+   ? "Vocal analysis: Limited signal-periodicity diagnostics were performed. They do not detect or confirm human vocals; singing, speech, vocal presence/absence and vocal arrangement remain undetermined."
+   : vocalAnalysisPerformed
+    ? "Vocal analysis: Automated separated-stem analysis performed (status: "+vocalStatus+"). The presence result is provisional, not calibrated and not human-reviewed; speech/singing, lead/backing and vocal arrangement remain unclassified."
+    : "Vocal analysis: Status "+vocalStatus+"; no conclusion about vocal presence or absence is established.";
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
+  const rhythmDiagnostics=s?.rhythmFeatures&&typeof s.rhythmFeatures==="object"?s.rhythmFeatures as Record<string,unknown>:{};
+  const harmonicDiagnostics=s?.harmonicFeatures&&typeof s.harmonicFeatures==="object"?s.harmonicFeatures as Record<string,unknown>:{};
+  const keySegments=Array.isArray(harmonicDiagnostics.segmentChroma)?harmonicDiagnostics.segmentChroma.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
+  const keyVotes=new Map<string,number>();
+  for(const segment of keySegments){
+   const candidate=[text(segment.winningKey),text(segment.winningMode)].filter(Boolean).join(" ");
+   if(candidate)keyVotes.set(candidate,(keyVotes.get(candidate)??0)+1);
+  }
+  const rankedKeyVotes=[...keyVotes.entries()].sort((a,b)=>b[1]-a[1]);
+  const dominantKeyCandidate=rankedKeyVotes[0];
+  const keyDisagreement=rankedKeyVotes.length>1&&rankedKeyVotes[1][1]===dominantKeyCandidate?.[1];
+  const keyDiagnostic= isReliableKey(s)
+   ? [text(s?.key),text(s?.mode)].filter(Boolean).join(" ")
+   : dominantKeyCandidate&&!keyDisagreement
+    ? "Tentative segment candidate — "+dominantKeyCandidate[0]+" ("+dominantKeyCandidate[1]+"/"+keySegments.length+" analysed windows; not verified)"
+    : keySegments.length?"Conflicting segment candidates — no single key asserted":"Not determined";
+  const tempoDiagnostic=tempoReliable
+   ? "Detected — "+metric(s?.bpm,1)+" BPM"
+   : typeof s?.tempoConfidence==="number"&&s.tempoConfidence>0&&typeof s?.bpm==="number"
+    ? "Tentative candidate — "+metric(s.bpm,1)+" BPM (half-time "+metric(s.bpm/2,1)+"; double-time "+metric(s.bpm*2,1)+")"
+    : "Not determined";
   sonicDnaBody.push(
    e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
-   "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative candidate — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
-   "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not measured"),
+   "Tempo: " + tempoDiagnostic,
+   "Key / mode: " + keyDiagnostic,
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
    "Integrated loudness (EBU R128): " + metric(s?.loudnessLufs,1) + " LUFS (gated programme loudness; not a mastering verdict)",
    "Loudness range (EBU R128 LRA): " + metric(s?.loudnessRangeLu,1) + " LU (programme loudness variation; not the same as sample-peak dynamic range)",
@@ -289,12 +313,39 @@ function sections(i:AuditReportInput):Section[]{
    "Source format: " + val(s?.sampleRate) + " Hz; " + val(s?.channels) + " channel(s); " + metric(s?.durationSeconds,2) + " seconds",
    "Spectral profile: centroid " + metric(s?.spectralCentroidHz,0) + " Hz; bandwidth " + metric(s?.spectralBandwidthHz,0) + " Hz; 85% rolloff " + metric(s?.spectralRolloffHz,0) + " Hz; zero-crossing rate " + metric(s?.zeroCrossingRate,3),
    "Measurement note: EBU R128 LUFS/LRA and true peak are separate from the internal RMS-envelope spread; RMS level, RMS energy and spectral descriptors are signal measurements, not subjective mastering-quality scores.",
-   "Tempo estimator: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.method) + "; confidence diagnostic: " + metric(s?.tempoConfidence,2) + "; candidates: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.candidateBpms),
+   "Tempo estimator: " + val(rhythmDiagnostics.method) + "; confidence diagnostic: " + metric(s?.tempoConfidence,2) + "; candidates: " + val(rhythmDiagnostics.candidateBpms) + "; abstention: " + val(rhythmDiagnostics.abstentionReason,"none recorded"),
+   "Key detector: " + val(harmonicDiagnostics.method) + "; confidence diagnostic: " + metric(s?.keyConfidence,2) + "; segment agreement: " + metric(s?.keySegmentAgreement,2) + "; abstention: " + val(harmonicDiagnostics.limitation??(Array.isArray(s?.limitations)?s.limitations.find((item)=>typeof item==="string"&&item.toLowerCase().includes("key")):null),"none recorded"),
    "Beat-grid diagnostic: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatGridStatus) + "; beat timestamps: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatTimesSeconds ? ((s?.rhythmFeatures as Record<string,unknown>).beatTimesSeconds as unknown[]).length : 0) + "; downbeat grouping is a four-beat diagnostic assumption, not a verified bar structure.",
    "Key analysis: method " + val((s?.harmonicFeatures as Record<string,unknown>|undefined)?.method) + "; tuning offset " + metric(s?.keyTuningCents,2) + " cents; segment agreement " + metric(s?.keySegmentAgreement,2) + ". Key confidence is an estimator diagnostic, not calibrated accuracy.",
    "Rhythm scope: onset periodicity and candidate beat timestamps are measured; groove, swing, syncopation, verified bar structure and section boundaries are not independently classified in this analysis version.",
    "Rule-based signal descriptors (not an emotion or mood classifier): " + val(s?.moodTags)
   );
+  if (vocalAnalysisPerformed) {
+   const vocalSegments = Array.isArray(vocalFeatures?.activitySegments)
+    ? vocalFeatures.activitySegments.filter((item): item is Record<string,unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+    : [];
+   const vocalPitch = vocalFeatures?.pitch && typeof vocalFeatures.pitch === "object" ? vocalFeatures.pitch as Record<string,unknown> : {};
+   const vocalSegmentSummary = vocalSegments.slice(0, 12).map((segment) =>
+    metric(segment.startSeconds, 2) + "–" + metric(segment.endSeconds, 2) + " s"
+   ).join("; ");
+   const vocalPitchRange = typeof vocalPitch.lowerHz === "number" && typeof vocalPitch.upperHz === "number"
+    ? metric(vocalPitch.lowerHz, 0) + "–" + metric(vocalPitch.upperHz, 0) + " Hz (median " + metric(vocalPitch.medianHz, 0) + " Hz)"
+    : "Not determined";
+   const vocalEnergyShare = typeof vocalFeatures?.vocalEnergyShare === "number"
+    ? (vocalFeatures.vocalEnergyShare * 100).toFixed(1) + "%"
+    : "Not measured";
+   const vocalActivityRatio = typeof vocalFeatures?.vocalActivityRatio === "number"
+    ? (vocalFeatures.vocalActivityRatio * 100).toFixed(1) + "%"
+    : "Not measured";
+   sonicDnaBody.push(
+    "Vocal presence: " + val(vocalFeatures?.voicePresence, "Unknown") + "; separated-stem method/model: " + val(vocalFeatures?.method) + " / " + val((vocalFeatures?.model as Record<string,unknown>|undefined)?.name),
+    "Estimated vocal-stem energy ratio: " + vocalEnergyShare + "; stem RMS: " + metric(vocalFeatures?.vocalStemRmsDbfs, 1) + " dBFS; estimated activity: " + vocalActivityRatio + "; active duration: " + metric(vocalFeatures?.activeDurationSeconds, 2) + " s",
+    "Vocal activity timestamps (first 12): " + (vocalSegmentSummary || "No activity intervals detected"),
+    "Estimated fundamental-frequency candidates: " + vocalPitchRange + "; voiced-frame ratio: " + (typeof vocalPitch.voicedFrameRatio === "number" ? (vocalPitch.voicedFrameRatio * 100).toFixed(1) + "%" : "Not determined"),
+    "Delivery: " + val(vocalFeatures?.delivery, "Not classified") + "; layering: " + val(vocalFeatures?.layering, "Not classified") + "; human review: " + val(vocalFeatures?.reviewStatus, "Not recorded") + "; lyrics: " + val(vocalFeatures?.lyrics, "Not requested"),
+    "Vocal-analysis limitations: " + (Array.isArray(vocalFeatures?.limitations) ? vocalFeatures.limitations.map(text).filter(Boolean).join(" ") : "No limitation record supplied")
+   );
+  }
  } else if (s) {
   sonicDnaBody.push(
    "Provider-supplied sonic context (not master-measured)",
@@ -323,6 +374,14 @@ function sections(i:AuditReportInput):Section[]{
   );
  }
  sonicDnaBody.push(vocalAnalysisDisclosure);
+ if(vocalStatus==="signal_diagnostics_only"&&vocalFeatures){
+  sonicDnaBody.push(
+   "Voice-range periodicity diagnostic (not vocal detection): "+metric(vocalFeatures.periodicityActivityRatio,3,"Not measured")+" activity ratio across "+val(vocalFeatures.sampledFrames,"0")+" sampled signal frames.",
+   "Periodic fundamental-frequency candidates: median "+metric(vocalFeatures.medianFundamentalHz,1)+" Hz; lower 10th percentile "+metric(vocalFeatures.lowerFundamentalHz,1)+" Hz; upper 90th percentile "+metric(vocalFeatures.upperFundamentalHz,1)+" Hz.",
+   "Diagnostic method: "+val(vocalFeatures.method)+"; periodic frames: "+val(vocalFeatures.periodicFrames,"0")+". These measurements may originate from instruments or synthesizers and must not be interpreted as a singer pitch range.",
+   ...(Array.isArray(vocalFeatures.limitations)?vocalFeatures.limitations.map(text).filter(Boolean):[])
+  );
+ }
  if (Object.keys(genreRecord).length) {
   sonicDnaBody.push(
    "Genre evidence: " + primaryGenre
@@ -351,7 +410,8 @@ function sections(i:AuditReportInput):Section[]{
    "Evidence gaps blocking target selection: "+[
     ...(unresolvedCuratorIdentity.length?["unresolved identity fields: "+unresolvedCuratorIdentity.join(", ")]:[]),
     ...(!curatorGenreConfirmed?["no confirmed provider-backed genre classification"]:[]),
-    ...(!curatorVocalAnalyzed?["vocal analysis was not performed"]:[]),
+    ...(!vocalAnalysisPerformed?["vocal analysis was not performed"]:[]),
+    ...(vocalAnalysisPerformed&&!curatorVocalAnalyzed?["automated vocal analysis has not been human-validated"]:[]),
     ...(!catalogSources.length?["no usable DSP catalog lookup results"]:[])
    ].join("; "),
    "Playlist categories are discovery hypotheses, not named playlists, curator contacts, relationships or evidence of acceptance.",

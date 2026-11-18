@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AI_ASSESSMENT_STAGE_TIMEOUT_MS, AUDIT_JOB_DEADLINE_MS, classifyAuditFailure, processAuditJob } from "../src/jobs/process-audit-job.js";
+import { analyzeVocalStem } from "../src/audio/vocal-analysis.js";
 
 const assessment = {} as import("../src/providers/groq/client.js").ArAssessment;
 
@@ -40,6 +41,8 @@ describe("audit failure classification", () => {
 describe("processAuditJob", () => {
   it("persists Sonic DNA before reconciliation, then assesses and completes a queued master", async () => {
     const events: string[] = [];
+    let failureMessage = "";
+    let reconciledIdentity: unknown = null;
     const result = await processAuditJob("job-123", {
       getJob: async () => ({
         id: "job-123",
@@ -62,6 +65,7 @@ describe("processAuditJob", () => {
       recognize: async () => ({ matched: false as const }),
       saveRecognition: async () => events.push("recognition"),
       saveEvidence: async (_jobId, _claimToken, _recognition, reconciliation) => {
+        reconciledIdentity = reconciliation.identity;
         expect(reconciliation.identity).toMatchObject({
           artist: "Embedded Artist", title: "Embedded Title", album: "Embedded Album",
           isrc: "NGABC2600001", genres: ["Afrobeats"], releaseDate: "2025-08-27",
@@ -74,8 +78,16 @@ describe("processAuditJob", () => {
         sampleRate: 44100,
         channels: 2,
       }),
+      analyzeVocals: async () => {
+        events.push("vocal-analysis");
+        const sampleRate = 8000;
+        const mix = Float32Array.from({ length: sampleRate }, (_, i) => 0.5 * Math.sin(2 * Math.PI * 220 * i / sampleRate));
+        const vocal = Float32Array.from({ length: sampleRate }, (_, i) => 0.25 * Math.sin(2 * Math.PI * 220 * i / sampleRate));
+        return analyzeVocalStem([vocal], [mix], sampleRate);
+      },
       saveSonicDna: async (_jobId, _claimToken, dna) => {
         events.push("dna");
+        expect(dna.vocalFeatures).toMatchObject({ status: "analyzed", voicePresence: "likely_present" });
         expect(dna.sampleRate).toBe(44100);
         expect(dna.channels).toBe(2);
         expect(dna.durationSeconds).toBe(4 / 44100);
@@ -105,13 +117,14 @@ describe("processAuditJob", () => {
         events.push(`report-saved-${tier}`);
       },
       markCompleted: async () => events.push("completed"),
-      markFailed: async () => events.push("failed"),
+      markFailed: async (_jobId, _claimToken, message) => { failureMessage = message; events.push("failed"); },
     });
 
-    expect(result.status).toBe("completed");
+    expect(result.status, failureMessage + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity)).toBe("completed");
     expect(events).toEqual([
       "processing",
       "recognition",
+      "vocal-analysis",
       "dna",
       "evidence",
       "assessment",

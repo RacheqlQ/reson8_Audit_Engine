@@ -93,6 +93,27 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(zeroBody).toContain("Tempo: Not determined");
   expect(zeroBody).not.toMatch(/Tempo: Detected|Tempo: Tentative/);
  });
+
+ it("renders measured vocal presence, activity timestamps and pitch without inventing delivery or lyrics",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.sonicDna.vocalFeatures={
+   status:"analyzed",method:"open_unmix_umxhq_vocal_stem",model:{name:"Open-Unmix UMX-HQ vocals",artifactSha256:"f27742bb52b2"},
+   voicePresence:"likely_present",vocalStemRmsDbfs:-18.4,vocalEnergyShare:0.12,vocalActivityRatio:0.35,activeDurationSeconds:42.0,
+   activitySegments:[{startSeconds:4.2,endSeconds:12.6,meanLevelDbfs:-19.2,peakLevelDbfs:-12.4}],
+   pitch:{medianHz:220,lowerHz:110,upperHz:440,voicedFrameRatio:0.82,track:[{timeSeconds:4.2,fundamentalHz:220}]},
+   delivery:"not_classified",layering:"not_classified",lyrics:"not_requested",reviewStatus:"not_human_reviewed",
+   limitations:["Vocal presence is a conservative separated-stem estimate, not a calibrated probability."]
+  };
+  const body=planAuditReportPages(input).flatMap((section)=>section.text).join(" ");
+  expect(body).toContain("Vocal presence: likely_present");
+  expect(body).toContain("Vocal activity timestamps (first 12): 4.20–12.60 s");
+  expect(body).toContain("Estimated fundamental-frequency candidates: 110–440 Hz (median 220 Hz)");
+  expect(body).toContain("Delivery: not_classified; layering: not_classified");
+  expect(body).toContain("lyrics: not_requested");
+  expect(body).toContain("human review: not_human_reviewed");
+  expect(body).toContain("automated vocal analysis has not been human-validated");
+  expect(body).toContain("not a calibrated probability");
+ });
  it("marks the audio fixture variants as synthetic, including partial null-key and low-confidence data",()=>{
   expect(fullAudioFixture.evidence.artist).toBe("Fixture Artist");
   expect(fullAudioFixture.sonicDna.bpm).toBe(96);
@@ -205,7 +226,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not determined");
   expect(report).not.toContain("Tempo confidence score");
-  expect(report).toContain("Key / mode: Not measured");
+  expect(report).toContain("Key / mode: Not determined");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
@@ -237,7 +258,7 @@ describe("A4 report layout and fixture coverage",()=>{
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Key / mode: Not measured");
+  expect(report).toContain("Key / mode: Not determined");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).not.toContain("Key / mode: C major");
  });

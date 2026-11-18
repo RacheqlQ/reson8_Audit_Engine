@@ -1,4 +1,5 @@
 import { estimateKey } from "./key-estimation.js";
+import { analyzeVocalSignalDiagnostics } from "./vocal-signal-diagnostics.js";
 import type { GenreFusionResult } from "../genre/fusion.js";
 export interface TempoEstimate {
  bpm:number|null;
@@ -182,6 +183,7 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
 
 export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):SonicDnaFeatures {
  const prepared=prepareAnalysisPcm(samples,sampleRate,channels),a=prepared.samples,rate=prepared.sampleRate,energy=rms(a);
+ const vocalDiagnostics=analyzeVocalSignalDiagnostics(a,rate);
  let crossings=0;
  for(let i=1;i<a.length;i++)if((a[i-1]<0&&a[i]>=0)||(a[i-1]>=0&&a[i]<0))crossings++;
  const size=2048,bins=size/2,available=Math.max(1,Math.floor((a.length-size)/(size/2))+1),count=Math.min(12,available);
@@ -212,9 +214,9 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  frames.sort((x,y)=>x-y);
  const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),key=estimateKey(a,rate);
  const tags:string[]=[];
- if(energy>0.15)tags.push("High Energy");else if(energy<0.04)tags.push("Low Energy");else tags.push("Moderate Energy");
- if(crossings/Math.max(1,a.length-1)>0.08)tags.push("Bright/Noisy Texture");
- if(centroid>3000)tags.push("Bright Timbre");else if(centroid<1000)tags.push("Dark Timbre");
+ if(energy>0.15)tags.push("Elevated RMS level");else if(energy<0.04)tags.push("Low RMS level");else tags.push("Moderate RMS level");
+ if(crossings/Math.max(1,a.length-1)>0.08)tags.push("Elevated zero-crossing rate");
+ if(centroid>3000)tags.push("High spectral centroid");else if(centroid<1000)tags.push("Low spectral centroid");
  const limitations:string[]=[];
  if(key.limitation)limitations.push(key.limitation);
  if(tempo.bpm===null)limitations.push("Tempo could not be determined reliably from the supplied audio.");
@@ -222,7 +224,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
   sampleRate,channels:Number.isInteger(channels)&&channels>0?channels:1,durationSeconds:prepared.durationSeconds,
   rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:tempo.method,candidateBpms:tempo.candidateBpms,candidateScores:tempo.candidateScores,onsetEnvelope:tempo.onsetEnvelope,beatTimesSeconds:tempo.beatTimesSeconds,downbeatCandidateTimesSeconds:tempo.downbeatCandidateTimesSeconds,beatGridStatus:tempo.beatGridStatus,downbeatGridAssumption:tempo.downbeatGridAssumption,abstentionReason:tempo.abstentionReason},
   harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:key.method,tuningCents:key.tuningCents,segmentAgreement:key.segmentAgreement,analysisWindows:key.analysisWindows,fftButterflyCount:key.fftButterflyCount,segmentChroma:key.segmentChroma},
-  vocalFeatures:{status:"not_analyzed",reason:"No vocal separation or vocal-activity model is configured; vocal attributes are not inferred."},
+  vocalFeatures:{...vocalDiagnostics},
   bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
   key:key.key,mode:key.mode,keyConfidence:key.confidence,keyTuningCents:key.tuningCents,keySegmentAgreement:key.segmentAgreement,keyAnalysisFftButterflyCount:key.fftButterflyCount,limitations,
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
