@@ -340,7 +340,7 @@ function sections(i:AuditReportInput):Section[]{
    "VOCAL ANALYSIS — separated vocal-stem evidence",
    "Vocal presence: " + val(vocalFeatures?.voicePresence, "Unknown"),
    "Separation method / model: " + val(vocalFeatures?.method) + " / " + val((vocalFeatures?.model as Record<string,unknown>|undefined)?.name),
-   "Vocal stem energy share of master: " + vocalEnergyShare + "; vocal stem RMS: " + metric(vocalFeatures?.vocalStemRmsDbfs, 1) + " dBFS",
+   "Estimated vocal-stem energy ratio to master (heuristic): " + vocalEnergyShare + "; vocal stem RMS: " + metric(vocalFeatures?.vocalStemRmsDbfs, 1) + " dBFS",
    "Estimated vocal activity: " + vocalActivityRatio + " of analysed frames; active duration: " + metric(vocalFeatures?.activeDurationSeconds, 2) + " s",
    "Vocal activity timestamps (first 12): " + (vocalSegmentSummary || "No activity intervals detected"),
    "Estimated fundamental-frequency range: " + vocalPitchRange + "; voiced-frame ratio: " + (typeof vocalPitch.voicedFrameRatio === "number" ? (vocalPitch.voicedFrameRatio * 100).toFixed(1) + "%" : "Not determined"),
