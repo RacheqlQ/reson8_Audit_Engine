@@ -298,11 +298,16 @@ export async function runAuditQueueWorker(signal: AbortSignal): Promise<void> {
     signal,
     pollIntervalMs: POLL_INTERVAL_MS,
     onError: (error) => {
+      const failure = classifyAuditFailure(error);
       console.error(JSON.stringify({
         worker: "audit",
         event: "worker_cycle_failed",
         retryInMs: POLL_INTERVAL_MS,
-        error: error instanceof Error ? error.message : String(error),
+        errorCode: failure.errorCode,
+        provider: failure.provider,
+        httpStatus: failure.httpStatus,
+        errorType: failure.errorType,
+        retryable: failure.retryable,
       }));
     },
   });
