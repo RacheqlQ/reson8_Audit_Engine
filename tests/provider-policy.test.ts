@@ -26,7 +26,7 @@ describe("commercial provider policy registry", () => {
     expect(providerDecision("essentia", { ESSENTIA_MODEL_PATH: "present" }).enabled).toBe(false);
   });
 
-  it("allows approved providers without PROVIDER_ENABLED flags", () => {
+  it("allows approved providers without per-provider enable flags", () => {
     expect(providerDecision("spotify", { SPOTIFY_CLIENT_ID: "present", SPOTIFY_CLIENT_SECRET: "present" }).enabled).toBe(true);
     expect(providerDecision("groq", { GROQ_API: "present" }).enabled).toBe(true);
     expect(providerDecision("musicbrainz", {}).enabled).toBe(true);
@@ -36,6 +36,6 @@ describe("commercial provider policy registry", () => {
     const links = normalizeDspTrackLinks(["https://open.spotify.com/track/spotify-123"]);
     const [result] = await collectDspMetadata(links);
     expect(result?.status).toBe("unavailable");
-    expect(result?.error).toBe("not_configured");
+    expect(result?.error).toMatch(/Spotify client credentials are required/);
   });
 });
