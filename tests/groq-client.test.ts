@@ -204,7 +204,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async(ms)=>{sleeps.push(ms);});
   const result=await client.assess({evidence:{},sonicDna:null});
-  expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);expect(sleeps).toContain(13973);
+  expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);expect(sleeps[0]).toBeGreaterThanOrEqual(13973);expect(sleeps[0]).toBeLessThanOrEqual(16768);
  });
  it("retries Groq provider-side JSON schema validation failures with provider error details as correction context",async()=>{
   let evidenceScoreCalls=0;

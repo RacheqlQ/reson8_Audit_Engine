@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails.js";
+import { sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
 
 export const GROQ_PROMPT_VERSION = "audit-ar-v6";
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
@@ -135,6 +136,8 @@ function thresholdError(name: string, value: unknown): string | null {
 }
 
 const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
+let groqDailyCapUntil = 0;
+let groqCompletionBudgetScale = 1;
 const MAX_NETWORK_ATTEMPTS = 3;
 export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
 export const GROQ_ASSESSMENT_TIMEOUT_MS = 4 * 60_000;
@@ -155,7 +158,7 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
       ? seconds * 1000
       : Date.parse(retryAfter) - Date.now();
     if (Number.isFinite(headerDelay) && headerDelay >= 0) {
-      return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(headerDelay));
+      return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(headerDelay * (1 + Math.random() * 0.2)));
     }
   }
 
@@ -175,7 +178,8 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
     // Non-JSON provider errors use bounded exponential backoff below.
   }
 
-  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, 1000 * (2 ** fallbackAttempt));
+  const exponential = 1000 * (2 ** fallbackAttempt);
+  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(exponential * (0.8 + Math.random() * 0.4)));
 }
 
 function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -347,12 +351,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // prompt_only deliberately omits response_format. The exact schema is still
     // supplied to the model, and no response is accepted without local Zod checks.
     const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 3) + 256;
-    const sectionOutputBudget = Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
+    const sectionOutputBudget = Math.floor(Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600) * (providerName === "groq" ? groqCompletionBudgetScale : 1));
     completionTokenBudget = Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens);
     if (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS) {
       throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
+    if (providerName === "groq" && process.env.NODE_ENV !== "test") {
+      await sharedGroqTokenLimiter.acquire(estimatedInputTokens + completionTokenBudget, sleepImpl, signal);
+    }
     console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
@@ -378,6 +385,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (response.ok) break;
       const errorBody = response.status === 429 ? await response.clone().text().catch(() => "") : "";
       if (response.status === 429 && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody)) {
+        const tomorrow = new Date();
+        tomorrow.setUTCHours(24, 0, 0, 0);
+        groqDailyCapUntil = tomorrow.getTime();
         throw new Error("AI capacity reached for now, please try again later", { cause: new Error("GROQ_DAILY_CAP_REACHED") });
       }
       const transient = response.status === 429 || response.status >= 500;
@@ -396,7 +406,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 413) {
-        throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; the same payload was not retried");
+        groqCompletionBudgetScale = Math.max(0.25, groqCompletionBudgetScale * 0.5);
+        throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; it was not retried and future Groq completion budgets were reduced");
       }
 
       if (response?.status === 400 && providerError.error?.code === "json_validate_failed") {
@@ -530,6 +541,10 @@ export class GroqClient implements GroqAssessmentClient {
     this.providerName = providerName;
   }
   async assess(input:GroqAssessmentInput, signal?:AbortSignal):Promise<ArAssessment>{
+    if (this.providerName === "groq" && Date.now() < groqDailyCapUntil) {
+      await recordProviderAttempt(input, { provider: "groq", model: this.model, status: null, errorType: "capacity", retryable: false, attempt: 0 });
+      throw new Error("GROQ_DAILY_CAP_SKIPPED: daily token limit was already reached for this UTC day");
+    }
     const deadlineController = new AbortController();
     const deadlineError = new Error("GROQ_ASSESSMENT_TIMEOUT");
     const deadlineTimer = setTimeout(
