@@ -99,12 +99,11 @@ export function createSupabaseAuditStore(
     signal?: AbortSignal,
   ) => {
     signal?.throwIfAborted();
-    let activeJobRequest = admin.from("audit_jobs")
+    let activeJobQuery = admin.from("audit_jobs")
       .select("status,claim_token,lease_expires_at")
-      .eq("id", jobId)
-      .maybeSingle();
-    if (signal) activeJobRequest = activeJobRequest.abortSignal(signal);
-    const { data: activeJob, error: activeJobError } = await activeJobRequest;
+      .eq("id", jobId);
+    if (signal) activeJobQuery = activeJobQuery.abortSignal(signal);
+    const { data: activeJob, error: activeJobError } = await activeJobQuery.maybeSingle();
     if (activeJobError || !activeJob || activeJob.status !== "processing"
       || activeJob.claim_token !== claimToken
       || !activeJob.lease_expires_at
