@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, GROQ_PROMPT_VERSION } from "../src/providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
 
 const long=(s:string,n=65)=>{let v=s;while(v.trim().split(/\s+/).length<n)v+=" "+s;return v;};
 const p=(group:string):Record<string,unknown>=>{
@@ -18,6 +18,23 @@ const p=(group:string):Record<string,unknown>=>{
 };
 function fetchMock(invalid?:string){const counts=new Map<string,number>();const mock=vi.fn(async (_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const name=body.response_format.json_schema.name.replace(/^ar_/,"");const n=(counts.get(name)??0)+1;counts.set(name,n);const value=name===invalid&&n===1?{}:p(name);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});return {mock,counts};}
 describe("GroqClient section groups",()=>{
+ it("keeps all provider deadlines within the ten-minute assessment stage",()=>{
+  expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBe(4*60_000);
+  expect(GEMINI_ASSESSMENT_TIMEOUT_MS).toBe(3*60_000);
+  expect(OLLAMA_ASSESSMENT_TIMEOUT_MS).toBe(2*60_000);
+  expect(GROQ_ASSESSMENT_TIMEOUT_MS+GEMINI_ASSESSMENT_TIMEOUT_MS+OLLAMA_ASSESSMENT_TIMEOUT_MS).toBeLessThan(10*60_000);
+ });
+ it("uses the bounded provider-specific deadline defaults",async()=>{
+  const groqController=new AbortController();
+  const groqFetch=vi.fn(async()=>{groqController.abort();throw new Error("captured");});
+  await expect(new GroqClient("groq-key",undefined,groqFetch as typeof fetch).assess({evidence:{},sonicDna:null},groqController.signal)).rejects.toThrow("captured");
+  const geminiController=new AbortController();
+  const geminiFetch=vi.fn(async()=>{geminiController.abort();throw new Error("captured");});
+  await expect(new GeminiClient("gemini-key",undefined,geminiFetch as typeof fetch).assess({evidence:{},sonicDna:null},geminiController.signal)).rejects.toThrow("captured");
+  const ollamaController=new AbortController();
+  const ollamaFetch=vi.fn(async()=>{ollamaController.abort();throw new Error("captured");});
+  await expect(new OllamaClient("ollama-key",undefined,ollamaFetch as typeof fetch).assess({evidence:{},sonicDna:null},ollamaController.signal)).rejects.toThrow("captured");
+ });
  it("removes high-volume Sonic DNA diagnostic arrays from repeated Groq prompts while preserving useful measurements",async()=>{
   const {mock}=fetchMock();
   const sonicDna={
