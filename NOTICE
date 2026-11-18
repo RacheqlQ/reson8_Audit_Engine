@@ -10,8 +10,13 @@ Potentially permitted with conditions / pending implementation gates
 - ListenBrainz: use subject to current project/API terms, rate limits and attribution. https://listenbrainz.org/
 - YouTube Data API: use subject to YouTube API Services Terms and Developer Policies. https://developers.google.com/youtube/terms/api-services-terms-of-service
 
-Unverified — disabled by data policy until commercial terms are confirmed
+Operationally enabled by explicit product-owner authorization, subject to provider-specific controls
 - Groq API assessment processing: https://groq.com/terms-of-use/
+  The executable policy registry marks Groq allowed and requires PROVIDER_ENABLED_GROQ=true.
+  This operational authorization is not a legal determination and does not waive applicable terms,
+  data-use, retention or deletion obligations.
+
+Unverified — disabled by data policy until commercial terms are confirmed
 - Spotify: https://developer.spotify.com/terms
 - Apple Music / iTunes lookup: https://developer.apple.com/musickit/
 - YouTube Music oEmbed: https://developers.google.com/youtube/terms/api-services-terms-of-service

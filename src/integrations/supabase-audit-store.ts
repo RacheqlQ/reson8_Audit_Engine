@@ -5,6 +5,7 @@ import type { AuditFailureCode, AuditJobRecord } from "../jobs/process-audit-job
 import type { AuditRecognition } from "../providers/audd/normalize.js";
 import { type CatalogMetadata } from "../providers/dsp/catalog.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
+import { getAuditProgressStep } from "../jobs/audit-progress.js";
 import type { MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
 import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
@@ -588,10 +589,6 @@ export function createSupabaseAuditStore(
       if (jobError) throw new Error("Unable to read audit status");
       if (!job) throw new Error("Audit job not found");
 
-      const eventStep: Record<string, number> = {
-        processing_claimed: 0, processing_started: 0, recognition: 1, catalog_ingestion: 1,
-        sonic_dna: 2, evidence_reconciliation: 3, ar_assessment: 4, report_generated: 5, audit_completed: 5,
-      };
       const { data: events, error: eventError } = await admin.from("audit_events")
         .select("event_type,status,created_at,payload").eq("audit_job_id", jobId)
         .in("event_type", ["processing_claimed", "processing_started", "recognition", "catalog_ingestion", "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated", "audit_completed", "catalog_links_submitted", "audit_failed"])
@@ -620,11 +617,9 @@ export function createSupabaseAuditStore(
           reason: "Provider lookup has not completed.",
         }) : [];
 
-      const latestEvent = orderedEvents.find((event) => event.event_type in eventStep);
       const failureEvent = orderedEvents.find((event) => event.event_type === "audit_failed");
       const failurePayload = failureEvent?.payload as Record<string, unknown> | null;
-      const currentStepIndex = latestEvent?.event_type && latestEvent.event_type in eventStep
-        ? eventStep[latestEvent.event_type] : job.status === "completed" ? 5 : 0;
+      const currentStepIndex = getAuditProgressStep(orderedEvents, job.status);
 
       const { data: reports, error: reportError } = await admin.from("audit_reports")
         .select("tier,version,access_status").eq("audit_job_id", jobId).order("version", { ascending: false });
@@ -639,7 +634,7 @@ export function createSupabaseAuditStore(
         errorCode: typeof job.error_code === "string" ? job.error_code : null,
         errorRetryable: typeof failurePayload?.retryable === "boolean" ? failurePayload.retryable : false,
         errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
-          : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
+          : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its ten-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
           : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
         full: full ? { available: true, version: full.version } : { available: false }, catalogUrlsSubmitted, catalogSources,
