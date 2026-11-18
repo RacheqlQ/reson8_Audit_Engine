@@ -117,6 +117,12 @@ describe("GroqClient section groups",()=>{
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
  });
+ it("classifies exhausted Groq JSON-schema rejection as malformed output",async()=>{
+  const mock=vi.fn(async()=>new Response(JSON.stringify({error:{message:"Failed to validate JSON",code:"json_validate_failed"}}),{status:400}));
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("json_validate_failed:");
+  expect(mock).toHaveBeenCalledTimes(2);
+ });
  it("treats HTTP 413 as permanent and never retries the same request payload",async()=>{
   let calls=0;
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
