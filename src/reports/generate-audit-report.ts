@@ -259,7 +259,7 @@ function sections(i:AuditReportInput):Section[]{
   sonicDnaBody.push(
    e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
    "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
-   "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not reported — confidence below 80% reporting target"),
+   "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not measured — confidence below 80% reporting target"),
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
    "Integrated loudness: " + metric(s?.loudnessLufs,1) + " LUFS (direct signal measurement; not a mastering verdict)",
    "Dynamic range: " + metric(s?.dynamicRangeDb,1) + " dB (direct signal measurement; not a quality verdict)",
@@ -344,7 +344,7 @@ function sections(i:AuditReportInput):Section[]{
  "Conflict policy: values that disagree across providers remain visible as conflicts; a preferred identity value is not treated as proof that the other provider was wrong.",
  "Conflict details: "+conflictSummary,
  "External identifiers: "+(externalIdentifiers(e.externalIds)?(e.fixture?"Synthetic test identifiers — ":"Available — ")+externalIdentifiers(e.externalIds):"Unavailable — no external identifiers returned"),
- "Sources checked: "+val((Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked:Array.isArray(e.sourceProviders)?e.sourceProviders:Array.isArray(e.sources)?e.sources:null)?.map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition",synthetic_audio_fixture:"Synthetic report fixture (layout testing only)"} as Record<string,string>)[String(provider)]??String(provider)).join(", ")??e.source),
+ "Sources checked: "+val((Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked:Array.isArray(e.sourceProviders)?e.sourceProviders:Array.isArray(e.sources)?e.sources:null)?.filter((provider)=>hasMasterAudio || provider!=="synthetic_audio_fixture").map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition",synthetic_audio_fixture:"Synthetic report fixture (layout testing only)"} as Record<string,string>)[String(provider)]??String(provider)).join(", ")??e.source),
  "Coverage status: "+val(e.evidenceStatus??e.status,"Partial — one or more identity fields remain unavailable"),
  "Verification note: unavailable fields are not inferred or fabricated. Analytical recommendations remain hypotheses and are never presented as verified identity metadata."
 ]},
