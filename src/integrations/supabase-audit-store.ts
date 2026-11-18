@@ -13,6 +13,7 @@ import { ensurePdfReport, isPdf } from "../reports/pdf-output.js";
 import { sha256 } from "../jobs/content-hash.js";
 import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
 import { persistUploadedReport } from "../jobs/report-persistence.js";
+import { currentAuditStepIndex } from "../jobs/audit-progress.js";
 
 const REPORT_RECONCILIATION_TIMEOUT_MS = 2_000;
 const REPORT_CLEANUP_TIMEOUT_MS = 2_000;
@@ -24,6 +25,8 @@ export interface SupabaseAuditStore {
   failExpiredProcessingJobs(): Promise<number>;
   renewLease(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   markProcessing(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
+  markAssessmentStarted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
+  markReportGenerationStarted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   downloadMaster(path: string, signal?: AbortSignal): Promise<Uint8Array>;
   saveRecognition(jobId: string, claimToken: string, recognition: AuditRecognition, signal?: AbortSignal): Promise<void>;
   saveEvidence(jobId: string, claimToken: string, recognition: AuditRecognition, reconciliation: MetadataReconciliation, metadata?: CatalogMetadata, signal?: AbortSignal, metadataSources?: readonly CatalogMetadata[]): Promise<void>;
@@ -86,6 +89,35 @@ export function createSupabaseAuditStore(
       throw new Error(`Unable to persist fenced ${operation}: ${error.message}`);
     }
     return data as Record<string, unknown> | null;
+  };
+  const recordProgressEvent = async (
+    jobId: string,
+    claimToken: string,
+    eventType: "ar_assessment_started" | "report_generation_started",
+    signal?: AbortSignal,
+  ) => {
+    signal?.throwIfAborted();
+    let activeJobRequest = admin.from("audit_jobs")
+      .select("status,claim_token,lease_expires_at")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (signal) activeJobRequest = activeJobRequest.abortSignal(signal);
+    const { data: activeJob, error: activeJobError } = await activeJobRequest;
+    if (activeJobError || !activeJob || activeJob.status !== "processing"
+      || activeJob.claim_token !== claimToken
+      || !activeJob.lease_expires_at
+      || Date.parse(activeJob.lease_expires_at) <= Date.now()) {
+      throw new Error("AUDIT_LEASE_LOST");
+    }
+    let insertRequest = admin.from("audit_events").insert({
+      audit_job_id: jobId,
+      event_type: eventType,
+      status: "processing",
+      payload: { stage: eventType === "ar_assessment_started" ? "ar_assessment" : "report_generation" },
+    });
+    if (signal) insertRequest = insertRequest.abortSignal(signal);
+    const { error } = await insertRequest;
+    if (error) throw new Error("Unable to persist audit progress event");
   };
   const recordSubmittedCatalogLinks = async (jobId: string, links: string[]) => {
     if (!links.length) return;
@@ -249,6 +281,12 @@ export function createSupabaseAuditStore(
     },
     async markProcessing(jobId, claimToken, signal) {
       await fencedStep(jobId, claimToken, "processing_started", {}, signal);
+    },
+    async markAssessmentStarted(jobId, claimToken, signal) {
+      await recordProgressEvent(jobId, claimToken, "ar_assessment_started", signal);
+    },
+    async markReportGenerationStarted(jobId, claimToken, signal) {
+      await recordProgressEvent(jobId, claimToken, "report_generation_started", signal);
     },
     async downloadMaster(path, signal) {
       signal?.throwIfAborted();
@@ -580,36 +618,25 @@ export function createSupabaseAuditStore(
       if (jobError) throw new Error(`Unable to read audit status: ${jobError.message}`);
       if (!job) throw new Error("Audit job not found");
 
+      // One event query supplies progress, submitted links, DSP statuses and
+      // sanitized failure diagnostics. This replaces three separate round trips.
       const { data: events, error: eventError } = await admin
         .from("audit_events")
-        .select("event_type,status,created_at")
+        .select("event_type,status,created_at,payload")
         .eq("audit_job_id", jobId)
-        .neq("event_type", "audit_failed")
         .order("created_at", { ascending: false })
-        .limit(1);
+        .limit(100);
       if (eventError) throw new Error(`Unable to read audit events: ${eventError.message}`);
+      const orderedEvents = [...(events ?? [])].reverse();
 
-      const { data: catalogEvents, error: catalogEventError } = await admin
-        .from("audit_events")
-        .select("payload")
-        .eq("audit_job_id", jobId)
-        .eq("event_type", "catalog_ingestion")
-        .order("created_at", { ascending: true });
-      if (catalogEventError) throw new Error(`Unable to read DSP source statuses: ${catalogEventError.message}`);
-      const { data: submittedEvent, error: submittedError } = await admin.from("audit_events")
-        .select("payload")
-        .eq("audit_job_id", jobId)
-        .eq("event_type", "catalog_links_submitted")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (submittedError) throw new Error(`Unable to read submitted DSP links: ${submittedError.message}`);
+      const submittedEvent = orderedEvents.find((event) => event.event_type === "catalog_links_submitted");
       const submittedPayload = submittedEvent?.payload as Record<string, unknown> | null;
       const catalogUrlsSubmitted = Array.isArray(submittedPayload?.submittedLinks)
         ? submittedPayload.submittedLinks.filter((value): value is string => typeof value === "string")
         : [];
       const catalogStatusMap = new Map<string, { platform: string; canonicalUrl: string; status: string; reason: string }>();
-      for (const event of catalogEvents ?? []) {
+      for (const event of orderedEvents) {
+        if (event.event_type !== "catalog_ingestion") continue;
         const payload = event.payload as Record<string, unknown> | null;
         if (typeof payload?.platform !== "string" || typeof payload?.canonicalUrl !== "string") continue;
         const key = `${payload.platform}:${payload.canonicalUrl}`;
@@ -630,23 +657,14 @@ export function createSupabaseAuditStore(
         },
       ) : [];
 
-      const latestEvent = events?.[0];
-      const eventStep: Record<string, number> = {
-        processing_claimed: 0,
-        processing_started: 0,
-        recognition: 1,
-        catalog_ingestion: 1,
-        sonic_dna: 2,
-        evidence_reconciliation: 3,
-        ar_assessment: 4,
-        report_generated: 5,
-        audit_completed: 5,
-      };
-      const currentStepIndex = latestEvent?.event_type && latestEvent.event_type in eventStep
-        ? eventStep[latestEvent.event_type]
-        : job.status === "completed"
-          ? 5
-          : 0;
+      const currentStepIndex = job.status === "completed"
+        ? 5
+        : currentAuditStepIndex(orderedEvents.filter((event) => event.event_type !== "audit_failed"));
+      const failedEvent = orderedEvents.find((event) => event.event_type === "audit_failed");
+      const failurePayload = failedEvent?.payload as Record<string, unknown> | null;
+      const errorDetails = failurePayload?.errorDetails && typeof failurePayload.errorDetails === "object"
+        ? failurePayload.errorDetails as Record<string, unknown>
+        : null;
 
       const { data: reports, error: reportError } = await admin
         .from("audit_reports")
@@ -671,6 +689,7 @@ export function createSupabaseAuditStore(
           : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
           : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
+        errorDetails,
         full: full ? { available: true, version: full.version } : { available: false },
         catalogUrlsSubmitted,
         catalogSources,
