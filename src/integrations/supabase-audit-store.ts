@@ -620,11 +620,10 @@ export function createSupabaseAuditStore(
           reason: "Provider lookup has not completed.",
         }) : [];
 
-      const latestEvent = orderedEvents.find((event) => event.event_type in eventStep);
+      const completedStepIndex = orderedEvents.reduce((highest, event) => event.event_type in eventStep ? Math.max(highest, eventStep[event.event_type]) : highest, 0);
       const failureEvent = orderedEvents.find((event) => event.event_type === "audit_failed");
       const failurePayload = failureEvent?.payload as Record<string, unknown> | null;
-      const currentStepIndex = latestEvent?.event_type && latestEvent.event_type in eventStep
-        ? eventStep[latestEvent.event_type] : job.status === "completed" ? 5 : 0;
+      const currentStepIndex = job.status === "completed" ? 5 : completedStepIndex;
 
       const { data: reports, error: reportError } = await admin.from("audit_reports")
         .select("tier,version,access_status").eq("audit_job_id", jobId).order("version", { ascending: false });
@@ -639,7 +638,7 @@ export function createSupabaseAuditStore(
         errorCode: typeof job.error_code === "string" ? job.error_code : null,
         errorRetryable: typeof failurePayload?.retryable === "boolean" ? failurePayload.retryable : false,
         errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
-          : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
+          : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its ten-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
           : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
         full: full ? { available: true, version: full.version } : { available: false }, catalogUrlsSubmitted, catalogSources,
