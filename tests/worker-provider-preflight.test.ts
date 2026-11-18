@@ -43,8 +43,8 @@ describe("audit worker provider preflight", () => {
     vi.unstubAllEnvs();
   });
 
-  it("validates Groq configuration before claiming a queued job", async () => {
-    await expect(processNextQueuedAudit()).rejects.toThrow("GROQ_API is required");
+  it("idles without claiming a job when no assessment provider is configured", async () => {
+    await expect(processNextQueuedAudit()).resolves.toBeNull();
     expect(claimNextQueuedJob).not.toHaveBeenCalled();
   });
 });
