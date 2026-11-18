@@ -26,6 +26,7 @@ describe("audio decoder", () => {
     expect(decoded.sampleRate).toBe(48000);
     expect(decoded.channels).toBe(2);
     expect([...decoded.samples]).toEqual([0.25, -0.25, 0.5, -0.5]);
+    expect(decoded.samples.buffer).toBe(buffer.buffer);
   });
 
   it("decodes a real stereo WAV without downmixing and returns EBU R128 measurements", async () => {
