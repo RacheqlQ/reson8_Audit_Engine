@@ -15,6 +15,7 @@ import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
 import { persistUploadedReport } from "../jobs/report-persistence.js";
 import { AUDIT_EVENT_STEP, getAuditProgressStep } from "../jobs/audit-progress.js";
 import type { AuditFailureDetails } from "../jobs/failure-details.js";
+import { getStuckJobTimeoutMs } from "../jobs/worker-config.js";
 
 const REPORT_RECONCILIATION_TIMEOUT_MS = 2_000;
 const REPORT_CLEANUP_TIMEOUT_MS = 2_000;
@@ -166,7 +167,9 @@ export function createSupabaseAuditStore(
     },
     async failExpiredProcessingJobs() {
       const now = new Date();
-      const cutoff = new Date(now.getTime() - 10 * 60_000).toISOString();
+      const timeoutMs = getStuckJobTimeoutMs();
+      const cutoff = new Date(now.getTime() - timeoutMs).toISOString();
+      const timeoutMinutes = Math.ceil(timeoutMs / 60_000);
       const nowIso = now.toISOString();
       const { data, error } = await admin.from("audit_jobs")
         .select("id")
@@ -180,7 +183,7 @@ export function createSupabaseAuditStore(
         const { error: updateError } = await admin.from("audit_jobs").update({
           status: "failed",
           error_code: "AUDIT_JOB_EXPIRED",
-          error_message: "This audit could not be completed within 10 minutes. Please submit it again.",
+          error_message: `This audit could not be completed within ${timeoutMinutes} minutes. Please submit it again.`,
           completed_at: nowIso,
           lease_expires_at: null,
           claim_token: null,
