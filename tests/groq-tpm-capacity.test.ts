@@ -17,7 +17,15 @@ describe("Groq TPM capacity responses", () => {
     );
 
     try {
-      await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow("GROQ_TPM_CAPACITY_EXHAUSTED");
+      const failure = await client.assess({ evidence: {}, sonicDna: null }).catch((error: unknown) => error);
+      expect(failure).toMatchObject({
+        provider: "groq",
+        model: "openai/gpt-oss-120b",
+        httpStatus: 413,
+        retryable: true,
+      });
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message).toContain("GROQ_TPM_CAPACITY_EXHAUSTED");
       expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(delays).toHaveLength(2);
       expect(delays.every((delay) => delay >= 1000 && delay <= 60000)).toBe(true);
