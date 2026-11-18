@@ -10,7 +10,7 @@ export interface AuditFailureDetails {
 
 function safeIdentifier(value: string | null | undefined): string | null {
   if (!value) return null;
-  const safe = value.replace(/[^A-Za-z0-9._:\\/-]/g, "").slice(0, 80);
+  const safe = value.replace(/[^A-Za-z0-9._:\/-]/g, "").slice(0, 80);
   return safe || null;
 }
 
