@@ -533,6 +533,7 @@ export class ProviderAssessmentError extends Error {
     if (providerCode) this.providerCode = providerCode.slice(0, 80);
     this.retryable = /GROQ_TPM_CAPACITY_EXHAUSTED|timed out|timeout|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message)
       || status === 408 || status === 425 || status === 429 || (status !== undefined && status >= 500)
+      || /json_validate_failed|failed to validate JSON|failed Zod validation/i.test(message)
       || (status === 413 && /tokens?\s+per\s+minute|\bTPM\b|capacity/i.test(message));
   }
 }
