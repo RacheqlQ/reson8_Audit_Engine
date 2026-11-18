@@ -1,4 +1,4 @@
-export const GENRE_TAXONOMY_VERSION = "2026.1";
+export const GENRE_TAXONOMY_VERSION = "2026.2";
 
 export interface GenreDefinition {
   id: string;
@@ -13,6 +13,7 @@ export const GENRE_TAXONOMY: readonly GenreDefinition[] = [
   { id: "afrobeats", label: "Afrobeats", family: "African popular", aliases: ["afro beats", "afropop nigeria", "naija pop", "afrobeat pop"], regionTags: ["west-africa", "african-diaspora"], tempoHints: [92, 128] },
   { id: "afro-pop", label: "Afro-pop", family: "African popular", aliases: ["afropop", "afro pop"], regionTags: ["west-africa", "southern-africa", "east-africa", "african-diaspora"], tempoHints: [88, 132] },
   { id: "afro-fusion", label: "Afro-fusion", family: "African popular", aliases: ["afrofusion", "afro fusion"], regionTags: ["west-africa", "african-diaspora"] },
+  { id: "afro-soul", label: "Afro Soul", family: "African soul", aliases: ["afro-soul", "afrosoul", "african soul"], regionTags: ["west-africa", "african-diaspora"] },
   { id: "afro-rnb", label: "Afro-R&B", family: "African popular", aliases: ["afro r&b", "afro rnb", "african r&b"], regionTags: ["west-africa", "african-diaspora"] },
   { id: "alte", label: "Alté", family: "African alternative", aliases: ["alte", "alternative african", "nigerian alternative"], regionTags: ["west-africa", "african-diaspora"] },
   { id: "amapiano", label: "Amapiano", family: "Southern African dance", aliases: ["ama piano", "private school amapiano"], regionTags: ["southern-africa", "african-diaspora"], tempoHints: [105, 120] },
