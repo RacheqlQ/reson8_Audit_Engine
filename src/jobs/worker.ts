@@ -20,7 +20,7 @@ const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
 function isFallbackEligible(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /AI capacity reached|timed out|HTTP (?:413|429|5\d\d)|GROQ_REQUEST_TOO_LARGE|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
+  return /AI capacity reached|disabled by data policy|unauthorized|forbidden|timed out|HTTP (?:4\d\d|5\d\d)|GROQ_REQUEST_TOO_LARGE|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
 }
 
 function safeFailureCategory(error: unknown): string {
@@ -38,17 +38,19 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   if (signal?.aborted) return null;
   const store = createSupabaseAuditStore();
   if (signal?.aborted) return null;
-  // Validate required provider configuration before claiming work so a
-  // misconfigured worker cannot strand a queued job in processing.
-  const groqReadiness = getProviderReadiness().groq;
-  if (!groqReadiness.ready) {
-    throw new ProviderUnavailableError("groq", groqReadiness.reason ?? "disabled_by_data_policy");
+  // Require at least one ready assessment provider before claiming work.
+  // An unavailable primary is skipped; a configured fallback can still process the job.
+  const readiness = getProviderReadiness();
+  const groq = readiness.groq.ready ? new GroqClient() : null;
+  const gemini = readiness.gemini.ready ? new GeminiClient() : null;
+  const ollama = readiness.ollama.ready ? new OllamaClient() : null;
+  if (!groq && !gemini && !ollama) {
+    const unavailableProvider = !readiness.groq.ready ? "groq" : !readiness.gemini.ready ? "gemini" : "ollama";
+    throw new ProviderUnavailableError(
+      unavailableProvider,
+      readiness[unavailableProvider].reason ?? "disabled_by_data_policy",
+    );
   }
-  const groq = new GroqClient();
-  const geminiReadiness = getProviderReadiness().gemini;
-  const gemini = geminiReadiness.ready ? new GeminiClient() : null;
-  const ollamaReadiness = getProviderReadiness().ollama;
-  const ollama = ollamaReadiness.ready ? new OllamaClient() : null;
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
     await store.failExpiredProcessingJobs?.();
@@ -114,45 +116,75 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         loadCompletedSectionGroup: (group: string) => store.loadAssessmentSectionGroup(job.id, group),
         saveCompletedSectionGroup: (group: string, result: unknown) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, signal),
       };
-      try {
-        return await groq.assess(assessmentInput, signal);
-      } catch (error) {
-        const groqDiagnostics = classifyAuditFailure(error, "groq");
-        if (groqDiagnostics.httpStatus === 401 || groqDiagnostics.httpStatus === 403) {
-          markProviderUnavailable("groq", "authentication_failed");
-        }
-        if (signal?.aborted || !isFallbackEligible(error)) throw error;
-        let fallbackError: unknown = error;
-        if (gemini) {
-          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: safeFailureCategory(error) }));
-          try {
-            return await gemini.assess(assessmentInput, signal);
-          } catch (geminiError) {
-            fallbackError = geminiError;
-            const diagnostics = classifyAuditFailure(geminiError, "gemini");
-            if (diagnostics.httpStatus === 401 || diagnostics.httpStatus === 403) {
-              markProviderUnavailable("gemini", "authentication_failed");
-            }
-            console.warn(JSON.stringify({
-              worker: "audit",
-              jobId: job.id,
-              event: "gemini_fallback_failed",
-              reason: safeFailureCategory(geminiError),
-              provider: diagnostics.provider,
-              model: diagnostics.model,
-              httpStatus: diagnostics.httpStatus,
-              errorType: diagnostics.errorType,
-              retryable: diagnostics.retryable,
-            }));
+      let fallbackError: unknown = null;
+      if (groq) {
+        try {
+          return await groq.assess(assessmentInput, signal);
+        } catch (error) {
+          const diagnostics = classifyAuditFailure(error, "groq");
+          if (diagnostics.httpStatus === 401 || diagnostics.httpStatus === 403) {
+            markProviderUnavailable("groq", "authentication_failed");
           }
+          if (signal?.aborted || !isFallbackEligible(error)) throw error;
+          fallbackError = error;
         }
-        if (!ollama || signal?.aborted || !isFallbackEligible(fallbackError)) throw fallbackError;
+      } else {
         console.warn(JSON.stringify({
           worker: "audit",
           jobId: job.id,
-          event: gemini ? "gemini_fallback_to_ollama" : "groq_fallback_to_ollama",
-          reason: safeFailureCategory(fallbackError),
+          event: "groq_provider_skipped",
+          reason: readiness.groq.reason,
         }));
+      }
+
+      if (gemini) {
+        if (fallbackError) {
+          console.warn(JSON.stringify({
+            worker: "audit",
+            jobId: job.id,
+            event: "groq_fallback_to_gemini",
+            reason: safeFailureCategory(fallbackError),
+          }));
+        }
+        try {
+          return await gemini.assess(assessmentInput, signal);
+        } catch (geminiError) {
+          const diagnostics = classifyAuditFailure(geminiError, "gemini");
+          if (diagnostics.httpStatus === 401 || diagnostics.httpStatus === 403) {
+            markProviderUnavailable("gemini", "authentication_failed");
+          }
+          console.warn(JSON.stringify({
+            worker: "audit",
+            jobId: job.id,
+            event: fallbackError ? "gemini_fallback_failed" : "gemini_provider_failed",
+            reason: safeFailureCategory(geminiError),
+            provider: diagnostics.provider,
+            model: diagnostics.model,
+            httpStatus: diagnostics.httpStatus,
+            errorType: diagnostics.errorType,
+            retryable: diagnostics.retryable,
+          }));
+          if (signal?.aborted || !isFallbackEligible(geminiError)) throw geminiError;
+          fallbackError = geminiError;
+        }
+      } else {
+        console.warn(JSON.stringify({
+          worker: "audit",
+          jobId: job.id,
+          event: "gemini_provider_skipped",
+          reason: readiness.gemini.reason,
+        }));
+      }
+
+      if (ollama) {
+        if (fallbackError) {
+          console.warn(JSON.stringify({
+            worker: "audit",
+            jobId: job.id,
+            event: gemini ? "gemini_fallback_to_ollama" : "groq_fallback_to_ollama",
+            reason: safeFailureCategory(fallbackError),
+          }));
+        }
         try {
           return await ollama.assess(assessmentInput, signal);
         } catch (ollamaError) {
@@ -163,7 +195,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
           console.error(JSON.stringify({
             worker: "audit",
             jobId: job.id,
-            event: "ollama_fallback_failed",
+            event: fallbackError ? "ollama_fallback_failed" : "ollama_provider_failed",
             reason: safeFailureCategory(ollamaError),
             provider: diagnostics.provider,
             model: diagnostics.model,
@@ -174,6 +206,9 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
           throw ollamaError;
         }
       }
+
+      if (fallbackError) throw fallbackError;
+      throw new ProviderUnavailableError("groq", readiness.groq.reason ?? "disabled_by_data_policy");
     },
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
     markAssessmentStarted: async (jobId, _claimToken, signal) => store.markAssessmentStarted(jobId, _claimToken, signal),
