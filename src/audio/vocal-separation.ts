@@ -60,7 +60,7 @@ async function readVerifiedModel(signal?: AbortSignal): Promise<Uint8Array> {
 function toStereo(samples: Float32Array, channelCount: number): Float32Array[] {
   const channels = Number.isInteger(channelCount) && channelCount > 0 ? channelCount : 1;
   const frames = Math.floor(samples.length / channels);
-  if (channels === 1) return [samples.slice(0, frames)];
+  if (channels === 1) return [samples.subarray(0, frames)];
   if (channels === 2) {
     const left = new Float32Array(frames);
     const right = new Float32Array(frames);
