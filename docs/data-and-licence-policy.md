@@ -35,7 +35,7 @@
 | YouTube Data API | Submitter-linked channel/video metadata and permitted public metrics | allowed | Requires `YOUTUBE_API_KEY`; follow API Services Terms, Developer Policies, attribution and refresh/deletion rules. |
 | Last.fm | Catalogue/listening metadata | allowed | Requires valid Last.fm API credentials; comply with API terms, attribution, caching and deletion requirements. |
 | Chartmetric / Soundcharts / Luminate | Paid market intelligence | allowed, contract-dependent | Call only when the applicable executed commercial agreement and approved credentials exist; follow contract-specific attribution, storage and deletion clauses. |
-| Deezer | Catalogue metadata | unverified | Do not call until current API/commercial permissions for this product are verified. |
+| Deezer | Public track metadata cross-reference | allowed | Product-owner operational authorization; use the implemented track endpoint only within current Deezer API terms, rate limits, availability and applicable restrictions. |
 | Beat This! | Optional tempo/beat inference | unverified | Do not enable until exact model artifact, commit, SHA-256, licence, conversion provenance, training-data rights, Node compatibility and measured peak memory on the Render service are documented. |
 | FMAK / Free Music Archive datasets | Model training/evaluation data | unverified | Do not ingest/use until per-asset provenance, rights and commercial permissions are verified. |
 | GiantSteps datasets | Model training/evaluation data | unverified | Do not ingest/use until per-asset provenance, rights and commercial permissions are verified. |
@@ -44,9 +44,9 @@
 
 ## Runtime policy implementation
 
-The executable register is `src/providers/provider-policy.ts`. The registry is the sole provider authorization switch. The DSP catalogue dispatcher and embedded worker consult it before third-party calls. Credentials are checked by each integration; a missing credential must be reported as unavailable and must never be represented as a policy denial.
+The executable register is `src/providers/provider-policy.ts`. The registry is the sole provider authorization switch. The DSP catalogue dispatcher and embedded worker consult it before third-party calls. There are no `PROVIDER_ENABLED_<NAME>` variables or per-provider true/false opt-ins. Credentials are checked by each integration; a missing credential must be reported as `not_configured` and must never be represented as a policy denial.
 
-There are no per-provider environment variables in the runtime configuration. Removing those switches does not bypass credentials, API rate limits, authentication, vendor contracts, licensing restrictions or the registry's `unverified`/`denied` status. Provider readiness for Groq, Gemini and Ollama requires both an `allowed` registry status and the relevant API credential.
+There are no per-provider environment variables in the runtime configuration. Provider authorization comes from this registry; credentials, authentication, API rate limits, vendor contracts, licensing restrictions and implementation readiness remain mandatory. Entries marked `unverified` or `denied` remain unavailable. Provider readiness for Groq, Gemini and Ollama requires both an `allowed` registry status and the relevant API credential.
 
 Audio diagnostics are persisted in the existing fenced `sonic_dna` audit event payload; no database migration is required. `scripts/diagnostics-to-fixture.mjs` converts one exported event payload from stdin into a bounded Vitest fixture and deliberately selects only diagnostic fields. The downbeat grid is explicitly a four-beat diagnostic hypothesis, not a meter or downbeat detection claim.
 
