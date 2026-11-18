@@ -19,6 +19,7 @@ vi.mock("../src/integrations/supabase-audit-store.js", () => ({
 }));
 
 import { processNextQueuedAudit, runAuditQueueWorker } from "../src/jobs/worker.js";
+import { ProviderUnavailableError } from "../src/providers/provider-readiness.js";
 
 describe("audit worker provider preflight", () => {
   beforeEach(() => {
@@ -44,7 +45,9 @@ describe("audit worker provider preflight", () => {
   });
 
   it("validates Groq configuration before claiming a queued job", async () => {
-    await expect(processNextQueuedAudit()).rejects.toThrow("GROQ_API is required");
+    const error = await processNextQueuedAudit().catch((value) => value);
+    expect(error).toBeInstanceOf(ProviderUnavailableError);
+    expect(error.reason).toBe("missing_credentials");
     expect(claimNextQueuedJob).not.toHaveBeenCalled();
   });
 
