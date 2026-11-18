@@ -1,3 +1,5 @@
+import { ProviderUnavailableError } from "../providers/provider-readiness.js";
+
 export interface QueueWorkerLoopOptions {
   processNext: () => Promise<unknown>;
   signal: AbortSignal;
@@ -32,6 +34,7 @@ export async function runQueueWorkerLoop({
       await processNext();
     } catch (error) {
       onError(error);
+      if (error instanceof ProviderUnavailableError) return;
     }
 
     if (!signal.aborted) {
