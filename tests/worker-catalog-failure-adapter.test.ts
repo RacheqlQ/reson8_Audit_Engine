@@ -37,7 +37,6 @@ vi.mock("../src/providers/provider-policy.js", () => ({
     enabled: id === "groq",
     reason: id === "groq" ? null : "disabled by data policy",
     commercialStatus: id === "groq" ? "allowed" : "unverified",
-    enableFlag: "PROVIDER_ENABLED_GROQ",
   }),
 }));
 
