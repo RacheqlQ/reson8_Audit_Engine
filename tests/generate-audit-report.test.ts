@@ -135,6 +135,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(metadataFieldSource({fieldProvenance:{title:"spotify",artist:"id3",album:"filename"}}, "artist")).toBe("Field source: Embedded audio tags");
   expect(metadataFieldSource({fieldProvenance:{title:"spotify",artist:"id3",album:"filename"}}, "album")).toBe("Field source: Uploaded filename");
   expect(metadataFieldSource({fieldProvenance:{}}, "isrc")).toBe("Field source: unavailable");
+  expect(metadataFieldSource({fieldProvenance:{genre:"apple_music"}}, "genre")).toBe("Field source: Apple Music");
   const input=structuredClone(fullAudioFixture) as any;
   input.evidence.fieldProvenance={title:"spotify",artist:"id3",album:null,isrc:null,upc:null,label:null,releaseDate:null};
   const identity=planAuditReportPages(input,"full").find(page=>page.title==="Identity and source reconciliation");
