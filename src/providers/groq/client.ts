@@ -283,6 +283,13 @@ async function recordProviderAttempt(input: GroqAssessmentInput, detail: Provide
   }
 }
 
+function providerErrorType(status: number): ProviderAttemptDiagnostic["errorType"] {
+  if (status === 401 || status === 403) return "auth";
+  if (status === 413 || status === 429) return "capacity";
+  if (status >= 500) return "provider_error";
+  return "provider_error";
+}
+
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
   groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number, signal?:AbortSignal)=>Promise<void>, signal?: AbortSignal, requestTimeoutMs = GROQ_REQUEST_TIMEOUT_MS, endpoint = "https://api.groq.com/openai/v1/chat/completions", providerName = "groq"): Promise<T> {
   let lastError = "No valid response was returned";
@@ -395,19 +402,38 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           body: JSON.stringify(requestBody),
         });
       } catch (error) {
-        if (requestTimeoutSignal.aborted && !signal?.aborted) {
+        const timedOut = requestTimeoutSignal.aborted && !signal?.aborted;
+        await recordProviderAttempt(input, {
+          provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
+          errorType: timedOut ? "timeout" : "provider_unavailable",
+          retryable: !signal?.aborted, attempt: networkAttempt + 1,
+        });
+        if (timedOut) {
           throw new Error(providerLabel + " " + groupName + " request timed out after " + requestTimeoutMs + "ms", { cause: error });
         }
         throw error;
       }
-      if (response.ok) break;
-      const errorBody = response.status === 429 ? await response.clone().text().catch(() => "") : "";
-      if (response.status === 429 && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody)) {
+      const errorBody = response.ok ? "" : await response.clone().text().catch(() => "");
+      const dailyLimit = providerName === "groq" && response.status === 429
+        && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody);
+      let malformedProviderOutput = false;
+      if (response.status === 400) {
+        try { malformedProviderOutput = (JSON.parse(errorBody) as { error?: { code?: unknown } }).error?.code === "json_validate_failed"; }
+        catch { malformedProviderOutput = false; }
+      }
+      await recordProviderAttempt(input, {
+        provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
+        errorType: dailyLimit ? "capacity" : malformedProviderOutput ? "malformed_output" : response.ok ? "none" : providerErrorType(response.status),
+        retryable: !response.ok && !dailyLimit && (response.status === 429 || response.status >= 500),
+        attempt: networkAttempt + 1,
+      });
+      if (dailyLimit) {
         const tomorrow = new Date();
         tomorrow.setUTCHours(24, 0, 0, 0);
         if (process.env.NODE_ENV !== "test") groqDailyCapUntil = tomorrow.getTime();
         throw new Error("AI capacity reached for now, please try again later", { cause: new Error("GROQ_DAILY_CAP_REACHED") });
       }
+      if (response.ok) break;
       const transient = response.status === 429 || response.status >= 500;
       if (!transient || networkAttempt >= 2) break;
       await sleepImpl(Math.min(60_000, await providerRetryDelayMs(response, networkAttempt)), signal);
