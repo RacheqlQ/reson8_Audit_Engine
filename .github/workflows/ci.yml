@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/multi-dsp-enrichment]
+    branches: [main, feat/multi-dsp-enrichment, fix/production-resilience-acceptance-20261118]
   pull_request:
-    branches: [main, fix/report-fixture-provenance-date]
+    branches: [main, fix/report-fixture-provenance-date, fix/production-resilience-acceptance-20261118]
   workflow_dispatch:
 
 permissions:
@@ -38,7 +38,32 @@ jobs:
           npm --version
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Verify Render commands map to package scripts
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const yaml = fs.readFileSync('render.yaml', 'utf8');
+          const commands = [...yaml.matchAll(/^\s*(buildCommand|startCommand):\s*(.+)$/gm)];
+          if (!commands.length) throw new Error('render.yaml has no buildCommand/startCommand');
+          for (const [, key, raw] of commands) {
+            const command = raw.trim().replace(/^['"]|['"]$/g, '');
+            if (/^(?:npm|yarn|pnpm)\s+(?:install|ci)(?:\s|$)/.test(command)) {
+              console.log('Verified package-manager command: ' + command.split(/\s+/).slice(0, 2).join(' '));
+              continue;
+            }
+            const scriptName = command.match(/(?:npm|yarn|pnpm)\s+(?:run\s+)?([\w:-]+)/)?.[1];
+            if (!scriptName || !pkg.scripts?.[scriptName]) {
+              throw new Error(`Render ${key} does not map to an existing package.json script: ${command}`);
+            }
+            console.log(`Verified Render ${key}: ${scriptName}`);
+          }
+          for (const required of ['start', 'worker', 'build']) {
+            if (!pkg.scripts?.[required]) throw new Error(`Missing required package script: ${required}`);
+          }
+          NODE
 
       - name: Run focused worker-hardening regressions
         run: >-

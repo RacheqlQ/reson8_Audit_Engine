@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
-import { createSupabaseAuditStore } from "../src/integrations/supabase-audit-store.js";
+import { configuredStuckJobTimeoutMs, createSupabaseAuditStore } from "../src/integrations/supabase-audit-store.js";
 
 const TOKEN_A = "a".repeat(64);
 const TOKEN_B = "b".repeat(64);
@@ -67,7 +68,81 @@ describe("Supabase capability-token verification adapter", () => {
 });
 
 
+describe("audit status query efficiency", () => {
+  it("uses three database round trips and returns structured failures and catalog state", async () => {
+    process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
+    process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
+    const job = { id: "job-status", status: "failed", error_code: "capacity", error_message: "AI assessment: capacity exhausted.", catalog_metadata: {} };
+    const events = [
+      { event_type: "audit_failed", status: "failed", created_at: "2026-11-18T10:00:04.000Z", payload: { errorCode: "capacity", retryable: true } },
+      { event_type: "ar_assessment", status: "completed", created_at: "2026-11-18T10:00:03.000Z", payload: {} },
+      { event_type: "catalog_ingestion", status: "completed", created_at: "2026-11-18T10:00:02.000Z", payload: { platform: "spotify", canonicalUrl: "https://open.spotify.com/track/123", status: "recognized" } },
+      { event_type: "catalog_links_submitted", status: "recognized", created_at: "2026-11-18T10:00:01.000Z", payload: { submittedLinks: ["https://open.spotify.com/track/123"] } },
+    ];
+    const reports = [{ tier: "full", version: 2, access_status: "available" }];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes("/audit_jobs?") ? job : url.includes("/audit_events?") ? events : reports;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createSupabaseAuditStore();
+    const status = await store.getAuditStatus("job-status");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(status).toMatchObject({
+      errorCode: "capacity", errorRetryable: true, currentStepIndex: 4, full: { available: true, version: 2 },
+      catalogUrlsSubmitted: ["https://open.spotify.com/track/123"],
+      catalogSources: [{ platform: "spotify", status: "recognized" }],
+    });
+  });
+});
+
 describe("DSP provider failure persistence", () => {
+  it("uses a validated configurable stuck-job timeout", () => {
+    expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "300000" })).toBe(300_000);
+    expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "invalid" })).toBe(600_000);
+    expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "1000" })).toBe(600_000);
+  });
+
+  it("keeps the fenced SQL catalog metadata update idempotent and null-safe", () => {
+    const migration = readFileSync(new URL("../supabase/migrations/20261118120000_coalesce_catalog_metadata_snapshot.sql", import.meta.url), "utf8");
+    expect(migration).toContain("create or replace function public.persist_fenced_audit_step");
+    expect(migration).toContain("catalog_metadata = coalesce(p_payload->'raw', '{}'::jsonb)");
+    expect(migration).not.toMatch(/drop\\s+table|alter\\s+table/i);
+  });
+
+  it("normalizes null catalog metadata snapshots to an empty object before the fenced write", async () => {
+    const { store, fetchMock } = makeStore({});
+    const metadata = {
+      platform: "spotify" as const, sourceUrl: "https://open.spotify.com/track/123",
+      canonicalUrl: "https://open.spotify.com/track/123", catalogId: "123",
+      artist: null, title: null, album: null, releaseDate: null, isrc: null, upc: null,
+      catalogPopularity: null, catalogPopularityScale: null, label: null, genre: null,
+      artworkUrl: null, previewUrl: null, externalIds: {}, sonicProfile: null,
+      raw: null as unknown as Record<string, unknown>, evidenceStatus: "partial" as const,
+    };
+    await store.saveCatalogMetadata("job-null-raw", "claim-token", metadata);
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.p_payload.raw).toEqual({});
+  });
+
+  it("persists sanitized provider attempt metadata as an audit event", async () => {
+    const { store, fetchMock } = makeStore({});
+    await store.recordProviderAttempt("job-provider-attempt", {
+      provider: "gemini", model: "gemini-2.5-flash", status: 503,
+      errorType: "provider_error", retryable: true, attempt: 2,
+    });
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody).toMatchObject({
+      audit_job_id: "job-provider-attempt",
+      event_type: "provider_attempt",
+      status: "failed",
+      payload: { provider: "gemini", model: "gemini-2.5-flash", httpStatus: 503, errorType: "provider_error", retryable: true, attempt: 2 },
+    });
+    expect(JSON.stringify(requestBody)).not.toContain("api_key");
+    expect(JSON.stringify(requestBody)).not.toContain("prompt");
+  });
+
   it("persists Spotify API failure status and a bounded reason for audit polling", async () => {
     const { store, fetchMock, getRequestUrl } = makeStore({});
     const metadata = {

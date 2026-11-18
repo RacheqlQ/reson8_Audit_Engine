@@ -7,6 +7,7 @@ import { MAX_AUDIO_FILE_BYTES } from "./jobs/audio-intake.js";
 import { createSupabaseAuditStore } from "./integrations/supabase-audit-store.js";
 import type { CreateAuditJobDependencies } from "./jobs/create-audit-job.js";
 import { ensurePdfReport } from "./reports/pdf-output.js";
+import { getAssessmentProviderReadiness } from "./providers/provider-policy.js";
 
 export interface AuditStore {
   createJobDependencies(): CreateAuditJobDependencies;
@@ -15,6 +16,8 @@ export interface AuditStore {
     status: "queued" | "processing" | "completed" | "failed";
     currentStepIndex: number;
     errorMessage?: string | null;
+    errorCode?: string | null;
+    errorRetryable?: boolean;
     full: { available: boolean; version?: number };
   }>;
   getAuditReport(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<{
@@ -106,6 +109,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
   app.post<{
     Body: { url?: string; urls?: string[] };
   }>("/v1/audits/catalog", async (request, reply) => {
+    const requestStartedAt = Date.now();
     try {
       if (!allowPublicRequest(request.ip)) {
         return reply.code(429).send({
@@ -136,6 +140,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         },
       );
 
+      request.log.info({ event: "audit_submission_completed", sourceType: "dsp_link", durationMs: Date.now() - requestStartedAt, submittedLinkCount: result.catalogUrls.length }, "catalog audit intake completed");
       return reply.code(201).send({
         jobId: result.jobId,
         status: "queued",
@@ -155,6 +160,9 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
   app.get("/health", async () => ({
     status: "ok",
     service: "reson8-audit-engine",
+    providerReadiness: getAssessmentProviderReadiness().map(({ provider, model, enabled, configured, usable, reason }) => ({
+      provider, model, enabled, configured, usable, reason,
+    })),
   }));
   app.get<{
     Params: { jobId: string };
@@ -250,6 +258,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
       "x-catalog-urls"?: string;
     };
   }>("/v1/audits", async (request, reply) => {
+    const requestStartedAt = Date.now();
     try {
       if (!allowPublicRequest(request.ip)) {
         return reply.code(429).send({
@@ -298,6 +307,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
         store.createJobDependencies(),
       );
 
+      request.log.info({ event: "audit_submission_completed", sourceType: result.sourceType, durationMs: Date.now() - requestStartedAt, uploadBytes: bytes.length }, "audio audit intake completed");
       return reply.code(201).send({
         jobId: result.jobId,
         status: "queued",

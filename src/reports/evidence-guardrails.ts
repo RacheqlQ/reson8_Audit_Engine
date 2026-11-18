@@ -229,10 +229,17 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   const zeroConfidence = typeof assessment.confidence === "number"
     && Number.isFinite(assessment.confidence)
     && assessment.confidence <= 0;
+  const hasUploadedAudioMaster = sonicDna?.provenance === "uploaded_audio_master";
+  if (!hasUploadedAudioMaster && Array.isArray(mutable.strengths)) {
+    mutable.strengths = mutable.strengths.filter((strength: unknown) =>
+      typeof strength !== "string" || !/\b(?:bpm|tempo|key|mode|loudness|lufs|rms|dynamic range|spectral|vocal|frequency|master-derived|audio measurement)\b/i.test(strength));
+  }
   if (Array.isArray(mutable.evidenceLabels)) {
     mutable.evidenceLabels = mutable.evidenceLabels.filter((entry: unknown) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
       const record = entry as Record<string, unknown>;
+      if (!hasUploadedAudioMaster && record.label === "OBSERVED") return false;
+      if (record.source === "synthetic_audio_fixture") return false;
       const claim = typeof record.claim === "string" ? record.claim : "";
       if (!reliableTempo && /\b(?:tempo|bpm|beats per minute)\b/i.test(claim)) return false;
       if (!isReliableKey(sonicDna as Record<string, unknown> | null | undefined) && /\b(?:key|mode|major|minor|tonic)\b/i.test(claim)) return false;

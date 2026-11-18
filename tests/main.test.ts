@@ -81,6 +81,23 @@ describe("startAuditEngine", () => {
     expect(app.server.listening).toBe(false);
   });
 
+  it("does not start the embedded worker when RUN_WORKER_IN_API is false", async () => {
+    const app = Fastify();
+    const signals = new EventEmitter();
+    const runWorker = vi.fn(async () => undefined);
+    const previous = process.env.RUN_WORKER_IN_API;
+    process.env.RUN_WORKER_IN_API = "false";
+    try {
+      const engine = await startAuditEngine({ app, host: "127.0.0.1", port: 0, signals, runWorker });
+      runningEngines.push(engine);
+      expect(runWorker).not.toHaveBeenCalled();
+      await engine.shutdown();
+    } finally {
+      if (previous === undefined) delete process.env.RUN_WORKER_IN_API;
+      else process.env.RUN_WORKER_IN_API = previous;
+    }
+  });
+
   it("closes the API listener when the embedded worker fails during startup", async () => {
     const app = Fastify();
     const signals = new EventEmitter();

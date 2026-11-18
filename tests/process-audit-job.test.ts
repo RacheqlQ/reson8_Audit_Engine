@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { processAuditJob } from "../src/jobs/process-audit-job.js";
+import { classifyAuditFailure, processAuditJob } from "../src/jobs/process-audit-job.js";
 
 const assessment = {} as import("../src/providers/groq/client.js").ArAssessment;
 
@@ -20,6 +20,13 @@ function id3Fixture(): Uint8Array {
 }
 
 
+
+describe("audit failure classification", () => {
+  it("classifies exhausted upstream 5xx responses as provider unavailable", () => {
+    expect(classifyAuditFailure(new Error("Gemini assessment failed with HTTP 503"))).toBe("provider_unavailable");
+    expect(classifyAuditFailure(new Error("provider_error: Ollama returned HTTP 502"))).toBe("provider_unavailable");
+  });
+});
 
 describe("processAuditJob", () => {
   it("moves a queued master through evidence, Sonic DNA, Groq assessment and completion", async () => {
@@ -227,6 +234,7 @@ describe("processAuditJob", () => {
   it("preserves recognition and Sonic DNA when the second evidence-score validation fails", async () => {
     const events: string[] = [];
     let failureMessage = "";
+    let failureCode = "";
     const result = await processAuditJob("job-groq-failure", {
       getJob: async () => ({
         id: "job-groq-failure",
@@ -260,14 +268,16 @@ describe("processAuditJob", () => {
       },
       saveReport: async () => { events.push("report-saved"); },
       markCompleted: async () => { events.push("completed"); },
-      markFailed: async (_jobId, _claimToken, message) => {
+      markFailed: async (_jobId, _claimToken, message, _signal, errorCode) => {
         failureMessage = message;
+        failureCode = errorCode ?? "";
         events.push("audit_failed");
       },
     });
 
     expect(result.status).toBe("failed");
     expect(failureMessage).toBe("AI assessment: the generated response did not meet the report's validation requirements. Please retry later.");
+    expect(failureCode).toBe("malformed_output");
     expect(events).toContain("recognition-saved");
     expect(events).toContain("evidence-saved");
     expect(events).toContain("sonic-dna-saved");
@@ -282,6 +292,7 @@ describe("processAuditJob", () => {
 
   it("marks the job failed and preserves the error when processing fails", async () => {
     let failure = "";
+    let failureCode = "";
     const result = await processAuditJob("job-123", {
       getJob: async () => ({
         id: "job-123",
@@ -314,13 +325,15 @@ describe("processAuditJob", () => {
       generateReport: async () => new Uint8Array(),
       saveReport: async () => {},
       markCompleted: async () => {},
-      markFailed: async (_jobId, _claimToken, message) => {
+      markFailed: async (_jobId, _claimToken, message, _signal, errorCode) => {
         failure = message;
+        failureCode = errorCode ?? "";
       },
     });
 
     expect(result.status).toBe("failed");
     expect(failure).toBe("Audio intake: the uploaded master could not be retrieved. Re-upload it and retry.");
+    expect(failureCode).toBe("processing_error");
   });
   it("aborts after lease loss and prevents assessment, report, and terminal persistence", async () => {
     const controller = new AbortController();

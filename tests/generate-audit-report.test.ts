@@ -3,7 +3,7 @@ import { describe,expect,it,vi } from "vitest";
 import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
-import { buildStrengthRiskChartRows,chartPanelHeight } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows,chartPanelDisplayStatus,chartPanelHeight,constellationLabelLineCount } from "../src/reports/charts.js";
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
 const allFixtures=[...fixtures,ambiguousAudioFixture as unknown as AuditReportInput];
 const reportTiers=["sample","full"] as const;
@@ -27,6 +27,20 @@ describe("A4 report layout and fixture coverage",()=>{
   const maximum=chartPanelHeight("tension",buildStrengthRiskChartRows(Array.from({length:10},(_,i)=>"Strength "+i),Array.from({length:10},(_,i)=>"Risk "+i)));
   expect(compact).toBe(205);expect(maximum).toBe(205);
   expect(chartLayoutIssuesForReport(fullAudioFixture as any)).toEqual([]);
+ });
+ it("does not attach measured status to unavailable metadata-only charts",()=>{
+  expect(chartPanelDisplayStatus({fixture:true,unavailable:true,evidenceClass:"measured"})).toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO");
+  expect(chartPanelDisplayStatus({evidenceClass:"illustrative"})).toBe("ILLUSTRATIVE");
+ });
+ it("reserves enough wrapped rows for long lane constellation labels",()=>{
+  expect(constellationLabelLineCount({label:"Adjacent lane",value:"Alternative R&B (fixture lane hypothesis)"},499)).toBeGreaterThan(1);
+ });
+ it("collapses repeated industry-practice prefixes to one heading",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.assessment.industryPractice="INDUSTRY PRACTICE — INDUSTRY PRACTICE — General guidance for release planning.";
+  const report=planAuditReportPages(input,"full").flatMap(page=>page.text).join(" ");
+  expect(report).not.toContain("INDUSTRY PRACTICE — INDUSTRY PRACTICE");
+  expect(report).toContain("General industry guidance — General guidance for release planning.");
  });
  it("checks chart-caption separation for every chart in all four fixtures",()=>{
   for(const input of allFixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
@@ -131,7 +145,7 @@ describe("A4 report layout and fixture coverage",()=>{
  it("collapses all missing audio measurements into one empty state without master-derived provenance claims",()=>{
   const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");
   expect(report).toContain("Not measured: no master audio supplied.");
-  expect(report).not.toContain("Key / mode: Not measured");
+  expect(report).toContain("Key / mode: Not measured");
   expect(report).not.toContain("Measured from the uploaded master");
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
@@ -190,7 +204,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not determined");
   expect(report).not.toContain("Tempo confidence score");
-  expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
+  expect(report).toContain("Key / mode: Not measured");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
@@ -222,7 +236,7 @@ describe("A4 report layout and fixture coverage",()=>{
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Key / mode: Not reported — confidence below 80% reporting target");
+  expect(report).toContain("Key / mode: Not measured");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).not.toContain("Key / mode: C major");
  });

@@ -40,6 +40,18 @@ describe("runQueueWorkerLoop", () => {
     expect(errors).toEqual(["temporary database error"]);
   });
 
+  it("stops polling when the caller marks a permanent readiness error", async () => {
+    const controller = new AbortController();
+    let attempts = 0;
+    await runQueueWorkerLoop({
+      processNext: async () => { attempts += 1; throw new Error("AI_PROVIDERS_UNAVAILABLE"); },
+      stopOnError: (error) => error instanceof Error && error.message.startsWith("AI_PROVIDERS_UNAVAILABLE"),
+      pollIntervalMs: 0,
+      signal: controller.signal,
+    });
+    expect(attempts).toBe(1);
+  });
+
   it("finishes an active job after abort and does not claim another job", async () => {
     const controller = new AbortController();
     let finishActiveJob!: () => void;

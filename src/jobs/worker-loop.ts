@@ -3,6 +3,7 @@ export interface QueueWorkerLoopOptions {
   signal: AbortSignal;
   pollIntervalMs?: number;
   onError?: (error: unknown) => void;
+  stopOnError?: (error: unknown) => boolean;
 }
 
 function waitForNextPoll(intervalMs: number, signal: AbortSignal): Promise<void> {
@@ -26,12 +27,14 @@ export async function runQueueWorkerLoop({
   signal,
   pollIntervalMs = 15_000,
   onError = () => undefined,
+  stopOnError = () => false,
 }: QueueWorkerLoopOptions): Promise<void> {
   while (!signal.aborted) {
     try {
       await processNext();
     } catch (error) {
       onError(error);
+      if (stopOnError(error)) return;
     }
 
     if (!signal.aborted) {

@@ -110,7 +110,9 @@ export async function startAuditEngine(
   signals.on("SIGTERM", onSigterm);
   signals.on("SIGINT", onSigint);
 
-  workerTask = Promise.resolve().then(() => runWorker(controller.signal));
+  const runWorkerInApi = process.env.RUN_WORKER_IN_API !== "false";
+  workerTask = runWorkerInApi ? Promise.resolve().then(() => runWorker(controller.signal)) : Promise.resolve();
+  if (!runWorkerInApi) console.info(JSON.stringify({ worker: "audit", event: "embedded_worker_disabled" }));
   workerTask.catch(() => {
     // Shutdown observes and reports the worker rejection together with any
     // HTTP-close failure; do not report the same worker error twice.

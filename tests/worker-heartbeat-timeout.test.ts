@@ -18,6 +18,11 @@ const { claimNextQueuedJob, renewLease, failExpiredProcessingJobs, observedSigna
 }));
 
 vi.mock("../src/providers/provider-policy.js", () => ({
+  getAssessmentProviderReadiness: () => [
+    { provider: "groq", model: "test-groq-model", enabled: true, configured: true, usable: true, reason: null },
+    { provider: "gemini", model: "gemini-3.5-flash-lite", enabled: false, configured: false, usable: false, reason: "disabled_by_data_policy" },
+    { provider: "ollama", model: "gemma4:31b", enabled: false, configured: false, usable: false, reason: "disabled_by_data_policy" },
+  ],
   providerDecision: (provider: string) => ({
     provider,
     enabled: provider === "groq",

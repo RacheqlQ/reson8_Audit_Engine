@@ -1,18 +1,24 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { CreateAuditJobDependencies } from "../jobs/create-audit-job.js";
-import type { AuditJobRecord } from "../jobs/process-audit-job.js";
+import type { AuditFailureCode, AuditJobRecord } from "../jobs/process-audit-job.js";
 import type { AuditRecognition } from "../providers/audd/normalize.js";
 import { type CatalogMetadata } from "../providers/dsp/catalog.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import type { MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
-import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment } from "../providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { ensurePdfReport, isPdf } from "../reports/pdf-output.js";
 import { sha256 } from "../jobs/content-hash.js";
 import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
 import { persistUploadedReport } from "../jobs/report-persistence.js";
+
+export const DEFAULT_STUCK_JOB_TIMEOUT_MS = 10 * 60_000;
+export function configuredStuckJobTimeoutMs(env: Record<string, string | undefined> = process.env): number {
+  const configured = Number(env.AUDIT_STUCK_JOB_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured >= 60_000 ? Math.floor(configured) : DEFAULT_STUCK_JOB_TIMEOUT_MS;
+}
 
 const REPORT_RECONCILIATION_TIMEOUT_MS = 2_000;
 const REPORT_CLEANUP_TIMEOUT_MS = 2_000;
@@ -41,12 +47,14 @@ export interface SupabaseAuditStore {
   saveAssessmentSectionGroup(jobId: string, claimToken: string, group: string, result: unknown, signal?: AbortSignal): Promise<void>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
-  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
+  markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal, errorCode?: AuditFailureCode): Promise<void>;
+  recordProviderAttempt(jobId: string, attempt: ProviderAttemptDiagnostic): Promise<void>;
   getAuditStatus(jobId: string): Promise<{
     jobId: string;
     status: "queued" | "processing" | "completed" | "failed";
     currentStepIndex: number;
     errorMessage?: string | null;
+    errorCode?: string | null;
     full: { available: boolean; version?: number };
     catalogUrlsSubmitted?: string[];
     catalogSources?: Array<{ platform: string; canonicalUrl: string; status: string; reason: string }>;
@@ -163,7 +171,9 @@ export function createSupabaseAuditStore(
     },
     async failExpiredProcessingJobs() {
       const now = new Date();
-      const cutoff = new Date(now.getTime() - 10 * 60_000).toISOString();
+      const timeoutMs = configuredStuckJobTimeoutMs();
+      const timeoutMinutes = Math.ceil(timeoutMs / 60_000);
+      const cutoff = new Date(now.getTime() - timeoutMs).toISOString();
       const nowIso = now.toISOString();
       const { data, error } = await admin.from("audit_jobs")
         .select("id")
@@ -177,7 +187,7 @@ export function createSupabaseAuditStore(
         const { error: updateError } = await admin.from("audit_jobs").update({
           status: "failed",
           error_code: "AUDIT_JOB_EXPIRED",
-          error_message: "This audit could not be completed within 10 minutes. Please submit it again.",
+          error_message: "This audit could not be completed within " + timeoutMinutes + " minutes. Please submit it again.",
           completed_at: nowIso,
           lease_expires_at: null,
           claim_token: null,
@@ -279,7 +289,7 @@ export function createSupabaseAuditStore(
       await fencedStep(jobId, claimToken, "catalog_metadata", {
         platform: metadata.platform,
         catalogId: metadata.catalogId,
-        raw: metadata.raw,
+        raw: metadata.raw ?? {},
         evidenceStatus: metadata.evidenceStatus,
         eventPayload: {
           platform: metadata.platform,
@@ -572,109 +582,70 @@ export function createSupabaseAuditStore(
       return expectedBytes.length === suppliedBytes.length && timingSafeEqual(expectedBytes, suppliedBytes);
     },
     async getAuditStatus(jobId) {
-      const { data: job, error: jobError } = await admin
-        .from("audit_jobs")
-        .select("id,status,error_message,catalog_metadata")
-        .eq("id", jobId)
-        .maybeSingle();
-      if (jobError) throw new Error(`Unable to read audit status: ${jobError.message}`);
+      const statusStartedAt = Date.now();
+      const { data: job, error: jobError } = await admin.from("audit_jobs")
+        .select("id,status,error_code,error_message,catalog_metadata").eq("id", jobId).maybeSingle();
+      if (jobError) throw new Error("Unable to read audit status");
       if (!job) throw new Error("Audit job not found");
 
-      const { data: events, error: eventError } = await admin
-        .from("audit_events")
-        .select("event_type,status,created_at")
-        .eq("audit_job_id", jobId)
-        .neq("event_type", "audit_failed")
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (eventError) throw new Error(`Unable to read audit events: ${eventError.message}`);
+      const eventStep: Record<string, number> = {
+        processing_claimed: 0, processing_started: 0, recognition: 1, catalog_ingestion: 1,
+        sonic_dna: 2, evidence_reconciliation: 3, ar_assessment: 4, report_generated: 5, audit_completed: 5,
+      };
+      const { data: events, error: eventError } = await admin.from("audit_events")
+        .select("event_type,status,created_at,payload").eq("audit_job_id", jobId)
+        .in("event_type", ["processing_claimed", "processing_started", "recognition", "catalog_ingestion", "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated", "audit_completed", "catalog_links_submitted", "audit_failed"])
+        .order("created_at", { ascending: false });
+      if (eventError) throw new Error("Unable to read audit events");
 
-      const { data: catalogEvents, error: catalogEventError } = await admin
-        .from("audit_events")
-        .select("payload")
-        .eq("audit_job_id", jobId)
-        .eq("event_type", "catalog_ingestion")
-        .order("created_at", { ascending: true });
-      if (catalogEventError) throw new Error(`Unable to read DSP source statuses: ${catalogEventError.message}`);
-      const { data: submittedEvent, error: submittedError } = await admin.from("audit_events")
-        .select("payload")
-        .eq("audit_job_id", jobId)
-        .eq("event_type", "catalog_links_submitted")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (submittedError) throw new Error(`Unable to read submitted DSP links: ${submittedError.message}`);
+      const orderedEvents = events ?? [];
+      const submittedEvent = [...orderedEvents].reverse().find((event) => event.event_type === "catalog_links_submitted");
       const submittedPayload = submittedEvent?.payload as Record<string, unknown> | null;
       const catalogUrlsSubmitted = Array.isArray(submittedPayload?.submittedLinks)
-        ? submittedPayload.submittedLinks.filter((value): value is string => typeof value === "string")
-        : [];
+        ? submittedPayload.submittedLinks.filter((value): value is string => typeof value === "string") : [];
       const catalogStatusMap = new Map<string, { platform: string; canonicalUrl: string; status: string; reason: string }>();
-      for (const event of catalogEvents ?? []) {
+      for (const event of [...orderedEvents].reverse().filter((item) => item.event_type === "catalog_ingestion")) {
         const payload = event.payload as Record<string, unknown> | null;
         if (typeof payload?.platform !== "string" || typeof payload?.canonicalUrl !== "string") continue;
-        const key = `${payload.platform}:${payload.canonicalUrl}`;
-        catalogStatusMap.set(key, {
-          platform: payload.platform,
-          canonicalUrl: payload.canonicalUrl,
+        catalogStatusMap.set(`${payload.platform}:${payload.canonicalUrl}`, {
+          platform: payload.platform, canonicalUrl: payload.canonicalUrl,
           status: typeof payload.status === "string" ? payload.status : "recognized",
           reason: payload.status === "recognized" ? "Provider returned track metadata." : payload.status === "partial" ? "Provider returned incomplete metadata; some identity fields remain unresolved." : "Provider could not verify this submitted link.",
         });
       }
       const catalogSources = catalogUrlsSubmitted.length ? normalizeDspTrackLinks(catalogUrlsSubmitted).map((link) =>
         catalogStatusMap.get(`${link.platform}:${link.canonicalUrl}`) ?? {
-          platform: link.platform,
-          catalogId: link.catalogId,
-          canonicalUrl: link.canonicalUrl,
+          platform: link.platform, catalogId: link.catalogId, canonicalUrl: link.canonicalUrl,
           status: job.status === "completed" || job.status === "failed" ? "unavailable" : "pending",
           reason: "Provider lookup has not completed.",
-        },
-      ) : [];
+        }) : [];
 
-      const latestEvent = events?.[0];
-      const eventStep: Record<string, number> = {
-        processing_claimed: 0,
-        processing_started: 0,
-        recognition: 1,
-        catalog_ingestion: 1,
-        sonic_dna: 2,
-        evidence_reconciliation: 3,
-        ar_assessment: 4,
-        report_generated: 5,
-        audit_completed: 5,
-      };
+      const latestEvent = orderedEvents.find((event) => event.event_type in eventStep);
+      const failureEvent = orderedEvents.find((event) => event.event_type === "audit_failed");
+      const failurePayload = failureEvent?.payload as Record<string, unknown> | null;
       const currentStepIndex = latestEvent?.event_type && latestEvent.event_type in eventStep
-        ? eventStep[latestEvent.event_type]
-        : job.status === "completed"
-          ? 5
-          : 0;
+        ? eventStep[latestEvent.event_type] : job.status === "completed" ? 5 : 0;
 
-      const { data: reports, error: reportError } = await admin
-        .from("audit_reports")
-        .select("tier,version,access_status")
-        .eq("audit_job_id", jobId)
-        .order("version", { ascending: false });
-      if (reportError) throw new Error(`Unable to read audit reports: ${reportError.message}`);
-
+      const { data: reports, error: reportError } = await admin.from("audit_reports")
+        .select("tier,version,access_status").eq("audit_job_id", jobId).order("version", { ascending: false });
+      if (reportError) throw new Error("Unable to read audit reports");
       const latest = new Map<string, { version: number; access_status: string }>();
-      for (const report of reports ?? []) {
-        if (!latest.has(report.tier)) {
-          latest.set(report.tier, { version: Number(report.version), access_status: String(report.access_status) });
-        }
+      for (const report of reports ?? []) if (!latest.has(report.tier)) {
+        latest.set(report.tier, { version: Number(report.version), access_status: String(report.access_status) });
       }
-
       const full = latest.get("full");
-      return {
-        jobId,
-        status: job.status as "queued" | "processing" | "completed" | "failed",
-        currentStepIndex,
+      const result = {
+        jobId, status: job.status as "queued" | "processing" | "completed" | "failed", currentStepIndex,
+        errorCode: typeof job.error_code === "string" ? job.error_code : null,
+        errorRetryable: typeof failurePayload?.retryable === "boolean" ? failurePayload.retryable : false,
         errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
           : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
           : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
-        full: full ? { available: true, version: full.version } : { available: false },
-        catalogUrlsSubmitted,
-        catalogSources,
+        full: full ? { available: true, version: full.version } : { available: false }, catalogUrlsSubmitted, catalogSources,
       };
+      console.info(JSON.stringify({ event: "audit_status_read_completed", durationMs: Date.now() - statusStartedAt, queryCount: 3 }));
+      return result;
     },
     async getAuditReport(jobId, tier, ownerId) {
       const { data: job, error: jobError } = await admin
@@ -722,8 +693,32 @@ export function createSupabaseAuditStore(
     async getAuditReportPayload(jobId) {
       return readAuditReportPayload(jobId);
     },
-    async markFailed(jobId, claimToken, message, signal) {
-      await fencedStep(jobId, claimToken, "fail", { message }, signal);
+    async markFailed(jobId, claimToken, message, signal, errorCode = "processing_error") {
+      await fencedStep(jobId, claimToken, "fail", {
+        message,
+        eventPayload: { errorCode, retryable: ["capacity", "timeout", "provider_unavailable", "malformed_output"].includes(errorCode) },
+      }, signal);
+      const { error } = await admin.from("audit_jobs")
+        .update({ error_code: errorCode, error_message: message })
+        .eq("id", jobId)
+        .eq("status", "failed");
+      if (error) throw new Error("Unable to persist structured audit failure code");
+    },
+    async recordProviderAttempt(jobId, attempt) {
+      const { error } = await admin.from("audit_events").insert({
+        audit_job_id: jobId,
+        event_type: "provider_attempt",
+        status: attempt.errorType === "none" ? "completed" : "failed",
+        payload: {
+          provider: attempt.provider,
+          model: attempt.model,
+          httpStatus: attempt.status,
+          errorType: attempt.errorType,
+          retryable: attempt.retryable,
+          attempt: attempt.attempt,
+        },
+      });
+      if (error) throw new Error("Unable to persist provider attempt diagnostic");
     },
   };
 }

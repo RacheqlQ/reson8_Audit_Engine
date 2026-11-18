@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails.js";
+import { sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
+import { markAssessmentProviderUnavailable } from "../provider-policy.js";
 
 export const GROQ_PROMPT_VERSION = "audit-ar-v6";
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
@@ -81,8 +83,17 @@ const AssessmentSchema = NarrativeSchema.extend(PositioningSchema.shape).extend(
   .extend(PromotionSchema.shape).extend(LabelFitSchema.shape).extend(TimelineSchema.shape);
 export type ArAssessment = z.infer<typeof AssessmentSchema>;
 
+export interface ProviderAttemptDiagnostic {
+  provider: "groq" | "gemini" | "ollama";
+  model: string;
+  status: number | null;
+  errorType: "none" | "capacity" | "auth" | "malformed_output" | "timeout" | "provider_unavailable" | "provider_error";
+  retryable: boolean;
+  attempt: number;
+}
 export interface GroqAssessmentInput {
   evidence: Record<string, unknown>;
+  recordProviderAttempt?: (attempt: ProviderAttemptDiagnostic) => Promise<void>;
   sonicDna: Record<string, unknown> | null;
   catalogMetadata?: Record<string, unknown> | null;
   loadCompletedSectionGroup?: (group: string) => Promise<unknown | null>;
@@ -135,6 +146,8 @@ function thresholdError(name: string, value: unknown): string | null {
 }
 
 const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
+let groqDailyCapUntil = 0;
+let groqCompletionBudgetScale = 1;
 const MAX_NETWORK_ATTEMPTS = 3;
 export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
 export const GROQ_ASSESSMENT_TIMEOUT_MS = 4 * 60_000;
@@ -155,7 +168,7 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
       ? seconds * 1000
       : Date.parse(retryAfter) - Date.now();
     if (Number.isFinite(headerDelay) && headerDelay >= 0) {
-      return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(headerDelay));
+      return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(headerDelay * (1 + Math.random() * 0.2)));
     }
   }
 
@@ -175,7 +188,8 @@ async function providerRetryDelayMs(response: Response, fallbackAttempt: number)
     // Non-JSON provider errors use bounded exponential backoff below.
   }
 
-  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, 1000 * (2 ** fallbackAttempt));
+  const exponential = 1000 * (2 ** fallbackAttempt);
+  return Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(exponential * (0.8 + Math.random() * 0.4)));
 }
 
 function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -259,6 +273,22 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null): Recor
   }
 
   return compactPromptValue(compact) as Record<string, unknown>;
+}
+
+async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
+  console.info(JSON.stringify({ event: "provider_attempt", ...detail }));
+  try {
+    await input.recordProviderAttempt?.(detail);
+  } catch {
+    console.warn(JSON.stringify({ event: "provider_attempt_persist_failed", provider: detail.provider, model: detail.model }));
+  }
+}
+
+function providerErrorType(status: number): ProviderAttemptDiagnostic["errorType"] {
+  if (status === 401 || status === 403) return "auth";
+  if (status === 413 || status === 429) return "capacity";
+  if (status >= 500) return "provider_error";
+  return "provider_error";
 }
 
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
@@ -347,12 +377,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // prompt_only deliberately omits response_format. The exact schema is still
     // supplied to the model, and no response is accepted without local Zod checks.
     const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 3) + 256;
-    const sectionOutputBudget = Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
+    const sectionOutputBudget = Math.floor(Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600) * (providerName === "groq" ? groqCompletionBudgetScale : 1));
     completionTokenBudget = Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens);
     if (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS) {
       throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
+    if (providerName === "groq" && process.env.NODE_ENV !== "test") {
+      await sharedGroqTokenLimiter.acquire(estimatedInputTokens + completionTokenBudget, sleepImpl, signal);
+    }
     console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
@@ -370,16 +403,44 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           body: JSON.stringify(requestBody),
         });
       } catch (error) {
-        if (requestTimeoutSignal.aborted && !signal?.aborted) {
+        const timedOut = requestTimeoutSignal.aborted && !signal?.aborted;
+        await recordProviderAttempt(input, {
+          provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
+          errorType: timedOut ? "timeout" : "provider_unavailable",
+          retryable: !signal?.aborted, attempt: networkAttempt + 1,
+        });
+        if (timedOut) {
           throw new Error(providerLabel + " " + groupName + " request timed out after " + requestTimeoutMs + "ms", { cause: error });
         }
         throw error;
       }
-      if (response.ok) break;
-      const errorBody = response.status === 429 ? await response.clone().text().catch(() => "") : "";
-      if (response.status === 429 && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody)) {
+      const errorBody = response.ok ? "" : await response.clone().text().catch(() => "");
+      const dailyLimit = providerName === "groq" && response.status === 429
+        && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody);
+      let malformedProviderOutput = false;
+      if (response.status === 401 || response.status === 403) {
+        markAssessmentProviderUnavailable(providerName as "groq" | "gemini" | "ollama", "auth_error");
+      }
+      if (response.status === 400) {
+        try { malformedProviderOutput = (JSON.parse(errorBody) as { error?: { code?: unknown } }).error?.code === "json_validate_failed"; }
+        catch { malformedProviderOutput = false; }
+      }
+      await recordProviderAttempt(input, {
+        provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
+        errorType: dailyLimit ? "capacity" : malformedProviderOutput ? "malformed_output" : response.ok ? "none" : providerErrorType(response.status),
+        retryable: !response.ok && !dailyLimit && (response.status === 429 || response.status >= 500),
+        attempt: networkAttempt + 1,
+      });
+      if (dailyLimit) {
+        const tomorrow = new Date();
+        tomorrow.setUTCHours(24, 0, 0, 0);
+        if (process.env.NODE_ENV !== "test") {
+          groqDailyCapUntil = tomorrow.getTime();
+          markAssessmentProviderUnavailable("groq", "daily_capacity", tomorrow.getTime());
+        }
         throw new Error("AI capacity reached for now, please try again later", { cause: new Error("GROQ_DAILY_CAP_REACHED") });
       }
+      if (response.ok) break;
       const transient = response.status === 429 || response.status >= 500;
       if (!transient || networkAttempt >= 2) break;
       await sleepImpl(Math.min(60_000, await providerRetryDelayMs(response, networkAttempt)), signal);
@@ -396,7 +457,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 413) {
-        throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; the same payload was not retried");
+        if (process.env.NODE_ENV !== "test") groqCompletionBudgetScale = Math.max(0.25, groqCompletionBudgetScale * 0.5);
+        throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; it was not retried and future Groq completion budgets were reduced");
       }
 
       if (response?.status === 400 && providerError.error?.code === "json_validate_failed") {
@@ -457,6 +519,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, actualPromptTokens: payload.usage?.prompt_tokens ?? null, actualCompletionTokens: payload.usage?.completion_tokens ?? null, actualTotalTokens: payload.usage?.total_tokens ?? null }));
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1 });
       if (scheduleCorrection("The response contained no JSON content. Return one complete JSON object matching outputSchema.")) continue;
       break;
     }
@@ -465,12 +528,14 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     try {
       parsed = JSON.parse(content);
     } catch {
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1 });
       if (scheduleCorrection("The response was not valid JSON. Return raw JSON only, without markdown or surrounding prose.")) continue;
       break;
     }
 
     const result = schema.safeParse(parsed);
     if (!result.success) {
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1 });
       const detail = responseMode === "json_object" || responseMode === "prompt_only"
         ? "The " + responseMode + " response failed local Zod validation: " + result.error.message + "."
         : "Strict structured output failed local Zod validation: " + result.error.message + ".";
@@ -527,6 +592,10 @@ export class GroqClient implements GroqAssessmentClient {
     this.providerName = providerName;
   }
   async assess(input:GroqAssessmentInput, signal?:AbortSignal):Promise<ArAssessment>{
+    if (this.providerName === "groq" && Date.now() < groqDailyCapUntil) {
+      await recordProviderAttempt(input, { provider: "groq", model: this.model, status: null, errorType: "capacity", retryable: false, attempt: 0 });
+      throw new Error("GROQ_DAILY_CAP_SKIPPED: daily token limit was already reached for this UTC day");
+    }
     const deadlineController = new AbortController();
     const deadlineError = new Error("GROQ_ASSESSMENT_TIMEOUT");
     const deadlineTimer = setTimeout(
@@ -602,7 +671,7 @@ export { AssessmentSchema, EvidenceLabelSchema };
 export class GeminiClient extends GroqClient {
   constructor(
     apiKey = process.env.GEMINI_API_KEY,
-    model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+    model = process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
     fetchImpl: typeof fetch = fetch,
     sleepImpl: (ms: number, signal?: AbortSignal) => Promise<void> = abortableSleep,
     requestTimeoutMs = GROQ_REQUEST_TIMEOUT_MS,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_GROQ_MODEL, GroqClient, GROQ_PROMPT_VERSION } from "../src/providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, GROQ_PROMPT_VERSION } from "../src/providers/groq/client.js";
 
 const long=(s:string,n=65)=>{let v=s;while(v.trim().split(/\s+/).length<n)v+=" "+s;return v;};
 const p=(group:string):Record<string,unknown>=>{
@@ -62,6 +62,32 @@ describe("GroqClient section groups",()=>{
   }
  });
 
+ it("records sanitized provider attempt diagnostics without prompt or credential material",async()=>{
+  const {mock}=fetchMock();
+  const attempts:Array<Record<string,unknown>>=[];
+  const client=new GroqClient("secret-test-key","test-model",mock as typeof fetch);
+  await client.assess({evidence:{privatePrompt:"do not persist"},sonicDna:null,recordProviderAttempt:async(attempt)=>{attempts.push(attempt);}});
+  expect(attempts).toHaveLength(9);
+  expect(attempts[0]).toMatchObject({provider:"groq",model:"test-model",status:200,errorType:"none",retryable:false,attempt:1});
+  expect(JSON.stringify(attempts)).not.toContain("secret-test-key");
+  expect(JSON.stringify(attempts)).not.toContain("privatePrompt");
+ });
+ it("uses the current Gemini Flash Lite model and OpenAI-compatible JSON contract",async()=>{
+  let capturedUrl="";
+  let capturedInit:RequestInit|undefined;
+  const controller=new AbortController();
+  const mock=vi.fn(async (url:RequestInfo|URL,init?:RequestInit)=>{
+   capturedUrl=String(url);capturedInit=init;controller.abort();throw new Error("test-stop-after-request-capture");
+  });
+  const client=new GeminiClient("test-gemini-key",undefined,mock as typeof fetch);
+  await expect(client.assess({evidence:{},sonicDna:null},controller.signal)).rejects.toThrow("test-stop-after-request-capture");
+  const body=JSON.parse(String(capturedInit?.body));
+  expect(capturedUrl).toContain("/v1beta/openai/chat/completions");
+  expect((capturedInit?.headers as Record<string,string>).authorization).toBe("Bearer test-gemini-key");
+  expect(body.model).toBe("gemini-3.5-flash-lite");
+  expect(body.response_format).toEqual({type:"json_object"});
+  expect(JSON.stringify(body.messages[0].content)).toContain("outputSchema");
+ });
  it("passes the completion-token budget on every Groq request",async()=>{
   const {mock}=fetchMock();
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
@@ -204,7 +230,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async(ms)=>{sleeps.push(ms);});
   const result=await client.assess({evidence:{},sonicDna:null});
-  expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);expect(sleeps).toContain(13973);
+  expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);expect(sleeps[0]).toBeGreaterThanOrEqual(13973);expect(sleeps[0]).toBeLessThanOrEqual(16768);
  });
  it("retries Groq provider-side JSON schema validation failures with provider error details as correction context",async()=>{
   let evidenceScoreCalls=0;

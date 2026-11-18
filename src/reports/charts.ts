@@ -72,9 +72,9 @@ function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
 }
 function text(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink){p.drawText(normalizeChartText(s),{x,y,font,size,color:c});}
 function tracked(p:PDFPage,s:string,x:number,y:number,font:PDFFont,size:number,c=C.ink,spacing=.55){let cursor=x;for(const ch of s){text(p,ch,cursor,y,font,size,c);cursor+=font.widthOfTextAtSize(ch,size)+spacing;}}
-function constellationLabelLineCount(row:ChartRow,width:number):number{
+export function constellationLabelLineCount(row:ChartRow,width:number):number{
  const label=shown(row.value),columnWidth=Math.max(42,(width-36)/2);
- return Math.max(1,Math.ceil(label.length/Math.max(8,Math.floor(columnWidth/5.5))));
+ return Math.max(1,Math.ceil(label.length/Math.max(8,Math.floor(columnWidth/8.5))));
 }
 function constellationLabelRowHeights(rows:ChartRow[],width:number):number[]{
  const heights:number[]=[];
@@ -261,7 +261,7 @@ export function chartPanelDisplayStatus(input: Pick<ChartPanelInput, "fixture" |
  if(input.fixture)labels.push("SYNTHETIC FIXTURE");
  if(input.unavailable)labels.push("REQUIRES AUDIO");
  if(status!=="SYNTHETIC FIXTURE"&&status!=="REQUIRES AUDIO")labels.push(status);
- if(!labels.includes(evidence))labels.push(evidence);
+ if((!input.unavailable||(evidence!=="MEASURED"))&&!labels.includes(evidence))labels.push(evidence);
  return labels.join(" · ");
 }
 function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,height:number){

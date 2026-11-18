@@ -1,12 +1,13 @@
 import { createAudioDecoder } from "../audio/decoder.js";
 import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
-import { providerDecision } from "../providers/provider-policy.js";
+import { getAssessmentProviderReadiness, providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
-import { GeminiClient, GroqClient, OllamaClient } from "../providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
 import { generateAuditReport } from "../reports/generate-audit-report.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
+import { runAssessmentProviderChain } from "./assessment-provider-chain.js";
 import { runQueueWorkerLoop } from "./worker-loop.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 import { startRenderFreeServiceKeepalive } from "./render-free-service-keepalive.js";
@@ -16,10 +17,6 @@ const HEARTBEAT_INTERVAL_MS = 45_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
 const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
-function isFallbackEligible(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /AI capacity reached|timed out|HTTP (?:413|429|5\d\d)|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
-}
 
 function safeFailureCategory(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -36,15 +33,15 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   if (signal?.aborted) return null;
   const store = createSupabaseAuditStore();
   if (signal?.aborted) return null;
-  // Validate required provider configuration before claiming work so a
-  // misconfigured worker cannot strand a queued job in processing.
-  const groqDecision = providerDecision("groq");
-  if (!groqDecision.enabled) throw new Error("groq: disabled by data policy");
-  const groq = new GroqClient();
-  const geminiDecision = providerDecision("gemini");
-  const gemini = geminiDecision.enabled && process.env.GEMINI_API_KEY ? new GeminiClient() : null;
-  const ollamaDecision = providerDecision("ollama");
-  const ollama = ollamaDecision.enabled && process.env.OLLAMA_API_KEY ? new OllamaClient() : null;
+  // Any enabled and credentialed provider can serve as the first provider in the chain.
+  const readiness = getAssessmentProviderReadiness();
+  if (!readiness.some((provider) => provider.usable)) {
+    console.error(JSON.stringify({ worker: "audit", event: "provider_chain_unavailable", code: "AI_PROVIDERS_UNAVAILABLE", providers: readiness.map(({ provider, model, reason }) => ({ provider, model, reason })) }));
+    throw new Error("AI_PROVIDERS_UNAVAILABLE: no enabled assessment provider has usable credentials");
+  }
+  const groq = readiness.find((provider) => provider.provider === "groq")?.usable ? new GroqClient() : null;
+  const gemini = readiness.find((provider) => provider.provider === "gemini")?.usable ? new GeminiClient() : null;
+  const ollama = readiness.find((provider) => provider.provider === "ollama")?.usable ? new OllamaClient() : null;
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
     await store.failExpiredProcessingJobs?.();
@@ -107,43 +104,35 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     generateAssessment: async (input, signal) => {
       const assessmentInput = {
         ...input,
+        recordProviderAttempt: (attempt: ProviderAttemptDiagnostic) => store.recordProviderAttempt(job.id, attempt),
         loadCompletedSectionGroup: (group: string) => store.loadAssessmentSectionGroup(job.id, group),
         saveCompletedSectionGroup: (group: string, result: unknown) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, signal),
       };
-      try {
-        return await groq.assess(assessmentInput, signal);
-      } catch (error) {
-        if (signal?.aborted || !isFallbackEligible(error)) throw error;
-        let fallbackError: unknown = error;
-        if (gemini) {
-          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: safeFailureCategory(error) }));
-          try {
-            return await gemini.assess(assessmentInput, signal);
-          } catch (geminiError) {
-            fallbackError = geminiError;
-            console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_failed", reason: safeFailureCategory(geminiError) }));
-          }
-        }
-        if (!ollama || signal?.aborted || !isFallbackEligible(fallbackError)) throw fallbackError;
-        console.warn(JSON.stringify({
-          worker: "audit",
-          jobId: job.id,
-          event: gemini ? "gemini_fallback_to_ollama" : "groq_fallback_to_ollama",
-          reason: safeFailureCategory(fallbackError),
-        }));
-        try {
-          return await ollama.assess(assessmentInput, signal);
-        } catch (ollamaError) {
-          console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "ollama_fallback_failed", reason: safeFailureCategory(ollamaError) }));
-          throw ollamaError;
-        }
-      }
+      const providers = [
+        { provider: "groq" as const, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, client: groq },
+        { provider: "gemini" as const, model: readiness.find((item) => item.provider === "gemini")?.model ?? "gemini-3.5-flash-lite", client: gemini },
+        { provider: "ollama" as const, model: process.env.OLLAMA_MODEL ?? "gemma4:31b", client: ollama },
+      ];
+      return runAssessmentProviderChain(providers, assessmentInput, signal, {
+        onSkipped: async (candidate) => {
+          const status = readiness.find((item) => item.provider === candidate.provider);
+          await store.recordProviderAttempt(job.id, {
+            provider: candidate.provider, model: candidate.model, status: null,
+            errorType: status?.reason === "daily_capacity" ? "capacity" : status?.reason === "auth_error" ? "auth" : "provider_unavailable",
+            retryable: false, attempt: 1,
+          });
+          console.info(JSON.stringify({ worker: "audit", jobId: job.id, event: "provider_skipped", provider: candidate.provider, model: candidate.model, reason: status?.reason ?? "not_configured" }));
+        },
+        onFailure: (candidate, error) => {
+          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "provider_fallback", provider: candidate.provider, model: candidate.model, reason: safeFailureCategory(error) }));
+        },
+      });
     },
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
     generateReport: generateAuditReport,
     saveReport: async (jobId, _claimToken, tier, pdf, reportInput, signal) => store.saveReport(jobId, _claimToken, tier, pdf, reportInput, signal),
     markCompleted: async (jobId, _claimToken, signal) => store.markCompleted(jobId, _claimToken, signal),
-    markFailed: async (jobId, _claimToken, message, signal) => store.markFailed(jobId, _claimToken, message, signal),
+    markFailed: async (jobId, _claimToken, message, signal, errorCode) => store.markFailed(jobId, _claimToken, message, signal, errorCode),
   };
 
   const leaseController = new AbortController();
@@ -250,5 +239,6 @@ export async function runAuditQueueWorker(signal: AbortSignal): Promise<void> {
         error: error instanceof Error ? error.message : String(error),
       }));
     },
+    stopOnError: (error) => error instanceof Error && error.message.startsWith("AI_PROVIDERS_UNAVAILABLE"),
   });
 }

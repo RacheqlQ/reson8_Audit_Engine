@@ -26,7 +26,8 @@ describe("professional report text and metadata coverage", () => {
     expect(reportText).toContain("Assessment basis: Synthetic renderer fixture — no real master or identity evidence.");
     expect(reportText).toContain("External identifiers: Synthetic test identifiers — Spotify: fixture-spotify-id; Apple Music: fixture-apple-music-id");
     expect(reportText).toContain("FIXTURE VALUES — synthetic audio-profile test data");
-    expect(reportText).toContain("Synthetic report fixture (layout testing only)");
+    expect(reportText).not.toContain("Synthetic report fixture (layout testing only)");
+    expect(reportText).toContain("No external metadata sources were checked");
   });
   it("serializes supported external identifiers and ignores arbitrary nested objects", () => {
     const input = {
