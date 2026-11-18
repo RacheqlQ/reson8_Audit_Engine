@@ -74,17 +74,18 @@ describe("GroqClient section groups",()=>{
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
  });
- it("treats HTTP 413 as permanent and never retries the same request payload",async()=>{
+ it("retries Groq TPM 413 responses but never retries a non-TPM request-size rejection",async()=>{
   let calls=0;
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
    const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
-   if(group==="narrative"&&calls++===0)return new Response(JSON.stringify({error:{message:"Request too large for model in organization on tokens per minute (TPM): Limit 8000, Requested 8289."}}),{status:413});
+   if(group==="narrative"&&calls++===0)return new Response(JSON.stringify({error:{message:"Request too large for model in organization on tokens per minute (TPM): Limit 8000, Requested 8289."}}),{status:413,headers:{"retry-after":"1"}});
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
-  await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("GROQ_REQUEST_TOO_LARGE");
-  expect(calls).toBe(1);
-  expect(mock).toHaveBeenCalledTimes(1);
+  const result=await client.assess({evidence:{},sonicDna:null});
+  expect(result.assessmentVersion).toBe("3.0");
+  expect(calls).toBe(2);
+  expect(mock).toHaveBeenCalledTimes(10);
  });
  it("fails fast on a Groq tokens-per-day limit without sleeping or retrying",async()=>{
   let calls=0;const sleeps:number[]=[];
