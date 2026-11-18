@@ -109,7 +109,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       };
       const providers = [
         { provider: "groq" as const, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, client: groq },
-        { provider: "gemini" as const, model: process.env.GEMINI_MODEL ?? "gemini-2.5-flash", client: gemini },
+        { provider: "gemini" as const, model: readiness.find((item) => item.provider === "gemini")?.model ?? "gemini-3.5-flash-lite", client: gemini },
         { provider: "ollama" as const, model: process.env.OLLAMA_MODEL ?? "gemma4:31b", client: ollama },
       ];
       let lastProviderError: unknown = null;
