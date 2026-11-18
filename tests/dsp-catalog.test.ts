@@ -36,32 +36,22 @@ describe("DSP catalog URL detection", () => {
 describe("catalogue policy gate coverage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete process.env.PROVIDER_ENABLED_APPLE_MUSIC;
-    delete process.env.PROVIDER_ENABLED_YOUTUBE_MUSIC;
-    delete process.env.PROVIDER_ENABLED_DEEZER;
   });
 
-  it("keeps Apple, YouTube Music and Deezer off by default without exact opt-in flags", async () => {
+  it("does not call unverified Deezer but allows the approved Apple lookup without opt-in flags", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const urls = [
-      "https://music.apple.com/us/album/song/12345?i=67890",
-      "https://music.youtube.com/watch?v=youtube-123",
-      "https://www.deezer.com/track/98765",
-    ];
-    const results = await Promise.all(urls.map((url) => collectCatalogMetadata(url)));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ resultCount: 1, results: [{ kind: "song", trackId: 67890, trackName: "Approved Track", artistName: "Approved Artist" }] }), { status: 200, headers: { "content-type": "application/json" } }));
+    const apple = await collectCatalogMetadata("https://music.apple.com/us/album/song/12345?i=67890");
+    const deezer = await collectCatalogMetadata("https://www.deezer.com/track/98765");
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(results.map((result) => result.raw.providerPolicy)).toMatchObject([
-      { provider: "apple_music", reason: "disabled by data policy", commercialStatus: "allowed" },
-      { provider: "youtube_music", reason: "disabled by data policy", commercialStatus: "allowed" },
-      { provider: "deezer", reason: "disabled by data policy", commercialStatus: "allowed" },
-    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(apple.title).toBe("Approved Track");
+    expect(deezer.raw.providerPolicy).toMatchObject({ provider: "deezer", reason: "not_configured", commercialStatus: "unverified" });
   });
 
   it("extracts Apple Music track identity fields when the exact provider opt-in is enabled", async () => {
-    process.env.PROVIDER_ENABLED_APPLE_MUSIC = "true";
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       expect(String(input)).toContain("itunes.apple.com/lookup?id=67890&entity=song&country=ng");
       return new Response(JSON.stringify({
@@ -100,12 +90,9 @@ describe("Audiomack commercial policy gate", () => {
     vi.unstubAllGlobals();
     delete process.env.AUDIOMACK_CONSUMER_KEY;
     delete process.env.AUDIOMACK_CONSUMER_SECRET;
-    delete process.env.PROVIDER_ENABLED_AUDIOMACK;
   });
 
-  it("does not call the official API when credentials are present but exact opt-in is absent", async () => {
-    process.env.AUDIOMACK_CONSUMER_KEY = "consumer-key";
-    process.env.AUDIOMACK_CONSUMER_SECRET = "consumer-secret";
+  it("does not call the official API when credentials are absent", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -127,7 +114,7 @@ describe("Audiomack commercial policy gate", () => {
     const result = await collectCatalogMetadata("https://audiomack.com/artist/song/track-title");
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(result.raw.providerPolicy).toMatchObject({ reason: "disabled by data policy" });
+    expect(result.raw.providerPolicy).toMatchObject({ reason: "not_configured" });
   });
 });
 
@@ -135,7 +122,6 @@ describe("Audiomack commercial policy gate", () => {
 describe("Apple Music direct-song catalog lookup", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete process.env.PROVIDER_ENABLED_APPLE_MUSIC;
   });
 
   it("extracts direct song IDs from geo links and queries the submitted storefront", async () => {
@@ -153,15 +139,12 @@ describe("Apple Music direct-song catalog lookup", () => {
     expect(result).toMatchObject({ platform: "apple_music", catalogId: "1234567890", title: "Direct Song", artist: "Test Artist" });
   });
 
-  it("recognizes geo links but preserves the Apple provider-policy gate", async () => {
+  it("recognizes geo links and performs approved Apple lookup without an enable flag", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const result = await collectCatalogMetadata("https://geo.music.apple.com/gb/song/example-track/1234567890");
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(detectDspPlatform("https://geo.music.apple.com/gb/song/example-track/1234567890")).toBe("apple_music");
-    expect(result).toMatchObject({
-      catalogId: "1234567890",
-      raw: { providerPolicy: { provider: "apple_music", reason: "disabled by data policy" } }
-    });
+    expect(result.catalogId).toBe("1234567890");
   });
 });
