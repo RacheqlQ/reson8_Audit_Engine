@@ -16,10 +16,6 @@ const HEARTBEAT_INTERVAL_MS = 45_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
 const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
-function isFallbackEligible(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /AI capacity reached|timed out|HTTP (?:413|429|5\d\d)|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
-}
 
 function safeFailureCategory(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -110,34 +106,28 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         loadCompletedSectionGroup: (group: string) => store.loadAssessmentSectionGroup(job.id, group),
         saveCompletedSectionGroup: (group: string, result: unknown) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, signal),
       };
-      try {
-        return await groq.assess(assessmentInput, signal);
-      } catch (error) {
-        if (signal?.aborted || !isFallbackEligible(error)) throw error;
-        let fallbackError: unknown = error;
-        if (gemini) {
-          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: safeFailureCategory(error) }));
-          try {
-            return await gemini.assess(assessmentInput, signal);
-          } catch (geminiError) {
-            fallbackError = geminiError;
-            console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_failed", reason: safeFailureCategory(geminiError) }));
-          }
+      const providers = [
+        { provider: "groq" as const, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, client: groq },
+        { provider: "gemini" as const, model: process.env.GEMINI_MODEL ?? "gemini-2.5-flash", client: gemini },
+        { provider: "ollama" as const, model: process.env.OLLAMA_MODEL ?? "gemma4:31b", client: ollama },
+      ];
+      let lastProviderError: unknown = null;
+      for (const candidate of providers) {
+        if (!candidate.client) {
+          const status = readiness.find((item) => item.provider === candidate.provider);
+          await store.recordProviderAttempt(job.id, { provider: candidate.provider, model: candidate.model, status: null, errorType: "provider_unavailable", retryable: false, attempt: 1 });
+          console.info(JSON.stringify({ worker: "audit", jobId: job.id, event: "provider_skipped", provider: candidate.provider, model: candidate.model, reason: status?.reason ?? "not_configured" }));
+          continue;
         }
-        if (!ollama || signal?.aborted || !isFallbackEligible(fallbackError)) throw fallbackError;
-        console.warn(JSON.stringify({
-          worker: "audit",
-          jobId: job.id,
-          event: gemini ? "gemini_fallback_to_ollama" : "groq_fallback_to_ollama",
-          reason: safeFailureCategory(fallbackError),
-        }));
         try {
-          return await ollama.assess(assessmentInput, signal);
-        } catch (ollamaError) {
-          console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "ollama_fallback_failed", reason: safeFailureCategory(ollamaError) }));
-          throw ollamaError;
+          return await candidate.client.assess(assessmentInput, signal);
+        } catch (error) {
+          if (signal?.aborted) throw error;
+          lastProviderError = error;
+          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "provider_fallback", provider: candidate.provider, model: candidate.model, reason: safeFailureCategory(error) }));
         }
       }
+      throw lastProviderError ?? new Error("AI_PROVIDERS_UNAVAILABLE: no assessment provider could be attempted");
     },
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
     generateReport: generateAuditReport,
