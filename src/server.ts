@@ -109,6 +109,7 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
   app.post<{
     Body: { url?: string; urls?: string[] };
   }>("/v1/audits/catalog", async (request, reply) => {
+    const requestStartedAt = Date.now();
     try {
       if (!allowPublicRequest(request.ip)) {
         return reply.code(429).send({
