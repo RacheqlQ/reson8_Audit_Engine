@@ -69,6 +69,26 @@ describe("Supabase capability-token verification adapter", () => {
 
 
 describe("audit status query efficiency", () => {
+  it("keeps progress at reconciliation when a later Sonic DNA event is persisted", async () => {
+    process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
+    process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
+    const job = { id: "job-progress", status: "processing", error_code: null, error_message: null, catalog_metadata: {} };
+    const events = [
+      { event_type: "sonic_dna", status: "completed", created_at: "2026-11-18T10:00:05.000Z", payload: {} },
+      { event_type: "evidence_reconciliation", status: "completed", created_at: "2026-11-18T10:00:03.000Z", payload: {} },
+      { event_type: "recognition", status: "completed", created_at: "2026-11-18T10:00:02.000Z", payload: {} },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes("/audit_jobs?") ? job : url.includes("/audit_events?") ? events : [];
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const status = await createSupabaseAuditStore().getAuditStatus("job-progress");
+    expect(status.currentStepIndex).toBe(3);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("uses three database round trips and returns structured failures and catalog state", async () => {
     process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
     process.env.SUPABASE_SECRET_KEY = "test-service-role-key";

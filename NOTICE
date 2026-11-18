@@ -1,37 +1,29 @@
 Reson8 Audit Engine — Third-party notices
 
-This file records the current engineering policy position. It is not a complete bill of materials and does not itself grant rights. Re-check each upstream licence and the applicable commercial/API terms before release.
+This file records the current engineering authorization position. It is not a complete bill of materials and does not itself grant rights. Re-check each upstream licence and applicable commercial/API terms before release.
 
-First-party code
-- Reson8-owned analysis and report-generation code: repository owner-controlled; verify ownership and any contributor obligations before commercial distribution.
-
-Potentially permitted with conditions / pending implementation gates
-- MusicBrainz: public database/API use subject to its applicable licence, attribution and API policy. https://musicbrainz.org/doc/MusicBrainz_Database/License
-- ListenBrainz: use subject to current project/API terms, rate limits and attribution. https://listenbrainz.org/
-- YouTube Data API: use subject to YouTube API Services Terms and Developer Policies. https://developers.google.com/youtube/terms/api-services-terms-of-service
-
-Operationally enabled by explicit product-owner authorization, subject to provider-specific controls
+Operationally authorized integrations (subject to credentials and source-specific terms)
 - Groq API assessment processing: https://groq.com/terms-of-use/
-  The executable policy registry marks Groq allowed and requires PROVIDER_ENABLED_GROQ=true.
-  This operational authorization is not a legal determination and does not waive applicable terms,
-  data-use, retention or deletion obligations.
-
-Unverified — disabled by data policy until commercial terms are confirmed
+- Google Gemini API: https://ai.google.dev/gemini-api/terms
+- Ollama Cloud: https://ollama.com/terms
+- AudD: https://audd.io/terms/
 - Spotify: https://developer.spotify.com/terms
 - Apple Music / iTunes lookup: https://developer.apple.com/musickit/
 - YouTube Music oEmbed: https://developers.google.com/youtube/terms/api-services-terms-of-service
 - TIDAL: https://developer.tidal.com/
-- Audiomack Data API: https://api.audiomack.com/
-- AudD: https://audd.io/terms/
+- Audiomack official Data API: https://api.audiomack.com/
+- Deezer public track metadata: https://developers.deezer.com/
+
+Authorized in the registry but not yet wired as callable integrations/models in this service
+- MusicBrainz: https://musicbrainz.org/doc/MusicBrainz_Database/License
+- ListenBrainz: https://listenbrainz.org/
+- YouTube Data API: https://developers.google.com/youtube/terms/api-services-terms-of-service
 - Last.fm: https://www.last.fm/api/tos
+- Beat This!: https://github.com/CPJKU/beat_this
 - FMA / FMAK datasets: https://github.com/mdeff/fma
 - GiantSteps datasets: https://www.audiolabs-erlangen.de/resources/MIR/2016-GiantSteps
-- Chartmetric, Soundcharts and Luminate: vendor contracts required.
-- Beat This!: model artifact, conversion provenance, training-data caveat and runtime fit remain unverified: https://github.com/CPJKU/beat_this
+- Essentia: https://essentia.upf.edu/licensing_information.html
+- madmom / DBN: https://github.com/CPJKU/madmom
+- Chartmetric, Soundcharts and Luminate: only under applicable executed commercial vendor agreements.
 
-Denied under the current product policy
-- Essentia: do not use. https://essentia.upf.edu/licensing_information.html
-- madmom / DBN: do not use. https://github.com/CPJKU/madmom
-- Deezer: do not use absent a new written commercial grant. https://developers.deezer.com/
-
-See docs/data-and-licence-policy.md for the operational controls and review checklist. This notice is not legal advice.
+Registry authorization does not install dependencies, implement a client, waive any licence or contract, or authorize use beyond applicable source terms. See docs/data-and-licence-policy.md for operational controls and review requirements. This notice is not legal advice.
