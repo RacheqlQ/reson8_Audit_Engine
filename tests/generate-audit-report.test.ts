@@ -146,7 +146,7 @@ describe("A4 report layout and fixture coverage",()=>{
  it("collapses all missing audio measurements into one empty state without master-derived provenance claims",()=>{
   const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");
   expect(report).toContain("Not measured: no master audio supplied.");
-  expect(report).toContain("Key / mode: Not measured");
+  expect(report).toContain("Key / mode: Not determined");
   expect(report).not.toContain("Measured from the uploaded master");
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
@@ -205,7 +205,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Tempo: Not determined");
   expect(report).not.toContain("Tempo confidence score");
-  expect(report).toContain("Key / mode: Not measured");
+  expect(report).toContain("Key / mode: Not determined");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
@@ -237,7 +237,7 @@ describe("A4 report layout and fixture coverage",()=>{
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Key / mode: Not measured");
+  expect(report).toContain("Key / mode: Not determined");
   expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
   expect(report).not.toContain("Key / mode: C major");
  });
