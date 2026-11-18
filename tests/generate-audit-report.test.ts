@@ -28,6 +28,20 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(compact).toBe(205);expect(maximum).toBe(205);
   expect(chartLayoutIssuesForReport(fullAudioFixture as any)).toEqual([]);
  });
+ it("does not attach measured status to unavailable metadata-only charts",()=>{
+  expect(chartPanelDisplayStatus({fixture:true,unavailable:true,evidenceClass:"measured"})).toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO");
+  expect(chartPanelDisplayStatus({evidenceClass:"illustrative"})).toBe("ILLUSTRATIVE");
+ });
+ it("reserves enough wrapped rows for long lane constellation labels",()=>{
+  expect(constellationLabelLineCount({label:"Adjacent lane",value:"Alternative R&B (fixture lane hypothesis)"},499)).toBeGreaterThan(1);
+ });
+ it("collapses repeated industry-practice prefixes to one heading",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.assessment.industryPractice="INDUSTRY PRACTICE — INDUSTRY PRACTICE — General guidance for release planning.";
+  const report=planAuditReportPages(input,"full").flatMap(page=>page.text).join(" ");
+  expect(report).not.toContain("INDUSTRY PRACTICE — INDUSTRY PRACTICE");
+  expect(report).toContain("General industry guidance — General guidance for release planning.");
+ });
  it("checks chart-caption separation for every chart in all four fixtures",()=>{
   for(const input of allFixtures)expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
