@@ -17,18 +17,19 @@ describe("embedded worker provider policy", () => {
     mocks.claimNextQueuedJob.mockReset();
   });
 
-  it("allows the worker to preflight Groq only with the exact opt-in flag after owner authorization", async () => {
+  it("allows Groq preflight when its credential is configured, without an enable flag", async () => {
     vi.stubEnv("GROQ_API", "configured");
-    vi.stubEnv("PROVIDER_ENABLED_GROQ", "true");
     mocks.claimNextQueuedJob.mockResolvedValue(null);
 
     await expect(processNextQueuedAudit()).resolves.toBeNull();
     expect(mocks.claimNextQueuedJob).toHaveBeenCalledOnce();
   });
 
-  it("does not claim a queued job when the Groq opt-in flag is absent or not exactly true", async () => {
-    vi.stubEnv("GROQ_API", "configured");
-    vi.stubEnv("PROVIDER_ENABLED_GROQ", "TRUE");
+  it("does not claim a job when no assessment provider has credentials", async () => {
+    vi.stubEnv("GROQ_API", "");
+    vi.stubEnv("GROQ_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("OLLAMA_API_KEY", "");
 
     await expect(processNextQueuedAudit()).rejects.toThrow("AI_PROVIDERS_UNAVAILABLE");
     expect(mocks.claimNextQueuedJob).not.toHaveBeenCalled();
