@@ -10,6 +10,7 @@ const originalKey = process.env.SUPABASE_SECRET_KEY;
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   if (originalUrl === undefined) delete process.env.SUPABASE_URL;
   else process.env.SUPABASE_URL = originalUrl;
   if (originalKey === undefined) delete process.env.SUPABASE_SECRET_KEY;
@@ -111,6 +112,16 @@ describe("DSP provider failure persistence", () => {
       error: "TIDAL track request failed with HTTP 503",
       evidenceClass: null,
     });
+  });
+
+  it("uses the configured stale-job timeout when reaping expired leases", async () => {
+    vi.stubEnv("AUDIT_JOB_STALE_TIMEOUT_MS", "120000");
+    const { store, fetchMock } = makeStore([{ id: "22222222-2222-4222-8222-222222222222" }]);
+
+    await expect(store.failExpiredProcessingJobs()).resolves.toBe(1);
+
+    const updateBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(updateBody.error_message).toContain("within 2 minutes");
   });
 
   it("fails an expired processing job older than ten minutes", async () => {
