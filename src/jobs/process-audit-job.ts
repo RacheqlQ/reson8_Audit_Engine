@@ -548,7 +548,7 @@ export async function processAuditJob(
       }
       masterDna = {
         ...masterDna,
-        vocalFeatures,
+        vocalFeatures: vocalFeatures as unknown as Record<string, unknown>,
         limitations: [...masterDna.limitations, ...vocalFeatures.limitations],
       };
     }
