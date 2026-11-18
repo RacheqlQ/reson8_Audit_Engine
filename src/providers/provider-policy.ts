@@ -18,25 +18,25 @@ export const PROVIDER_POLICY = {
   groq: {
     id: "groq", commercialStatus: "allowed", termsUrl: "https://groq.com/terms-of-use/",
     attribution: "Identify Groq as the assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
-    retention: "Verify current API retention, training and deletion terms before enabling.",
+    retention: "Follow current API retention, training and deletion terms for every request.",
 decisionNote: "Operational enablement explicitly authorized by the product owner; this setting is not a legal determination and does not waive applicable terms or retention obligations.",
   },
   gemini: {
     id: "gemini", commercialStatus: "allowed", termsUrl: "https://ai.google.dev/gemini-api/terms",
     attribution: "Identify Google Gemini as the fallback assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
-    retention: "Verify current Gemini API retention, training, regional processing and deletion terms before enabling.",
+    retention: "Follow current Gemini API retention, training, regional processing and deletion terms for every request.",
 decisionNote: "Available when GEMINI_API_KEY is configured; verify applicable Google AI terms and data handling.",
   },
   ollama: {
     id: "ollama", commercialStatus: "allowed", termsUrl: "https://ollama.com/terms",
     attribution: "Identify Ollama Cloud and the selected model as the fallback assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
-    retention: "Verify current Ollama Cloud data handling, retention, training and deletion terms before enabling.",
+    retention: "Follow current Ollama Cloud data handling, retention, training and deletion terms for every request.",
 decisionNote: "Available when OLLAMA_API_KEY is configured; use only the hosted cloud API from the embedded worker.",
   },
   audd: {
     id: "audd", commercialStatus: "allowed", termsUrl: "https://audd.io/terms/",
     attribution: "Name AudD and retrieval time for every recognition result.",
-    retention: "Verify audio upload, transient processing, caching and deletion terms before enabling.",
+    retention: "Follow current audio upload, transient processing, caching and deletion terms for every request.",
 decisionNote: "Operational enablement explicitly authorized by the product owner; this setting is not a legal determination and does not waive applicable terms, audio-processing, retention or deletion obligations.",
   },
   spotify: {
@@ -48,19 +48,19 @@ decisionNote: "Operational use explicitly authorized by the product owner; compl
   apple_music: {
     id: "apple_music", commercialStatus: "allowed", termsUrl: "https://developer.apple.com/musickit/",
     attribution: "Name Apple/iTunes lookup and retrieval time.",
-    retention: "Verify applicable catalogue API terms, caching and attribution requirements.",
+    retention: "Follow applicable catalogue API terms, caching and attribution requirements.",
 decisionNote: "Operational use explicitly authorized by the product owner; verify and comply with applicable Apple API terms, caching and attribution requirements.",
   },
   youtube_music: {
     id: "youtube_music", commercialStatus: "allowed", termsUrl: "https://developers.google.com/youtube/terms/api-services-terms-of-service",
     attribution: "Name YouTube oEmbed and retrieval time; preserve required attribution.",
-    retention: "Verify YouTube API terms, refresh and deletion rules for any retained data.",
+    retention: "Follow YouTube API terms, refresh and deletion rules for any retained data.",
 decisionNote: "Operational use explicitly authorized by the product owner; comply with YouTube API terms, attribution, refresh and deletion requirements.",
   },
   tidal: {
     id: "tidal", commercialStatus: "allowed", termsUrl: "https://developer.tidal.com/",
     attribution: "Name TIDAL and retrieval time.",
-    retention: "Verify API data storage, caching, display and deletion restrictions.",
+    retention: "Follow API data storage, caching, display and deletion restrictions.",
 decisionNote: "Operational use explicitly authorized by the product owner; comply with applicable TIDAL API terms and data handling requirements.",
   },
   audiomack: {
@@ -90,7 +90,7 @@ decisionNote: "Allowed only within API Services Terms and Developer Policies.",
   lastfm: {
     id: "lastfm", commercialStatus: "allowed", termsUrl: "https://www.last.fm/api/tos",
     attribution: "Attribute Last.fm and retrieval time.",
-    retention: "Review caching, display and deletion rules before any use.",
+    retention: "Follow caching, display and deletion rules for every use.",
 decisionNote: "Operational use explicitly authorized by the product owner; comply with Last.fm API terms, attribution, caching and deletion requirements.",
   },
   beat_this: {
@@ -159,10 +159,7 @@ export interface ProviderDecision {
 }
 
 /** Fail-closed decision based on the reviewed registry status. */
-export function providerDecision(
-  provider: ProviderId,
-  _env: Record<string, string | undefined> = process.env,
-): ProviderDecision {
+export function providerDecision(provider: ProviderId): ProviderDecision {
   const policy: ProviderPolicy = PROVIDER_POLICY[provider];
   const enabled = policy.commercialStatus === "allowed";
   return {
