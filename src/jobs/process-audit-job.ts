@@ -136,6 +136,30 @@ async function awaitWithLease<T>(
   return result;
 }
 
+const MEMORY_DIAGNOSTIC_STAGES = new Set([
+  "audio_download",
+  "audio_decode",
+  "sonic_dna",
+  "vocal_analysis",
+  "ai_assessment",
+  "sample_pdf_generation",
+  "full_pdf_generation",
+]);
+
+function logStageMemory(stage: string, phase: "start" | "end"): void {
+  const usage = process.memoryUsage();
+  console.info(JSON.stringify({
+    worker: "audit",
+    event: "audit_stage_memory",
+    stage,
+    phase,
+    rssBytes: usage.rss,
+    heapUsedBytes: usage.heapUsed,
+    externalBytes: usage.external,
+    arrayBuffersBytes: usage.arrayBuffers,
+  }));
+}
+
 async function awaitWithStage<T>(
   deps: AuditProcessorDependencies,
   stage: string,
@@ -143,6 +167,8 @@ async function awaitWithStage<T>(
   operation: (signal?: AbortSignal) => Promise<T>,
 ): Promise<T> {
   return await awaitWithLease(deps, async (leaseSignal) => {
+    const captureMemory = MEMORY_DIAGNOSTIC_STAGES.has(stage);
+    if (captureMemory) logStageMemory(stage, "start");
     let onAbort: (() => void) | undefined;
     const leaseAbort = leaseSignal ? new Promise<never>((_resolve, reject) => {
       onAbort = () => reject(leaseSignal.reason instanceof Error ? leaseSignal.reason : new Error("AUDIT_LEASE_LOST"));
@@ -160,6 +186,7 @@ async function awaitWithStage<T>(
       ]);
     } finally {
       if (onAbort && leaseSignal) leaseSignal.removeEventListener("abort", onAbort);
+      if (captureMemory) logStageMemory(stage, "end");
     }
   });
 }
