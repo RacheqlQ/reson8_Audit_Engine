@@ -259,7 +259,7 @@ function sections(i:AuditReportInput):Section[]{
   sonicDnaBody.push(
    e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
    "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
-   "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not reported — confidence below 80% reporting target"),
+   "Key / mode: " + (!text(s?.key) || !text(s?.mode) ? "Not measured" : isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not reported — confidence below 80% reporting target"),
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
    "Integrated loudness: " + metric(s?.loudnessLufs,1) + " LUFS (direct signal measurement; not a mastering verdict)",
    "Dynamic range: " + metric(s?.dynamicRangeDb,1) + " dB (direct signal measurement; not a quality verdict)",
@@ -271,7 +271,7 @@ function sections(i:AuditReportInput):Section[]{
   sonicDnaBody.push(
    "Provider-supplied sonic context (not master-measured)",
    "Provider BPM: " + val(s.bpm),
-   "Provider key / mode: " + [text(s.key), text(s.mode)].filter(Boolean).join(" "),
+   "Provider key / mode: " + ([text(s.key), text(s.mode)].filter(Boolean).join(" ") || "Not measured"),
    "Provider mood tags: " + val(s.moodTags),
    hasMasterAudio ? "Master audio submitted; master-derived Sonic DNA measurements unavailable." : "Not measured: no master audio supplied."
   );
