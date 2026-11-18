@@ -67,6 +67,9 @@ export function getAuditProgress(
       default: return false;
     }
   };
+  const percentFor = (id: string) => id === "report"
+    ? Math.min(100, reportCount * 50)
+    : complete(id) ? 100 : 0;
 
   const definitions = [
     { id: "intake", label: "Secure intake" },
@@ -82,18 +85,18 @@ export function getAuditProgress(
   const failed = jobStatus === "failed" || eventTypes.has("audit_failed");
   const stages: AuditProgressStage[] = definitions.map((definition) => {
     const notApplicable = definition.id === "sonic_dna" && sonicNotApplicable;
-    const isComplete = complete(definition.id);
+    const percent = percentFor(definition.id);
     if (notApplicable) return { ...definition, percent: 100, status: "not_applicable" };
-    if (isComplete) return { ...definition, percent: 100, status: "completed" };
+    if (percent === 100) return { ...definition, percent, status: "completed" };
     if (!activeAssigned && failed) {
       activeAssigned = true;
-      return { ...definition, percent: 0, status: "failed" };
+      return { ...definition, percent, status: "failed" };
     }
     if (!activeAssigned && jobStatus === "processing") {
       activeAssigned = true;
-      return { ...definition, percent: 0, status: "in_progress" };
+      return { ...definition, percent, status: "in_progress" };
     }
-    return { ...definition, percent: 0, status: "pending" };
+    return { ...definition, percent, status: "pending" };
   });
 
   const completedStages = stages.filter((stage) => stage.status === "completed").length;
