@@ -75,6 +75,9 @@ function assertLeaseActive(deps: AuditProcessorDependencies): void {
 
 export type AuditFailureCode = "capacity" | "auth" | "malformed_output" | "timeout" | "provider_unavailable" | "processing_error";
 
+export const AI_ASSESSMENT_STAGE_TIMEOUT_MS = 10 * 60_000;
+export const AUDIT_JOB_DEADLINE_MS = 20 * 60_000;
+
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
   const message = error instanceof Error ? error.message : String(error);
   if (/AI_PROVIDERS_UNAVAILABLE|provider unavailable|provider_error|HTTP 5\d\d|service unavailable|bad gateway|gateway timeout|not configured|fetch failed|ECONNRESET|ENOTFOUND|EHOSTUNREACH/i.test(message)) return "provider_unavailable";
@@ -99,7 +102,7 @@ function userSafeFailureMessage(error: unknown): string {
       audio_decode: "Sonic DNA: the uploaded audio could not be decoded in time. Check the audio file and retry.",
       catalog_preview_recognition: "Catalog recognition: optional preview identification timed out; the audit can continue without it.",
       sonic_dna: "Sonic DNA: technical analysis exceeded its time limit. Please retry with a shorter or supported master.",
-      ai_assessment: "AI assessment: the analysis exceeded its four-minute time limit. Please retry later.",
+      ai_assessment: "AI assessment: the analysis exceeded its ten-minute time limit. Please retry later.",
       sample_pdf_generation: "Sample report: PDF generation exceeded its time limit. Please retry.",
       full_pdf_generation: "Full report: PDF generation exceeded its time limit. Please retry.",
       sample_pdf_persistence: "Sample report: the PDF could not be saved in time. Please retry.",
@@ -107,7 +110,7 @@ function userSafeFailureMessage(error: unknown): string {
     };
     return messages[stage] ?? "Audit processing: the " + stage.replace(/_/g, " ") + " stage exceeded its time limit. Please retry.";
   }
-  if (raw === "GROQ_ASSESSMENT_TIMEOUT") return "AI assessment: the analysis exceeded its four-minute time limit. Please retry later.";
+  if (raw === "GROQ_ASSESSMENT_TIMEOUT") return "AI assessment: the provider analysis exceeded its allocated time. The audit may continue with another configured provider.";
   if (raw.startsWith("Combined audit is missing its uploaded master")) return "Audio intake: the combined audit is missing its uploaded master audio. Upload the master file and retry.";
   if (raw === "master unavailable") return "Audio intake: the uploaded master could not be retrieved. Re-upload it and retry.";
   if (raw.includes("evidenceGaps") || raw.includes("scorecard") || raw.includes("Zod validation")) return "AI assessment: the generated response did not meet the report's validation requirements. Please retry later.";
@@ -429,7 +432,7 @@ export async function processAuditJob(
   if (job.status !== "processing") throw new Error(`Audit job is not actively claimed: ${job.status}`);
   const previousSignal = deps.signal;
   const jobDeadlineController = new AbortController();
-  const jobDeadlineTimer = setTimeout(() => jobDeadlineController.abort(new Error("AUDIT_JOB_DEADLINE_EXCEEDED")), 8 * 60_000);
+  const jobDeadlineTimer = setTimeout(() => jobDeadlineController.abort(new Error("AUDIT_JOB_DEADLINE_EXCEEDED")), AUDIT_JOB_DEADLINE_MS);
   deps.signal = previousSignal ? AbortSignal.any([previousSignal, jobDeadlineController.signal]) : jobDeadlineController.signal;
 
   try {
@@ -644,7 +647,7 @@ export async function processAuditJob(
       genreClassification,
       genreContext: genreClassification.genres.map((genre) => genre.label),
     } : null;
-    const assessment = await awaitWithStage(deps, "ai_assessment", 4 * 60_000, (signal) => deps.generateAssessment({
+    const assessment = await awaitWithStage(deps, "ai_assessment", AI_ASSESSMENT_STAGE_TIMEOUT_MS, (signal) => deps.generateAssessment({
       evidence: assessmentEvidence,
       sonicDna,
       catalogMetadata: assessmentMetadata
@@ -670,7 +673,7 @@ export async function processAuditJob(
     const jobDeadlineExceeded = jobDeadlineController.signal.aborted && !previousSignal?.aborted;
     if (deps.signal?.aborted && !jobDeadlineExceeded) throw leaseLostError(deps.signal);
     const message = jobDeadlineExceeded
-      ? "Audit processing: the job exceeded its eight-minute time limit. Please submit it again."
+      ? "Audit processing: the job exceeded its twenty-minute safety deadline. Please submit it again."
       : userSafeFailureMessage(error);
     const errorCode = classifyAuditFailure(error);
     await withAbortTimeout(
