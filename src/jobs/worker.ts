@@ -18,7 +18,7 @@ const HEARTBEAT_INTERVAL_MS = 45_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
 const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
-function isFallbackEligible(error: unknown): boolean {
+export function isFallbackEligible(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /AI capacity reached|disabled by data policy|unauthorized|forbidden|timed out|HTTP (?:4\d\d|5\d\d)|GROQ_REQUEST_TOO_LARGE|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
 }
