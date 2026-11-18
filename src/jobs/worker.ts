@@ -144,6 +144,17 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         markProviderUnavailableFromError(error);
         if (signal?.aborted || !isFallbackEligible(error)) throw error;
         let fallbackError: unknown = error;
+        if (!gemini) {
+          console.warn(JSON.stringify({
+            worker: "audit",
+            jobId: job.id,
+            event: "gemini_fallback_unavailable",
+            readiness: geminiReadiness?.status ?? "unknown",
+            providerEnabled: geminiDecision.enabled,
+            credentialConfigured: Boolean(process.env.GEMINI_API_KEY),
+            model: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+          }));
+        }
         if (gemini) {
           console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: safeFailureCategory(error), ...providerFailureDiagnostics(error, groq.providerId, groq.modelId) }));
           try {
@@ -162,7 +173,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
             worker: "audit",
             jobId: job.id,
             event: "ollama_fallback_unavailable",
-            reason: !ollamaDecision.enabled ? "disabled_by_policy" : "missing_credentials",
+            reason: ollamaReadiness?.status ?? (!ollamaDecision.enabled ? "disabled_by_data_policy" : "missing_credentials"),
             providerEnabled: ollamaDecision.enabled,
             credentialConfigured: Boolean(process.env.OLLAMA_API_KEY),
             model: process.env.OLLAMA_MODEL ?? "gemma4:31b",
