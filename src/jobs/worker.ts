@@ -1,7 +1,7 @@
 import { createAudioDecoder } from "../audio/decoder.js";
 import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
-import { providerDecision } from "../providers/provider-policy.js";
+import { markAssessmentProviderUnavailable, providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
 import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient } from "../providers/groq/client.js";
 import { generateAuditReport } from "../reports/generate-audit-report.js";
@@ -32,6 +32,12 @@ export function safeFailureCategory(error: unknown): string {
   if (/HTTP 5\d\d|network|fetch failed|ECONNRESET/i.test(message)) return "transient_provider_error";
   if (/HTTP 401|HTTP 403/i.test(message)) return "authentication";
   return "provider_error";
+}
+
+function markProviderUnavailableOnAuthenticationFailure(provider: "groq" | "gemini" | "ollama", error: unknown): void {
+  if (classifyAuditFailure(error).errorType === "authentication") {
+    markAssessmentProviderUnavailable(provider, "authentication_failed");
+  }
 }
 
 function providerFailureTelemetry(provider: "groq" | "gemini" | "ollama", model: string, error: unknown) {
@@ -143,7 +149,10 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         try {
           return await groq.assess(assessmentInput, signal);
         } catch (error) {
-          if (signal?.aborted || !isFallbackEligible(error)) throw error;
+          if (signal?.aborted) throw error;
+          markProviderUnavailableOnAuthenticationFailure("groq", error);
+          console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_assessment_failed", ...providerFailureTelemetry("groq", process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, error) }));
+          if (!isFallbackEligible(error)) throw error;
           lastError = error;
           if (gemini || ollama) {
             console.warn(JSON.stringify({
@@ -159,7 +168,10 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         try {
           return await gemini.assess(assessmentInput, signal);
         } catch (geminiError) {
-          if (signal?.aborted || !isFallbackEligible(geminiError)) throw geminiError;
+          if (signal?.aborted) throw geminiError;
+          markProviderUnavailableOnAuthenticationFailure("gemini", geminiError);
+          console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_assessment_failed", ...providerFailureTelemetry("gemini", process.env.GEMINI_MODEL ?? "gemini-2.5-flash", geminiError) }));
+          if (!isFallbackEligible(geminiError)) throw geminiError;
           lastError = geminiError;
           console.warn(JSON.stringify({
             worker: "audit", jobId: job.id, event: "gemini_fallback_failed",
@@ -182,6 +194,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         try {
           return await ollama.assess(assessmentInput, signal);
         } catch (ollamaError) {
+          markProviderUnavailableOnAuthenticationFailure("ollama", ollamaError);
           console.error(JSON.stringify({
             worker: "audit", jobId: job.id, event: "ollama_fallback_failed",
             reason: safeFailureCategory(ollamaError),
