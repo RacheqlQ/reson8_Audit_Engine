@@ -18,18 +18,30 @@ const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
 function isFallbackEligible(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /AI capacity reached|timed out|HTTP (?:413|429|5\d\d)|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
+  return /AI capacity reached|GROQ_TPM_CAPACITY_EXHAUSTED|timed out|HTTP (?:413|429|5\d\d)|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
 }
 
 function safeFailureCategory(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  if (/capacity|429|daily.limit|TPD/i.test(message)) return "capacity";
+  if (/capacity|429|daily.limit|TPD|TPM/i.test(message)) return "capacity";
   if (/timed out|ETIMEDOUT/i.test(message)) return "timeout";
   if (/json_validate_failed|failed to validate JSON|failed Zod validation/i.test(message)) return "json_validation";
   if (/HTTP 413/i.test(message)) return "request_too_large";
   if (/HTTP 5\d\d|network|fetch failed|ECONNRESET/i.test(message)) return "transient_provider_error";
   if (/HTTP 401|HTTP 403/i.test(message)) return "authentication";
   return "provider_error";
+}
+
+function providerFailureDiagnostics(error: unknown, fallbackProvider: string, fallbackModel: string) {
+  const context = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  return {
+    provider: typeof context.provider === "string" ? context.provider : fallbackProvider,
+    model: typeof context.model === "string" ? context.model : fallbackModel,
+    httpStatus: typeof context.httpStatus === "number" ? context.httpStatus : null,
+    errorType: typeof context.providerErrorType === "string" ? context.providerErrorType : null,
+    providerCode: typeof context.providerCode === "string" ? context.providerCode : null,
+    retryable: typeof context.retryable === "boolean" ? context.retryable : isFallbackEligible(error),
+  };
 }
 
 export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jobId: string; status: "completed" | "failed" } | null> {
@@ -116,25 +128,48 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         if (signal?.aborted || !isFallbackEligible(error)) throw error;
         let fallbackError: unknown = error;
         if (gemini) {
-          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: safeFailureCategory(error) }));
+          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "groq_fallback_to_gemini", reason: safeFailureCategory(error), ...providerFailureDiagnostics(error, groq.providerId, groq.modelId) }));
           try {
             return await gemini.assess(assessmentInput, signal);
           } catch (geminiError) {
             fallbackError = geminiError;
-            console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_failed", reason: safeFailureCategory(geminiError) }));
+            console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "gemini_fallback_failed", reason: safeFailureCategory(geminiError), ...providerFailureDiagnostics(geminiError, gemini.providerId, gemini.modelId) }));
           }
         }
-        if (!ollama || signal?.aborted || !isFallbackEligible(fallbackError)) throw fallbackError;
+        if (signal?.aborted) throw fallbackError;
+        if (!ollama) {
+          console.warn(JSON.stringify({
+            worker: "audit",
+            jobId: job.id,
+            event: "ollama_fallback_unavailable",
+            reason: !ollamaDecision.enabled ? "disabled_by_policy" : "missing_credentials",
+            providerEnabled: ollamaDecision.enabled,
+            credentialConfigured: Boolean(process.env.OLLAMA_API_KEY),
+            model: process.env.OLLAMA_MODEL ?? "gemma4:31b",
+          }));
+          throw fallbackError;
+        }
+        if (!isFallbackEligible(fallbackError)) {
+          console.warn(JSON.stringify({
+            worker: "audit",
+            jobId: job.id,
+            event: "ollama_fallback_skipped",
+            reason: "previous_provider_failure_not_retryable",
+            ...providerFailureDiagnostics(fallbackError, gemini ? gemini.providerId : groq.providerId, gemini ? gemini.modelId : groq.modelId),
+          }));
+          throw fallbackError;
+        }
         console.warn(JSON.stringify({
           worker: "audit",
           jobId: job.id,
           event: gemini ? "gemini_fallback_to_ollama" : "groq_fallback_to_ollama",
           reason: safeFailureCategory(fallbackError),
+          ...providerFailureDiagnostics(fallbackError, gemini ? gemini.providerId : groq.providerId, gemini ? gemini.modelId : groq.modelId),
         }));
         try {
           return await ollama.assess(assessmentInput, signal);
         } catch (ollamaError) {
-          console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "ollama_fallback_failed", reason: safeFailureCategory(ollamaError) }));
+          console.error(JSON.stringify({ worker: "audit", jobId: job.id, event: "ollama_fallback_failed", reason: safeFailureCategory(ollamaError), ...providerFailureDiagnostics(ollamaError, ollama.providerId, ollama.modelId) }));
           throw ollamaError;
         }
       }
