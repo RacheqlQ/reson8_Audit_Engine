@@ -50,7 +50,8 @@ export function classifyAuditFailure(
   const retryable = httpStatus !== null
     ? httpStatus === 408 || httpStatus === 409 || httpStatus === 425 || httpStatus === 429 || httpStatus >= 500
     : /capacity|timed out|timeout|network|fetch failed|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT|AUDIT_JOB_DEADLINE_EXCEEDED|GROQ_REQUEST_TOO_LARGE/i.test(message);
-  const errorType = responseErrorType(message);
+  const errorType = responseErrorType(message)
+    ?? (/capacity/i.test(message) ? "capacity" : /timeout|timed out/i.test(message) ? "timeout" : null);
   const model = providerModel(provider, env);
   const errorCode = provider && httpStatus
     ? `${provider.toUpperCase()}_HTTP_${httpStatus}`
