@@ -584,29 +584,18 @@ export function createSupabaseAuditStore(
 
       const { data: events, error: eventError } = await admin
         .from("audit_events")
-        .select("event_type")
+        .select("event_type,status,created_at,payload")
         .eq("audit_job_id", jobId)
         .in("event_type", [
           "processing_claimed", "processing_started", "recognition", "catalog_ingestion",
-          "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated", "audit_completed",
-        ]);
+          "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated",
+          "audit_completed", "catalog_links_submitted",
+        ])
+        .order("created_at", { ascending: true });
       if (eventError) throw new Error(`Unable to read audit events: ${eventError.message}`);
 
-      const { data: catalogEvents, error: catalogEventError } = await admin
-        .from("audit_events")
-        .select("payload")
-        .eq("audit_job_id", jobId)
-        .eq("event_type", "catalog_ingestion")
-        .order("created_at", { ascending: true });
-      if (catalogEventError) throw new Error(`Unable to read DSP source statuses: ${catalogEventError.message}`);
-      const { data: submittedEvent, error: submittedError } = await admin.from("audit_events")
-        .select("payload")
-        .eq("audit_job_id", jobId)
-        .eq("event_type", "catalog_links_submitted")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (submittedError) throw new Error(`Unable to read submitted DSP links: ${submittedError.message}`);
+      const catalogEvents = (events ?? []).filter((event) => event.event_type === "catalog_ingestion");
+      const submittedEvent = (events ?? []).find((event) => event.event_type === "catalog_links_submitted");
       const submittedPayload = submittedEvent?.payload as Record<string, unknown> | null;
       const catalogUrlsSubmitted = Array.isArray(submittedPayload?.submittedLinks)
         ? submittedPayload.submittedLinks.filter((value): value is string => typeof value === "string")
