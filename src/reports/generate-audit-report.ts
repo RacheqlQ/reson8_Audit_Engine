@@ -259,7 +259,7 @@ function sections(i:AuditReportInput):Section[]{
   sonicDnaBody.push(
    e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
    "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
-   "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not reported — confidence below 80% reporting target"),
+   "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not measured"),
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
    "Integrated loudness: " + metric(s?.loudnessLufs,1) + " LUFS (direct signal measurement; not a mastering verdict)",
    "Dynamic range: " + metric(s?.dynamicRangeDb,1) + " dB (direct signal measurement; not a quality verdict)",
@@ -271,13 +271,14 @@ function sections(i:AuditReportInput):Section[]{
   sonicDnaBody.push(
    "Provider-supplied sonic context (not master-measured)",
    "Provider BPM: " + val(s.bpm),
-   "Provider key / mode: " + [text(s.key), text(s.mode)].filter(Boolean).join(" "),
+   "Provider key / mode: " + ([text(s.key), text(s.mode)].filter(Boolean).join(" ") || "Not measured"),
    "Provider mood tags: " + val(s.moodTags),
    hasMasterAudio ? "Master audio submitted; master-derived Sonic DNA measurements unavailable." : "Not measured: no master audio supplied."
   );
  } else if (hasMasterAudio) {
   sonicDnaBody.push(
    "Master audio submitted; master-derived Sonic DNA measurements unavailable.",
+   "Key / mode: Not measured",
    "Processing status: no completed master analysis is available; do not substitute provider tags for measurements.",
    "Required action: retry the audio decode and Sonic DNA worker path while preserving the combined-source job and its submitted DSP link.",
    "Until measurements are present, BPM, key/mode, rhythm, integrated loudness, dynamic range and vocal presence remain unconfirmed."
@@ -285,6 +286,7 @@ function sections(i:AuditReportInput):Section[]{
  } else {
   sonicDnaBody.push(
    "Requires audio upload",
+   "Key / mode: Not measured",
    "Not measured: no master audio supplied.",
    "Required next input: upload the actual master audio file in WAV, FLAC or a high-quality MP3 so the worker can inspect the recording rather than relying on catalogue metadata.",
    "Analysis plan: after ingestion, estimate BPM with confidence and segment stability, estimate key/mode with confidence and agreement, measure integrated loudness and dynamic range, and run vocal-activity analysis.",
@@ -344,14 +346,14 @@ function sections(i:AuditReportInput):Section[]{
  "Conflict policy: values that disagree across providers remain visible as conflicts; a preferred identity value is not treated as proof that the other provider was wrong.",
  "Conflict details: "+conflictSummary,
  "External identifiers: "+(externalIdentifiers(e.externalIds)?(e.fixture?"Synthetic test identifiers — ":"Available — ")+externalIdentifiers(e.externalIds):"Unavailable — no external identifiers returned"),
- "Sources checked: "+val((Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked:Array.isArray(e.sourceProviders)?e.sourceProviders:Array.isArray(e.sources)?e.sources:null)?.map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition",synthetic_audio_fixture:"Synthetic report fixture (layout testing only)"} as Record<string,string>)[String(provider)]??String(provider)).join(", ")??e.source),
+ "Sources checked: "+val((Array.isArray(e.metadataSourcesChecked)?e.metadataSourcesChecked:Array.isArray(e.sourceProviders)?e.sourceProviders:Array.isArray(e.sources)?e.sources:null)?.filter((provider)=>provider!=="synthetic_audio_fixture").map((provider)=>({spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",id3:"Embedded audio tags",filename:"Uploaded filename",audd:"Audio recognition"} as Record<string,string>)[String(provider)]??String(provider)).join(", ")??"No external metadata sources were checked"),
  "Coverage status: "+val(e.evidenceStatus??e.status,"Partial — one or more identity fields remain unavailable"),
  "Verification note: unavailable fields are not inferred or fabricated. Analytical recommendations remain hypotheses and are never presented as verified identity metadata."
 ]},
  {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>(({OBSERVED:"Measured from the uploaded master",RECOGNIZED:"Returned by an external identification source",RECONCILED:"Cross-checked across independent sources",INFERRED:"Analytical hypothesis — not independently verified","INDUSTRY PRACTICE":"General industry guidance"} as Record<string,string>)[x.label]??"Evidence item")+" — "+x.claim+" [Source: "+x.source+"]")},
  {title:"Sonic DNA and technical profile",accent:"blue",body:sonicDnaBody},
  {title:"Creative identity and A&R positioning",accent:"violet",body:[a.creativeIdentity,"Primary lane: "+a.aAndRPositioning.primaryLane,"Adjacent lanes: "+a.aAndRPositioning.adjacentLanes.join(", "),a.aAndRPositioning.rationale]},
- {title:"Strengths and creative leverage",accent:"teal",body:a.strengths.length?a.strengths:["No track-specific creative strengths are asserted because overall A&R assessment confidence is zero."]},
+ {title:"Strengths and creative leverage",accent:"teal",body:a.strengths.length?a.strengths:["No audio-measured strengths are asserted without an uploaded master."]},
  {title:"Risks and diligence",accent:"coral",body:a.risks},
  {title:"Evidence-derived scorecard",accent:"blue",body:[score("Tempo and lane fit",a.scorecard.tempoLaneFit),score("Rhythmic consistency",a.scorecard.rhythmicConsistency),score("Dynamic range and RMS signal level",a.scorecard.dynamicRangeLoudness),score("Metadata completeness",a.scorecard.metadataCompleteness),score("Release readiness",a.scorecard.releaseReadiness)]},
  {title:"Human listening checklist (unscored)",accent:"violet",body:a.humanListeningChecklist},
@@ -397,7 +399,10 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
   const sonicBlock=section.title==="Sonic DNA and technical profile";
-  const keepTogetherCount=section.title==="Curator campaign and target verification"?Math.min(3,section.body.length):chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
+  const keepTogetherCount=section.title==="Curator campaign and target verification"?Math.min(3,section.body.length)
+    :section.title==="Creative identity and A&R positioning"?Math.min(4,section.body.length)
+    :section.title==="Human listening checklist (unscored)"?Math.min(5,section.body.length)
+    :chartsForSection(input,section.title).length?Math.min(2,section.body.length):Math.min(1,section.body.length);
   const openingHeight=section.body.slice(0,keepTogetherCount).reduce((sum,para)=>{
    const size=para===para.toUpperCase()&&para.length<100?8:9.7;
    return sum+wrap(para,fonts.regular,size,W-2*M-16).length*size*1.4+8;
