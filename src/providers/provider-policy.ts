@@ -142,10 +142,10 @@ decisionNote: "Denied pending a commercially compatible licence for this product
 decisionNote: "Denied pending a commercially compatible licence for this product.",
   },
   deezer: {
-    id: "deezer", commercialStatus: "unverified", termsUrl: "https://developers.deezer.com/",
+    id: "deezer", commercialStatus: "allowed", termsUrl: "https://developers.deezer.com/",
     attribution: "Attribute Deezer and retrieval time; preserve required API branding and source context.",
     retention: "Follow applicable Deezer API terms for permitted collection, caching, display, refresh and deletion.",
-decisionNote: "Operational use explicitly authorized by the product owner; verify and comply with Deezer API permissions and applicable commercial terms.",
+decisionNote: "Operational use explicitly authorized by the product owner; use the implemented public track-metadata endpoint only within Deezer API terms, rate limits and applicable restrictions.",
   },
 } as const satisfies Record<string, ProviderPolicy>;
 
