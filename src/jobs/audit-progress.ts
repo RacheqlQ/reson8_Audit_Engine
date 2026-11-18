@@ -21,7 +21,7 @@ const EVENT_STEP: Readonly<Record<string, number>> = {
  */
 export function getAuditProgressStep(
   events: readonly AuditProgressEvent[],
-  status: "queued" | "processing" | "completed" | "failed",
+  status: string,
 ): number {
   let furthestStep = status === "completed" ? 5 : 0;
   for (const event of events) {
