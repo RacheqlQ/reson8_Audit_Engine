@@ -583,20 +583,26 @@ export function createSupabaseAuditStore(
       if (jobError) throw new Error(`Unable to read audit status: ${jobError.message}`);
       if (!job) throw new Error("Audit job not found");
 
-      const { data: events, error: eventError } = await admin
+      const { data: stageEvents, error: stageEventError } = await admin
         .from("audit_events")
-        .select("event_type,status,created_at,payload")
+        .select("event_type")
         .eq("audit_job_id", jobId)
         .in("event_type", [
           "processing_claimed", "processing_started", "recognition", "catalog_ingestion",
-          "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated",
-          "audit_completed", "catalog_links_submitted", "audit_failed",
-        ])
-        .order("created_at", { ascending: true });
-      if (eventError) throw new Error(`Unable to read audit events: ${eventError.message}`);
+          "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated", "audit_completed",
+        ]);
+      if (stageEventError) throw new Error(`Unable to read audit progress: ${stageEventError.message}`);
 
-      const catalogEvents = (events ?? []).filter((event) => event.event_type === "catalog_ingestion");
-      const submittedEvent = (events ?? []).find((event) => event.event_type === "catalog_links_submitted");
+      const { data: detailEvents, error: detailEventError } = await admin
+        .from("audit_events")
+        .select("event_type,payload")
+        .eq("audit_job_id", jobId)
+        .in("event_type", ["catalog_ingestion", "catalog_links_submitted", "audit_failed"])
+        .order("created_at", { ascending: true });
+      if (detailEventError) throw new Error(`Unable to read audit event details: ${detailEventError.message}`);
+
+      const catalogEvents = (detailEvents ?? []).filter((event) => event.event_type === "catalog_ingestion");
+      const submittedEvent = (detailEvents ?? []).find((event) => event.event_type === "catalog_links_submitted");
       const submittedPayload = submittedEvent?.payload as Record<string, unknown> | null;
       const catalogUrlsSubmitted = Array.isArray(submittedPayload?.submittedLinks)
         ? submittedPayload.submittedLinks.filter((value): value is string => typeof value === "string")
@@ -623,7 +629,7 @@ export function createSupabaseAuditStore(
         },
       ) : [];
 
-      const failedEvent = (events ?? []).find((event) => event.event_type === "audit_failed");
+      const failedEvent = (detailEvents ?? []).find((event) => event.event_type === "audit_failed");
       const failedPayload = failedEvent?.payload as Record<string, unknown> | null;
       const rawFailure = failedPayload?.failure && typeof failedPayload.failure === "object"
         ? failedPayload.failure as Record<string, unknown> : null;
@@ -635,7 +641,7 @@ export function createSupabaseAuditStore(
       } : null;
 
       const currentStepIndex = getAuditProgressStepIndex(
-        (events ?? []).map((event) => String(event.event_type)),
+        (stageEvents ?? []).map((event) => String(event.event_type)),
         job.status as "queued" | "processing" | "completed" | "failed",
       );
 
