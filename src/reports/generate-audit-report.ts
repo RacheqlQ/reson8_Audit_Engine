@@ -206,8 +206,22 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
   ],shows:"Provider lookup outcomes across the submitted track links.",cantShow:"Audience size, stream counts, playlist placement or listener demand."}];
  }
  if(title==="Sonic DNA and technical profile")return [
- {title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,rows:[{label:"BPM",value:hasAudio&&tempoReliable?metric(s?.bpm,1):null},{label:"KEY / MODE",value:hasAudio&&isReliableKey(s)?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},{label:"KEY CONFIDENCE",value:hasAudio&&typeof s?.keyConfidence==="number"?Math.round(s.keyConfidence*100)+"%":null},{label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},{label:"RMS LEVEL dBFS",value:hasAudio?metric(s?.rmsLevelDbfs,1):null},{label:"DYNAMIC RANGE",value:hasAudio?metric(s?.dynamicRangeDb,1):null},{label:"RMS ENERGY",value:hasAudio?metric(s?.rmsEnergy,2):null}],shows:"Confidence-qualified tempo and key plus master-derived RMS signal level, dynamic range and spectral fields when an uploaded master exists.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."},
- {title:"Tempo and energy spectrum",kind:"spectrum",evidenceClass:"measured",unavailable:!hasAudio,rows:[{label:"TEMPO",value:hasAudio&&tempoReliable?metric(s?.bpm,1):null},{label:"RMS ENERGY",value:hasAudio?metric(s?.rmsEnergy,2):null},{label:"DYNAMIC RANGE",value:hasAudio?metric(s?.dynamicRangeDb,1):null}],shows:tempoReliable?"Confidence-qualified master-derived tempo and energy measurements.":"RMS energy and dynamic range; tempo withheld because confidence is insufficient.",cantShow:"A genre verdict or listener reaction from these measurements alone."}];
+ {title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,rows:[
+  {label:tempoReliable?"BPM":"BPM CANDIDATE (TENTATIVE)",value:hasAudio&&typeof s?.bpm==="number"&&typeof s?.tempoConfidence==="number"&&s.tempoConfidence>0?metric(s.bpm,1):null},
+  {label:"KEY / MODE",value:hasAudio&&isReliableKey(s)?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
+  {label:"KEY CONFIDENCE",value:hasAudio&&typeof s?.keyConfidence==="number"?Math.round(s.keyConfidence*100)+"%":null},
+  {label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},
+  {label:"RMS LEVEL dBFS",value:hasAudio?metric(s?.rmsLevelDbfs,1):null},
+  {label:"LOUDNESS RANGE LRA",value:hasAudio?metric(s?.loudnessRangeLu,1):null},
+  {label:"TRUE PEAK dBFS",value:hasAudio?metric(s?.truePeakDbfs,1):null},
+  {label:"RMS ENVELOPE SPREAD",value:hasAudio?metric(s?.dynamicRangeDb,1):null},
+  {label:"SPECTRAL CENTROID HZ",value:hasAudio?metric(s?.spectralCentroidHz,0):null}
+ ],shows:"Master-derived measurements. Tempo candidates remain explicitly tentative until the confidence gate is met; LUFS/LRA follow EBU R128.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."},
+ {title:"Tempo and energy spectrum",kind:"spectrum",evidenceClass:"measured",unavailable:!hasAudio,rows:[
+  {label:"TEMPO CANDIDATE",value:hasAudio&&typeof s?.bpm==="number"&&typeof s?.tempoConfidence==="number"&&s.tempoConfidence>0?metric(s.bpm,1):null},
+  {label:"RMS ENERGY",value:hasAudio?metric(s?.rmsEnergy,2):null},
+  {label:"RMS ENVELOPE SPREAD",value:hasAudio?metric(s?.dynamicRangeDb,1):null}
+ ],shows:tempoReliable?"Confidence-qualified tempo plus master-derived energy measurements.":"Tempo candidate is shown for review, not as a confirmed beat grid; RMS energy and envelope spread are signal descriptors.",cantShow:"A genre verdict or listener reaction from these measurements alone."}];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"Dynamic / RMS level",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
  if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(a.strengths.slice(0,10),a.risks.slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
@@ -258,18 +272,20 @@ function sections(i:AuditReportInput):Section[]{
  if (hasAudio) {
   sonicDnaBody.push(
    e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
-   "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
+   "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative candidate — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
    "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not measured"),
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
    "Integrated loudness (EBU R128): " + metric(s?.loudnessLufs,1) + " LUFS (gated programme loudness; not a mastering verdict)",
    "Loudness range (EBU R128 LRA): " + metric(s?.loudnessRangeLu,1) + " LU (programme loudness variation; not the same as sample-peak dynamic range)",
    "True peak: " + metric(s?.truePeakDbfs,1) + " dBFS (oversampled peak estimate from FFmpeg EBU R128)",
-   "Dynamic range: " + metric(s?.dynamicRangeDb,1) + " dB (direct signal measurement; not a quality verdict)",
+   "RMS envelope spread (p95/p10; internal proxy): " + metric(s?.dynamicRangeDb,1) + " dB (not EBU loudness range or a mastering verdict)",
    "RMS level dBFS: " + metric(s?.rmsLevelDbfs,1),
    "RMS energy: " + metric(s?.rmsEnergy,2),
    "Source format: " + val(s?.sampleRate) + " Hz; " + val(s?.channels) + " channel(s); " + metric(s?.durationSeconds,2) + " seconds",
    "Spectral profile: centroid " + metric(s?.spectralCentroidHz,0) + " Hz; bandwidth " + metric(s?.spectralBandwidthHz,0) + " Hz; 85% rolloff " + metric(s?.spectralRolloffHz,0) + " Hz; zero-crossing rate " + metric(s?.zeroCrossingRate,4),
-   "Measurement note: EBU R128 LUFS/LRA and true peak are separate from the internal RMS-envelope spread; RMS level, RMS energy and spectral descriptors are signal measurements, not subjective mastering-quality scores."
+   "Measurement note: EBU R128 LUFS/LRA and true peak are separate from the internal RMS-envelope spread; RMS level, RMS energy and spectral descriptors are signal measurements, not subjective mastering-quality scores.",
+   "Tempo estimator: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.method) + "; confidence diagnostic: " + metric(s?.tempoConfidence,2) + "; candidates: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.candidateBpms),
+   "Beat-grid diagnostic: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatGridStatus) + "; beat timestamps: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatTimesSeconds ? ((s?.rhythmFeatures as Record<string,unknown>).beatTimesSeconds as unknown[]).length : 0) + "; downbeat grouping is a four-beat diagnostic assumption, not a verified bar structure."
   );
  } else if (s) {
   sonicDnaBody.push(
