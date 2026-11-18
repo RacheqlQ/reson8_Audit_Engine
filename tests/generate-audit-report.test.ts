@@ -132,6 +132,8 @@ describe("A4 report layout and fixture coverage",()=>{
   const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");
   expect(report).toContain("Not measured: no master audio supplied.");
   expect(report).toContain("Key / mode: Not measured.");
+  expect(report).not.toContain("OBSERVED");
+  expect(report).not.toContain("synthetic_audio_fixture");
   expect(report).not.toContain("Measured from the uploaded master");
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
