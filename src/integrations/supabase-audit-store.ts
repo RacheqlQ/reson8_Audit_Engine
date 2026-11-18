@@ -594,7 +594,7 @@ export function createSupabaseAuditStore(
       };
       const { data: events, error: eventError } = await admin.from("audit_events")
         .select("event_type,status,created_at,payload").eq("audit_job_id", jobId)
-        .in("event_type", ["processing_claimed", "processing_started", "recognition", "catalog_ingestion", "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated", "audit_completed", "catalog_links_submitted"])
+        .in("event_type", ["processing_claimed", "processing_started", "recognition", "catalog_ingestion", "sonic_dna", "evidence_reconciliation", "ar_assessment", "report_generated", "audit_completed", "catalog_links_submitted", "audit_failed"])
         .order("created_at", { ascending: false });
       if (eventError) throw new Error("Unable to read audit events");
 
@@ -621,6 +621,8 @@ export function createSupabaseAuditStore(
         }) : [];
 
       const latestEvent = orderedEvents.find((event) => event.event_type in eventStep);
+      const failureEvent = orderedEvents.find((event) => event.event_type === "audit_failed");
+      const failurePayload = failureEvent?.payload as Record<string, unknown> | null;
       const currentStepIndex = latestEvent?.event_type && latestEvent.event_type in eventStep
         ? eventStep[latestEvent.event_type] : job.status === "completed" ? 5 : 0;
 
@@ -635,6 +637,7 @@ export function createSupabaseAuditStore(
       const result = {
         jobId, status: job.status as "queued" | "processing" | "completed" | "failed", currentStepIndex,
         errorCode: typeof job.error_code === "string" ? job.error_code : null,
+        errorRetryable: typeof failurePayload?.retryable === "boolean" ? failurePayload.retryable : false,
         errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
           : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its four-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
@@ -693,7 +696,7 @@ export function createSupabaseAuditStore(
     async markFailed(jobId, claimToken, message, signal, errorCode = "processing_error") {
       await fencedStep(jobId, claimToken, "fail", {
         message,
-        eventPayload: { errorCode },
+        eventPayload: { errorCode, retryable: ["capacity", "timeout", "provider_unavailable", "malformed_output"].includes(errorCode) },
       }, signal);
       const { error } = await admin.from("audit_jobs")
         .update({ error_code: errorCode, error_message: message })

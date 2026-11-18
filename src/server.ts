@@ -17,6 +17,7 @@ export interface AuditStore {
     currentStepIndex: number;
     errorMessage?: string | null;
     errorCode?: string | null;
+    errorRetryable?: boolean;
     full: { available: boolean; version?: number };
   }>;
   getAuditReport(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<{
