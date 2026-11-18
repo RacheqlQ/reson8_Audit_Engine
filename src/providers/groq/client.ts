@@ -510,7 +510,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           continue;
         }
 
-        throw new Error("" + providerLabel + " " + groupName + " assessment failed with HTTP 400 after bounded JSON recovery: " + detail.slice(0, 300));
+        throw new Error("json_validate_failed: " + providerLabel + " " + groupName + " assessment failed with HTTP 400 after bounded JSON recovery: " + detail.slice(0, 300));
       }
 
       throw new Error("" + providerLabel + " " + groupName + " assessment failed with HTTP " + (response?.status ?? "unknown")
