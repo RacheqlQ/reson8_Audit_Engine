@@ -20,7 +20,7 @@ let providerUnavailableLogged = false;
 
 export function isFallbackEligible(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /AI capacity reached|timed out|HTTP (?:413|429|5\d\d)|GROQ_REQUEST_TOO_LARGE|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
+  return /AI capacity reached|timed out|HTTP (?:413|429|5\d\d)|GROQ_REQUEST_TOO_LARGE|GROQ_TPM_CAPACITY_EXHAUSTED|json_validate_failed|failed to validate JSON|failed Zod validation|fetch failed|network|ECONNRESET|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT/i.test(message);
 }
 
 export function safeFailureCategory(error: unknown): string {
