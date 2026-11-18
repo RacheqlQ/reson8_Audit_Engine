@@ -5,6 +5,7 @@ const { claimNextQueuedJob } = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/providers/provider-policy.js", () => ({
+  markAssessmentProviderUnavailable: vi.fn(),
   providerDecision: (provider: string) => ({
     provider,
     enabled: provider === "groq",
