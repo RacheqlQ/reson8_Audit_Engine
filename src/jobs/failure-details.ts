@@ -20,11 +20,11 @@ function boundedIdentifier(value: unknown): string | undefined {
 export function getAuditFailureDetails(error: unknown): AuditFailureDetails {
   const context = error && typeof error === "object" ? error as Record<string, unknown> : {};
   const rawMessage = error instanceof Error ? error.message : String(error ?? "");
-  const providerFromMessage = rawMessage.match(/^(Groq|Gemini|Ollama|TIDAL)\\b/i)?.[1]?.toLowerCase();
+  const providerFromMessage = rawMessage.match(/^(Groq|Gemini|Ollama|TIDAL)\b/i)?.[1]?.toLowerCase();
   const providerValue = typeof context.provider === "string" ? context.provider.toLowerCase() : providerFromMessage ?? "";
   const provider = PROVIDERS.has(providerValue) ? providerValue as AuditFailureDetails["provider"] : undefined;
   const model = boundedIdentifier(context.model);
-  const messageStatus = rawMessage.match(/HTTP (\\d{3})/i)?.[1];
+  const messageStatus = rawMessage.match(/HTTP (\d{3})/i)?.[1];
   const httpStatusValue = Number(context.httpStatus ?? messageStatus);
   const httpStatus = Number.isInteger(httpStatusValue) && httpStatusValue >= 100 && httpStatusValue <= 599
     ? httpStatusValue : undefined;
