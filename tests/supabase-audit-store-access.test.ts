@@ -207,6 +207,17 @@ describe("audit progress event persistence", () => {
     });
   });
 
+  it("rejects progress writes from a stale claim token", async () => {
+    const { store, fetchMock } = makeStore({
+      status: "processing",
+      claim_token: "current-claim",
+      lease_expires_at: "2099-01-01T00:00:00.000Z",
+    });
+
+    await expect(store.markAssessmentStarted("job-stale", "old-claim")).rejects.toThrow("AUDIT_LEASE_LOST");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("records report-generation-started as a distinct progress stage", async () => {
     const { store, fetchMock } = makeStore({
       status: "processing",
