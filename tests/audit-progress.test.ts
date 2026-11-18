@@ -81,4 +81,17 @@ describe("report progress accounting", () => {
     ], "processing", "master");
     expect(progress.stages.find((stage) => stage.id === "report")).toMatchObject({ percent: 50, status: "in_progress" });
   });
+
+  it("retains a saved sample report's 50 percent when full-report generation fails", () => {
+    const progress = getAuditProgress([
+      { event_type: "recognition" },
+      { event_type: "sonic_dna" },
+      { event_type: "evidence_reconciliation" },
+      { event_type: "ar_assessment" },
+      { event_type: "report_generated", payload: { tier: "sample" } },
+      { event_type: "audit_failed" },
+    ], "failed", "master");
+    expect(progress.stages.find((stage) => stage.id === "report")).toMatchObject({ percent: 50, status: "failed" });
+    expect(progress.overallPercent).toBe(78.6);
+  });
 });
