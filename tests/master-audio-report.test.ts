@@ -125,4 +125,31 @@ describe("uploaded master provenance in reports", () => {
     expect(report).not.toContain("Key / mode: A minor");
   });
 
+  it("reports periodicity measurements without promoting them to vocal detection", () => {
+    const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.sonicDna = {
+      ...input.sonicDna,
+      vocalFeatures: {
+        status: "signal_diagnostics_only",
+        method: "autocorrelation_voiced_periodicity",
+        voicePresence: "undetermined",
+        sampledFrames: 100,
+        periodicFrames: 62,
+        periodicityActivityRatio: 0.62,
+        medianFundamentalHz: 220,
+        lowerFundamentalHz: 196,
+        upperFundamentalHz: 247,
+        limitations: ["Periodic energy is not proof of human vocals."],
+      },
+    };
+    const report = planAuditReportPages(input, "full")
+      .flatMap((section) => [section.title, ...section.text])
+      .join(" ");
+    expect(report).toContain("Limited signal-periodicity diagnostics were performed");
+    expect(report).toContain("voice-range periodicity diagnostic (not vocal detection)");
+    expect(report).toContain("median 220.0 Hz");
+    expect(report).toContain("singing, speech, vocal presence/absence and vocal arrangement remain undetermined");
+    expect(report).not.toContain("Vocal analysis: Performed");
+  });
+
 });
