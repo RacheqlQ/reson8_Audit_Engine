@@ -1,3 +1,5 @@
+import { markProviderUnavailable } from "../provider-readiness.js";
+
 interface TidalTokenResponse {
   access_token: string;
   token_type: string;
@@ -50,6 +52,9 @@ export class TidalClient implements TidalApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        markProviderUnavailable("tidal", "authentication");
+      }
       throw new Error(
         `TIDAL token request failed with HTTP ${response.status}`,
       );
@@ -93,6 +98,9 @@ export class TidalClient implements TidalApiClient {
     );
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        markProviderUnavailable("tidal", "authentication");
+      }
       throw new Error(
         `TIDAL track request failed with HTTP ${response.status}`,
       );
