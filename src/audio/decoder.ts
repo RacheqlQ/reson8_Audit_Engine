@@ -73,8 +73,14 @@ export function parseFloatPcmWav(buffer: Buffer): Pick<DecodedAudio, "samples" |
     throw new Error("Unsupported FFmpeg WAV format; expected interleaved 32-bit float PCM");
   }
   const alignedLength = dataLength - (dataLength % 4);
-  const samples = new Float32Array(alignedLength / 4);
-  for (let index = 0; index < samples.length; index++) samples[index] = buffer.readFloatLE(dataOffset + index * 4);
+  const sampleCount = alignedLength / 4;
+  // FFmpeg's WAV data is little-endian float32. A typed view shares the
+  // concatenated WAV allocation and avoids another audio-sized PCM copy.
+  const absoluteDataOffset = buffer.byteOffset + dataOffset;
+  const littleEndian = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+  const samples = buffer.buffer instanceof ArrayBuffer && littleEndian && absoluteDataOffset % 4 === 0
+    ? new Float32Array(buffer.buffer, absoluteDataOffset, sampleCount)
+    : Float32Array.from({ length: sampleCount }, (_, index) => buffer.readFloatLE(dataOffset + index * 4));
   if (samples.length % channels !== 0) throw new Error("Decoded PCM frame is incomplete");
   return { samples, sampleRate, channels };
 }
