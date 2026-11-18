@@ -382,7 +382,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (response.status === 429 && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody)) {
         throw new Error("AI capacity reached for now, please try again later", { cause: new Error("GROQ_DAILY_CAP_REACHED") });
       }
-      const tpmCapacity = response.status === 413 && /tokens?\\s+per\\s+minute|\\bTPM\\b/i.test(errorBody);
+      const tpmCapacity = response.status === 413 && /tokens?\s+per\s+minute|\bTPM\b/i.test(errorBody);
       const transient = response.status === 429 || response.status >= 500 || tpmCapacity;
       if (!transient || networkAttempt >= 2) break;
       await sleepImpl(Math.min(60_000, await providerRetryDelayMs(response, networkAttempt)), signal);
@@ -399,7 +399,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 413) {
-        if (/tokens?\\s+per\\s+minute|\\bTPM\\b/i.test(detail)) {
+        if (/tokens?\s+per\s+minute|\bTPM\b/i.test(detail)) {
           throw new Error("GROQ_TPM_CAPACITY_EXHAUSTED: provider token-per-minute capacity remained exhausted after bounded retries");
         }
         throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; the same payload was not retried");
