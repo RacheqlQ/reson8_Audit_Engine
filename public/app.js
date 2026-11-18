@@ -118,7 +118,7 @@ function renderEvidenceChain(progress,currentStepIndex=0){
   if(overallPercent)overallPercent.textContent=overall+"%";
   if(overallBar)overallBar.setAttribute("aria-valuenow",String(overall));
   if(overallFill)overallFill.style.width=overall+"%";
-  if(overallCaption)overallCaption.textContent=(progress?.completedStages??resolved.filter(stage=>stage.percent===100).length)+" of "+(progress?.totalStages??resolved.length)+" stages complete";
+  if(overallCaption)overallCaption.textContent=(progress?.completedStages??resolved.filter(stage=>stage.status==="completed").length)+" complete · "+(progress?.notApplicableStages??resolved.filter(stage=>stage.status==="not_applicable").length)+" not applicable · "+(progress?.totalStages??resolved.length)+" total stages";
 }
 function stopPolling(){auditPoller.stop();}
 function applyAuditPayload(payload){
