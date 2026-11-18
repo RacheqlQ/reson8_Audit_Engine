@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { configuredStuckJobTimeoutMs, createSupabaseAuditStore } from "../src/integrations/supabase-audit-store.js";
@@ -101,6 +102,13 @@ describe("DSP provider failure persistence", () => {
     expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "300000" })).toBe(300_000);
     expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "invalid" })).toBe(600_000);
     expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "1000" })).toBe(600_000);
+  });
+
+  it("keeps the fenced SQL catalog metadata update idempotent and null-safe", () => {
+    const migration = readFileSync(new URL("../supabase/migrations/20261118120000_coalesce_catalog_metadata_snapshot.sql", import.meta.url), "utf8");
+    expect(migration).toContain("create or replace function public.persist_fenced_audit_step");
+    expect(migration).toContain("catalog_metadata = coalesce(p_payload->'raw', '{}'::jsonb)");
+    expect(migration).not.toMatch(/drop\\s+table|alter\\s+table/i);
   });
 
   it("normalizes null catalog metadata snapshots to an empty object before the fenced write", async () => {
