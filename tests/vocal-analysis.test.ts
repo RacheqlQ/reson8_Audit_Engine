@@ -25,6 +25,21 @@ describe("acoustic vocal stem analysis", () => {
     expect(result.lyrics).toBe("not_requested");
   });
 
+  it("preserves vocal measurements for stereo channel arrays without requiring a full-length mono copy", () => {
+    const sampleRate = 8000;
+    const mix = Float32Array.from({ length: sampleRate * 3 }, (_, i) =>
+      0.5 * Math.sin(2 * Math.PI * 220 * i / sampleRate),
+    );
+    const vocal = Float32Array.from({ length: sampleRate * 3 }, (_, i) =>
+      i < sampleRate * 1.6 ? 0.25 * Math.sin(2 * Math.PI * 220 * i / sampleRate) : 0,
+    );
+
+    const monoResult = analyzeVocalStem([vocal], [mix], sampleRate);
+    const stereoResult = analyzeVocalStem([vocal, vocal], [mix, mix], sampleRate);
+
+    expect(stereoResult).toEqual(monoResult);
+  });
+
   it("does not claim vocals when the separated vocal stem contains negligible energy", () => {
     const sampleRate = 8000;
     const mix = Float32Array.from({ length: sampleRate * 2 }, (_, i) =>
