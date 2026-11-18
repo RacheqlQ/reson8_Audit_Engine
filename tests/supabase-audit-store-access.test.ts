@@ -74,6 +74,21 @@ describe("DSP provider failure persistence", () => {
     expect(configuredStuckJobTimeoutMs({ AUDIT_STUCK_JOB_TIMEOUT_MS: "1000" })).toBe(600_000);
   });
 
+  it("normalizes null catalog metadata snapshots to an empty object before the fenced write", async () => {
+    const { store, fetchMock } = makeStore({});
+    const metadata = {
+      platform: "spotify" as const, sourceUrl: "https://open.spotify.com/track/123",
+      canonicalUrl: "https://open.spotify.com/track/123", catalogId: "123",
+      artist: null, title: null, album: null, releaseDate: null, isrc: null, upc: null,
+      catalogPopularity: null, catalogPopularityScale: null, label: null, genre: null,
+      artworkUrl: null, previewUrl: null, externalIds: {}, sonicProfile: null,
+      raw: null as unknown as Record<string, unknown>, evidenceStatus: "partial" as const,
+    };
+    await store.saveCatalogMetadata("job-null-raw", "claim-token", metadata);
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.p_payload.raw).toEqual({});
+  });
+
   it("persists Spotify API failure status and a bounded reason for audit polling", async () => {
     const { store, fetchMock, getRequestUrl } = makeStore({});
     const metadata = {
