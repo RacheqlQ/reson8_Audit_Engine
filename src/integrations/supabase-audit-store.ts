@@ -5,7 +5,7 @@ import type { AuditFailureCode, AuditJobRecord } from "../jobs/process-audit-job
 import type { AuditRecognition } from "../providers/audd/normalize.js";
 import { type CatalogMetadata } from "../providers/dsp/catalog.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
-import { getAuditProgressStep } from "../jobs/audit-progress.js";
+import { getAuditProgress, getAuditProgressStep } from "../jobs/audit-progress.js";
 import type { MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
 import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
@@ -585,7 +585,7 @@ export function createSupabaseAuditStore(
     async getAuditStatus(jobId) {
       const statusStartedAt = Date.now();
       const { data: job, error: jobError } = await admin.from("audit_jobs")
-        .select("id,status,error_code,error_message,catalog_metadata").eq("id", jobId).maybeSingle();
+        .select("id,status,source_type,error_code,error_message,catalog_metadata").eq("id", jobId).maybeSingle();
       if (jobError) throw new Error("Unable to read audit status");
       if (!job) throw new Error("Audit job not found");
 
@@ -620,6 +620,7 @@ export function createSupabaseAuditStore(
       const failureEvent = orderedEvents.find((event) => event.event_type === "audit_failed");
       const failurePayload = failureEvent?.payload as Record<string, unknown> | null;
       const currentStepIndex = getAuditProgressStep(orderedEvents, job.status);
+      const progress = getAuditProgress(orderedEvents, job.status, typeof job.source_type === "string" ? job.source_type : null);
 
       const { data: reports, error: reportError } = await admin.from("audit_reports")
         .select("tier,version,access_status").eq("audit_job_id", jobId).order("version", { ascending: false });
@@ -630,7 +631,7 @@ export function createSupabaseAuditStore(
       }
       const full = latest.get("full");
       const result = {
-        jobId, status: job.status as "queued" | "processing" | "completed" | "failed", currentStepIndex,
+        jobId, status: job.status as "queued" | "processing" | "completed" | "failed", currentStepIndex, progress,
         errorCode: typeof job.error_code === "string" ? job.error_code : null,
         errorRetryable: typeof failurePayload?.retryable === "boolean" ? failurePayload.retryable : false,
         errorMessage: typeof job.error_message === "string" && job.error_message.startsWith("AI capacity reached for now") ? job.error_message
