@@ -42,6 +42,7 @@ describe("processAuditJob", () => {
   it("persists Sonic DNA before reconciliation, then assesses and completes a queued master", async () => {
     const events: string[] = [];
     let failureMessage = "";
+    let reconciledIdentity: unknown = null;
     const result = await processAuditJob("job-123", {
       getJob: async () => ({
         id: "job-123",
@@ -64,6 +65,7 @@ describe("processAuditJob", () => {
       recognize: async () => ({ matched: false as const }),
       saveRecognition: async () => events.push("recognition"),
       saveEvidence: async (_jobId, _claimToken, _recognition, reconciliation) => {
+        reconciledIdentity = reconciliation.identity;
         expect(reconciliation.identity).toMatchObject({
           artist: "Embedded Artist", title: "Embedded Title", album: "Embedded Album",
           isrc: "NGABC2600001", genres: ["Afrobeats"], releaseDate: "2025-08-27",
@@ -118,7 +120,7 @@ describe("processAuditJob", () => {
       markFailed: async (_jobId, _claimToken, message) => { failureMessage = message; events.push("failed"); },
     });
 
-    expect(result.status, failureMessage + " | events: " + events.join(",")).toBe("completed");
+    expect(result.status, failureMessage + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity)).toBe("completed");
     expect(events).toEqual([
       "processing",
       "recognition",
