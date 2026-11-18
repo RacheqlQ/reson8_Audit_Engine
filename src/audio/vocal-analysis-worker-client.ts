@@ -4,6 +4,39 @@ import type { VocalAnalysisResult } from "./vocal-analysis.js";
 
 export const VOCAL_ANALYSIS_TIMEOUT_MS = 150_000;
 
+export interface PcmTransferPayload {
+  samples: Float32Array;
+  transferList: ArrayBuffer[];
+}
+
+/** Reuse an exclusively-owned PCM allocation; compact only views that expose unrelated backing data. */
+export function preparePcmTransfer(samples: Float32Array, options: { allowLeadingBytes?: number } = {}): PcmTransferPayload {
+  const backing = samples.buffer;
+  const allowLeadingBytes = options.allowLeadingBytes ?? 0;
+  if (
+    backing instanceof ArrayBuffer
+    && samples.byteOffset === 0
+    && samples.byteLength === backing.byteLength
+  ) {
+    return { samples, transferList: [backing] };
+  }
+  // The FFmpeg WAV decoder owns this dedicated buffer. Its PCM view begins
+  // after the small RIFF header and extends to the end of the allocation.
+  // Transfer the backing allocation rather than cloning the entire PCM.
+  if (
+    backing instanceof ArrayBuffer
+    && allowLeadingBytes > 0
+    && samples.byteOffset > 0
+    && samples.byteOffset <= allowLeadingBytes
+    && samples.byteOffset % Float32Array.BYTES_PER_ELEMENT === 0
+    && samples.byteOffset + samples.byteLength === backing.byteLength
+  ) {
+    return { samples, transferList: [backing] };
+  }
+  const compact = new Float32Array(samples);
+  return { samples: compact, transferList: [compact.buffer as ArrayBuffer] };
+}
+
 export function analyzeVocalsWithTimeout(
   samples: Float32Array,
   sampleRate: number,
@@ -15,10 +48,10 @@ export function analyzeVocalsWithTimeout(
     if (signal?.aborted) return Promise.reject(signal.reason);
     return separateVocalsFromPcm(samples, sampleRate, channels, signal);
   }
-  const transferable = new Float32Array(samples);
+  const payload = preparePcmTransfer(samples, { allowLeadingBytes: 64 });
   const worker = new Worker(new URL("./vocal-analysis-worker.js", import.meta.url), {
-    workerData: { samples: transferable, sampleRate, channels },
-    transferList: [transferable.buffer],
+    workerData: { samples: payload.samples, sampleRate, channels },
+    transferList: payload.transferList,
   });
   return new Promise((resolve, reject) => {
     let settled = false;
