@@ -261,7 +261,7 @@ export function chartPanelDisplayStatus(input: Pick<ChartPanelInput, "fixture" |
  if(input.fixture)labels.push("SYNTHETIC FIXTURE");
  if(input.unavailable)labels.push("REQUIRES AUDIO");
  if(status!=="SYNTHETIC FIXTURE"&&status!=="REQUIRES AUDIO")labels.push(status);
- if((!input.unavailable||(evidence!=="MEASURED"&&evidence!=="OBSERVED"))&&!labels.includes(evidence))labels.push(evidence);
+ if((!input.unavailable||(evidence!=="MEASURED"))&&!labels.includes(evidence))labels.push(evidence);
  return labels.join(" · ");
 }
 function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,height:number){

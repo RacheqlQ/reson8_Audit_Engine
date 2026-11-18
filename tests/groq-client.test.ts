@@ -73,16 +73,20 @@ describe("GroqClient section groups",()=>{
   expect(JSON.stringify(attempts)).not.toContain("privatePrompt");
  });
  it("uses the current Gemini Flash Lite model and OpenAI-compatible JSON contract",async()=>{
-  const {mock}=fetchMock();
+  let capturedUrl="";
+  let capturedInit:RequestInit|undefined;
+  const controller=new AbortController();
+  const mock=vi.fn(async (url:RequestInfo|URL,init?:RequestInit)=>{
+   capturedUrl=String(url);capturedInit=init;controller.abort();throw new Error("test-stop-after-request-capture");
+  });
   const client=new GeminiClient("test-gemini-key",undefined,mock as typeof fetch);
-  await client.assess({evidence:{},sonicDna:null});
-  const [url,init]=mock.mock.calls[0] as unknown as [string,RequestInit];
-  const body=JSON.parse(String(init.body));
-  expect(url).toContain("/v1beta/openai/chat/completions");
-  expect((init.headers as Record<string,string>).authorization).toBe("Bearer test-gemini-key");
+  await expect(client.assess({evidence:{},sonicDna:null},controller.signal)).rejects.toThrow("test-stop-after-request-capture");
+  const body=JSON.parse(String(capturedInit?.body));
+  expect(capturedUrl).toContain("/v1beta/openai/chat/completions");
+  expect((capturedInit?.headers as Record<string,string>).authorization).toBe("Bearer test-gemini-key");
   expect(body.model).toBe("gemini-3.5-flash-lite");
-  expect(JSON.stringify(body.messages[0].content)).toContain("outputSchema");
   expect(body.response_format).toEqual({type:"json_object"});
+  expect(JSON.stringify(body.messages[0].content)).toContain("outputSchema");
  });
  it("passes the completion-token budget on every Groq request",async()=>{
   const {mock}=fetchMock();
