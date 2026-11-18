@@ -7,7 +7,7 @@ import { type CatalogMetadata } from "../providers/dsp/catalog.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import type { MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
-import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { ensurePdfReport, isPdf } from "../reports/pdf-output.js";
 import { sha256 } from "../jobs/content-hash.js";
@@ -42,7 +42,6 @@ export interface SupabaseAuditStore {
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal): Promise<void>;
-  recordProviderAttempt(jobId: string, attempt: ProviderAttemptDiagnostic): Promise<void>;
   getAuditStatus(jobId: string): Promise<{
     jobId: string;
     status: "queued" | "processing" | "completed" | "failed";
@@ -725,22 +724,6 @@ export function createSupabaseAuditStore(
     },
     async markFailed(jobId, claimToken, message, signal) {
       await fencedStep(jobId, claimToken, "fail", { message }, signal);
-    },
-    async recordProviderAttempt(jobId, attempt) {
-      const { error } = await admin.from("audit_events").insert({
-        audit_job_id: jobId,
-        event_type: "provider_attempt",
-        status: attempt.errorType === "none" ? "completed" : "failed",
-        payload: {
-          provider: attempt.provider,
-          model: attempt.model,
-          httpStatus: attempt.status,
-          errorType: attempt.errorType,
-          retryable: attempt.retryable,
-          attempt: attempt.attempt,
-        },
-      });
-      if (error) throw new Error("Unable to persist provider attempt diagnostic");
     },
   };
 }

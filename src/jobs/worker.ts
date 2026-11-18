@@ -3,7 +3,7 @@ import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
-import { GeminiClient, GroqClient, OllamaClient, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
+import { GeminiClient, GroqClient, OllamaClient } from "../providers/groq/client.js";
 import { generateAuditReport } from "../reports/generate-audit-report.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
@@ -107,7 +107,6 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     generateAssessment: async (input, signal) => {
       const assessmentInput = {
         ...input,
-        recordProviderAttempt: (attempt: ProviderAttemptDiagnostic) => store.recordProviderAttempt(job.id, attempt),
         loadCompletedSectionGroup: (group: string) => store.loadAssessmentSectionGroup(job.id, group),
         saveCompletedSectionGroup: (group: string, result: unknown) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, signal),
       };

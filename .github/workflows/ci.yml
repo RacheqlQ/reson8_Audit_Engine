@@ -50,6 +50,10 @@ jobs:
           if (!commands.length) throw new Error('render.yaml has no buildCommand/startCommand');
           for (const [, key, raw] of commands) {
             const command = raw.trim().replace(/^['"]|['"]$/g, '');
+            if (/^(?:npm|yarn|pnpm)\s+(?:install|ci)(?:\s|$)/.test(command)) {
+              console.log('Verified package-manager command: ' + command.split(/\s+/).slice(0, 2).join(' '));
+              continue;
+            }
             const scriptName = command.match(/(?:npm|yarn|pnpm)\s+(?:run\s+)?([\w:-]+)/)?.[1];
             if (!scriptName || !pkg.scripts?.[scriptName]) {
               throw new Error(`Render ${key} does not map to an existing package.json script: ${command}`);

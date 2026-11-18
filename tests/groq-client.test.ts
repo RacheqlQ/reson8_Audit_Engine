@@ -62,16 +62,6 @@ describe("GroqClient section groups",()=>{
   }
  });
 
- it("records sanitized provider, model, HTTP status and retryability for each request",async()=>{
-  const {mock}=fetchMock();
-  const attempts:Array<Record<string,unknown>>=[];
-  const client=new GroqClient("secret-test-key","test-model",mock as typeof fetch);
-  await client.assess({evidence:{privatePrompt:"must not be persisted"},sonicDna:null,recordProviderAttempt:async(attempt)=>{attempts.push(attempt);}});
-  expect(attempts).toHaveLength(9);
-  expect(attempts[0]).toMatchObject({provider:"groq",model:"test-model",status:200,errorType:"none",retryable:false,attempt:1});
-  expect(JSON.stringify(attempts)).not.toContain("secret-test-key");
-  expect(JSON.stringify(attempts)).not.toContain("privatePrompt");
- });
  it("passes the completion-token budget on every Groq request",async()=>{
   const {mock}=fetchMock();
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
