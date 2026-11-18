@@ -21,6 +21,9 @@ export function classifyAuditFailure(error: unknown): SanitizedAuditFailure {
   const statusMatch = message.match(/HTTP\s+(\d{3})/i);
   const httpStatus = statusMatch ? Number(statusMatch[1]) : null;
 
+  if (/GROQ_TPM_CAPACITY_EXHAUSTED/i.test(message)) {
+    return { errorCode: "AI_PROVIDER_CAPACITY", provider: "groq", httpStatus: 413, errorType: "capacity", retryable: true };
+  }
   if (/capacity|daily.limit|\bTPM\b|\bTPD\b|429/.test(lower)) {
     return { errorCode: "AI_PROVIDER_CAPACITY", provider, httpStatus: httpStatus ?? 429, errorType: "capacity", retryable: true };
   }
