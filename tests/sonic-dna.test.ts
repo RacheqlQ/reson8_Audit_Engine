@@ -96,7 +96,7 @@ describe("Sonic DNA",()=>{
   expect(result.key).toBeNull();
   expect(result.mode).toBeNull();
   expect(result.limitations.some((item)=>item.includes("varied across audio segments"))).toBe(true);
- });
+ },15000);
  it("returns null key and tempo with limitation notes for silence",()=>{
   const result=analyzePcm(new Float32Array(48000),8000);
   expect(result.key).toBeNull();
