@@ -85,4 +85,44 @@ describe("uploaded master provenance in reports", () => {
     expect(report).toContain("No DSP provider lookup result was recorded");
   });
 
+  it("shows low-confidence key and tempo candidates with their detector abstention diagnostics", () => {
+    const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      bpm: 190,
+      tempoConfidence: 0.28,
+      rhythmFeatures: {
+        status: "insufficient_evidence",
+        method: "high_frequency_transient_autocorrelation",
+        candidateBpms: [190, 95],
+        abstentionReason: "Tempo candidate prominence is too weak to support a reliable result.",
+      },
+      key: null,
+      mode: null,
+      keyConfidence: 0.17,
+      keySegmentAgreement: 0.75,
+      harmonicFeatures: {
+        status: "insufficient_evidence",
+        method: "fft_harmonic_chroma_ensemble",
+        limitation: "Key and mode confidence was below threshold; no key is asserted.",
+        segmentChroma: [
+          { winningKey: "A", winningMode: "minor" },
+          { winningKey: "A", winningMode: "minor" },
+          { winningKey: "A", winningMode: "minor" },
+          { winningKey: "C", winningMode: "major" },
+        ],
+      },
+      limitations: ["Key and mode confidence was below threshold; no key is asserted."],
+    };
+    const report = planAuditReportPages(input, "full")
+      .flatMap((section) => [section.title, ...section.text])
+      .join(" ");
+    expect(report).toContain("Tentative candidate — 190 BPM");
+    expect(report).toContain("abstention: Tempo candidate prominence is too weak");
+    expect(report).toContain("Tentative segment candidate — A minor (3/4 analysed windows; not verified)");
+    expect(report).toContain("Key and mode confidence was below threshold");
+    expect(report).not.toContain("Key / mode: A minor");
+  });
+
 });
