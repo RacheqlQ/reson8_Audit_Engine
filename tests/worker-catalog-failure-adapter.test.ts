@@ -46,6 +46,9 @@ vi.mock("../src/providers/groq/client.js", () => ({
   GroqClient: class {
     assess = vi.fn();
   },
+  GeminiClient: class { assess = vi.fn(); },
+  OllamaClient: class { assess = vi.fn(); },
+  DEFAULT_GROQ_MODEL: "test-groq-model",
 }));
 
 vi.mock("../src/audio/decoder.js", () => ({

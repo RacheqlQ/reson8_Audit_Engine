@@ -89,6 +89,23 @@ describe("DSP provider failure persistence", () => {
     expect(requestBody.p_payload.raw).toEqual({});
   });
 
+  it("persists sanitized provider attempt metadata as an audit event", async () => {
+    const { store, fetchMock } = makeStore({});
+    await store.recordProviderAttempt("job-provider-attempt", {
+      provider: "gemini", model: "gemini-2.5-flash", status: 503,
+      errorType: "provider_error", retryable: true, attempt: 2,
+    });
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody).toMatchObject({
+      audit_job_id: "job-provider-attempt",
+      event_type: "provider_attempt",
+      status: "failed",
+      payload: { provider: "gemini", model: "gemini-2.5-flash", httpStatus: 503, errorType: "provider_error", retryable: true, attempt: 2 },
+    });
+    expect(JSON.stringify(requestBody)).not.toContain("api_key");
+    expect(JSON.stringify(requestBody)).not.toContain("prompt");
+  });
+
   it("persists Spotify API failure status and a bounded reason for audit polling", async () => {
     const { store, fetchMock, getRequestUrl } = makeStore({});
     const metadata = {
