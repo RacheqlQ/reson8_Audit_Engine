@@ -233,7 +233,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     sonicDna && sonicDna.provenance === "uploaded_audio_master",
   );
   if (!hasUploadedMasterMeasurements && Array.isArray(mutable.strengths)) {
-    const audioMeasurementClaim = /\\b(?:\\d{2,3}\\s*bpm|beats per minute|tempo|key\\s*\\/\\s*mode|harmonic key|rhythm|rhythmic|dynamic range|rms|lufs|loudness|spectral|vocal|instrumental|mix translation|mastering|low[- ]end|groove|arrangement|production quality)\\b/i;
+    const audioMeasurementClaim = /\b(?:\d{2,3}\s*bpm|beats per minute|tempo|key\s*\/\s*mode|harmonic key|rhythm|rhythmic|dynamic range|rms|lufs|loudness|spectral|vocal|instrumental|mix translation|mastering|low[- ]end|groove|arrangement|production quality)\b/i;
     mutable.strengths = mutable.strengths.filter((strength: unknown) =>
       typeof strength !== "string" || !audioMeasurementClaim.test(strength),
     );
