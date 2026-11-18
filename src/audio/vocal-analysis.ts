@@ -263,6 +263,7 @@ export function analyzeVocalStem(
     delivery: "not_classified",
     layering: "not_classified",
     lyrics: "not_requested",
+    reviewStatus: "not_human_reviewed",
     limitations: [
       "Vocal presence is a conservative interpretation of a separated stem and energy/pitch evidence, not a calibrated probability.",
       "Source separation can leak harmonic instruments into the vocal stem or suppress difficult vocal material.",
