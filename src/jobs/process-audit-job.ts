@@ -74,6 +74,7 @@ function assertLeaseActive(deps: AuditProcessorDependencies): void {
 }
 
 export const AI_ASSESSMENT_STAGE_TIMEOUT_MS = 10 * 60_000;
+export const AUDIT_JOB_DEADLINE_MS = 20 * 60_000;
 
 export type AuditFailureCode = "capacity" | "auth" | "malformed_output" | "timeout" | "provider_unavailable" | "processing_error";
 
@@ -109,7 +110,7 @@ function userSafeFailureMessage(error: unknown): string {
     };
     return messages[stage] ?? "Audit processing: the " + stage.replace(/_/g, " ") + " stage exceeded its time limit. Please retry.";
   }
-  if (raw === "GROQ_ASSESSMENT_TIMEOUT") return "AI assessment: the analysis exceeded its four-minute time limit. Please retry later.";
+  if (raw === "GROQ_ASSESSMENT_TIMEOUT") return "AI assessment: one provider reached its allocated time limit; the configured fallback chain could not complete the assessment.";
   if (raw.startsWith("Combined audit is missing its uploaded master")) return "Audio intake: the combined audit is missing its uploaded master audio. Upload the master file and retry.";
   if (raw === "master unavailable") return "Audio intake: the uploaded master could not be retrieved. Re-upload it and retry.";
   if (raw.includes("evidenceGaps") || raw.includes("scorecard") || raw.includes("Zod validation")) return "AI assessment: the generated response did not meet the report's validation requirements. Please retry later.";
@@ -431,7 +432,7 @@ export async function processAuditJob(
   if (job.status !== "processing") throw new Error(`Audit job is not actively claimed: ${job.status}`);
   const previousSignal = deps.signal;
   const jobDeadlineController = new AbortController();
-  const jobDeadlineTimer = setTimeout(() => jobDeadlineController.abort(new Error("AUDIT_JOB_DEADLINE_EXCEEDED")), 8 * 60_000);
+  const jobDeadlineTimer = setTimeout(() => jobDeadlineController.abort(new Error("AUDIT_JOB_DEADLINE_EXCEEDED")), AUDIT_JOB_DEADLINE_MS);
   deps.signal = previousSignal ? AbortSignal.any([previousSignal, jobDeadlineController.signal]) : jobDeadlineController.signal;
 
   try {
