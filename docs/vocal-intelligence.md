@@ -12,7 +12,7 @@ For an uploaded master, the existing Node worker now runs a vocal-only source-se
 - **Memory policy:** CPU memory arena and memory pattern pooling are disabled; the vocal-only path uses the raw model estimate (no multichannel Wiener refinement) to reduce peak allocation on the existing Render worker. Actual production RAM and latency still require measurement against real masters.
 - **Cache:** the verified model is stored under `AUDIO_NEURAL_CACHE` or `~/.cache/audiojs/neural`; no model weights are committed to the repository.
 
-The result records model provenance, vocal-stem energy share, estimated activity ratio and timestamps, vocal-stem RMS, a conservative fundamental-frequency range/contour, and explicit limitations. The result is persisted as part of Sonic DNA before reconciliation.
+The result records model provenance, vocal-stem energy ratio, estimated activity ratio and timestamps, vocal-stem RMS, a conservative fundamental-frequency range/contour, and explicit limitations. The result is persisted as part of Sonic DNA before reconciliation.
 
 ## What the result means
 
