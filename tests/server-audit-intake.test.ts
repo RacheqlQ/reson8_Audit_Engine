@@ -65,6 +65,7 @@ describe("GET /health", () => {
       expect.objectContaining({ provider: "groq", enabled: expect.any(Boolean), status: expect.any(String), credentialConfigured: expect.any(Boolean) }),
       expect.objectContaining({ provider: "gemini", enabled: expect.any(Boolean), status: expect.any(String), credentialConfigured: expect.any(Boolean) }),
       expect.objectContaining({ provider: "ollama", enabled: expect.any(Boolean), status: expect.any(String), credentialConfigured: expect.any(Boolean) }),
+      expect.objectContaining({ provider: "tidal", enabled: expect.any(Boolean), status: expect.any(String), credentialConfigured: expect.any(Boolean) }),
     ]));
     expect(JSON.stringify(payload)).not.toContain("GROQ_API");
 
