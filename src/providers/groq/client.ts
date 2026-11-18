@@ -293,7 +293,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       return true;
     }
     if (responseMode === "json_schema") return false;
-    if (responseMode === "json_object" && jsonObjectContentRetries < 2) {
+    if (responseMode === "json_object" && jsonObjectContentRetries < (providerName === "gemini" ? 1 : 2)) {
       jsonObjectContentRetries++;
       lastError += " Correct every reported issue and return one complete object matching outputSchema.";
       return true;
@@ -432,7 +432,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           continue;
         }
 
-        if (responseMode === "json_object" && jsonObjectProviderRetries < 2) {
+        if (responseMode === "json_object" && jsonObjectProviderRetries < (providerName === "gemini" ? 1 : 2)) {
           jsonObjectProviderRetries++;
           if (jsonObjectProviderRetries === 2) {
             responseMode = "prompt_only";
