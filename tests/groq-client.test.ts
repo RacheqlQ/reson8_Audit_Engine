@@ -72,6 +72,17 @@ describe("GroqClient section groups",()=>{
   expect(JSON.stringify(attempts)).not.toContain("secret-test-key");
   expect(JSON.stringify(attempts)).not.toContain("privatePrompt");
  });
+ it("uses the current Gemini Flash Lite model and OpenAI-compatible JSON contract",async()=>{
+  const {mock}=fetchMock();
+  const client=new GeminiClient("test-gemini-key",undefined,mock as typeof fetch);
+  await client.assess({evidence:{},sonicDna:null});
+  const [url,init]=mock.mock.calls[0] as unknown as [string,RequestInit];
+  const body=JSON.parse(String(init.body));
+  expect(url).toContain("/v1beta/openai/chat/completions");
+  expect((init.headers as Record<string,string>).authorization).toBe("Bearer test-gemini-key");
+  expect(body.model).toBe("gemini-3.5-flash-lite");
+  expect(body.response_format).toMatchObject({type:"json_schema",json_schema:{strict:true}});
+ });
  it("passes the completion-token budget on every Groq request",async()=>{
   const {mock}=fetchMock();
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
