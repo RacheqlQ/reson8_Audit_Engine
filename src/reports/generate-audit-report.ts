@@ -278,6 +278,7 @@ function sections(i:AuditReportInput):Section[]{
  } else if (hasMasterAudio) {
   sonicDnaBody.push(
    "Master audio submitted; master-derived Sonic DNA measurements unavailable.",
+   "Key / mode: Not measured.",
    "Processing status: no completed master analysis is available; do not substitute provider tags for measurements.",
    "Required action: retry the audio decode and Sonic DNA worker path while preserving the combined-source job and its submitted DSP link.",
    "Until measurements are present, BPM, key/mode, rhythm, integrated loudness, dynamic range and vocal presence remain unconfirmed."
@@ -285,6 +286,7 @@ function sections(i:AuditReportInput):Section[]{
  } else {
   sonicDnaBody.push(
    "Requires audio upload",
+   "Key / mode: Not measured.",
    "Not measured: no master audio supplied.",
    "Required next input: upload the actual master audio file in WAV, FLAC or a high-quality MP3 so the worker can inspect the recording rather than relying on catalogue metadata.",
    "Analysis plan: after ingestion, estimate BPM with confidence and segment stability, estimate key/mode with confidence and agreement, measure integrated loudness and dynamic range, and run vocal-activity analysis.",
