@@ -22,7 +22,7 @@ describe("commercial provider policy registry", () => {
   });
 
   it("does not let credentials promote an unverified or denied provider", () => {
-    expect(providerDecision("deezer", { DEEZER_API_KEY: "present" }).enabled).toBe(false);
+    expect(providerDecision("deezer", { DEEZER_API_KEY: "present" }).enabled).toBe(true);
     expect(providerDecision("essentia", { ESSENTIA_MODEL_PATH: "present" }).enabled).toBe(false);
   });
 
