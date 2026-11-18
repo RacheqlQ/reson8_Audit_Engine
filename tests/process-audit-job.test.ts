@@ -79,6 +79,8 @@ describe("processAuditJob", () => {
         return assessment;
       },
       saveAssessment: async () => events.push("assessment-saved"),
+      markAssessmentStarted: async () => events.push("assessment-started"),
+      markReportGenerationStarted: async () => events.push("report-started"),
       generateReport: async (_input, tier) => {
         events.push(`report-${tier}`);
         return new Uint8Array([37, 80, 68, 70, 45]);
@@ -98,8 +100,10 @@ describe("processAuditJob", () => {
       "recognition",
       "dna",
       "evidence",
+      "assessment-started",
       "assessment",
       "assessment-saved",
+      "report-started",
       "report-sample",
       "report-saved-sample",
       "report-full",
