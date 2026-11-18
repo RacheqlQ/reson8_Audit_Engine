@@ -73,6 +73,8 @@ function assertLeaseActive(deps: AuditProcessorDependencies): void {
   if (deps.signal?.aborted) throw leaseLostError(deps.signal);
 }
 
+export const AI_ASSESSMENT_STAGE_TIMEOUT_MS = 10 * 60_000;
+
 export type AuditFailureCode = "capacity" | "auth" | "malformed_output" | "timeout" | "provider_unavailable" | "processing_error";
 
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
@@ -99,7 +101,7 @@ function userSafeFailureMessage(error: unknown): string {
       audio_decode: "Sonic DNA: the uploaded audio could not be decoded in time. Check the audio file and retry.",
       catalog_preview_recognition: "Catalog recognition: optional preview identification timed out; the audit can continue without it.",
       sonic_dna: "Sonic DNA: technical analysis exceeded its time limit. Please retry with a shorter or supported master.",
-      ai_assessment: "AI assessment: the analysis exceeded its four-minute time limit. Please retry later.",
+      ai_assessment: "AI assessment: the analysis exceeded its ten-minute time limit. Please retry later.",
       sample_pdf_generation: "Sample report: PDF generation exceeded its time limit. Please retry.",
       full_pdf_generation: "Full report: PDF generation exceeded its time limit. Please retry.",
       sample_pdf_persistence: "Sample report: the PDF could not be saved in time. Please retry.",
@@ -644,7 +646,7 @@ export async function processAuditJob(
       genreClassification,
       genreContext: genreClassification.genres.map((genre) => genre.label),
     } : null;
-    const assessment = await awaitWithStage(deps, "ai_assessment", 4 * 60_000, (signal) => deps.generateAssessment({
+    const assessment = await awaitWithStage(deps, "ai_assessment", AI_ASSESSMENT_STAGE_TIMEOUT_MS, (signal) => deps.generateAssessment({
       evidence: assessmentEvidence,
       sonicDna,
       catalogMetadata: assessmentMetadata
