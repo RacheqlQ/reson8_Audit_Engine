@@ -254,12 +254,16 @@ function sections(i:AuditReportInput):Section[]{
   : curatorVocalAnalyzed
    ? "Vocal analysis: Performed (status: "+vocalStatus+"). Only explicitly returned vocal measurements may be reported; unmeasured vocal attributes remain unknown."
    : "Vocal analysis: Status "+vocalStatus+"; no conclusion about vocal presence or absence is established.";
+ const keyModeValue=[text(s?.key),text(s?.mode)].filter(Boolean).join(" ");
+ const keyModeStatus=keyModeValue
+   ? (isReliableKey(s) ? keyModeValue : "Not reported — confidence below 80% reporting target")
+   : Number(s?.keyConfidence)>0 ? "Not reported — confidence below 80% reporting target" : "Not measured";
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
   sonicDnaBody.push(
    e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
    "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
-   "Key / mode: " + (![text(s?.key), text(s?.mode)].filter(Boolean).length ? "Not measured" : isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not reported — confidence below 80% reporting target"),
+   "Key / mode: " + keyModeStatus,
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
    "Integrated loudness: " + metric(s?.loudnessLufs,1) + " LUFS (direct signal measurement; not a mastering verdict)",
    "Dynamic range: " + metric(s?.dynamicRangeDb,1) + " dB (direct signal measurement; not a quality verdict)",
