@@ -56,6 +56,8 @@ export interface AuditProcessorDependencies {
     catalogMetadata?: Record<string, unknown> | null;
   }, signal?: AbortSignal): Promise<ArAssessment>;
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment, signal?: AbortSignal): Promise<void>;
+  markAssessmentStarted?(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
+  markReportGenerationStarted?(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   generateReport(input: AuditReportInput, tier: AuditReportTier, signal?: AbortSignal): Promise<Uint8Array>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
@@ -637,6 +639,11 @@ export async function processAuditJob(
       genreClassification,
       genreContext: genreClassification.genres.map((genre) => genre.label),
     } : null;
+    if (deps.markAssessmentStarted) {
+      await awaitWithStage(deps, "assessment_start", 15_000, (signal) =>
+        deps.markAssessmentStarted!(jobId, job.claimToken, signal),
+      );
+    }
     const assessment = await awaitWithStage(deps, "ai_assessment", 4 * 60_000, (signal) => deps.generateAssessment({
       evidence: assessmentEvidence,
       sonicDna,
@@ -651,6 +658,11 @@ export async function processAuditJob(
         : null,
     }, signal));
     await awaitWithStage(deps, "assessment_persist", 15_000, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
+    if (deps.markReportGenerationStarted) {
+      await awaitWithStage(deps, "report_generation_start", 15_000, (signal) =>
+        deps.markReportGenerationStarted!(jobId, job.claimToken, signal),
+      );
+    }
 
     const generatedAt = new Date().toISOString();
     const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
