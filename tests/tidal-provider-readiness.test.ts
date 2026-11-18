@@ -4,6 +4,7 @@ import { getProviderReadiness, markProviderAvailable } from "../src/providers/pr
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   markProviderAvailable("tidal");
 });
 
