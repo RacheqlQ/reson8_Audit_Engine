@@ -113,6 +113,24 @@ describe("DSP provider failure persistence", () => {
     });
   });
 
+  it("creates a master-only job with an explicit empty catalog metadata object", async () => {
+    const { store, fetchMock } = makeStore({ id: "job-master-only" });
+    const deps = store.createJobDependencies();
+    await deps.createJob({
+      ownerId: null,
+      filename: "master.wav",
+      mimeType: "audio/wav",
+      sizeBytes: 4,
+      sha256: "a".repeat(64),
+      sourceType: "master",
+      catalogUrl: null,
+      reportAccessTokenHash: "b".repeat(64),
+    });
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.catalog_metadata).toEqual({});
+  });
+
   it("persists only sanitized failure codes and provider diagnostics", async () => {
     const { store, fetchMock } = makeStore({});
     await store.markFailed("job-failure", "claim-token", "AI assessment: retry later.", undefined, {
