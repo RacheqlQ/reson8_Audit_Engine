@@ -36,7 +36,7 @@ describe("uploaded master provenance in reports", () => {
       .flatMap((section) => [section.title, ...section.text])
       .join(" ");
     expect(report).toContain("Integrated loudness: -11.3 LUFS");
-    expect(report).toContain("Dynamic range: 13.1 dB");
+    expect(report).toContain("RMS envelope spread (p95/p10; internal proxy): 13.1 dB");
     expect(report).toContain("Vocal analysis: Not performed");
     expect(report.toLowerCase()).toContain("vocal presence/absence is unknown");
   });
