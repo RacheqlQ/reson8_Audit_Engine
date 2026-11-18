@@ -305,13 +305,18 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
 }
 
 export async function runAuditQueueWorker(signal: AbortSignal): Promise<void> {
-  const groqReadiness = getProviderReadiness().groq;
-  if (!groqReadiness.ready) {
+  const readiness = getProviderReadiness();
+  if (!readiness.groq.ready && !readiness.gemini.ready && !readiness.ollama.ready) {
+    const unavailableProvider = !readiness.groq.ready ? "groq" : !readiness.gemini.ready ? "gemini" : "ollama";
     console.error(JSON.stringify({
       worker: "audit",
       event: "worker_start_blocked",
-      provider: "groq",
-      reason: groqReadiness.reason ?? "not_ready",
+      provider: unavailableProvider,
+      reasons: {
+        groq: readiness.groq.reason,
+        gemini: readiness.gemini.reason,
+        ollama: readiness.ollama.reason,
+      },
     }));
     return;
   }
