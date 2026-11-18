@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyAuditFailure, processAuditJob } from "../src/jobs/process-audit-job.js";
+import { AI_ASSESSMENT_STAGE_TIMEOUT_MS, AUDIT_JOB_DEADLINE_MS, classifyAuditFailure, processAuditJob } from "../src/jobs/process-audit-job.js";
 
 const assessment = {} as import("../src/providers/groq/client.js").ArAssessment;
 
@@ -22,6 +22,15 @@ function id3Fixture(): Uint8Array {
 
 
 describe("audit failure classification", () => {
+  it("allocates ten minutes to assessment with a longer overall job safety deadline", () => {
+    expect(AI_ASSESSMENT_STAGE_TIMEOUT_MS).toBe(10 * 60_000);
+    expect(AUDIT_JOB_DEADLINE_MS).toBeGreaterThan(AI_ASSESSMENT_STAGE_TIMEOUT_MS);
+  });
+
+  it("classifies malformed provider JSON as retryable malformed output", () => {
+    expect(classifyAuditFailure(new Error("json_validate_failed: Groq evidence-score assessment failed with HTTP 400"))).toBe("malformed_output");
+  });
+
   it("classifies exhausted upstream 5xx responses as provider unavailable", () => {
     expect(classifyAuditFailure(new Error("Gemini assessment failed with HTTP 503"))).toBe("provider_unavailable");
     expect(classifyAuditFailure(new Error("provider_error: Ollama returned HTTP 502"))).toBe("provider_unavailable");
