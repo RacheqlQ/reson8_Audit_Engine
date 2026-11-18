@@ -68,6 +68,27 @@ describe("Supabase capability-token verification adapter", () => {
 });
 
 
+describe("audit job catalog metadata defaults", () => {
+  it("inserts an empty object when an audio-only job has no catalog metadata", async () => {
+    const { store, fetchMock } = makeStore({ id: "audio-only-job" });
+    const dependencies = store.createJobDependencies();
+
+    await dependencies.createJob({
+      ownerId: null,
+      filename: "master.wav",
+      mimeType: "audio/wav",
+      sizeBytes: 3,
+      sha256: "a".repeat(64),
+      sourceType: "master",
+      catalogUrl: null,
+      reportAccessTokenHash: "b".repeat(64),
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.catalog_metadata).toEqual({});
+  });
+});
+
 describe("DSP provider failure persistence", () => {
   it("persists Spotify API failure status and a bounded reason for audit polling", async () => {
     const { store, fetchMock, getRequestUrl } = makeStore({});
