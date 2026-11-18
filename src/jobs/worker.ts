@@ -10,6 +10,7 @@ import { processAuditJob, type AuditProcessorDependencies } from "./process-audi
 import { runQueueWorkerLoop } from "./worker-loop.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 import { startRenderFreeServiceKeepalive } from "./render-free-service-keepalive.js";
+import { getAuditFailureDetails } from "./failure-details.js";
 
 const POLL_INTERVAL_MS = 15_000;
 const HEARTBEAT_INTERVAL_MS = 45_000;
@@ -66,7 +67,8 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       worker: "audit",
       event: "queue_claim_failed",
       retryInMs: POLL_INTERVAL_MS,
-      error: error instanceof Error ? error.message : String(error),
+      errorCode: getAuditFailureDetails(error).error_code,
+        retryable: getAuditFailureDetails(error).retryable,
     }));
     throw error;
   }
@@ -282,7 +284,8 @@ export async function runAuditQueueWorker(signal: AbortSignal): Promise<void> {
         worker: "audit",
         event: "worker_cycle_failed",
         retryInMs: POLL_INTERVAL_MS,
-        error: error instanceof Error ? error.message : String(error),
+        errorCode: getAuditFailureDetails(error).error_code,
+        retryable: getAuditFailureDetails(error).retryable,
       }));
     },
   });
