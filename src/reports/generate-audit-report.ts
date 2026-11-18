@@ -275,10 +275,31 @@ function sections(i:AuditReportInput):Section[]{
    : "Vocal analysis: Status "+vocalStatus+"; no conclusion about vocal presence or absence is established.";
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
+  const rhythmDiagnostics=s?.rhythmFeatures&&typeof s.rhythmFeatures==="object"?s.rhythmFeatures as Record<string,unknown>:{};
+  const harmonicDiagnostics=s?.harmonicFeatures&&typeof s.harmonicFeatures==="object"?s.harmonicFeatures as Record<string,unknown>:{};
+  const keySegments=Array.isArray(harmonicDiagnostics.segmentChroma)?harmonicDiagnostics.segmentChroma.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
+  const keyVotes=new Map<string,number>();
+  for(const segment of keySegments){
+   const candidate=[text(segment.winningKey),text(segment.winningMode)].filter(Boolean).join(" ");
+   if(candidate)keyVotes.set(candidate,(keyVotes.get(candidate)??0)+1);
+  }
+  const rankedKeyVotes=[...keyVotes.entries()].sort((a,b)=>b[1]-a[1]);
+  const dominantKeyCandidate=rankedKeyVotes[0];
+  const keyDisagreement=rankedKeyVotes.length>1&&rankedKeyVotes[1][1]===dominantKeyCandidate?.[1];
+  const keyDiagnostic= isReliableKey(s)
+   ? [text(s?.key),text(s?.mode)].filter(Boolean).join(" ")
+   : dominantKeyCandidate&&!keyDisagreement
+    ? "Tentative segment candidate — "+dominantKeyCandidate[0]+" ("+dominantKeyCandidate[1]+"/"+keySegments.length+" analysed windows; not verified)"
+    : keySegments.length?"Conflicting segment candidates — no single key asserted":"Not determined";
+  const tempoDiagnostic=tempoReliable
+   ? "Detected — "+metric(s?.bpm,1)+" BPM"
+   : typeof s?.tempoConfidence==="number"&&s.tempoConfidence>0&&typeof s?.bpm==="number"
+    ? "Tentative candidate — "+metric(s.bpm,1)+" BPM (half-time "+metric(s.bpm/2,1)+"; double-time "+metric(s.bpm*2,1)+")"
+    : "Not determined";
   sonicDnaBody.push(
    e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "Measured from the uploaded master",
-   "Tempo: " + (tempoReliable ? "Detected — " + metric(s?.bpm,1) + " BPM" : typeof s?.tempoConfidence==="number" && s.tempoConfidence>0 && typeof s?.bpm==="number" ? "Tentative candidate — " + metric(s.bpm,1) + " BPM (half-time " + metric(s.bpm/2,1) + "; double-time " + metric(s.bpm*2,1) + ")" : "Not determined"),
-   "Key / mode: " + (isReliableKey(s) ? [text(s?.key), text(s?.mode)].filter(Boolean).join(" ") : "Not measured"),
+   "Tempo: " + tempoDiagnostic,
+   "Key / mode: " + keyDiagnostic,
    "Key confidence estimator score (not calibrated accuracy): " + val(s?.keyConfidence),
    "Integrated loudness (EBU R128): " + metric(s?.loudnessLufs,1) + " LUFS (gated programme loudness; not a mastering verdict)",
    "Loudness range (EBU R128 LRA): " + metric(s?.loudnessRangeLu,1) + " LU (programme loudness variation; not the same as sample-peak dynamic range)",
@@ -289,7 +310,8 @@ function sections(i:AuditReportInput):Section[]{
    "Source format: " + val(s?.sampleRate) + " Hz; " + val(s?.channels) + " channel(s); " + metric(s?.durationSeconds,2) + " seconds",
    "Spectral profile: centroid " + metric(s?.spectralCentroidHz,0) + " Hz; bandwidth " + metric(s?.spectralBandwidthHz,0) + " Hz; 85% rolloff " + metric(s?.spectralRolloffHz,0) + " Hz; zero-crossing rate " + metric(s?.zeroCrossingRate,3),
    "Measurement note: EBU R128 LUFS/LRA and true peak are separate from the internal RMS-envelope spread; RMS level, RMS energy and spectral descriptors are signal measurements, not subjective mastering-quality scores.",
-   "Tempo estimator: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.method) + "; confidence diagnostic: " + metric(s?.tempoConfidence,2) + "; candidates: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.candidateBpms),
+   "Tempo estimator: " + val(rhythmDiagnostics.method) + "; confidence diagnostic: " + metric(s?.tempoConfidence,2) + "; candidates: " + val(rhythmDiagnostics.candidateBpms) + "; abstention: " + val(rhythmDiagnostics.abstentionReason,"none recorded"),
+   "Key detector: " + val(harmonicDiagnostics.method) + "; confidence diagnostic: " + metric(s?.keyConfidence,2) + "; segment agreement: " + metric(s?.keySegmentAgreement,2) + "; abstention: " + val(harmonicDiagnostics.limitation??(Array.isArray(s?.limitations)?s.limitations.find((item)=>typeof item==="string"&&item.toLowerCase().includes("key")):null),"none recorded"),
    "Beat-grid diagnostic: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatGridStatus) + "; beat timestamps: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatTimesSeconds ? ((s?.rhythmFeatures as Record<string,unknown>).beatTimesSeconds as unknown[]).length : 0) + "; downbeat grouping is a four-beat diagnostic assumption, not a verified bar structure.",
    "Key analysis: method " + val((s?.harmonicFeatures as Record<string,unknown>|undefined)?.method) + "; tuning offset " + metric(s?.keyTuningCents,2) + " cents; segment agreement " + metric(s?.keySegmentAgreement,2) + ". Key confidence is an estimator diagnostic, not calibrated accuracy.",
    "Rhythm scope: onset periodicity and candidate beat timestamps are measured; groove, swing, syncopation, verified bar structure and section boundaries are not independently classified in this analysis version.",

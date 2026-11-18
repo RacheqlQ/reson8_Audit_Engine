@@ -153,6 +153,15 @@ describe("Sonic DNA",()=>{
   expect(estimateTempo(dc,8000).bpm).toBeNull();
   expect(estimateTempo(tone,8000).bpm).toBeNull();
  });
+ it("labels rule-based energy and spectral outputs as signal descriptors, not moods",()=>{
+  const sampleRate=8000;
+  const bright=Float32Array.from({length:sampleRate*2},(_,i)=>0.2*Math.sin(2*Math.PI*3500*i/sampleRate));
+  const result=analyzePcm(bright,sampleRate);
+  expect(result.moodTags).toContain("Elevated RMS level");
+  expect(result.moodTags).toContain("High spectral centroid");
+  expect(result.moodTags.some(tag=>/happy|sad|energetic|calm|dark mood|bright mood/i.test(tag))).toBe(false);
+ });
+
  it("does not assert genre from tempo alone",()=>{
   const result=analyzePcm(pulse(112),8000);
   expect(result.genreContext).toEqual([]);

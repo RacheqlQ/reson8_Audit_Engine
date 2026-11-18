@@ -212,9 +212,9 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  frames.sort((x,y)=>x-y);
  const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),key=estimateKey(a,rate);
  const tags:string[]=[];
- if(energy>0.15)tags.push("High Energy");else if(energy<0.04)tags.push("Low Energy");else tags.push("Moderate Energy");
- if(crossings/Math.max(1,a.length-1)>0.08)tags.push("Bright/Noisy Texture");
- if(centroid>3000)tags.push("Bright Timbre");else if(centroid<1000)tags.push("Dark Timbre");
+ if(energy>0.15)tags.push("Elevated RMS level");else if(energy<0.04)tags.push("Low RMS level");else tags.push("Moderate RMS level");
+ if(crossings/Math.max(1,a.length-1)>0.08)tags.push("Elevated zero-crossing rate");
+ if(centroid>3000)tags.push("High spectral centroid");else if(centroid<1000)tags.push("Low spectral centroid");
  const limitations:string[]=[];
  if(key.limitation)limitations.push(key.limitation);
  if(tempo.bpm===null)limitations.push("Tempo could not be determined reliably from the supplied audio.");
