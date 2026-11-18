@@ -1,5 +1,6 @@
 -- Persist sanitized provider/stage failure codes without storing raw provider responses or prompts.
 -- Idempotent function replacement only. This file is intentionally not applied to production.
+-- Based on the latest fenced-step implementation, including Sonic feature-group persistence.
 
 create or replace function public.persist_fenced_audit_step(
   p_job_id uuid,
@@ -92,9 +93,9 @@ begin
         audit_job_id, analysis_version, duration_seconds, sample_rate, channels,
         bpm, key, mode, loudness_lufs, rms_energy, dynamic_range_db,
         spectral_centroid_hz, spectral_bandwidth_hz, spectral_rolloff_hz,
-        zero_crossing_rate, mood_tags, genre_context, raw_features
+        zero_crossing_rate, rhythm_features, harmonic_features, vocal_features, mood_tags, genre_context, raw_features
       ) values (
-        p_job_id, 'audit-engine-0.1.0',
+        p_job_id, 'audit-engine-0.2.0',
         nullif(p_payload->>'durationSeconds', '')::numeric,
         nullif(p_payload->>'sampleRate', '')::integer,
         nullif(p_payload->>'channels', '')::integer,
@@ -106,6 +107,9 @@ begin
         nullif(p_payload->>'spectralBandwidthHz', '')::numeric,
         nullif(p_payload->>'spectralRolloffHz', '')::numeric,
         nullif(p_payload->>'zeroCrossingRate', '')::numeric,
+        coalesce(p_payload->'rhythmFeatures', '{}'::jsonb),
+        coalesce(p_payload->'harmonicFeatures', '{}'::jsonb),
+        coalesce(p_payload->'vocalFeatures', '{}'::jsonb),
         coalesce(p_payload->'moodTags', '[]'::jsonb),
         coalesce(p_payload->'genreContext', '[]'::jsonb),
         coalesce(p_payload->'rawFeatures', '{}'::jsonb)
@@ -118,7 +122,9 @@ begin
         spectral_centroid_hz = excluded.spectral_centroid_hz,
         spectral_bandwidth_hz = excluded.spectral_bandwidth_hz,
         spectral_rolloff_hz = excluded.spectral_rolloff_hz,
-        zero_crossing_rate = excluded.zero_crossing_rate, mood_tags = excluded.mood_tags,
+        zero_crossing_rate = excluded.zero_crossing_rate, rhythm_features = excluded.rhythm_features,
+        harmonic_features = excluded.harmonic_features, vocal_features = excluded.vocal_features,
+        mood_tags = excluded.mood_tags,
         genre_context = excluded.genre_context, raw_features = excluded.raw_features;
       update public.audit_jobs
       set duration_seconds = nullif(p_payload->>'durationSeconds', '')::numeric
