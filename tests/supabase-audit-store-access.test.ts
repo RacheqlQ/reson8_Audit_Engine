@@ -134,6 +134,47 @@ describe("DSP provider failure persistence", () => {
 });
 
 
+describe("audit progress event persistence", () => {
+  it("records assessment-started only for the active claim", async () => {
+    const { store, fetchMock } = makeStore({
+      status: "processing",
+      claim_token: "claim-token",
+      lease_expires_at: "2099-01-01T00:00:00.000Z",
+    });
+
+    await store.markAssessmentStarted("job-assessment", "claim-token");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("audit_jobs");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("audit_events");
+    const body = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(body).toMatchObject({
+      audit_job_id: "job-assessment",
+      event_type: "ar_assessment_started",
+      status: "processing",
+      payload: { stage: "ar_assessment" },
+    });
+  });
+
+  it("records report-generation-started as a distinct progress stage", async () => {
+    const { store, fetchMock } = makeStore({
+      status: "processing",
+      claim_token: "claim-token",
+      lease_expires_at: "2099-01-01T00:00:00.000Z",
+    });
+
+    await store.markReportGenerationStarted("job-report", "claim-token");
+
+    const body = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(body).toMatchObject({
+      audit_job_id: "job-report",
+      event_type: "report_generation_started",
+      status: "processing",
+      payload: { stage: "report_generation" },
+    });
+  });
+});
+
 describe("Sonic DNA diagnostic event persistence", () => {
   it("stores bounded tempo and key diagnostics in audit_events without audio samples", async () => {
     const { store, fetchMock } = makeStore({});
