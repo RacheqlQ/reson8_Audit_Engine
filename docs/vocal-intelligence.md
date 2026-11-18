@@ -9,7 +9,7 @@ For an uploaded master, the existing Node worker now runs a vocal-only source-se
 - **Expected size:** 35,623,512 bytes.
 - **Pinned SHA-256:** `f27742bb52b24cb039614dc76d0764e279df3eb2a9d6daa82c6daee3369ec747`. The runtime refuses an artifact with a different size or hash.
 - **Runtime:** Node ONNX Runtime CPU, with a 20-second inference chunk and 2-second overlap. The model input is resampled to 44.1 kHz stereo and returned at the decoded master's sample rate.
-- **Memory policy:** CPU memory arena and memory pattern pooling are disabled; the vocal-only path uses the raw model estimate (no multichannel Wiener refinement) to reduce peak allocation on the existing Render worker. Actual production RAM and latency still require measurement against real masters.
+- **Memory policy:** CPU memory arena and memory pattern pooling are disabled; the vocal-only path uses one multichannel Wiener refinement iteration with 120-frame windows to balance reconstruction quality and peak allocation on the existing Render worker. Actual production RAM and latency still require measurement against real masters.
 - **Cache:** the verified model is stored under `AUDIO_NEURAL_CACHE` or `~/.cache/audiojs/neural`; no model weights are committed to the repository.
 
 The result records model provenance, vocal-stem energy ratio, estimated activity ratio and timestamps, vocal-stem RMS, a conservative fundamental-frequency range/contour, and explicit limitations. The result is persisted as part of Sonic DNA before reconciliation.
@@ -37,14 +37,14 @@ Implementation dependencies are pinned in `package.json` and `package-lock.json`
 ## Verification required before production acceptance
 
 - Unit tests cover activity intervals, pitch estimation, abstention, the actual separation pipeline with a deterministic ONNX session double, report rendering, and the evidence-chain ordering.
-- CI must pass install, full test suite, TypeScript build and sample-report inspection.
-- The five acceptance passes must complete successfully.
+- Pre-merge CI passed install, the full test suite, TypeScript build and sample-report inspection on feature head `10f8b570f1f2b341ff346e9f751e6bc014029be3`.
+- All five pre-merge acceptance passes completed successfully on that same feature head. Post-merge main-branch workflows are tracked separately.
 - A real submitted master must be analysed to inspect stem leakage, false vocal activity, timestamps and pitch output. No such real-master validation is claimed by synthetic tests.
 - Render CPU/RAM, cold model download time, warm-cache inference time and timeout behaviour must be measured before deployment. Do not change Render plans, environment variables, Supabase or the separate worker as part of this feature.
 
 ## Evidence status
 
-- Acoustic vocal-stem extraction and measurements: implemented in the PR branch; CI/acceptance and real-master validation are pending.
+- Acoustic vocal-stem extraction and measurements: merged in main at `ab0f9f564c50c05e9c4e8d371a8866a8d67b5942`; pre-merge CI and all five acceptance passes passed. Real-master validation remains pending.
 - Human review and calibrated vocal-presence accuracy: not implemented.
 - Singing/speech/rap and lead/backing classification: not implemented.
 - Production deployment: not performed.
