@@ -9,7 +9,7 @@ describe("AI assessment deadline contract", () => {
 
   it("keeps the Groq provider deadline below the outer stage deadline", () => {
     expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBeLessThan(AI_ASSESSMENT_STAGE_TIMEOUT_MS);
-    expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBeGreaterThanOrEqual(8 * 60_000);
+    expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBe(4 * 60_000);
   });
 
   it("classifies exhausted Groq JSON validation responses as malformed output", () => {
