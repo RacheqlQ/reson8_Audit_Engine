@@ -25,13 +25,13 @@ decisionNote: "Operational enablement explicitly authorized by the product owner
     id: "gemini", commercialStatus: "allowed", termsUrl: "https://ai.google.dev/gemini-api/terms",
     attribution: "Identify Google Gemini as the fallback assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
     retention: "Verify current Gemini API retention, training, regional processing and deletion terms before enabling.",
-decisionNote: "Operational fallback is opt-in and requires the exact enable flag plus GEMINI_API_KEY; verify applicable Google AI terms and data handling before use.",
+decisionNote: "Available when GEMINI_API_KEY is configured; verify applicable Google AI terms and data handling.",
   },
   ollama: {
     id: "ollama", commercialStatus: "allowed", termsUrl: "https://ollama.com/terms",
     attribution: "Identify Ollama Cloud and the selected model as the fallback assessment processor in internal provenance; do not attribute generated analysis as an observed source.",
     retention: "Verify current Ollama Cloud data handling, retention, training and deletion terms before enabling.",
-decisionNote: "Operational fallback is opt-in and requires the exact enable flag plus OLLAMA_API_KEY; use only the hosted cloud API from the embedded worker.",
+decisionNote: "Available when OLLAMA_API_KEY is configured; use only the hosted cloud API from the embedded worker.",
   },
   audd: {
     id: "audd", commercialStatus: "allowed", termsUrl: "https://audd.io/terms/",
@@ -97,13 +97,13 @@ decisionNote: "Operational use explicitly authorized by the product owner; compl
     id: "beat_this", commercialStatus: "unverified", termsUrl: "https://github.com/CPJKU/beat_this",
     attribution: "Disclose model name, upstream commit, artifact hash and conversion provenance.",
     retention: "Limit submitted-audio retention to what the applicable model licence and documented processing purpose permit; record artifact and training-data provenance.",
-decisionNote: "Operational use explicitly authorized by the product owner; verify model artifact provenance, licence and runtime fit before deploying the model.",
+decisionNote: "Not enabled until exact model artifact provenance, licence and runtime fit are verified.",
   },
   fmak: {
     id: "fmak", commercialStatus: "unverified", termsUrl: "https://github.com/mdeff/fma",
     attribution: "Record dataset version and per-asset source/licence where used.",
     retention: "Record dataset version and asset-level source/licence; use and retain each asset only as its licence permits.",
-decisionNote: "Operational use explicitly authorized by the product owner; verify asset-level licences and provenance before ingesting or redistributing dataset content.",
+decisionNote: "Not enabled until asset-level licences and provenance are verified.",
   },
   giantsteps: {
     id: "giantsteps", commercialStatus: "unverified", termsUrl: "https://www.audiolabs-erlangen.de/resources/MIR/2016-GiantSteps",
@@ -133,13 +133,13 @@ decisionNote: "Operational use explicitly authorized by the product owner; use o
     id: "essentia", commercialStatus: "denied", termsUrl: "https://essentia.upf.edu/licensing_information.html",
     attribution: "Disclose Essentia and the exact model/version; preserve required licence notices and provenance.",
     retention: "Use model artifacts only under applicable licence terms; document provenance and submitted-audio handling.",
-decisionNote: "Operational use explicitly authorized by the product owner; confirm and comply with the applicable Essentia licence before distribution.",
+decisionNote: "Denied pending a commercially compatible licence for this product.",
   },
   madmom: {
     id: "madmom", commercialStatus: "denied", termsUrl: "https://github.com/CPJKU/madmom",
     attribution: "Disclose Madmom and the exact model/version; preserve required licence notices and provenance.",
     retention: "Use model artifacts only under applicable licence terms; document provenance and submitted-audio handling.",
-decisionNote: "Operational use explicitly authorized by the product owner; confirm and comply with the applicable Madmom licence before distribution.",
+decisionNote: "Denied pending a commercially compatible licence for this product.",
   },
   deezer: {
     id: "deezer", commercialStatus: "unverified", termsUrl: "https://developers.deezer.com/",
@@ -161,7 +161,7 @@ export interface ProviderDecision {
 /** Fail-closed decision based on the reviewed registry status. */
 export function providerDecision(
   provider: ProviderId,
-  env: Record<string, string | undefined> = process.env,
+  _env: Record<string, string | undefined> = process.env,
 ): ProviderDecision {
   const policy: ProviderPolicy = PROVIDER_POLICY[provider];
   const enabled = policy.commercialStatus === "allowed";
