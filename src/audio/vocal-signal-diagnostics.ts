@@ -73,8 +73,7 @@ export function analyzeVocalSignalDiagnostics(
     if (energy / frameLength < 1e-7) continue;
     sampledFrames++;
 
-    let bestLag = 0;
-    let bestCorrelation = 0;
+    const correlations = new Float32Array(lagMax + 1);
     for (let lag = lagMin; lag <= lagMax; lag++) {
       let cross = 0;
       let left = 0;
@@ -86,13 +85,26 @@ export function analyzeVocalSignalDiagnostics(
         left += a * a;
         right += b * b;
       }
-      const correlation = cross / Math.sqrt(Math.max(EPSILON, left * right));
-      if (correlation > bestCorrelation) {
-        bestCorrelation = correlation;
-        bestLag = lag;
+      correlations[lag] = cross / Math.sqrt(Math.max(EPSILON, left * right));
+    }
+
+    // Autocorrelation also peaks at integer multiples of a true period.
+    // Selecting the global maximum can therefore report a subharmonic (for
+    // example, 73 Hz instead of a 220 Hz tone). Choose the first convincing
+    // local maximum to prefer the shortest supported period.
+    let selectedLag = 0;
+    for (let lag = lagMin + 1; lag < lagMax; lag++) {
+      const correlation = correlations[lag] ?? 0;
+      if (
+        correlation >= 0.6
+        && correlation >= (correlations[lag - 1] ?? 0)
+        && correlation >= (correlations[lag + 1] ?? 0)
+      ) {
+        selectedLag = lag;
+        break;
       }
     }
-    if (bestLag > 0 && bestCorrelation >= 0.6) pitches.push(sampleRate / bestLag);
+    if (selectedLag > 0) pitches.push(sampleRate / selectedLag);
   }
 
   if (sampledFrames === 0) return empty("No frames contained sufficient signal energy for periodicity diagnostics.");
