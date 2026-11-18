@@ -651,6 +651,22 @@ export function createSupabaseAuditStore(
         .from("audit_events")
         .select("event_type,status,created_at,payload")
         .eq("audit_job_id", jobId)
+        .in("event_type", [
+          "processing_claimed",
+          "processing_started",
+          "recognition",
+          "catalog_ingestion",
+          "catalog_links_submitted",
+          "sonic_dna",
+          "evidence_reconciliation",
+          "ar_assessment_started",
+          "ar_assessment",
+          "groq_section_completed",
+          "report_generation_started",
+          "report_generated",
+          "audit_completed",
+          "audit_failed",
+        ])
         .order("created_at", { ascending: false })
         .limit(100);
       if (eventError) throw new Error(`Unable to read audit events: ${eventError.message}`);
