@@ -27,6 +27,17 @@ describe("sanitized audit failure classification", () => {
     });
   });
 
+
+  it("keeps provider errors without an HTTP status visible as retryable failures", () => {
+    expect(classifyAuditFailure(new Error("Gemini fallback failed with provider_error"))).toMatchObject({
+      errorCode: "AI_PROVIDER_ERROR",
+      provider: "gemini",
+      httpStatus: null,
+      errorType: "provider_error",
+      retryable: true,
+    });
+  });
+
   it("classifies capacity and request timeouts as retryable without exposing raw errors", () => {
     expect(classifyAuditFailure(new Error("AI capacity reached for now"))).toMatchObject({
       errorCode: "AI_PROVIDER_CAPACITY",
