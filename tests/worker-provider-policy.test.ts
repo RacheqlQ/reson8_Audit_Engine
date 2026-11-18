@@ -26,11 +26,11 @@ describe("embedded worker provider policy", () => {
     expect(mocks.claimNextQueuedJob).toHaveBeenCalledOnce();
   });
 
-  it("does not claim a queued job when the Groq opt-in flag is absent or not exactly true", async () => {
+  it("idles without claiming a queued job when the Groq opt-in flag is absent or not exactly true", async () => {
     vi.stubEnv("GROQ_API", "configured");
     vi.stubEnv("PROVIDER_ENABLED_GROQ", "TRUE");
 
-    await expect(processNextQueuedAudit()).rejects.toThrow("groq: disabled by data policy");
+    await expect(processNextQueuedAudit()).resolves.toBeNull();
     expect(mocks.claimNextQueuedJob).not.toHaveBeenCalled();
   });
 });
