@@ -270,9 +270,11 @@ function sections(i:AuditReportInput):Section[]{
  const curatorVocalAnalyzed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
  const vocalAnalysisDisclosure=!vocalFeatures||["not_analyzed","not_recorded","unavailable","not_configured"].includes(vocalStatus)
   ? "Vocal analysis: Not performed — "+(text(vocalFeatures?.reason)||"no vocal-analysis result is recorded")+"; vocal presence/absence is unknown and is not inferred."
-  : curatorVocalAnalyzed
-   ? "Vocal analysis: Performed (status: "+vocalStatus+"). Only explicitly returned vocal measurements may be reported; unmeasured vocal attributes remain unknown."
-   : "Vocal analysis: Status "+vocalStatus+"; no conclusion about vocal presence or absence is established.";
+  : vocalStatus==="signal_diagnostics_only"
+   ? "Vocal analysis: Limited signal-periodicity diagnostics were performed. They do not detect or confirm human vocals; singing, speech, vocal presence/absence and vocal arrangement remain undetermined."
+   : curatorVocalAnalyzed
+    ? "Vocal analysis: Performed (status: "+vocalStatus+"). Only explicitly returned vocal measurements may be reported; unmeasured vocal attributes remain unknown."
+    : "Vocal analysis: Status "+vocalStatus+"; no conclusion about vocal presence or absence is established.";
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
   const rhythmDiagnostics=s?.rhythmFeatures&&typeof s.rhythmFeatures==="object"?s.rhythmFeatures as Record<string,unknown>:{};
@@ -345,6 +347,14 @@ function sections(i:AuditReportInput):Section[]{
   );
  }
  sonicDnaBody.push(vocalAnalysisDisclosure);
+ if(vocalStatus==="signal_diagnostics_only"&&vocalFeatures){
+  sonicDnaBody.push(
+   "Voice-range periodicity diagnostic (not vocal detection): "+metric(vocalFeatures.periodicityActivityRatio,3,"Not measured")+" activity ratio across "+val(vocalFeatures.sampledFrames,"0")+" sampled signal frames.",
+   "Periodic fundamental-frequency candidates: median "+metric(vocalFeatures.medianFundamentalHz,1)+" Hz; lower 10th percentile "+metric(vocalFeatures.lowerFundamentalHz,1)+" Hz; upper 90th percentile "+metric(vocalFeatures.upperFundamentalHz,1)+" Hz.",
+   "Diagnostic method: "+val(vocalFeatures.method)+"; periodic frames: "+val(vocalFeatures.periodicFrames,"0")+". These measurements may originate from instruments or synthesizers and must not be interpreted as a singer pitch range.",
+   ...(Array.isArray(vocalFeatures.limitations)?vocalFeatures.limitations.map(text).filter(Boolean):[])
+  );
+ }
  if (Object.keys(genreRecord).length) {
   sonicDnaBody.push(
    "Genre evidence: " + primaryGenre
