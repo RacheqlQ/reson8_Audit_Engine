@@ -38,17 +38,29 @@ describe("catalogue policy gate coverage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("does not call unverified Deezer but allows the approved Apple lookup without opt-in flags", async () => {
-    const fetchMock = vi.fn();
+  it("calls approved Deezer and Apple catalogue lookups without per-provider opt-in flags", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("api.deezer.com/track/")) {
+        return new Response(JSON.stringify({
+          id: 98765, title: "Deezer Track", artist: { name: "Deezer Artist" },
+          album: { title: "Deezer Album", cover_medium: "https://example.test/cover.jpg" },
+          link: "https://www.deezer.com/track/98765",
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        resultCount: 1,
+        results: [{ kind: "song", trackId: 67890, trackName: "Approved Track", artistName: "Approved Artist" }],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ resultCount: 1, results: [{ kind: "song", trackId: 67890, trackName: "Approved Track", artistName: "Approved Artist" }] }), { status: 200, headers: { "content-type": "application/json" } }));
     const apple = await collectCatalogMetadata("https://music.apple.com/us/album/song/12345?i=67890");
     const deezer = await collectCatalogMetadata("https://www.deezer.com/track/98765");
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(apple.title).toBe("Approved Track");
-    expect(deezer.raw.providerPolicy).toMatchObject({ provider: "deezer", reason: "disabled by data policy", commercialStatus: "unverified" });
+    expect(deezer).toMatchObject({ platform: "deezer", title: "Deezer Track", artist: "Deezer Artist", evidenceStatus: "recognized" });
   });
 
   it("extracts Apple Music track identity fields without a provider enable flag", async () => {
