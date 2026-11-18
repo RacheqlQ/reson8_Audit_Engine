@@ -15,7 +15,7 @@ export interface AuditStore {
     jobId: string;
     status: "queued" | "processing" | "completed" | "failed";
     currentStepIndex: number;
-    progress?: { overallPercent: number; completedStages: number; totalStages: number; stages: Array<{ id: string; label: string; percent: number; status: "completed" | "in_progress" | "pending" | "failed" | "not_applicable" }> };
+    progress?: { overallPercent: number; completedStages: number; notApplicableStages: number; totalStages: number; stages: Array<{ id: string; label: string; percent: number; status: "completed" | "in_progress" | "pending" | "failed" | "not_applicable" }> };
     errorMessage?: string | null;
     errorCode?: string | null;
     errorRetryable?: boolean;
