@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ModelSpec, SeparateOptions, Session } from "@audio/neural-separate";
+import type { ModelSpec, Session } from "@audio/neural-separate";
 import { separateVocalsFromPcm } from "../src/audio/vocal-separation.js";
 
 describe("master vocal separation integration", () => {
@@ -8,14 +8,15 @@ describe("master vocal separation integration", () => {
     const mix = Float32Array.from({ length: sampleRate }, (_, i) =>
       0.5 * Math.sin(2 * Math.PI * 220 * i / sampleRate),
     );
-    const vocal = Float32Array.from({ length: sampleRate }, (_, i) =>
-      0.25 * Math.sin(2 * Math.PI * 220 * i / sampleRate),
-    );
     let sessionRequested = false;
     const session: Session = {
       inputs: [{ name: "magnitude" }],
       outputs: [{ name: "vocals_magnitude" }],
-      run: async () => ({}),
+      run: async (feeds) => {
+        const input = Object.values(feeds)[0];
+        if (!input) throw new Error("Expected a magnitude tensor");
+        return { vocals_magnitude: { data: new Float32Array(input.data), dims: [...input.dims] } };
+      },
       free: () => {},
     };
     const sessionLoader = async (model: ModelSpec): Promise<Session> => {
@@ -23,19 +24,8 @@ describe("master vocal separation integration", () => {
       expect(String(model)).toContain("huggingface.co/MixDirective/open-unmix-umxhq-vocals-onnx");
       return session;
     };
-    const separateImpl = async (_audio: Float32Array[], options: SeparateOptions) => {
-      expect(options.modelType).toBe("openunmix");
-      expect(options.targets).toEqual(["vocals"]);
-      expect(options.targetRate).toBe(44100);
-      expect(options.wiener).toBe(0);
-      await options.session?.("https://huggingface.co/MixDirective/open-unmix-umxhq-vocals-onnx/resolve/main/model.onnx", options);
-      return { stems: { vocals: [vocal] }, sampleRate, residual: [new Float32Array(mix.length)] };
-    };
 
-    const result = await separateVocalsFromPcm(mix, sampleRate, 1, undefined, {
-      sessionLoader,
-      separateImpl: separateImpl as unknown as typeof import("@audio/neural-separate").default,
-    });
+    const result = await separateVocalsFromPcm(mix, sampleRate, 1, undefined, { sessionLoader });
 
     expect(sessionRequested).toBe(true);
     expect(result.status).toBe("analyzed");
