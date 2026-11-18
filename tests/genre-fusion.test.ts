@@ -29,6 +29,21 @@ describe("versioned genre taxonomy", () => {
 });
 
 describe("genre evidence fusion", () => {
+  it("recognizes Afro Soul tags from DSP and ID3 sources without inventing audio-only classification", () => {
+    const result = fuseGenreEvidence({
+      providerTags: [
+        { provider: "apple_music", tags: ["Afro Soul"] },
+        { provider: "id3", tags: ["Afro-Soul"] },
+      ],
+      bpm: 190,
+      tempoConfidence: 0.17,
+    });
+    expect(result.primaryGenre).toBe("Afro Soul");
+    expect(result.abstained).toBe(false);
+    expect(result.genres[0]?.sources).toEqual(["apple_music", "id3"]);
+    expect(result.evidence.providerCount).toBe(2);
+  });
+
   it("uses provider genre tags as primary evidence and caps tempo at fifteen percent", () => {
     const result = fuseGenreEvidence({
       providerTags: [{ provider: "audiomack", tags: ["Afro Beats"] }],
