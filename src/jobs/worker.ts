@@ -10,6 +10,7 @@ import { processAuditJob, type AuditProcessorDependencies } from "./process-audi
 import { runQueueWorkerLoop } from "./worker-loop.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 import { classifyAuditFailure } from "./audit-failure.js";
+import { getProviderReadiness } from "../providers/provider-readiness.js";
 import { startRenderFreeServiceKeepalive } from "./render-free-service-keepalive.js";
 
 const POLL_INTERVAL_MS = 15_000;
@@ -246,6 +247,16 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
 }
 
 export async function runAuditQueueWorker(signal: AbortSignal): Promise<void> {
+  const groqReadiness = getProviderReadiness().groq;
+  if (!groqReadiness.ready) {
+    console.error(JSON.stringify({
+      worker: "audit",
+      event: "worker_start_blocked",
+      provider: "groq",
+      reason: groqReadiness.reason ?? "not_ready",
+    }));
+    return;
+  }
   console.log(JSON.stringify({ worker: "audit", status: "started", pollIntervalMs: POLL_INTERVAL_MS }));
   await runQueueWorkerLoop({
     processNext: async () => {
