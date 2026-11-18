@@ -340,8 +340,9 @@ function sections(i:AuditReportInput):Section[]{
  const checkedSourceValues = Array.isArray(e.metadataSourcesChecked) ? e.metadataSourcesChecked
   : Array.isArray(e.sourceProviders) ? e.sourceProviders
   : Array.isArray(e.sources) ? e.sources : [];
- const reportCheckedSources = checkedSourceValues.filter((provider) => hasAudio || provider !== "synthetic_audio_fixture");
- const reportEvidenceLabels = a.evidenceLabels.filter((entry) => hasAudio
+ const metadataOnly = !hasMasterAudio && !(e.fixture && Boolean(sonicDna));
+ const reportCheckedSources = checkedSourceValues.filter((provider) => !metadataOnly || provider !== "synthetic_audio_fixture");
+ const reportEvidenceLabels = a.evidenceLabels.filter((entry) => !metadataOnly
   || !/synthetic_audio_fixture|fixture\.sonicDna|uploaded_audio_master/i.test(entry.source));
  const sourceLabels: Record<string,string> = {
   spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",
