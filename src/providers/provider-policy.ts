@@ -204,7 +204,7 @@ export interface AssessmentProviderReadiness {
 export function getAssessmentProviderReadiness(env: Record<string, string | undefined> = process.env): AssessmentProviderReadiness[] {
   const specs = [
     { provider: "groq" as const, key: env.GROQ_API_KEY ?? env.GROQ_API, model: env.GROQ_MODEL ?? "openai/gpt-oss-120b" },
-    { provider: "gemini" as const, key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL ?? "gemini-2.5-flash" },
+    { provider: "gemini" as const, key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL ?? "gemini-3.5-flash-lite" },
     { provider: "ollama" as const, key: env.OLLAMA_API_KEY, model: env.OLLAMA_MODEL ?? "gemma4:31b" },
   ];
   return specs.map((spec) => {

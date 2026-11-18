@@ -671,7 +671,7 @@ export { AssessmentSchema, EvidenceLabelSchema };
 export class GeminiClient extends GroqClient {
   constructor(
     apiKey = process.env.GEMINI_API_KEY,
-    model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+    model = process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
     fetchImpl: typeof fetch = fetch,
     sleepImpl: (ms: number, signal?: AbortSignal) => Promise<void> = abortableSleep,
     requestTimeoutMs = GROQ_REQUEST_TIMEOUT_MS,

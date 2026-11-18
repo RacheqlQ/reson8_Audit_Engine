@@ -20,7 +20,7 @@ describe("assessment provider readiness", () => {
     markAssessmentProviderUnavailable("groq", "auth_error");
     const readiness = getAssessmentProviderReadiness(env);
     expect(readiness.find((item) => item.provider === "groq")).toMatchObject({ usable: false, reason: "auth_error" });
-    expect(readiness.find((item) => item.provider === "gemini")).toMatchObject({ usable: true, reason: null });
+    expect(readiness.find((item) => item.provider === "gemini")).toMatchObject({ usable: true, reason: null, model: "gemini-3.5-flash-lite" });
   });
 
   it("marks daily token exhaustion unavailable until the UTC-day expiry", () => {
