@@ -5,7 +5,7 @@ import type { AuditFailureCode, AuditJobRecord } from "../jobs/process-audit-job
 import type { AuditRecognition } from "../providers/audd/normalize.js";
 import { type CatalogMetadata } from "../providers/dsp/catalog.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
-import { getAuditProgress, getAuditProgressStep } from "../jobs/audit-progress.js";
+import { getAuditProgress, getAuditProgressStep, type AuditProgressSnapshot } from "../jobs/audit-progress.js";
 import type { MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
 import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
@@ -54,6 +54,7 @@ export interface SupabaseAuditStore {
     jobId: string;
     status: "queued" | "processing" | "completed" | "failed";
     currentStepIndex: number;
+    progress: AuditProgressSnapshot;
     errorMessage?: string | null;
     errorCode?: string | null;
     full: { available: boolean; version?: number };
