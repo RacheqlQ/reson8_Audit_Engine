@@ -116,7 +116,11 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       for (const candidate of providers) {
         if (!candidate.client) {
           const status = readiness.find((item) => item.provider === candidate.provider);
-          await store.recordProviderAttempt(job.id, { provider: candidate.provider, model: candidate.model, status: null, errorType: "provider_unavailable", retryable: false, attempt: 1 });
+          await store.recordProviderAttempt(job.id, {
+            provider: candidate.provider, model: candidate.model, status: null,
+            errorType: status?.reason === "daily_capacity" ? "capacity" : status?.reason === "auth_error" ? "auth" : "provider_unavailable",
+            retryable: false, attempt: 1,
+          });
           console.info(JSON.stringify({ worker: "audit", jobId: job.id, event: "provider_skipped", provider: candidate.provider, model: candidate.model, reason: status?.reason ?? "not_configured" }));
           continue;
         }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails.js";
 import { sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
+import { markAssessmentProviderUnavailable } from "../provider-policy.js";
 
 export const GROQ_PROMPT_VERSION = "audit-ar-v6";
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
@@ -417,6 +418,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       const dailyLimit = providerName === "groq" && response.status === 429
         && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody);
       let malformedProviderOutput = false;
+      if (response.status === 401 || response.status === 403) {
+        markAssessmentProviderUnavailable(providerName as "groq" | "gemini" | "ollama", "auth_error");
+      }
       if (response.status === 400) {
         try { malformedProviderOutput = (JSON.parse(errorBody) as { error?: { code?: unknown } }).error?.code === "json_validate_failed"; }
         catch { malformedProviderOutput = false; }
@@ -430,7 +434,10 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (dailyLimit) {
         const tomorrow = new Date();
         tomorrow.setUTCHours(24, 0, 0, 0);
-        if (process.env.NODE_ENV !== "test") groqDailyCapUntil = tomorrow.getTime();
+        if (process.env.NODE_ENV !== "test") {
+          groqDailyCapUntil = tomorrow.getTime();
+          markAssessmentProviderUnavailable("groq", "daily_capacity", tomorrow.getTime());
+        }
         throw new Error("AI capacity reached for now, please try again later", { cause: new Error("GROQ_DAILY_CAP_REACHED") });
       }
       if (response.ok) break;

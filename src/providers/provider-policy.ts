@@ -180,13 +180,25 @@ export function providerDecision(
   };
 }
 
+type AssessmentProviderId = "groq" | "gemini" | "ollama";
+type RuntimeUnavailableReason = "auth_error" | "daily_capacity";
+const runtimeUnavailable = new Map<AssessmentProviderId, { reason: RuntimeUnavailableReason; until: number }>();
+
+export function markAssessmentProviderUnavailable(provider: AssessmentProviderId, reason: RuntimeUnavailableReason, until = Number.POSITIVE_INFINITY): void {
+  runtimeUnavailable.set(provider, { reason, until });
+}
+
+export function clearAssessmentProviderUnavailable(): void {
+  runtimeUnavailable.clear();
+}
+
 export interface AssessmentProviderReadiness {
   provider: "groq" | "gemini" | "ollama";
   model: string;
   enabled: boolean;
   configured: boolean;
   usable: boolean;
-  reason: "disabled_by_data_policy" | "not_configured" | null;
+  reason: "disabled_by_data_policy" | "not_configured" | "auth_error" | "daily_capacity" | null;
 }
 
 export function getAssessmentProviderReadiness(env: Record<string, string | undefined> = process.env): AssessmentProviderReadiness[] {
@@ -198,8 +210,12 @@ export function getAssessmentProviderReadiness(env: Record<string, string | unde
   return specs.map((spec) => {
     const enabled = providerDecision(spec.provider, env).enabled;
     const configured = typeof spec.key === "string" && spec.key.trim().length > 0;
-    const usable = enabled && configured;
-    return { provider: spec.provider, model: spec.model, enabled, configured, usable, reason: usable ? null : enabled ? "not_configured" : "disabled_by_data_policy" };
+    const runtime = runtimeUnavailable.get(spec.provider);
+    if (runtime && runtime.until <= Date.now()) runtimeUnavailable.delete(spec.provider);
+    const activeRuntime = runtimeUnavailable.get(spec.provider);
+    const usable = enabled && configured && !activeRuntime;
+    const reason = activeRuntime?.reason ?? (usable ? null : enabled ? "not_configured" : "disabled_by_data_policy");
+    return { provider: spec.provider, model: spec.model, enabled, configured, usable, reason };
   });
 }
 export function assertProviderEnabled(provider: ProviderId): void {
