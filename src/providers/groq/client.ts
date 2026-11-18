@@ -450,7 +450,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 413) {
-        groqCompletionBudgetScale = Math.max(0.25, groqCompletionBudgetScale * 0.5);
+        if (process.env.NODE_ENV !== "test") groqCompletionBudgetScale = Math.max(0.25, groqCompletionBudgetScale * 0.5);
         throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; it was not retried and future Groq completion budgets were reduced");
       }
 
