@@ -6,7 +6,17 @@ export interface ProviderReadiness {
   enabled: boolean;
   configured: boolean;
   ready: boolean;
-  reason: "disabled_by_data_policy" | "missing_credentials" | null;
+  reason: "disabled_by_data_policy" | "missing_credentials" | "authentication_failed" | null;
+}
+
+const runtimeUnavailable = new Map<AssessmentProvider, "authentication_failed">();
+
+export function markProviderUnavailable(provider: AssessmentProvider, reason: "authentication_failed"): void {
+  runtimeUnavailable.set(provider, reason);
+}
+
+export function clearProviderUnavailable(provider: AssessmentProvider): void {
+  runtimeUnavailable.delete(provider);
 }
 
 const CREDENTIALS: Record<AssessmentProvider, readonly string[]> = {
@@ -21,12 +31,15 @@ export function getProviderReadiness(
   return Object.fromEntries((Object.keys(CREDENTIALS) as AssessmentProvider[]).map((provider) => {
     const enabled = providerDecision(provider, env).enabled;
     const configured = CREDENTIALS[provider].some((key) => Boolean(env[key]?.trim()));
-    const ready = enabled && configured;
+    const runtimeReason = runtimeUnavailable.get(provider) ?? null;
+    const reason = !enabled ? "disabled_by_data_policy"
+      : !configured ? "missing_credentials"
+        : runtimeReason;
     return [provider, {
       enabled,
       configured,
-      ready,
-      reason: !enabled ? "disabled_by_data_policy" : !configured ? "missing_credentials" : null,
+      ready: reason === null,
+      reason,
     }];
   })) as Record<AssessmentProvider, ProviderReadiness>;
 }
