@@ -53,6 +53,8 @@ describe("audit progress", () => {
 
     expect(progress.stages[2]).toMatchObject({ percent: 100, status: "not_applicable" });
     expect(progress.overallPercent).toBe(100);
+    expect(progress.completedStages).toBe(6);
+    expect(progress.notApplicableStages).toBe(1);
   });
 
   it("marks the first incomplete stage failed when the audit has a terminal failure", () => {
@@ -64,5 +66,15 @@ describe("audit progress", () => {
 
     expect(progress.stages[3]).toMatchObject({ percent: 0, status: "failed" });
     expect(progress.overallPercent).toBe(42.9);
+  });
+});
+
+describe("report progress accounting", () => {
+  it("counts distinct report tiers rather than duplicate versions of one tier", () => {
+    const progress = getAuditProgress([
+      { event_type: "report_generated", payload: { tier: "sample" } },
+      { event_type: "report_generated", payload: { tier: "sample" } },
+    ], "processing", "master");
+    expect(progress.stages.find((stage) => stage.id === "report")).toMatchObject({ percent: 50, status: "in_progress" });
   });
 });
