@@ -112,6 +112,25 @@ function stripUnsupportedTechnicalClaims(value: unknown, suppressLoudnessOptimis
   return value;
 }
 
+
+function stripUnsupportedAudioMeasurementClaims(value: unknown): unknown {
+  if (typeof value === "string") {
+    const sentences = value.split(/(?<=[.!?])\\s+(?=[A-Z])/);
+    const kept = sentences.filter((sentence) => {
+      const audioMeasurement = /\\b(?:\\d+(?:\\.\\d+)?\\s*(?:BPM|LUFS|dBFS|Hz)|tempo|key|mode|major|minor|dynamic range|RMS(?: energy| level)?|spectral (?:centroid|bandwidth|rolloff)|zero[- ]crossing|vocal (?:analysis|features))\\b/i.test(sentence);
+      const cautious = /\\b(?:not|no|without|insufficient|unavailable|unverified|cannot|withheld|requires? review|not measured|not determined|not reported|not scored)\\b/i.test(sentence);
+      return !audioMeasurement || cautious;
+    });
+    return kept.join(" ").trim() || "Not asserted: uploaded-master measurements are unavailable for this metadata-only assessment.";
+  }
+  if (Array.isArray(value)) return value.map(stripUnsupportedAudioMeasurementClaims);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => [key, stripUnsupportedAudioMeasurementClaims(item)]));
+  }
+  return value;
+}
+
 function hasAlbumConflict(evidence:Record<string,unknown>|null|undefined):boolean {
  if(!evidence)return false;
  const reconciliation=evidence.reconciliation;
@@ -159,7 +178,9 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   sonicDna: Record<string, unknown> | null | undefined,
   evidence?: Record<string,unknown> | null,
 ): T {
-  const reliableTempo = isReliableTempo(sonicDna as TempoEvidence);
+  const hasUploadedMaster = sonicDna?.provenance === "uploaded_audio_master";
+  const reliableTempo = hasUploadedMaster && isReliableTempo(sonicDna as TempoEvidence);
+  const reliableKey = hasUploadedMaster && isReliableKey(sonicDna as Record<string, unknown> | null | undefined);
   const classification = sonicDna?.genreClassification;
   const genre = classification && typeof classification === "object"
     ? classification as Record<string, unknown>
@@ -168,12 +189,13 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     genre && typeof genre.primaryGenre === "string" && genre.primaryGenre.trim()
       && genre.abstained !== true,
   );
-  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence), !hasVocalAnalysis(sonicDna), !isReliableKey(sonicDna)) as T;
+  let result = stripUnsupportedClaims(assessment, !reliableTempo, !hasProviderGenre, !hasVerifiedCommercialMetrics(evidence), !hasUploadedMaster || !hasVocalAnalysis(sonicDna), !reliableKey) as T;
   const measuredLoudness = sonicDna?.loudnessLufs;
   const suppressLoudnessOptimisation = typeof measuredLoudness === "number" && Number.isFinite(measuredLoudness) && Math.abs(measuredLoudness + 11) <= 0.6;
   const measuredCentroid = sonicDna?.spectralCentroidHz;
   const suppressBrightTimbre = typeof measuredCentroid === "number" && Number.isFinite(measuredCentroid) && measuredCentroid <= 2_000;
-  result = stripUnsupportedTechnicalClaims(result, suppressLoudnessOptimisation, suppressBrightTimbre) as T;
+  result = stripUnsupportedTechnicalClaims(result, hasUploadedMaster && suppressLoudnessOptimisation, hasUploadedMaster && suppressBrightTimbre) as T;
+  if (!hasUploadedMaster) result = stripUnsupportedAudioMeasurementClaims(result) as T;
 
   if (hasAlbumConflict(evidence)) {
     result = sanitizeAlbumConflictClaims(result) as T;
@@ -212,9 +234,9 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     result.aAndRPositioning.adjacentLanes = [];
     result.aAndRPositioning.rationale = GENRE_UNCONFIRMED_RATIONALE;
   }
-  const hasDynamicRangeMeasurement = typeof sonicDna?.dynamicRangeDb === "number" && Number.isFinite(sonicDna.dynamicRangeDb);
-  const hasLoudnessMeasurement = typeof sonicDna?.loudnessLufs === "number" && Number.isFinite(sonicDna.loudnessLufs);
-  const hasRmsMeasurement = typeof sonicDna?.rmsLevelDbfs === "number" && Number.isFinite(sonicDna.rmsLevelDbfs);
+  const hasDynamicRangeMeasurement = hasUploadedMaster && typeof sonicDna?.dynamicRangeDb === "number" && Number.isFinite(sonicDna.dynamicRangeDb);
+  const hasLoudnessMeasurement = hasUploadedMaster && typeof sonicDna?.loudnessLufs === "number" && Number.isFinite(sonicDna.loudnessLufs);
+  const hasRmsMeasurement = hasUploadedMaster && typeof sonicDna?.rmsLevelDbfs === "number" && Number.isFinite(sonicDna.rmsLevelDbfs);
   if (!hasDynamicRangeMeasurement || (!hasLoudnessMeasurement && !hasRmsMeasurement)) {
     const dynamicRangeDimension = mutable.scorecard?.dynamicRangeLoudness;
     if (dynamicRangeDimension && typeof dynamicRangeDimension === "object") {
@@ -235,7 +257,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       const record = entry as Record<string, unknown>;
       const claim = typeof record.claim === "string" ? record.claim : "";
       if (!reliableTempo && /\b(?:tempo|bpm|beats per minute)\b/i.test(claim)) return false;
-      if (!isReliableKey(sonicDna as Record<string, unknown> | null | undefined) && /\b(?:key|mode|major|minor|tonic)\b/i.test(claim)) return false;
+      if (!reliableKey && /\b(?:key|mode|major|minor|tonic)\b/i.test(claim)) return false;
       if (!hasVocalAnalysis(sonicDna) && /\b(?:vocal|instrumental|singing|singer|voice)\b/i.test(claim)) return false;
       if (zeroConfidence && record.label === "INFERRED") return false;
       return true;
