@@ -26,7 +26,7 @@ const CARD_X=48,CARD_W=499,HEADER_H=29,CAPTION_H=43,PAD=12;
 function color(index:number){return PALETTE[index%PALETTE.length];}
 function validNumber(v:ChartRow["value"]):number|null{
  if(typeof v==="number")return Number.isFinite(v)?v:null;
- if(typeof v==="string"&&/^-?\\d+(?:\\.\\d+)?$/.test(v.trim())){const parsed=Number(v);return Number.isFinite(parsed)?parsed:null;}
+ if(typeof v==="string"&&/^-?\d+(?:\\.\d+)?$/.test(v.trim())){const parsed=Number(v);return Number.isFinite(parsed)?parsed:null;}
  return null;
 }
 export function compactChartItemSummary(value:string,maxLength=58):string{
