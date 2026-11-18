@@ -48,7 +48,7 @@ export interface AuditProcessorDependencies {
     error: string,
     signal?: AbortSignal,
   ): Promise<void>;
-  decode(bytes: Uint8Array, mimeType?: string, signal?: AbortSignal): Promise<{ samples: Float32Array; sampleRate: number; channels: number }>;
+  decode(bytes: Uint8Array, mimeType?: string, signal?: AbortSignal): Promise<{ samples: Float32Array; sampleRate: number; channels: number; loudnessLufs?: number | null; loudnessRangeLu?: number | null; truePeakDbfs?: number | null }>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
   generateAssessment(input: {
     evidence: Record<string, unknown>;
@@ -395,6 +395,8 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
     keyConfidence: dna.keyConfidence,
     limitations: dna.limitations,
     loudnessLufs: dna.loudnessLufs,
+    loudnessRangeLu: dna.loudnessRangeLu ?? null,
+    truePeakDbfs: dna.truePeakDbfs ?? null,
     rmsLevelDbfs: dna.rmsLevelDbfs,
     rmsEnergy: dna.rmsEnergy,
     dynamicRangeDb: dna.dynamicRangeDb,
@@ -494,6 +496,9 @@ export async function processAuditJob(
       );
       masterDna = {
         ...dna,
+        loudnessLufs: decoded.loudnessLufs ?? dna.loudnessLufs,
+        loudnessRangeLu: decoded.loudnessRangeLu ?? null,
+        truePeakDbfs: decoded.truePeakDbfs ?? null,
         sampleRate: decoded.sampleRate,
         channels: decoded.channels,
         durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,

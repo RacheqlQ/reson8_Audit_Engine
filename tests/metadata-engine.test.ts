@@ -31,6 +31,7 @@ describe("MetadataEngine", () => {
       genres: ["Soul"],
       sourceProviders: ["spotify", "tidal", "audd", "id3"],
     });
+    expect(identity.fieldProvenance.genre).toBe("spotify");
   });
 
   it("uses lower-priority providers to fill missing fields without inventing values", () => {
@@ -57,6 +58,7 @@ describe("MetadataEngine", () => {
     expect(identity.label).toBe("Recognized Label");
     expect(identity.releaseDate).toBe("1990-01-02");
     expect(identity.genres).toEqual(["Soul", "R&B"]);
+    expect(identity.fieldProvenance.genre).toBe("id3");
   });
 
   it("falls back to filename for title and artist when no structured metadata exists", () => {

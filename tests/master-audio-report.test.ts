@@ -26,6 +26,14 @@ describe("uploaded master provenance in reports", () => {
     input.sonicDna = {
       ...input.sonicDna,
       loudnessLufs: -11.32,
+      loudnessRangeLu: 4.2,
+      truePeakDbfs: -1.1,
+      sampleRate: 48000,
+      channels: 2,
+      spectralCentroidHz: 1850,
+      spectralBandwidthHz: 900,
+      spectralRolloffHz: 6200,
+      zeroCrossingRate: 0.045,
       dynamicRangeDb: 13.11,
       vocalFeatures: {
         status: "not_analyzed",
@@ -35,8 +43,12 @@ describe("uploaded master provenance in reports", () => {
     const report = planAuditReportPages(input, "full")
       .flatMap((section) => [section.title, ...section.text])
       .join(" ");
-    expect(report).toContain("Integrated loudness: -11.3 LUFS");
-    expect(report).toContain("Dynamic range: 13.1 dB");
+    expect(report).toContain("Integrated loudness (EBU R128): -11.3 LUFS");
+    expect(report).toContain("Loudness range (EBU R128 LRA): 4.2 LU");
+    expect(report).toContain("True peak: -1.1 dBFS");
+    expect(report).toContain("Source format: 48000 Hz; 2 channel(s)");
+    expect(report).toContain("Spectral profile: centroid 1850 Hz");
+    expect(report).toContain("RMS envelope spread (p95/p10; internal proxy): 13.1 dB");
     expect(report).toContain("Vocal analysis: Not performed");
     expect(report.toLowerCase()).toContain("vocal presence/absence is unknown");
   });

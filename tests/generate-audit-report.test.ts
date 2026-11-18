@@ -86,7 +86,7 @@ describe("A4 report layout and fixture coverage",()=>{
   tentative.sonicDna.tempoConfidence=0.32;
   tentative.sonicDna.bpm=96;
   const tentativeBody=planAuditReportPages(tentative).flatMap(section=>section.text).join(" ");
-  expect(tentativeBody).toContain("Tentative — 96.0 BPM (half-time 48.0; double-time 192.0)");
+  expect(tentativeBody).toContain("Tentative candidate — 96.0 BPM (half-time 48.0; double-time 192.0)");
   const zero=structuredClone(fullAudioFixture) as any;
   zero.sonicDna.tempoConfidence=0;
   const zeroBody=planAuditReportPages(zero).flatMap(section=>section.text).join(" ");
@@ -135,6 +135,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(metadataFieldSource({fieldProvenance:{title:"spotify",artist:"id3",album:"filename"}}, "artist")).toBe("Field source: Embedded audio tags");
   expect(metadataFieldSource({fieldProvenance:{title:"spotify",artist:"id3",album:"filename"}}, "album")).toBe("Field source: Uploaded filename");
   expect(metadataFieldSource({fieldProvenance:{}}, "isrc")).toBe("Field source: unavailable");
+  expect(metadataFieldSource({fieldProvenance:{genre:"apple_music"}}, "genre")).toBe("Field source: Apple Music");
   const input=structuredClone(fullAudioFixture) as any;
   input.evidence.fieldProvenance={title:"spotify",artist:"id3",album:null,isrc:null,upc:null,label:null,releaseDate:null};
   const identity=planAuditReportPages(input,"full").find(page=>page.title==="Identity and source reconciliation");
