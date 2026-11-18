@@ -14,7 +14,7 @@ const PROVIDERS = new Set(["groq", "gemini", "ollama"]);
 function boundedIdentifier(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const normalized = value.trim();
-  return /^[A-Za-z0-9_.:-]{1,100}$/.test(normalized) ? normalized : undefined;
+  return /^[A-Za-z0-9_./:-]{1,100}$/.test(normalized) ? normalized : undefined;
 }
 
 export function getAuditFailureDetails(error: unknown): AuditFailureDetails {
