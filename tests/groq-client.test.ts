@@ -206,7 +206,60 @@ describe("GroqClient section groups",()=>{
   const result=await client.assess({evidence:{},sonicDna:null});
   expect(result.assessmentVersion).toBe("3.0");expect(narrativeCalls).toBe(2);expect(sleeps).toContain(13973);
  });
- it("retries Groq provider-side JSON schema validation failures with provider error details as correction context",async()=>{
+  it("retries Groq TPM 413 responses using Retry-After before failing over", async () => {
+    let narrativeCalls = 0;
+    const sleeps: number[] = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const group = body.response_format.json_schema.name.replace(/^ar_/, "");
+      if (group === "narrative" && narrativeCalls++ === 0) {
+        return new Response(JSON.stringify({ error: { message: "Request exceeds tokens per minute TPM capacity" } }), {
+          status: 413,
+          headers: { "retry-after": "2" },
+        });
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(group)) } }] }), { status: 200 });
+    });
+    const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async (ms) => { sleeps.push(ms); });
+    const result = await client.assess({ evidence: {}, sonicDna: null });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(narrativeCalls).toBe(2);
+    expect(sleeps).toContain(2_000);
+  });
+
+  it("does not retry a non-TPM Groq 413 request-size rejection", async () => {
+    let calls = 0;
+    const mock = vi.fn(async () => {
+      calls++;
+      return new Response(JSON.stringify({ error: { message: "Payload exceeds model context window" } }), { status: 413 });
+    });
+    const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
+    await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow("GROQ_REQUEST_TOO_LARGE");
+    expect(calls).toBe(1);
+  });
+
+  it("adds bounded jitter to exponential retries when Retry-After is absent", async () => {
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    let narrativeCalls = 0;
+    const sleeps: number[] = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const group = body.response_format.json_schema.name.replace(/^ar_/, "");
+      if (group === "narrative" && narrativeCalls++ === 0) {
+        return new Response(JSON.stringify({ error: { message: "Temporary rate limit" } }), { status: 429 });
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(group)) } }] }), { status: 200 });
+    });
+    try {
+      const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async (ms) => { sleeps.push(ms); });
+      await client.assess({ evidence: {}, sonicDna: null });
+      expect(sleeps[0]).toBe(1_125);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+it("retries Groq provider-side JSON schema validation failures with provider error details as correction context",async()=>{
   let evidenceScoreCalls=0;
   const prompts:string[]=[];
   const systemPrompts:string[]=[];
