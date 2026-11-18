@@ -287,7 +287,7 @@ function sections(i:AuditReportInput):Section[]{
    "RMS level dBFS: " + metric(s?.rmsLevelDbfs,1),
    "RMS energy: " + metric(s?.rmsEnergy,2),
    "Source format: " + val(s?.sampleRate) + " Hz; " + val(s?.channels) + " channel(s); " + metric(s?.durationSeconds,2) + " seconds",
-   "Spectral profile: centroid " + metric(s?.spectralCentroidHz,0) + " Hz; bandwidth " + metric(s?.spectralBandwidthHz,0) + " Hz; 85% rolloff " + metric(s?.spectralRolloffHz,0) + " Hz; zero-crossing rate " + metric(s?.zeroCrossingRate,4),
+   "Spectral profile: centroid " + metric(s?.spectralCentroidHz,0) + " Hz; bandwidth " + metric(s?.spectralBandwidthHz,0) + " Hz; 85% rolloff " + metric(s?.spectralRolloffHz,0) + " Hz; zero-crossing rate " + metric(s?.zeroCrossingRate,3),
    "Measurement note: EBU R128 LUFS/LRA and true peak are separate from the internal RMS-envelope spread; RMS level, RMS energy and spectral descriptors are signal measurements, not subjective mastering-quality scores.",
    "Tempo estimator: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.method) + "; confidence diagnostic: " + metric(s?.tempoConfidence,2) + "; candidates: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.candidateBpms),
    "Beat-grid diagnostic: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatGridStatus) + "; beat timestamps: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatTimesSeconds ? ((s?.rhythmFeatures as Record<string,unknown>).beatTimesSeconds as unknown[]).length : 0) + "; downbeat grouping is a four-beat diagnostic assumption, not a verified bar structure."
