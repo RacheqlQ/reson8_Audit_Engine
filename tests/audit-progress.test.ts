@@ -72,6 +72,10 @@ describe("audit progress", () => {
 describe("report progress accounting", () => {
   it("counts distinct report tiers rather than duplicate versions of one tier", () => {
     const progress = getAuditProgress([
+      { event_type: "recognition" },
+      { event_type: "sonic_dna" },
+      { event_type: "evidence_reconciliation" },
+      { event_type: "ar_assessment" },
       { event_type: "report_generated", payload: { tier: "sample" } },
       { event_type: "report_generated", payload: { tier: "sample" } },
     ], "processing", "master");
