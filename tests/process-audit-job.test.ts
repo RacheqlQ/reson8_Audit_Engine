@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AI_ASSESSMENT_STAGE_TIMEOUT_MS, AUDIT_JOB_DEADLINE_MS, classifyAuditFailure, processAuditJob } from "../src/jobs/process-audit-job.js";
+import { analyzeVocalStem } from "../src/audio/vocal-analysis.js";
 
 const assessment = {} as import("../src/providers/groq/client.js").ArAssessment;
 
@@ -74,8 +75,16 @@ describe("processAuditJob", () => {
         sampleRate: 44100,
         channels: 2,
       }),
+      analyzeVocals: async () => {
+        events.push("vocal-analysis");
+        const sampleRate = 8000;
+        const mix = Float32Array.from({ length: sampleRate }, (_, i) => 0.5 * Math.sin(2 * Math.PI * 220 * i / sampleRate));
+        const vocal = Float32Array.from({ length: sampleRate }, (_, i) => 0.25 * Math.sin(2 * Math.PI * 220 * i / sampleRate));
+        return analyzeVocalStem([vocal], [mix], sampleRate);
+      },
       saveSonicDna: async (_jobId, _claimToken, dna) => {
         events.push("dna");
+        expect(dna.vocalFeatures).toMatchObject({ status: "analyzed", voicePresence: "likely_present" });
         expect(dna.sampleRate).toBe(44100);
         expect(dna.channels).toBe(2);
         expect(dna.durationSeconds).toBe(4 / 44100);
@@ -112,6 +121,7 @@ describe("processAuditJob", () => {
     expect(events).toEqual([
       "processing",
       "recognition",
+      "vocal-analysis",
       "dna",
       "evidence",
       "assessment",
