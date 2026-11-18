@@ -290,7 +290,10 @@ function sections(i:AuditReportInput):Section[]{
    "Spectral profile: centroid " + metric(s?.spectralCentroidHz,0) + " Hz; bandwidth " + metric(s?.spectralBandwidthHz,0) + " Hz; 85% rolloff " + metric(s?.spectralRolloffHz,0) + " Hz; zero-crossing rate " + metric(s?.zeroCrossingRate,3),
    "Measurement note: EBU R128 LUFS/LRA and true peak are separate from the internal RMS-envelope spread; RMS level, RMS energy and spectral descriptors are signal measurements, not subjective mastering-quality scores.",
    "Tempo estimator: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.method) + "; confidence diagnostic: " + metric(s?.tempoConfidence,2) + "; candidates: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.candidateBpms),
-   "Beat-grid diagnostic: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatGridStatus) + "; beat timestamps: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatTimesSeconds ? ((s?.rhythmFeatures as Record<string,unknown>).beatTimesSeconds as unknown[]).length : 0) + "; downbeat grouping is a four-beat diagnostic assumption, not a verified bar structure."
+   "Beat-grid diagnostic: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatGridStatus) + "; beat timestamps: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatTimesSeconds ? ((s?.rhythmFeatures as Record<string,unknown>).beatTimesSeconds as unknown[]).length : 0) + "; downbeat grouping is a four-beat diagnostic assumption, not a verified bar structure.",
+   "Key analysis: method " + val((s?.harmonicFeatures as Record<string,unknown>|undefined)?.method) + "; tuning offset " + metric(s?.keyTuningCents,2) + " cents; segment agreement " + metric(s?.keySegmentAgreement,2) + ". Key confidence is an estimator diagnostic, not calibrated accuracy.",
+   "Rhythm scope: onset periodicity and candidate beat timestamps are measured; groove, swing, syncopation, verified bar structure and section boundaries are not independently classified in this analysis version.",
+   "Rule-based signal descriptors (not an emotion or mood classifier): " + val(s?.moodTags)
   );
  } else if (s) {
   sonicDnaBody.push(
