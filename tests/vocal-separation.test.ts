@@ -29,6 +29,27 @@ describe("master vocal separation integration", () => {
 
     expect(sessionRequested).toBe(true);
     expect(result.status).toBe("analyzed");
+    expect(result.method).toBe("open_unmix_umxhq_vocal_stem");
+  });
+
+
+  it("converts a returned vocal stem into presence, activity and pitch evidence", async () => {
+    const sampleRate = 8000;
+    const mix = Float32Array.from({ length: sampleRate * 2 }, (_, i) =>
+      0.5 * Math.sin(2 * Math.PI * 220 * i / sampleRate),
+    );
+    const vocal = Float32Array.from({ length: sampleRate * 2 }, (_, i) =>
+      0.25 * Math.sin(2 * Math.PI * 220 * i / sampleRate),
+    );
+    const separateImpl = async () => ({
+      stems: { vocals: [vocal] },
+      sampleRate,
+      residual: [new Float32Array(mix.length)],
+    });
+    const result = await separateVocalsFromPcm(mix, sampleRate, 1, undefined, {
+      separateImpl: separateImpl as unknown as typeof import("@audio/neural-separate").default,
+    });
+    expect(result.status).toBe("analyzed");
     expect(result.voicePresence).toBe("likely_present");
     expect(result.pitch.medianHz).toBeGreaterThan(195);
     expect(result.pitch.medianHz).toBeLessThan(245);
