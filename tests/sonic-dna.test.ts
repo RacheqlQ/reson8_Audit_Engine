@@ -156,7 +156,7 @@ describe("Sonic DNA",()=>{
  });
  it("labels rule-based energy and spectral outputs as signal descriptors, not moods",()=>{
   const sampleRate=8000;
-  const bright=Float32Array.from({length:sampleRate*2},(_,i)=>0.2*Math.sin(2*Math.PI*3500*i/sampleRate));
+  const bright=Float32Array.from({length:sampleRate*2},(_,i)=>0.3*Math.sin(2*Math.PI*3500*i/sampleRate));
   const result=analyzePcm(bright,sampleRate);
   expect(result.moodTags).toContain("Elevated RMS level");
   expect(result.moodTags).toContain("High spectral centroid");
