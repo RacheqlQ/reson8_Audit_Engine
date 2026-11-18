@@ -12,7 +12,7 @@ export interface VocalPitchPoint {
 
 export interface VocalAnalysisResult {
   status: "analyzed" | "insufficient_evidence" | "unavailable";
-  method: "open_unmix_umxhq_vocal_stem";
+  method: "open_unmix_umxhq_vocal_stem" | "not_run";
   model: {
     name: "Open-Unmix UMX-HQ vocals";
     artifactSha256: string;
@@ -148,10 +148,10 @@ function estimatePitch(samples: Float32Array, sampleRate: number): {
   };
 }
 
-export function unavailableVocalAnalysis(reason: string): VocalAnalysisResult {
+export function unavailableVocalAnalysis(reason: string, status: "unavailable" | "insufficient_evidence" = "unavailable", method: "not_run" | "open_unmix_umxhq_vocal_stem" = "not_run"): VocalAnalysisResult {
   return {
-    status: "unavailable",
-    method: "open_unmix_umxhq_vocal_stem",
+    status,
+    method,
     model: { name: "Open-Unmix UMX-HQ vocals", artifactSha256: VOCAL_MODEL_SHA256 },
     voicePresence: "uncertain",
     vocalStemRmsDbfs: null,
@@ -177,8 +177,7 @@ export function analyzeVocalStem(
   const mix = mono(mixChannels);
   const length = Math.min(vocal.length, mix.length);
   if (!Number.isFinite(sampleRate) || sampleRate < 4000 || length < sampleRate * 0.5) {
-    const result = unavailableVocalAnalysis("At least half a second of decoded master and vocal-stem PCM at 4 kHz or higher is required.");
-    return { ...result, status: "insufficient_evidence" };
+    return unavailableVocalAnalysis("At least half a second of decoded master and vocal-stem PCM at 4 kHz or higher is required.", "insufficient_evidence", "open_unmix_umxhq_vocal_stem");
   }
 
   let vocalEnergy = 0;
@@ -256,7 +255,7 @@ export function analyzeVocalStem(
     vocalStemRmsDbfs: Number((20 * Math.log10(Math.max(EPSILON, vocalRms))).toFixed(1)),
     vocalEnergyShare: Number(energyShare.toFixed(4)),
     vocalActivityRatio: Number(vocalActivityRatio.toFixed(4)),
-    activeDurationSeconds: Number((activeCount * FRAME_SECONDS).toFixed(2)),
+    activeDurationSeconds: Number(Math.min(length / sampleRate, activeCount * FRAME_SECONDS).toFixed(2)),
     activitySegments: segments,
     pitch,
     delivery: "not_classified",
