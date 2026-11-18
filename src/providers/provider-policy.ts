@@ -180,6 +180,28 @@ export function providerDecision(
   };
 }
 
+export interface AssessmentProviderReadiness {
+  provider: "groq" | "gemini" | "ollama";
+  model: string;
+  enabled: boolean;
+  configured: boolean;
+  usable: boolean;
+  reason: "disabled_by_data_policy" | "not_configured" | null;
+}
+
+export function getAssessmentProviderReadiness(env: Record<string, string | undefined> = process.env): AssessmentProviderReadiness[] {
+  const specs = [
+    { provider: "groq" as const, key: env.GROQ_API_KEY ?? env.GROQ_API, model: env.GROQ_MODEL ?? "openai/gpt-oss-120b" },
+    { provider: "gemini" as const, key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL ?? "gemini-2.5-flash" },
+    { provider: "ollama" as const, key: env.OLLAMA_API_KEY, model: env.OLLAMA_MODEL ?? "gemma4:31b" },
+  ];
+  return specs.map((spec) => {
+    const enabled = providerDecision(spec.provider, env).enabled;
+    const configured = typeof spec.key === "string" && spec.key.trim().length > 0;
+    const usable = enabled && configured;
+    return { provider: spec.provider, model: spec.model, enabled, configured, usable, reason: usable ? null : enabled ? "not_configured" : "disabled_by_data_policy" };
+  });
+}
 export function assertProviderEnabled(provider: ProviderId): void {
   const decision = providerDecision(provider);
   if (!decision.enabled) {
