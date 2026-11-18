@@ -378,7 +378,7 @@ describe("Phillo evidence guardrails", () => {
     expect(result.scorecard.rhythmicConsistency.score).toBeNull();
     expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();
     expect(result.evidenceLabels.some((entry) => entry.label === "OBSERVED")).toBe(false);
-    expect(JSON.stringify(result)).not.toMatch(/156\\s*BPM|-11\\s*LUFS|8 dB dynamic range|RMS energy support/i);
+    expect(JSON.stringify(result)).not.toMatch(/156\s*BPM|-11\s*LUFS|8 dB dynamic range|RMS energy support/i);
     expect(result.evidenceLabels.some((entry) => entry.label === "RECOGNIZED")).toBe(true);
   });
 });
