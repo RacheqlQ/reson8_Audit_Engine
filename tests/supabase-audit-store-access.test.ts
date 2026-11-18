@@ -113,6 +113,33 @@ describe("DSP provider failure persistence", () => {
     });
   });
 
+  it("persists only sanitized failure codes and provider diagnostics", async () => {
+    const { store, fetchMock } = makeStore({});
+    await store.markFailed("job-failure", "claim-token", "AI assessment: retry later.", undefined, {
+      errorCode: "AI_PROVIDER_HTTP_503",
+      provider: "gemini",
+      httpStatus: 503,
+      errorType: "provider_error",
+      retryable: true,
+    });
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.p_operation).toBe("fail");
+    expect(requestBody.p_payload).toMatchObject({
+      message: "AI assessment: retry later.",
+      errorCode: "AI_PROVIDER_HTTP_503",
+      eventPayload: {
+        failure: {
+          provider: "gemini",
+          httpStatus: 503,
+          errorType: "provider_error",
+          retryable: true,
+        },
+      },
+    });
+    expect(JSON.stringify(requestBody)).not.toContain("API token");
+  });
+
   it("fails an expired processing job older than ten minutes", async () => {
     const jobId = "11111111-1111-4111-8111-111111111111";
     const { store, fetchMock } = makeStore([{ id: jobId }]);
