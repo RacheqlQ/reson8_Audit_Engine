@@ -45,6 +45,7 @@ describe("processAuditJob", () => {
     let failureCode = "";
     let reconciledIdentity: unknown = null;
     let persistedDna: Record<string, unknown> | null = null;
+    let signalMeasurementTimestamp: string | undefined;
     const result = await processAuditJob("job-123", {
       getJob: async () => ({
         id: "job-123",
@@ -121,9 +122,7 @@ describe("processAuditJob", () => {
       generateReport: async (_input, tier) => {
         expect((_input.evidence as Record<string, unknown>).playlistDiscovery).toMatchObject({ status: "available", candidates: [{ name: "Afrobeats Discovery", provider: "apple_music" }] });
         expect(_input.executionMode).toBe("master");
-        const measuredSignal = (_input.realMasterContract as { directSignalMeasurements: Array<{ status: string; measuredAt?: string }> }).directSignalMeasurements.find((metric) => metric.status === "measured");
-        expect(measuredSignal?.measuredAt).toEqual(expect.any(String));
-        expect(Number.isNaN(Date.parse(measuredSignal!.measuredAt!))).toBe(false);
+        signalMeasurementTimestamp = (_input.realMasterContract as { directSignalMeasurements: Array<{ name: string; measuredAt?: string }> }).directSignalMeasurements.find((metric) => metric.name === "sample_rate_hz")?.measuredAt;
         expect(_input.realMasterContract).toMatchObject({ schemaVersion: "1.0.0", auditId: "job-123", source: { sourceKind: "uploaded_master", sourceAudioPath: "owner-123/job-123/master.wav", mimeType: "audio/mpeg", byteLength: id3Fixture().byteLength } });
         expect((_input.realMasterContract as { externalRecords: Array<{ provider: string; status: string }> }).externalRecords).toEqual(expect.arrayContaining([
           expect.objectContaining({ provider: "musicbrainz", status: "unavailable" }),
@@ -145,6 +144,8 @@ describe("processAuditJob", () => {
     });
 
     expect(result.status, failureMessage + " | code: " + failureCode + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity)).toBe("completed");
+    expect(signalMeasurementTimestamp).toEqual(expect.any(String));
+    expect(Number.isNaN(Date.parse(signalMeasurementTimestamp!))).toBe(false);
     expect(events).toEqual([
       "processing",
       "dna-base",
