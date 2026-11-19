@@ -514,10 +514,10 @@ describe("Groq JSON-object fallback schema contract", () => {
     });
     const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
     await client.assess({ evidence: {}, sonicDna: null });
-    expect(fallbackPayloads).toHaveLength(2);
+    expect(fallbackPayloads).toHaveLength(3);
     expect(fallbackPayloads[0].outputSchema).toBeDefined();
-    expect(fallbackPayloads[1].outputSchema).toEqual(fallbackPayloads[0].outputSchema);
-    expect(fallbackPayloads[1].correction).toContain("evidenceGaps");
+    expect(fallbackPayloads[2].outputSchema).toEqual(fallbackPayloads[0].outputSchema);
+    expect(fallbackPayloads[2].correction).toContain("evidenceGaps");
     const schema = fallbackPayloads[0].outputSchema;
     expect(schema).toMatchObject({ type: "object" });
     expect(schema.properties).toMatchObject({
