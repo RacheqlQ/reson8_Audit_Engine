@@ -190,6 +190,10 @@ describe("processAuditJob", () => {
           genreContext: ["R&B"],
         },
       }),
+      collectIsrcCatalogMetadata: async (isrc) => ({ isrc, metadata: [], outcomes: [
+        { provider: "musicbrainz", status: "partial", reason: "No fixture match; external lookup intentionally mocked." },
+        { provider: "spotify", status: "not_configured", reason: "Spotify credentials are not configured in this deterministic test." },
+      ] }),
       recognizeUrl: async () => ({
         matched: true as const,
         artist: null,
@@ -212,7 +216,7 @@ describe("processAuditJob", () => {
       generateAssessment: async (input) => {
         assessmentInputs.push(input.evidence);
         assessmentCatalogInputs.push(input.catalogMetadata ?? {});
-        expect(input.evidence.metadataSourcesChecked).toEqual(["tidal", "audd"]);
+        expect(input.evidence.metadataSourcesChecked).toEqual(["tidal", "musicbrainz", "spotify", "audd"]);
         expect(input.sonicDna).toMatchObject({
           provenance: "tidal_catalog_metadata",
           evidenceClass: "RECOGNIZED",
