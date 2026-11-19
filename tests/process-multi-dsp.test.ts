@@ -83,10 +83,11 @@ describe("multi-DSP audit processing", () => {
     expect(assessmentEvidence).toMatchObject({
       artist: null,
       reconciliation: { status: "conflict", conflicts: [{ field: "artist", values: ["Wrong Artist", "Tems"] }] },
-      metadataSourcesChecked: ["apple_music", "deezer", "tidal", "youtube_music"],
+      metadataSourcesChecked: ["apple_music", "deezer", "tidal", "youtube_music", "musicbrainz"],
 
     });
-    expect(assessmentEvidence?.catalogSources).toHaveLength(4);
+    expect(assessmentEvidence?.catalogSources).toHaveLength(5);
+    expect((assessmentEvidence?.catalogSources as Array<{ platform: string }>).map((source) => source.platform)).toContain("musicbrainz");
     expect(assessmentCatalogMetadata?.artist).toBeNull();
     expect(assessmentCatalogMetadata?.identity).toMatchObject({ artist: null });
     expect(assessmentEvidence?.sourceProviders).not.toContain("spotify");
