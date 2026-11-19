@@ -388,6 +388,6 @@ describe("Sonic DNA provisional candidate reporting", () => {
     expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 (provisional");
     expect(rows.find((row) => row.label === "KEY / MODE")?.value).toBeNull();
     expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("C major");
-    expect(rows.find((row) => row.label === "TUNING OFFSET CENTS")?.value).toBe("18");
+    expect(rows.find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS")?.value).toBe("18 (multiple tonal windows; provisional)");
   });
 });
