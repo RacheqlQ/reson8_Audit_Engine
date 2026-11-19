@@ -388,7 +388,7 @@ describe("Sonic DNA provisional candidate reporting", () => {
     }, true);
     expect(rows.find((row) => row.label === "TEMPO BPM")?.value).toBeNull();
     expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 (provisional");
-    expect(rows.find((row) => row.label === "TEMPO CANDIDATE REASON")?.value).toContain("reliability");
+    expect(rows.find((row) => row.label === "TEMPO CANDIDATE REASON")?.value).toContain("reliable result");
     expect(rows.find((row) => row.label === "BEAT GRID STATUS")?.value).toContain("tentative (candidate; not independently validated)");
     expect(rows.find((row) => row.label === "BEAT TIMESTAMP COUNT")?.value).toContain("512 generated timestamps");
     expect(rows.find((row) => row.label === "KEY / MODE")?.value).toBeNull();
