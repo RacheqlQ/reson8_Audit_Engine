@@ -11,6 +11,19 @@ const MODEL_BYTES = 35_623_512;
 const MAX_MODEL_BYTES = 40 * 1024 * 1024;
 let modelBytesPromise: Promise<Uint8Array> | null = null;
 
+function logVocalMemory(event: string, details: Record<string, unknown> = {}): void {
+  const usage = process.memoryUsage();
+  console.info(JSON.stringify({
+    worker: "audit",
+    event,
+    ...details,
+    rssBytes: usage.rss,
+    heapUsedBytes: usage.heapUsed,
+    externalBytes: usage.external,
+    arrayBuffersBytes: usage.arrayBuffers,
+  }));
+}
+
 function hash(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -105,12 +118,15 @@ export async function separateVocalsFromPcm(
 
   const sessionLoader: SessionLoader = overrides.sessionLoader ?? (async (model: ModelSpec) => {
     if (model !== MODEL_URL) throw new Error("Unexpected vocal model URL");
+    logVocalMemory("vocal_model_load_start");
     const bytes = modelBytesPromise ??= readVerifiedModel(signal);
     try {
-      return await load(await bytes, {
+      const session = await load(await bytes, {
         backend: "node",
         sessionOptions: { enableCpuMemArena: false, enableMemPattern: false },
       }) as unknown as Session;
+      logVocalMemory("vocal_model_load_complete");
+      return session;
     } catch (error) {
       modelBytesPromise = null;
       throw error;
@@ -119,6 +135,12 @@ export async function separateVocalsFromPcm(
 
   const separator = overrides.separateImpl ?? separate;
   try {
+    logVocalMemory("vocal_separation_inference_start", {
+      sampleRate,
+      channels: mixChannels.length,
+      frames: mixChannels[0]?.length ?? 0,
+      durationSeconds: (mixChannels[0]?.length ?? 0) / sampleRate,
+    });
     const separated = await separator(mixChannels, {
       sampleRate,
       targetRate: 44100,
@@ -147,10 +169,18 @@ export async function separateVocalsFromPcm(
       session: sessionLoader,
     });
     signal?.throwIfAborted();
+    logVocalMemory("vocal_separation_inference_complete", {
+      sampleRate: separated.sampleRate,
+      stemChannels: separated.stems.vocals?.length ?? 0,
+      stemFrames: separated.stems.vocals?.[0]?.length ?? 0,
+    });
     const vocalStem = separated.stems.vocals;
     if (!vocalStem?.length) return unavailableVocalAnalysis("The vocal separation model returned no vocal stem.");
     return analyzeVocalStem(vocalStem, mixChannels, separated.sampleRate);
   } catch (error) {
+    logVocalMemory("vocal_separation_failed", {
+      error: error instanceof Error ? error.message.slice(0, 240) : "unknown",
+    });
     if (signal?.aborted) throw error;
     const reason = error instanceof Error ? error.message : "Vocal separation failed.";
     return unavailableVocalAnalysis(reason.slice(0, 300));
