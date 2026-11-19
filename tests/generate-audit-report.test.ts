@@ -435,6 +435,7 @@ describe("Phase 1 real-master report contract",()=>{
   expect(report).toContain("Master evidence contract and provenance");
   expect(report).toContain("SOURCE SHA-256: "+"a".repeat(64));
   expect(report).toContain("tempo_bpm: 96 BPM; method transient_autocorrelation");
+  expect(report).toContain("tempo_bpm: 96 BPM; method transient_autocorrelation; measured: 2026-11-19T12:00:00.000Z");
   expect(report).toContain("true_peak_dbfs: UNAVAILABLE; DECODER_METRIC_MISSING");
   expect(report).toContain("calibrated_audio_mood: UNAVAILABLE; VALIDATED_MODEL_NOT_CONFIGURED");
   expect(report).toContain("calibrated_key_mode_probability: UNAVAILABLE; CALIBRATED_CLASSIFIER_NOT_CONFIGURED");
