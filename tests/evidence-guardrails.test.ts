@@ -44,6 +44,17 @@ describe("Phillo evidence guardrails", () => {
     expect(isReliableTempo({ bpm: null, tempoConfidence: 0.9 })).toBe(false);
   });
 
+  it("does not mislabel a missing genre tempo range as a failed tempo-confidence gate", () => {
+    const result = sanitizeAssessmentForEvidence(baseAssessment, {
+      bpm: 96,
+      tempoConfidence: 0.94,
+      genreClassification: { primaryGenre: null, abstained: true },
+    });
+    expect(result.scorecard.tempoLaneFit.score).toBeNull();
+    expect(result.scorecard.tempoLaneFit.rationale).toContain("tempo is confidence-qualified");
+    expect(result.scorecard.tempoLaneFit.rationale).not.toContain("did not pass the confidence gate");
+  });
+
   it("withholds key labels unless confidence and segment agreement both reach the 80% reporting target", () => {
     expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.8, keySegmentAgreement: 0.8 })).toBe(true);
     expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.79, keySegmentAgreement: 0.95 })).toBe(false);
