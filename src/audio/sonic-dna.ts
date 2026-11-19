@@ -172,7 +172,7 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const bestScore=selected[0]?.[1]??0;
  const candidateScores=selected.map(([bpm,score])=>({bpm,score:Number(score.toFixed(6))}));
  if(bestBpm===undefined||bestScore<0.08)
-  return {...emptyTempoEstimate("Transient autocorrelation did not produce a sufficiently prominent tempo candidate."),candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
+  return {...emptyTempoEstimate("Transient autocorrelation did not produce a sufficiently prominent tempo candidate."),topCandidateBpm:bestBpm??null,candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
  const sortedScores=[...scores.values()].sort((a,b)=>a-b);
  const median=sortedScores[Math.floor(sortedScores.length/2)]??0;
  const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
