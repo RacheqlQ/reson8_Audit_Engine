@@ -176,7 +176,8 @@ function professionalEvidenceLanguage(value:string):string {
  return value
   .replace(/Vocal analysis:\s*Not performed[^.]*\./gi,"")
   .replace(/vocal presence\/absence is unknown[^.]*\./gi,"")
-  .replace(/learned audio(?:-genre)? model(?: status)?:\s*disabled[^.]*\.?/gi,"")
+  .replace(/(?:learned audio(?:-genre)?|audio-only genre|vocal|detection|classification) model(?: status)?[^.]*\b(?:disabled|not configured|unavailable)\b[^.]*\.?/gi,"")
+  .replace(/(?:model|detector) status:\s*(?:disabled|not configured|unavailable)[^.]*\.?/gi,"")
   .replace(/(?:vocal analysis|learned audio model) (?:is|was) temporarily disabled[^.]*\./gi,"")
   .replace(/vocal analysis (?:was|is) not performed[^.]*\./gi,"")
   .replace(/\bOBSERVED\b/g,"Measured from the uploaded master")
