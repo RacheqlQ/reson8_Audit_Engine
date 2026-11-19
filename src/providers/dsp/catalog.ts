@@ -100,8 +100,9 @@ async function apple(u: URL, signal?: AbortSignal) {
   const pathStorefront = u.pathname.split("/").filter(Boolean)[0]?.toLowerCase();
   const queryStorefront = u.searchParams.get("country")?.toLowerCase();
   const storefront = pathStorefront && /^[a-z]{2}$/.test(pathStorefront) ? pathStorefront : queryStorefront;
+  const configuredStorefront = process.env.APPLE_MUSIC_STOREFRONT?.toLowerCase();
   const appleStorefront = storefront && /^[a-z]{2}$/.test(storefront)
-    ? storefront : (process.env.APPLE_MUSIC_STOREFRONT ?? "ng").toLowerCase();
+    ? storefront : configuredStorefront && /^[a-z]{2}$/.test(configuredStorefront) ? configuredStorefront : "ng";
   const developerToken = process.env.APPLE_MUSIC_DEVELOPER_TOKEN?.trim();
   let appleApiFailure: Record<string, unknown> | null = null;
 
