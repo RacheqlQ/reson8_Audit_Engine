@@ -54,7 +54,7 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
     && typeof confidence === "number" && Number.isFinite(confidence)
     && confidence >= MIN_RELIABLE_KEY_CONFIDENCE && confidence <= 1
     && typeof agreement === "number" && Number.isFinite(agreement)
-    && agreement >= 0.8 && agreement <= 1;
+    && agreement >= 0.6 && agreement <= 1;
 }
 
 function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean, suppressVocal: boolean, suppressKey: boolean): unknown {
