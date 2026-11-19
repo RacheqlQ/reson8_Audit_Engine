@@ -6,6 +6,7 @@ describe("Spotify provider readiness", () => {
     vi.unstubAllGlobals();
     delete process.env.SPOTIFY_CLIENT_ID;
     delete process.env.SPOTIFY_CLIENT_SECRET;
+    delete process.env.SPOTIFY_PLAYLIST_MARKET;
   });
 
   it("reports missing Spotify credentials without treating the provider as policy-disabled", async () => {

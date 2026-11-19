@@ -172,6 +172,17 @@ export function coverVerdictLabel(input:AuditReportInput):string {
 }
 function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready to pitch requires verified commercial-performance evidence, a defined reporting period and a supportable release proposition.",moderate:"Develop applies when evidence supports a credible direction but important execution or positioning work remains.",low:"Needs work applies when supplied evidence identifies material gaps that should be addressed before pitching.",undetermined:"Insufficient evidence applies when source-attributed commercial or release evidence is missing; no demand or partner interest is inferred."};return m[v.toLowerCase()]??m.undetermined;}
 function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
+
+function drawSpotifyMark(page:PDFPage,x:number,y:number,size:number):void {
+ const green=rgb(30/255,215/255,96/255),black=rgb(0,0,0),scale=size/24;
+ page.drawCircle({x:x+size/2,y:y+size/2,size:size/2,color:green});
+ for(const path of [
+  "M 3 7 C 8 4.8 16 5.4 21 8.5",
+  "M 4 12 C 8.5 10 15 10.7 19.5 13.4",
+  "M 5.5 17 C 9 15.6 13.5 16.2 17.5 18.3",
+ ]) page.drawSvgPath(path,{x:x+size*0.08,y:y+size*0.08,scale,borderColor:black,borderWidth:Math.max(0.8,size/12)});
+}
+
 function professionalEvidenceLanguage(value:string):string {
  return value
   .replace(/Vocal analysis:\s*Not performed[^.]*\./gi,"")
@@ -363,7 +374,7 @@ function sections(i:AuditReportInput):Section[]{
  {title:"Human listening checklist (unscored)",accent:"violet",body:a.humanListeningChecklist},
  {title:"Production and arrangement guidance",accent:"teal",body:[a.productionArrangementGuidance,industryPractice("General lane craft knowledge, not track-specific evidence."),industryPractice(a.industryPractice),...a.listeningChecks]},
  {title:"Comparable lanes and listening references to verify",accent:"violet",body:["Analytical hypotheses — comparisons not independently verified",a.laneHypothesis,...a.referencesToVerify,a.verificationMethod]},
- {title:"Promotion plan",accent:"coral",body:[a.promotionPlan.preRelease,a.promotionPlan.releaseWindow,a.promotionPlan.postRelease,"Content concepts: "+a.promotionPlan.contentIdeas.join(" • "),"General pitching guidance — angles to adapt to verified track facts: "+a.promotionPlan.pitchingAngles.join(" • "),"Playlist categories to investigate only: "+a.promotionPlan.playlistCategories.join(", "),industryPractice(a.promotionPlan.industryPractice)]},
+ {title:"Promotion plan",accent:"coral",body:[a.promotionPlan.preRelease,a.promotionPlan.releaseWindow,a.promotionPlan.postRelease,"Content concepts: "+a.promotionPlan.contentIdeas.join(" • "),"General pitching guidance — angles to adapt to verified track facts: "+a.promotionPlan.pitchingAngles.join(" • "),"Playlist candidates are listed in A&R positioning; no placement or submission acceptance is implied.",industryPractice(a.promotionPlan.industryPractice)]},
  {title:"Curator campaign and target verification",accent:"coral",body:curatorCampaignBody},
  {title:"Label and partner fit",accent:"blue",body:[a.labelPartnerFit.partnerProfile,...a.labelPartnerFit.criteriaToDemonstrate,a.labelPartnerFit.diligenceBeforeContact,industryPractice(a.labelPartnerFit.industryPractice)]},
  {title:"30 / 60 / 90-day execution plan",accent:"violet",body:["DAYS 01–30 — "+a.executionPlan.days30,"DAYS 31–60 — "+a.executionPlan.days60,"DAYS 61–90 — "+a.executionPlan.days90]},
@@ -431,7 +442,13 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
     const count=Math.min(capacity,lines.length-offset),height=count*lineHeight+paragraphGap;
     const r={x:M,y:y-height,width:W-2*M,height,id:"section-"+si+"-paragraph-"+pi+"-part-"+chunk};rects.push(r);
 
-    for(let li=0;li<count;li++){const line=lines[offset+li];if(fonts.regular.widthOfTextAtSize(line,size)>W-2*M-16+.01)console.warn("[report-layout] Text width overflow:",r.id);page.drawText(line,{x:M+8,y:y-li*lineHeight,size,font:fonts.regular,color:size<9?accent:C.ink});}
+    for(let li=0;li<count;li++){
+      const line=lines[offset+li],spotifyAttribution=offset+li===0&&/^AVAILABLE PLAYLIST/.test(line)&&/— Spotify$/.test(line);
+      const textX=M+(spotifyAttribution?31:8);
+      if(spotifyAttribution)drawSpotifyMark(page,M+8,y-li*lineHeight-4,18);
+      if(fonts.regular.widthOfTextAtSize(line,size)>W-textX-M+.01)console.warn("[report-layout] Text width overflow:",r.id);
+      page.drawText(line,{x:textX,y:y-li*lineHeight,size,font:fonts.regular,color:size<9?accent:C.ink});
+     }
     y-=height;offset+=count;chunk++;
     if(offset<lines.length)nextPage(section.title,accent);
    }

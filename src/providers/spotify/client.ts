@@ -33,6 +33,7 @@ export class SpotifyClient implements SpotifyApiClient {
     private readonly clientId = process.env.SPOTIFY_CLIENT_ID,
     private readonly clientSecret = process.env.SPOTIFY_CLIENT_SECRET,
     private readonly market = process.env.SPOTIFY_MARKET ?? "US",
+    private readonly playlistMarket = process.env.SPOTIFY_PLAYLIST_MARKET ?? "NG",
   ) {
     if (!clientId || !clientSecret) {
       throw new Error("Spotify client credentials are required");
@@ -226,7 +227,7 @@ export class SpotifyClient implements SpotifyApiClient {
     const params = new URLSearchParams({
       q: normalizedQuery,
       type: "playlist",
-      market: this.market,
+      market: this.playlistMarket,
       limit: "10",
     });
     const payload = await this.spotifyRequest<{
