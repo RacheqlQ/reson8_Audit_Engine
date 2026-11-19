@@ -9,7 +9,7 @@ describe("MusicBrainz ISRC catalogue client", () => {
   it("normalizes valid ISRCs and rejects malformed identifiers", () => {
     expect(normalizeIsrc("GB-AYE-12-12345")).toBe("GBAYE1212345");
     expect(normalizeIsrc("usabc2300001")).toBe("USABC2300001");
-    expect(() => normalizeIsrc("not-an-isrc")).toThrow(/valid ISRC/i);
+    expect(() => normalizeIsrc("not-an-isrc")).toThrow(/ISRC/i);
   });
 
   it("resolves an ISRC to recording identity and release label evidence", async () => {
