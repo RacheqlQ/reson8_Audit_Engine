@@ -24,6 +24,10 @@ const C = {
 const PALETTE=[C.blue,C.violet,C.teal,C.coral,C.gold,C.sky,C.green];
 const CARD_X=48,CARD_W=499,HEADER_H=29,CAPTION_H=43,PAD=12;
 function color(index:number){return PALETTE[index%PALETTE.length];}
+export function radarScoreDisplayValue(value:number|null):string{
+ return value===null||!Number.isFinite(value)?"NOT SCORED":String(Math.round(value));
+}
+
 export function parseChartMetricValue(v:ChartRow["value"]):number|null{
  if(typeof v==="number")return Number.isFinite(v)?v:null;
  if(typeof v==="string"&&/^-?\d+(?:\.\d+)?$/.test(v.trim())){const parsed=Number(v);return Number.isFinite(parsed)?parsed:null;}
@@ -368,7 +372,7 @@ function drawRadar(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<ty
   const width=b.widthOfTextAtSize(label,6.2),lx=align==="left"?ax+5:align==="right"?ax-width-5:ax-width/2;
   const ly=ay+(Math.sin(q.angle)>.4?-4:Math.sin(q.angle)<-.4?1:-2);
   text(p,label,lx,ly,b,6.2,C.ink);
-  const scoreText=q.score===null?"N/D":String(Math.round(q.score));
+  const scoreText=radarScoreDisplayValue(q.score);
   const scoreWidth=f.widthOfTextAtSize(scoreText,6.2);
   text(p,scoreText,align==="left"?lx:align==="right"?lx+width-scoreWidth:lx+(width-scoreWidth)/2,ly-9,b,6.2,q.score===null?C.coral:C.blue);
  });
