@@ -126,8 +126,8 @@ describe("processAuditJob", () => {
           expect.objectContaining({ provider: "musicbrainz", status: "unavailable" }),
         ]));
         expect((_input.realMasterContract as { calibratedPredictions: Array<{ name: string; status: string }> }).calibratedPredictions).toEqual(expect.arrayContaining([
-          expect.objectContaining({ name: "audio_mood", status: "unavailable" }),
-          expect.objectContaining({ name: "key_mode_classification", status: "unavailable" }),
+          expect.objectContaining({ name: "calibrated_audio_mood", status: "unavailable" }),
+          expect.objectContaining({ name: "calibrated_key_mode_probability", status: "unavailable" }),
         ]));
         events.push(`report-${tier}`);
         return new Uint8Array([37, 80, 68, 70, 45]);
