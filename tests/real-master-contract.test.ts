@@ -77,7 +77,8 @@ describe("real-master audit contract", () => {
         provider: "musicbrainz",
         recordId: "recording-id",
         retrievedAt: "2026-11-19T12:00:00.000Z",
-        fields: { isrc: "USAAA2600001" },\n        fieldProvenance: { isrc: { provider: "musicbrainz", recordId: "recording-id", retrievedAt: "2026-11-19T12:00:00.000Z" } },
+        fields: { isrc: "USAAA2600001" },
+        fieldProvenance: { isrc: { provider: "musicbrainz", recordId: "recording-id", retrievedAt: "2026-11-19T12:00:00.000Z" } },
       }],
       strategicSynthesis: [],
     });
