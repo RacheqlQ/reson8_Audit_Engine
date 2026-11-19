@@ -43,6 +43,7 @@ describe("processAuditJob", () => {
     const events: string[] = [];
     let failureMessage = "";
     let reconciledIdentity: unknown = null;
+    let persistedDna: Record<string, unknown> | null = null;
     const result = await processAuditJob("job-123", {
       getJob: async () => ({
         id: "job-123",
@@ -87,6 +88,7 @@ describe("processAuditJob", () => {
         return analyzeVocalStem([vocal], [mix], sampleRate);
       },
       saveSonicDna: async (_jobId, _claimToken, dna) => {
+        persistedDna = dna as unknown as Record<string, unknown>;
         const hasVocalResult = (dna.vocalFeatures as { status?: string }).status === "analyzed";
         events.push(hasVocalResult ? "dna-final" : "dna-base");
         if (hasVocalResult) {
@@ -96,9 +98,13 @@ describe("processAuditJob", () => {
         expect(dna.channels).toBe(2);
         expect(dna.durationSeconds).toBe(4 / 44100);
       },
+      discoverPlaylists: async (input) => ({ status: "available" as const, outcomes: [{ provider: "apple_music" as const, status: "available" as const, reason: "Deterministic test provider result." }], candidates: [{ provider: "apple_music" as const, id: "pl-test", name: "Afrobeats Discovery", url: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", sourceUrl: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", curatorName: "Apple Music", playlistType: "editorial", description: "Afrobeats selections", trackCount: 20, genreMatches: ["Afrobeats"], moodMatches: [], matchBasis: ["Primary genre match: Afrobeats"], containsIsrc: false, retrievedAt: "2026-11-19T12:00:00.000Z" }] }),
       generateAssessment: async (input) => {
         events.push("assessment");
         expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
+        expect(input.sonicDna).toHaveProperty("keySegmentAgreement", persistedDna?.keySegmentAgreement);
+        expect(input.sonicDna).toHaveProperty("keyTuningCents", persistedDna?.keyTuningCents);
+        expect(input.evidence).not.toHaveProperty("playlistDiscovery");
         expect(input.evidence).toMatchObject({
           auditType: "MASTER-BASED AUDIT",
           metadataSourcesChecked: ["id3", "filename", "audd"],
@@ -112,6 +118,7 @@ describe("processAuditJob", () => {
       },
       saveAssessment: async () => events.push("assessment-saved"),
       generateReport: async (_input, tier) => {
+        expect((_input.evidence as Record<string, unknown>).playlistDiscovery).toMatchObject({ status: "available", candidates: [{ name: "Afrobeats Discovery", provider: "apple_music" }] });
         events.push(`report-${tier}`);
         return new Uint8Array([37, 80, 68, 70, 45]);
       },
