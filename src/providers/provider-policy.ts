@@ -71,10 +71,10 @@ export const PROVIDER_POLICY = {
     decisionNote: "Operational use explicitly authorized by the product owner; comply with applicable Audiomack API terms and written permissions where required.",
   },
   musicbrainz: {
-    id: "musicbrainz", commercialStatus: "allowed", termsUrl: "https://musicbrainz.org/doc/MusicBrainz_Database/License",
+    id: "musicbrainz", commercialStatus: "unverified", termsUrl: "https://musicbrainz.org/doc/MusicBrainz_API",
     attribution: "Attribute MusicBrainz and identify the accessed database/API fields.",
-    retention: "Respect database licence, API rate limits and applicable caching rules.",
-    decisionNote: "Allowed subject to attribution, descriptive User-Agent and one request per second.",
+    retention: "Respect field-level database licences, API rate limits and applicable caching rules.",
+    decisionNote: "Public web-service access is documented as free for non-commercial use. Commercial use must remain disabled until the applicable commercial plan or permission is verified; an API key or account ID is not proof of permission.",
   },
   listenbrainz: {
     id: "listenbrainz", commercialStatus: "allowed", termsUrl: "https://github.com/metabrainz/listenbrainz-server",
