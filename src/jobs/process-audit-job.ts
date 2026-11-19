@@ -534,6 +534,11 @@ export async function processAuditJob(
         channels: decoded.channels,
         durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
       };
+      // Persist the completed measurement before optional, memory-intensive vocal
+      // separation. A worker OOM during vocal analysis must not erase Sonic DNA.
+      await awaitWithStage(deps, "sonic_dna_persist", 15_000, (signal) =>
+        deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal),
+      );
     }
 
     let catalogRecognition: AuditRecognition | null = null;
@@ -571,7 +576,7 @@ export async function processAuditJob(
           vocalFeatures = unavailableVocalAnalysis(error instanceof Error ? error.message : "Vocal analysis did not complete.");
         }
       } else {
-        vocalFeatures = unavailableVocalAnalysis("Vocal separation is not configured in this worker build.");
+        vocalFeatures = unavailableVocalAnalysis("Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.");
       }
       masterDna = {
         ...masterDna,

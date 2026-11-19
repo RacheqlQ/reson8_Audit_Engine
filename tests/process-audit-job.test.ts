@@ -86,8 +86,11 @@ describe("processAuditJob", () => {
         return analyzeVocalStem([vocal], [mix], sampleRate);
       },
       saveSonicDna: async (_jobId, _claimToken, dna) => {
-        events.push("dna");
-        expect(dna.vocalFeatures).toMatchObject({ status: "analyzed", voicePresence: "likely_present" });
+        const hasVocalResult = (dna.vocalFeatures as { status?: string }).status === "analyzed";
+        events.push(hasVocalResult ? "dna-final" : "dna-base");
+        if (hasVocalResult) {
+          expect(dna.vocalFeatures).toMatchObject({ status: "analyzed", voicePresence: "likely_present" });
+        }
         expect(dna.sampleRate).toBe(44100);
         expect(dna.channels).toBe(2);
         expect(dna.durationSeconds).toBe(4 / 44100);
@@ -123,9 +126,10 @@ describe("processAuditJob", () => {
     expect(result.status, failureMessage + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity)).toBe("completed");
     expect(events).toEqual([
       "processing",
+      "dna-base",
       "recognition",
       "vocal-analysis",
-      "dna",
+      "dna-final",
       "evidence",
       "assessment",
       "assessment-saved",
@@ -303,8 +307,10 @@ describe("processAuditJob", () => {
     expect(events).toContain("recognition-saved");
     expect(events).toContain("evidence-saved");
     expect(events).toContain("sonic-dna-saved");
-    expect(events.indexOf("recognition-saved")).toBeLessThan(events.indexOf("sonic-dna-saved"));
-    expect(events.indexOf("sonic-dna-saved")).toBeLessThan(events.indexOf("evidence-saved"));
+    // The master measurement is persisted immediately after analysis, before
+    // recognition/reconciliation; the enriched DNA write may follow recognition.
+    expect(events.indexOf("sonic-dna-saved")).toBeLessThan(events.indexOf("recognition-saved"));
+    expect(events.indexOf("recognition-saved")).toBeLessThan(events.indexOf("evidence-saved"));
     expect(events.indexOf("evidence-saved")).toBeLessThan(events.indexOf("audit_failed"));
     expect(events).toContain("audit_failed");
     expect(events).not.toContain("assessment-saved");
