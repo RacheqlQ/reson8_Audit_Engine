@@ -146,10 +146,11 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
  const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[])]
   .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
   .filter((item,index,items)=>items.indexOf(item)===index)
-  .slice(0,2)
-  .map((item)=>item.length>150?item.slice(0,147)+"...":item);
- const safeSummary=val(safeAssessment.executiveSummary,"Further listening and source verification are required.");
- const nextAction="Reconcile source-specific identity and rights fields, review the submitted master, and document unavailable analysis before external pitching.";
+  .slice(0,1)
+  .map((item)=>item.length>105?item.slice(0,102)+"...":item);
+ const fullSummary=val(safeAssessment.executiveSummary,"Further listening and source verification are required.");
+ const safeSummary=fullSummary.length>180?fullSummary.slice(0,177)+"...":fullSummary;
+ const nextAction="Verify identity, rights and the submitted master before pitching.";
  return {
   heading:"DECISION CONTEXT",
   verdict:coverVerdictLabel(input).toUpperCase(),
