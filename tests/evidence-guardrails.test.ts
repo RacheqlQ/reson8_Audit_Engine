@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isReliableKey, isReliableTempo, sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
+import { isReliableKey, isReliableTempo, isReliableTuning, sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
 
 const baseAssessment = {
   executiveSummary: "The recording is a 156 BPM high-energy release with a strong rhythmic lane.",
@@ -382,4 +382,17 @@ describe("deterministic evidence scorecard",()=>{
   expect(result.scorecard.releaseReadiness.score).toBeNull();
   expect(result.scorecard.tempoLaneFit.rationale).not.toBe(result.scorecard.rhythmicConsistency.rationale);
  });
+});
+
+
+describe("independent tuning reliability", () => {
+  it("accepts a measured tuning offset even when key confidence is unresolved", () => {
+    expect(isReliableTuning({ key: null, mode: null, keyConfidence: 0.12, keyTuningCents: 18, tuningEvidenceWindows: 3 })).toBe(true);
+  });
+
+  it("rejects tuning offsets without multiple supporting tonal windows", () => {
+    expect(isReliableTuning({ keyTuningCents: 18, tuningEvidenceWindows: 1 })).toBe(false);
+    expect(isReliableTuning({ keyTuningCents: null, tuningEvidenceWindows: 4 })).toBe(false);
+    expect(isReliableTuning({ keyTuningCents: 62, tuningEvidenceWindows: 4 })).toBe(false);
+  });
 });
