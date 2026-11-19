@@ -251,6 +251,7 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
   {label:"BEAT TIMESTAMP COUNT",value:beatTimes.length?String(beatTimes.length)+" generated timestamps; count is not a reliability measure":"No beat timestamps generated"},
   {label:"KEY / MODE",value:keyReliable?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
   {label:"KEY / MODE CANDIDATES",value:!keyReliable&&keyCandidates?keyCandidates:null},
+  {label:"KEY CONFIDENCE DIAGNOSTIC",value:!keyReliable&&typeof s?.keyConfidence==="number"?(s.keyConfidence.toFixed(2)+" raw estimator score; not a calibrated probability; segment agreement "+(typeof s.keySegmentAgreement==="number"?s.keySegmentAgreement.toFixed(2):"not available")):null},
   {label:"KEY CANDIDATE REASON",value:!keyReliable?text(harmonic.limitation)||"Key and mode did not pass the reliability gate.":null},
   {label:"TUNING OFFSET CANDIDATE CENTS",value:hasMultipleTuningWindows(s)?metric(s?.keyTuningCents,0)+" (multiple tonal windows; provisional)":null},
   {label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},
