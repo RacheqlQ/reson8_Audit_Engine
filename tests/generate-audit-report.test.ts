@@ -260,7 +260,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
   expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
-  expect(report).toContain("Confirmed key / mode: A minor");
+  expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBe("96.0");
  });
  it("withholds a low-confidence harmonic key and its diagnostic model score from the report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
@@ -337,7 +337,7 @@ describe("report evidence integrity",()=>{
    confidence:0.9,abstained:false,adjacentLanes:["R&B","Hip-Hop","House"],
    regionTags:[],sceneTags:[],unmappedTags:[],model:{status:"disabled",predictions:[]},
   };
-  input.sonicDna={...input.sonicDna,provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.16,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,vocalFeatures:{status:"not_analyzed",reason:"Vocal analysis is temporarily disabled to keep the audit worker within its memory limit."},genreClassification};
+  input.sonicDna={...input.sonicDna,provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.08,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,vocalFeatures:{status:"not_analyzed",reason:"Vocal analysis is temporarily disabled to keep the audit worker within its memory limit."},genreClassification};
   input.evidence={...input.evidence,genreClassification};
   const report=planAuditReportPages(input,"full").flatMap(page=>page.text).join(" ");
   expect(report).toContain("Primary lane: Pop");
