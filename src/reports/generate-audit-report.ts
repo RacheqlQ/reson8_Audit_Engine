@@ -356,6 +356,26 @@ function sections(i:AuditReportInput):Section[]{
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
   sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confidence-qualified measurements from provisional candidates and unavailable results. Only measurements that pass their metric-specific reliability gate are presented as confirmed.");
+  const tempoReliable=isReliableTempo(s);
+  const keyReliable=isReliableKey(s);
+  if(tempoReliable&&typeof s?.bpm==="number"&&Number.isFinite(s.bpm)){
+   const diagnostic=typeof s.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)
+    ?"; detector prominence score "+s.tempoConfidence.toFixed(2)+" (diagnostic, not a calibrated probability)":"";
+   sonicDnaBody.push("Confirmed tempo: "+metric(s.bpm,1)+" BPM"+diagnostic+".");
+  }else if(typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)){
+   sonicDnaBody.push("Provisional tempo candidate: "+metric(s.tempoCandidateBpm,1)+" BPM; it did not pass the detector confidence gate.");
+  }else{
+   sonicDnaBody.push("Tempo: Not determined — "+val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.abstentionReason,"no supported tempo result was returned")+".");
+  }
+  if(keyReliable){
+   const diagnostic=typeof s?.keyConfidence==="number"&&Number.isFinite(s.keyConfidence)
+    ?"; detector score "+s.keyConfidence.toFixed(2)+" and segment agreement "+(typeof s.keySegmentAgreement==="number"?s.keySegmentAgreement.toFixed(2):"not available")+" (diagnostics, not calibrated probabilities)":"";
+   sonicDnaBody.push("Confirmed key / mode: "+text(s?.key)+" "+text(s?.mode)+diagnostic+".");
+  }else{
+   const candidates=Array.isArray(s?.keyCandidates)?s.keyCandidates:Array.isArray((s?.harmonicFeatures as Record<string,unknown>|undefined)?.topCandidates)?(s?.harmonicFeatures as Record<string,unknown>).topCandidates as unknown[]:[];
+   const candidateSummary=candidates.slice(0,3).map((item)=>item&&typeof item==="object"?[text((item as Record<string,unknown>).key),text((item as Record<string,unknown>).mode)].filter(Boolean).join(" "):"").filter(Boolean).join(", ");
+   sonicDnaBody.push(candidateSummary?"Provisional key / mode candidates: "+candidateSummary+".":"Key / mode: Not determined — "+val((s?.harmonicFeatures as Record<string,unknown>|undefined)?.limitation,"the key detector did not confirm a single key and mode")+".");
+  }
   if (vocalAnalysisPerformed) {
    const vocalSegments=Array.isArray(vocalFeatures?.activitySegments)?vocalFeatures.activitySegments.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))):[];
    const segmentSummary=vocalSegments.slice(0,8).map((segment)=>metric(segment.startSeconds,2)+"–"+metric(segment.endSeconds,2)+" s").join("; ");
