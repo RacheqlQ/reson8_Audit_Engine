@@ -393,6 +393,7 @@ describe("Sonic DNA provisional candidate reporting", () => {
     expect(rows.find((row) => row.label === "BEAT TIMESTAMP COUNT")?.value).toContain("512 generated timestamps");
     expect(rows.find((row) => row.label === "KEY / MODE")?.value).toBeNull();
     expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("C major");
+    expect(rows.find((row) => row.label === "KEY CONFIDENCE DIAGNOSTIC")?.value).toContain("not a calibrated probability");
     expect(rows.find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS")?.value).toBe("18 (multiple tonal windows; provisional)");
   });
 });
