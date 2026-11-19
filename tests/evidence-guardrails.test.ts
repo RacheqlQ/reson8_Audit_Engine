@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isReliableKey, isReliableTempo, isReliableTuning, sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
+import { isReliableKey, isReliableTempo, hasMultipleTuningWindows, sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
 
 const baseAssessment = {
   executiveSummary: "The recording is a 156 BPM high-energy release with a strong rhythmic lane.",
