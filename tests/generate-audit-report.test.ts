@@ -425,7 +425,7 @@ describe("Phase 1 real-master report contract",()=>{
     {name:"tempo_bpm",status:"measured",value:96,unit:"BPM",method:"transient_autocorrelation",measuredAt:"2026-11-19T12:00:00.000Z",diagnostics:[]},
     {name:"true_peak_dbfs",status:"unavailable",value:null,unit:"dBFS",method:"decoder_true_peak",diagnostics:[{code:"DECODER_METRIC_MISSING",message:"The decoder did not return a true-peak measurement.",retryable:false}]},
    ],
-   calibratedPredictions:[{name:"calibrated_audio_mood",status:"unavailable",label:null,probability:null,reasonCodes:["VALIDATED_MODEL_NOT_CONFIGURED"],diagnostics:[{code:"VALIDATED_MODEL_NOT_CONFIGURED",message:"No calibrated mood model is configured.",retryable:false}]},{name:"calibrated_key_mode_probability",status:"unavailable",label:null,probability:null,reasonCodes:["CALIBRATED_CLASSIFIER_NOT_CONFIGURED"],diagnostics:[{code:"CALIBRATED_CLASSIFIER_NOT_CONFIGURED",message:"The tonal estimator candidate score is not a calibrated class probability.",retryable:false}]}],
+   calibratedPredictions:[{name:"calibrated_audio_mood",status:"unavailable",label:null,probability:null,reasonCodes:["VALIDATED_MODEL_NOT_CONFIGURED"],diagnostics:[{code:"VALIDATED_MODEL_NOT_CONFIGURED",message:"No calibrated mood model is configured.",retryable:false}]},{name:"calibrated_key_mode_probability",status:"unavailable",label:null,probability:null,reasonCodes:["CALIBRATED_CLASSIFIER_NOT_CONFIGURED"],diagnostics:[{code:"CALIBRATED_CLASSIFIER_NOT_CONFIGURED",message:"The tonal estimator candidate score is not a calibrated class probability.",retryable:false}]},{name:"calibrated_energy_classification",status:"predicted",label:"high",probability:0.84,modelVersion:"energy-model-v2",calibration:{calibrated:true,method:"isotonic",modelVersion:"energy-calibration-v1",validationDataset:"held-out-validation-2026",validationSamples:240,expectedCalibrationError:0.042,brierScore:0.116},featureDrivers:[{feature:"rms_energy",contribution:0.62,direction:"supports"},{feature:"spectral_flux",contribution:-0.18,direction:"opposes"}],diagnostics:[]}],
    externalRecords:[{status:"verified",provider:"musicbrainz",recordId:"recording-mbid",retrievedAt:"2026-11-19T12:05:00.000Z",fields:{isrc:"USAAA2600001"},fieldProvenance:{isrc:{provider:"musicbrainz",recordId:"recording-mbid",retrievedAt:"2026-11-19T12:05:00.000Z"}}}],
    strategicSynthesis:[{claim:"Tempo was measured from the uploaded master.",evidenceRefs:["signal:tempo_bpm"],evidenceClass:"OBSERVED",limitations:[]}],
    pipelineDiagnostics:[],
@@ -439,6 +439,9 @@ describe("Phase 1 real-master report contract",()=>{
   expect(report).toContain("true_peak_dbfs: UNAVAILABLE; DECODER_METRIC_MISSING");
   expect(report).toContain("calibrated_audio_mood: UNAVAILABLE; VALIDATED_MODEL_NOT_CONFIGURED");
   expect(report).toContain("calibrated_key_mode_probability: UNAVAILABLE; CALIBRATED_CLASSIFIER_NOT_CONFIGURED");
+  expect(report).toContain("calibrated_energy_classification: high (84.0% calibrated; model energy-model-v2; calibration isotonic / energy-calibration-v1");
+  expect(report).toContain("validation held-out-validation-2026 (n=240); ECE 0.042; Brier 0.116");
+  expect(report).toContain("feature drivers: rms_energy supports (0.620), spectral_flux opposes (-0.180)");
   expect(report).toContain("EXTERNAL RECORD: musicbrainz / recording-mbid; retrieved: 2026-11-19T12:05:00.000Z");
   expect(report).toContain("field provenance: isrc=musicbrainz/recording-mbid@2026-11-19T12:05:00.000Z");
   expect(report).toContain("Provenance rule: direct signal measurements are observed from the uploaded master");
