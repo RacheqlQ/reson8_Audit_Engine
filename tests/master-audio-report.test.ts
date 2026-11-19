@@ -162,7 +162,7 @@ describe("uploaded master provenance in reports", () => {
     };
     const report = reportText(input, "sample");
     expect(report).toContain("Mood alignment was not asserted because no source-attributed DSP mood tags were available");
-    expect(report).not.toContain("Mood classification: Not performed");
+    expect(report).toContain("Mood classification: Not performed — no validated audio mood model is configured.");
     expect(report).not.toMatch(/model:.*disabled|Learned audio-genre model status/i);
   });
 
