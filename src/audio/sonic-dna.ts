@@ -1,6 +1,6 @@
 import { estimateKey } from "./key-estimation.js";
 
-export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.1;
+export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.5;
 import { analyzeVocalSignalDiagnostics } from "./vocal-signal-diagnostics.js";
 import type { GenreFusionResult } from "../genre/fusion.js";
 export interface TempoEstimate {
@@ -233,10 +233,10 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  for(let s=0;s<a.length;s+=frame){const end=Math.min(a.length,s+frame);let sum=0;for(let i=s;i<end;i++)sum+=a[i]*a[i];frames.push(Math.sqrt(sum/Math.max(1,end-s)));}
  frames.sort((x,y)=>x-y);
  const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),key=estimateKey(a,rate);
- const tags:string[]=[];
- if(energy>0.15)tags.push("Elevated RMS level");else if(energy<0.04)tags.push("Low RMS level");else tags.push("Moderate RMS level");
- if(crossings/Math.max(1,a.length-1)>0.08)tags.push("Elevated zero-crossing rate");
- if(centroid>3000)tags.push("High spectral centroid");else if(centroid<1000)tags.push("Low spectral centroid");
+ // Signal descriptors are reported in their own numeric fields. Do not
+ // relabel RMS, zero-crossing rate, or spectral centroid as emotional mood.
+ // A validated, licensed mood model is not currently integrated.
+ const moodTags:string[]=[];
  const limitations:string[]=[];
  if(key.limitation)limitations.push(key.limitation);
  if(tempo.bpm===null)limitations.push("Tempo could not be determined reliably from the supplied audio.");
@@ -250,6 +250,6 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
   dynamicRangeDb:20*Math.log10(p95/p10),spectralCentroidHz:centroid,spectralBandwidthHz:bandwidth,
   spectralRolloffHz:rolloff,zeroCrossingRate:crossings/Math.max(1,a.length-1),
-  moodTags:tags,genreContext:[]
+  moodTags,genreContext:[]
  };
 }
