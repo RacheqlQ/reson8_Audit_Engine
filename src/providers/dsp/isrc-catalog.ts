@@ -91,7 +91,7 @@ export async function collectIsrcCatalogMetadata(
       });
     }
   } else {
-    outcomes.push({ provider: "musicbrainz", status: "not_configured", reason: musicBrainzPolicy.reason ?? "MusicBrainz provider is disabled by policy." });
+    outcomes.push({ provider: "musicbrainz", status: "unavailable", reason: "MusicBrainz commercial-use authorization has not been verified; lookup is disabled by data policy." });
   }
 
   if (process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET && providerDecision("spotify").enabled) {
