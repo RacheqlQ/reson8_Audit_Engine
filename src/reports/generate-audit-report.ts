@@ -355,7 +355,7 @@ function sections(i:AuditReportInput):Section[]{
  const vocalAnalysisPerformed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
-  sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard summarizes the uploaded-master measurements. Only confidence-qualified tempo and key/mode values are displayed.");
+  sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confidence-qualified measurements from provisional candidates and unavailable results. Only measurements that pass their metric-specific reliability gate are presented as confirmed.");
   if (vocalAnalysisPerformed) {
    const vocalSegments=Array.isArray(vocalFeatures?.activitySegments)?vocalFeatures.activitySegments.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))):[];
    const segmentSummary=vocalSegments.slice(0,8).map((segment)=>metric(segment.startSeconds,2)+"–"+metric(segment.endSeconds,2)+" s").join("; ");
