@@ -18,6 +18,8 @@ import type { PlaylistDiscoveryInput, PlaylistDiscoveryResult } from "../provide
 import { normalizeIsrc } from "../providers/musicbrainz/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
+import { requireRealMasterInput } from "../audio/real-master-contract.js";
+import { sha256 } from "./content-hash.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 
 export interface AuditJobRecord {
@@ -528,6 +530,15 @@ export async function processAuditJob(
     const attemptedRecognitionProviders = new Set<string>();
     if (hasMaster) {
       const master = await awaitWithStage(deps, "audio_download", 30_000, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
+      // A master job cannot silently continue with a missing/empty object or synthetic renderer input.
+      // Hash the bytes actually retrieved so all downstream measurements bind to this exact master.
+      requireRealMasterInput({
+        sourceKind: "uploaded_master",
+        sourceAudioPath: job.sourceAudioPath,
+        sha256: await sha256(master),
+        mimeType: job.mimeType,
+        byteLength: master.byteLength,
+      });
       masterTags = readAudioTags(master);
       const sample = await awaitWithStage(deps, "recognition_sample", 30_000, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
       masterRecognition = await awaitWithStage(deps, "audio_recognition", 45_000, (signal) => {
