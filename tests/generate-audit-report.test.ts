@@ -258,9 +258,9 @@ describe("A4 report layout and fixture coverage",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.sonicDna={...input.sonicDna,key:"A",mode:"minor",keyConfidence:0.78,keySegmentAgreement:0.9};
   expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
-  const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
-  expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBe("96.0");
+  const dashboardRows=sonicDashboardRowsForReport(input.sonicDna,true);
+  expect(dashboardRows.find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
+  expect(dashboardRows.find(row=>row.label==="TEMPO BPM")?.value).toBe("96.0");
  });
  it("withholds a low-confidence harmonic key and its diagnostic model score from the report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
