@@ -142,6 +142,12 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Assessment confidence: a model-generated evidence-quality indicator");
   expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
+ it("explicitly marks audio mood classification unavailable instead of substituting signal descriptors",()=>{
+  const report=planAuditReportPages(fullAudioFixture as any,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Mood classification: Not performed — no validated audio mood model is configured.");
+  expect(report).toContain("RMS level, spectral centroid and zero-crossing rate are signal descriptors");
+  expect(report).not.toMatch(/Mood classification: (?:Elevated RMS level|High spectral centroid|Moderate RMS level)/i);
+ });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
   const pages=planAuditReportPages(fixtures[0],"full");
   const report=pages.flatMap(p=>[p.title,...p.text]).join(" ");
