@@ -14,8 +14,10 @@ Operationally authorized integrations (subject to credentials and source-specifi
 - Audiomack official Data API: https://api.audiomack.com/
 - Deezer public track metadata: https://developers.deezer.com/
 
+Implemented but policy-disabled pending commercial-use verification
+- MusicBrainz ISRC lookup: https://musicbrainz.org/doc/MusicBrainz_API (public web-service access is free for non-commercial use; commercial use requires the applicable commercial plan or permission)
+
 Authorized in the registry but not yet wired as callable integrations/models in this service
-- MusicBrainz ISRC lookup: https://musicbrainz.org/doc/MusicBrainz_API
 - ListenBrainz: https://listenbrainz.org/
 - YouTube Data API: https://developers.google.com/youtube/terms/api-services-terms-of-service
 - Last.fm: https://www.last.fm/api/tos
