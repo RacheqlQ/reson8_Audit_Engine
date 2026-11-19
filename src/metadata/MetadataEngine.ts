@@ -1,4 +1,4 @@
-export type MetadataProvider = "spotify" | "tidal" | "apple_music" | "deezer" | "youtube_music" | "audiomack" | "audd" | "id3";
+export type MetadataProvider = "spotify" | "musicbrainz" | "tidal" | "apple_music" | "deezer" | "youtube_music" | "audiomack" | "audd" | "id3";
 
 export type MetadataIdentityField = "title" | "artist" | "album" | "isrc" | "upc" | "label" | "releaseDate";
 
@@ -43,6 +43,7 @@ export interface Id3Metadata extends StructuredMetadata {}
 
 export interface MetadataEngineInput {
   spotify?: StructuredMetadata | null;
+  musicbrainz?: StructuredMetadata | null;
   tidal?: StructuredMetadata | null;
   apple_music?: StructuredMetadata | null;
   deezer?: StructuredMetadata | null;
@@ -55,6 +56,7 @@ export interface MetadataEngineInput {
 
 const PROVIDER_PRIORITY: readonly MetadataProvider[] = [
   "spotify",
+  "musicbrainz",
   "tidal",
   "apple_music",
   "deezer",
@@ -147,6 +149,7 @@ export class MetadataEngine {
   static normalize(input: MetadataEngineInput): TrackIdentity {
     const providers: Readonly<Record<MetadataProvider, StructuredMetadata | null>> = {
       spotify: input.spotify ?? null,
+      musicbrainz: input.musicbrainz ?? null,
       tidal: input.tidal ?? null,
       apple_music: input.apple_music ?? null,
       deezer: input.deezer ?? null,
