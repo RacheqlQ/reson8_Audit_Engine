@@ -290,7 +290,6 @@ function catalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetada
     };
     if (source.platform === "spotify") result.spotify = fields;
     if (source.platform === "musicbrainz") result.musicbrainz = fields;
-    if (source.platform === "musicbrainz") result.musicbrainz = fields;
     if (source.platform === "tidal") result.tidal = fields;
     if (source.platform === "apple_music") result.apple_music = fields;
     if (source.platform === "deezer") result.deezer = fields;
