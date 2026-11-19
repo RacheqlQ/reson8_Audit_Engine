@@ -524,6 +524,7 @@ export async function processAuditJob(
     }
 
     let masterDna: SonicDnaFeatures | null = null;
+    let masterMeasuredAt: string | null = null;
     let realMasterSource: { sourceAudioPath: string; sha256: string; mimeType: string; byteLength: number } | null = null;
     let decodedMaster: Awaited<ReturnType<AuditProcessorDependencies["decode"]>> | null = null;
     let masterRecognition: AuditRecognition | null = null;
@@ -552,6 +553,7 @@ export async function processAuditJob(
       const dna = await awaitWithStage(deps, "sonic_dna", 90_000, (signal) =>
         analyzePcmWithTimeout(decoded.samples, decoded.sampleRate, decoded.channels, 90_000, signal),
       );
+      masterMeasuredAt = new Date().toISOString();
       decodedMaster = decoded;
       masterDna = {
         ...dna,
@@ -843,7 +845,7 @@ export async function processAuditJob(
             ["spectral_rolloff_hz", masterDna.spectralRolloffHz, "Hz", "fft_spectral_rolloff"],
             ["zero_crossing_rate", masterDna.zeroCrossingRate, "ratio", "pcm_zero_crossing_rate"],
           ].map(([name, value, unit, method]) => typeof value === "number" && Number.isFinite(value)
-            ? { name, status: "measured", value, unit, method, measuredAt: generatedAt, diagnostics: [] }
+            ? { name, status: "measured", value, unit, method, measuredAt: masterMeasuredAt ?? generatedAt, diagnostics: [] }
             : buildUnavailableMetric(String(name), "MEASUREMENT_UNAVAILABLE", "The configured analysis stage did not return a finite measurement for this uploaded master.", String(unit), String(method))),
           calibratedPredictions: [
             { name: "calibrated_audio_mood", status: "unavailable", label: null, probability: null, reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "No validated and calibrated audio mood model is configured; signal descriptors are not substituted for emotional labels.", stage: "audio_classification", retryable: false }] },
