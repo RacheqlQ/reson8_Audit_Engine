@@ -19,7 +19,7 @@ describe("combined master and DSP processing", () => {
   it("merges catalog identity and master-measured Sonic DNA into one sample/full report pair", async () => {
     const events: string[] = [];
     let assessmentInput: any;
-    const recognition: AuditRecognition = { matched: true, artist: "Master Artist", title: "Master Song", isrc: "US-ABC-12-34567" };
+    const recognition: AuditRecognition = { matched: false };
     const musicBrainzMetadata: CatalogMetadata = {
       ...metadata,
       platform: "musicbrainz",
@@ -42,7 +42,7 @@ describe("combined master and DSP processing", () => {
       collectCatalogMetadata: async () => { events.push("catalog"); return metadata; },
       collectIsrcCatalogMetadata: async (isrc) => {
         events.push("isrc-catalog");
-        expect(isrc).toBe("US-ABC-12-34567");
+        expect(isrc).toBe("USABC1234567");
         return { isrc: "USABC1234567", metadata: [musicBrainzMetadata], outcomes: [{ provider: "musicbrainz", status: "recognized", reason: "MusicBrainz returned an ISRC recording match." }] };
       },
       saveCatalogMetadata: async () => { events.push("catalog-saved"); },
