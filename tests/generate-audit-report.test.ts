@@ -254,6 +254,13 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(sourceBackedReport).toContain("Album: Conflicting source values");
   expect(sourceBackedReport).toContain("album: Sample Release - EP vs Sample Release");
  });
+ it("reports detector-confirmed key and mode when the shared detector gates pass",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.sonicDna={...input.sonicDna,key:"A",mode:"minor",keyConfidence:0.78,keySegmentAgreement:0.9};
+  expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
+  const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Key / mode: A minor");
+ });
  it("withholds a low-confidence harmonic key and its diagnostic model score from the report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
