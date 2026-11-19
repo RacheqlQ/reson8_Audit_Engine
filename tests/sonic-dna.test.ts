@@ -158,9 +158,9 @@ describe("Sonic DNA",()=>{
   const sampleRate=8000;
   const bright=Float32Array.from({length:sampleRate*2},(_,i)=>0.3*Math.sin(2*Math.PI*3500*i/sampleRate));
   const result=analyzePcm(bright,sampleRate);
-  expect(result.moodTags).toContain("Elevated RMS level");
-  expect(result.moodTags).toContain("High spectral centroid");
-  expect(result.moodTags.some(tag=>/happy|sad|energetic|calm|dark mood|bright mood/i.test(tag))).toBe(false);
+  expect(result.moodTags).toEqual([]);
+  expect(result.spectralCentroidHz).toBeGreaterThan(3000);
+  expect(Number.isFinite(result.rmsLevelDbfs)).toBe(true);
  });
 
  it("does not assert genre from tempo alone",()=>{

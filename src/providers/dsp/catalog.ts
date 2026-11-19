@@ -22,6 +22,8 @@ export interface CatalogMetadata {
   isrc: string | null; upc: string | null; catalogPopularity: number | null; catalogPopularityScale: "0_1" | "0_100" | null; label: string | null; genre: string | null;
   artworkUrl: string | null; previewUrl: string | null; externalIds: Record<string,string>; sonicProfile: CatalogSonicProfile | null;
   raw: Record<string,unknown>; evidenceStatus: "recognized" | "partial";
+  /** UTC collector timestamp recorded after a successful provider adapter result; not a provider-supplied timestamp. */
+  retrievedAt?: string;
 }
 
 const HOSTS: Record<string,DspPlatform> = {
@@ -100,6 +102,60 @@ async function apple(u: URL, signal?: AbortSignal) {
   const pathStorefront = u.pathname.split("/").filter(Boolean)[0]?.toLowerCase();
   const queryStorefront = u.searchParams.get("country")?.toLowerCase();
   const storefront = pathStorefront && /^[a-z]{2}$/.test(pathStorefront) ? pathStorefront : queryStorefront;
+  const configuredStorefront = process.env.APPLE_MUSIC_STOREFRONT?.toLowerCase();
+  const appleStorefront = storefront && /^[a-z]{2}$/.test(storefront)
+    ? storefront : configuredStorefront && /^[a-z]{2}$/.test(configuredStorefront) ? configuredStorefront : "ng";
+  const developerToken = process.env.APPLE_MUSIC_DEVELOPER_TOKEN?.trim();
+  let appleApiFailure: Record<string, unknown> | null = null;
+
+  // The public iTunes lookup response is not a dependable source of ISRC.
+  // When the configured Apple Music developer token is present, prefer the
+  // catalog song resource, whose attributes include the recording ISRC.
+  if (developerToken) {
+    try {
+      const catalogUrl = "https://api.music.apple.com/v1/catalog/"
+        + encodeURIComponent(appleStorefront) + "/songs/" + encodeURIComponent(metadata.catalogId);
+      const catalogResponse = await fetch(catalogUrl, {
+        signal, redirect: "error",
+        headers: { Authorization: "Bearer " + developerToken },
+      });
+      if (catalogResponse.ok) {
+        const payload = await catalogResponse.json() as { data?: Array<Record<string, unknown>> };
+        const song = payload.data?.find((item) => item.type === "songs") ?? payload.data?.[0];
+        const attributes = song?.attributes && typeof song.attributes === "object"
+          ? song.attributes as Record<string, unknown> : null;
+        if (attributes) {
+          const stringValue = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : null;
+          const genres = Array.isArray(attributes.genreNames)
+            ? attributes.genreNames.filter((value): value is string => typeof value === "string" && value.trim().length > 0) : [];
+          const previews = Array.isArray(attributes.previews)
+            ? attributes.previews.filter((value): value is Record<string, unknown> => Boolean(value && typeof value === "object")) : [];
+          const artwork = attributes.artwork && typeof attributes.artwork === "object"
+            ? attributes.artwork as Record<string, unknown> : {};
+          metadata.canonicalUrl = stringValue(attributes.url) ?? metadata.canonicalUrl;
+          metadata.artist = stringValue(attributes.artistName);
+          metadata.title = stringValue(attributes.name);
+          metadata.album = stringValue(attributes.albumName);
+          metadata.releaseDate = stringValue(attributes.releaseDate)?.slice(0, 10) ?? null;
+          metadata.genre = genres[0] ?? null;
+          metadata.isrc = stringValue(attributes.isrc);
+          metadata.previewUrl = stringValue(previews[0]?.url);
+          if (song?.id) metadata.externalIds.apple_music = String(song.id);
+          if (typeof artwork.url === "string") metadata.artworkUrl = artwork.url;
+          metadata.raw = { appleMusicCatalog: song };
+          metadata.evidenceStatus = metadata.title && metadata.artist ? "recognized" : "partial";
+          return metadata;
+        }
+        appleApiFailure = { status: "unavailable", reason: "Apple Music catalog returned no song attributes." };
+      } else {
+        appleApiFailure = { status: "unavailable", reason: "Apple Music catalog returned HTTP " + catalogResponse.status };
+      }
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason;
+      appleApiFailure = { status: "unavailable", reason: error instanceof Error ? error.message.slice(0, 180) : "Apple Music catalog lookup failed." };
+    }
+  }
+
   const lookup = new URL("https://itunes.apple.com/lookup");
   lookup.searchParams.set("id", metadata.catalogId);
   lookup.searchParams.set("entity", "song");
@@ -123,7 +179,7 @@ async function apple(u: URL, signal?: AbortSignal) {
   metadata.previewUrl = String(track.previewUrl ?? "") || null;
   metadata.isrc = String(track.isrc ?? "") || null;
   if (track.trackId) metadata.externalIds.apple_music = String(track.trackId);
-  metadata.raw = track;
+  metadata.raw = appleApiFailure ? { appleMusicCatalogLookup: appleApiFailure, itunesLookup: track } : track;
   metadata.evidenceStatus = metadata.title && metadata.artist ? "recognized" : "partial";
   return metadata;
 }
@@ -191,6 +247,25 @@ export async function collectCatalogMetadata(input:string, signal?:AbortSignal):
       return metadata;
     }
   }
-  switch(platform){case"spotify":return spotify(u,signal);case"apple_music":return apple(u,signal);case"deezer":return deezer(u,signal);case"youtube_music":return youtube(u,signal);case"tidal":return tidal(u,signal);case"audiomack":return audiomack(u,signal);default:throw new Error("Unsupported DSP or catalog URL");}
+  let metadata: CatalogMetadata;
+  switch(platform){
+    case "spotify": metadata = await spotify(u,signal); break;
+    case "apple_music": metadata = await apple(u,signal); break;
+    case "deezer": metadata = await deezer(u,signal); break;
+    case "youtube_music": metadata = await youtube(u,signal); break;
+    case "tidal": metadata = await tidal(u,signal); break;
+    case "audiomack": metadata = await audiomack(u,signal); break;
+    default: throw new Error("Unsupported DSP or catalog URL");
+  }
+  // Spotify's adapter intentionally returns a partial result when its API lookup
+  // fails so the wider audit can continue. Do not timestamp that fallback as a
+  // successful provider retrieval. All other returned adapter results represent
+  // a completed provider response (including partial-but-real catalogue records).
+  const spotifyLookupFailed = metadata.platform === "spotify"
+    && metadata.raw.spotifyEnrichment
+    && typeof metadata.raw.spotifyEnrichment === "object"
+    && (metadata.raw.spotifyEnrichment as Record<string, unknown>).status === "unavailable";
+  if (!spotifyLookupFailed) metadata.retrievedAt ??= new Date().toISOString();
+  return metadata;
 }
 export function detectDspPlatform(input:string):DspPlatform{try{return HOSTS[normalizeUrl(input).hostname.toLowerCase()]??"unknown";}catch{return"unknown";}}

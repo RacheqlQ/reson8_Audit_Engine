@@ -1,11 +1,18 @@
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildStrengthRiskChartRows, compactChartItemSummary, parseChartMetricValue, strengthRiskItemsForColumn, chartPanelStatus, chartPanelDisplayStatus, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows, compactChartItemSummary, parseChartMetricValue, strengthRiskItemsForColumn, chartPanelStatus, chartPanelDisplayStatus, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, radarScoreDisplayValue, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
 import { checkLayout } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 
 describe("native PDF chart helpers", () => {
+  it("labels unavailable evidence-scorecard dimensions as not scored, not N/D", () => {
+    expect(radarScoreDisplayValue(null)).toBe("NOT SCORED");
+    expect(radarScoreDisplayValue(Number.NaN)).toBe("NOT SCORED");
+    expect(radarScoreDisplayValue(0)).toBe("0");
+    expect(radarScoreDisplayValue(82.7)).toBe("83");
+  });
+
   it("parses numeric strings for measured dashboard values and rejects labels", () => {
     expect(parseChartMetricValue("13.1")).toBe(13.1);
     expect(parseChartMetricValue("-10.6")).toBe(-10.6);

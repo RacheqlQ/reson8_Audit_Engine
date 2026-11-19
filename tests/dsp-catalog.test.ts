@@ -28,6 +28,8 @@ describe("authorized catalogue calls without per-provider opt-in flags", () => {
     vi.unstubAllGlobals();
     delete process.env.AUDIOMACK_CONSUMER_KEY;
     delete process.env.AUDIOMACK_CONSUMER_SECRET;
+    delete process.env.APPLE_MUSIC_DEVELOPER_TOKEN;
+    delete process.env.APPLE_MUSIC_STOREFRONT;
   });
 
   it("calls Apple Music, YouTube Music oEmbed and Deezer when their implemented public endpoints are available", async () => {
@@ -54,7 +56,39 @@ describe("authorized catalogue calls without per-provider opt-in flags", () => {
     expect(apple).toMatchObject({ platform: "apple_music", title: "Apple Track", artist: "Apple Artist", evidenceStatus: "recognized" });
     expect(youtube).toMatchObject({ platform: "youtube_music", title: "YouTube Music Track", artist: "YouTube Artist", evidenceStatus: "recognized" });
     expect(deezer).toMatchObject({ platform: "deezer", title: "Deezer Track", artist: "Deezer Artist", evidenceStatus: "recognized" });
-    for (const result of [apple, youtube, deezer]) expect(result.raw).not.toHaveProperty("providerPolicy");
+    for (const result of [apple, youtube, deezer]) {
+      expect(result.raw).not.toHaveProperty("providerPolicy");
+    expect(result.retrievedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(Number.isFinite(Date.parse(result.retrievedAt!))).toBe(true);
+      expect(result.retrievedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(Number.isFinite(Date.parse(result.retrievedAt!))).toBe(true);
+    }
+  });
+
+  it("uses Apple Music catalog metadata to retrieve the track ISRC when a developer token is configured", async () => {
+    process.env.APPLE_MUSIC_DEVELOPER_TOKEN = "test-apple-developer-token";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      expect(url).toContain("/v1/catalog/ng/songs/67890");
+      expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer test-apple-developer-token");
+      return new Response(JSON.stringify({ data: [{ id: "67890", type: "songs", attributes: {
+        name: "Apple Track", artistName: "Apple Artist", albumName: "Apple Album",
+        releaseDate: "2025-08-24", genreNames: ["Afro Soul"], isrc: "NGABC2500001",
+        url: "https://music.apple.com/ng/song/apple-track/67890",
+      } }] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await collectCatalogMetadata("https://music.apple.com/ng/album/song/12345?i=67890");
+
+    expect(result).toMatchObject({
+      platform: "apple_music", title: "Apple Track", artist: "Apple Artist",
+      album: "Apple Album", isrc: "NGABC2500001", releaseDate: "2025-08-24",
+      evidenceStatus: "recognized",
+    });
+    expect(result.externalIds.apple_music).toBe("67890");
+    expect(result.retrievedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(Number.isFinite(Date.parse(result.retrievedAt!))).toBe(true);
   });
 
   it("calls Audiomack official signed Data API with credentials and no provider enable flag", async () => {

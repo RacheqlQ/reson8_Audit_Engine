@@ -154,6 +154,7 @@ describe("uploaded master provenance in reports", () => {
 
   it("does not present signal descriptors as an audio-derived mood classification", () => {
     const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.evidence = { ...input.evidence, fixture: false, masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } };
     input.sonicDna = {
       ...input.sonicDna,
       provenance: "uploaded_audio_master",
@@ -162,7 +163,7 @@ describe("uploaded master provenance in reports", () => {
     };
     const report = reportText(input, "sample");
     expect(report).toContain("Mood alignment was not asserted because no source-attributed DSP mood tags were available");
-    expect(report).not.toContain("Mood classification: Not performed");
+    expect(report).toContain("Mood classification: Not performed — no validated audio mood model is configured.");
     expect(report).not.toMatch(/model:.*disabled|Learned audio-genre model status/i);
   });
 

@@ -19,6 +19,7 @@ export interface IsrcCatalogLookup {
 function musicBrainzMetadata(
   isrc: string,
   recordings: Awaited<ReturnType<MusicBrainzClient["lookupIsrc"]>>,
+  retrievedAt: string,
 ): CatalogMetadata | null {
   if (!recordings.length) return null;
   const uniqueIdentity = recordings.length === 1;
@@ -56,6 +57,7 @@ function musicBrainzMetadata(
       releaseSelection: release ? "single_release_match" : "not_selected_ambiguous_or_unavailable",
     },
     evidenceStatus: uniqueIdentity && title && artist ? "recognized" : "partial",
+    retrievedAt,
   };
 }
 
@@ -71,7 +73,8 @@ export async function collectIsrcCatalogMetadata(
   if (musicBrainzPolicy.enabled) {
     try {
       const recordings = await new MusicBrainzClient().lookupIsrc(isrc, signal);
-      const source = musicBrainzMetadata(isrc, recordings);
+      const retrievedAt = new Date().toISOString();
+      const source = musicBrainzMetadata(isrc, recordings, retrievedAt);
       if (source) metadata.push(source);
       outcomes.push({
         provider: "musicbrainz",
@@ -99,7 +102,7 @@ export async function collectIsrcCatalogMetadata(
       const track = await new SpotifyClient().getTrackByIsrc(isrc, signal);
       if (track) {
         const sourceUrl = `https://api.spotify.com/v1/search?q=isrc%3A${encodeURIComponent(isrc)}&type=track`;
-        const source = normalizeSpotifyTrack(sourceUrl, track);
+        const source = { ...normalizeSpotifyTrack(sourceUrl, track), retrievedAt: new Date().toISOString() };
         metadata.push(source);
         outcomes.push({ provider: "spotify", status: source.evidenceStatus, reason: "Spotify returned a track for the supplied ISRC." });
       } else {

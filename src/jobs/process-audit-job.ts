@@ -4,6 +4,7 @@ import type { ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { isPdf } from "../reports/pdf-output.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
+import { parseRealMasterAuditContract, buildUnavailableMetric, requireRealMasterInput, type RealMasterAuditContract } from "../audio/real-master-contract.js";
 import { unavailableVocalAnalysis, type VocalAnalysisResult } from "../audio/vocal-analysis.js";
 import { analyzePcmWithTimeout } from "../audio/sonic-dna-worker-client.js";
 import { fuseGenreEvidence, type ProviderGenreTags } from "../genre/fusion.js";
@@ -18,6 +19,7 @@ import type { PlaylistDiscoveryInput, PlaylistDiscoveryResult } from "../provide
 import { normalizeIsrc } from "../providers/musicbrainz/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
+import { sha256 } from "./content-hash.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 
 export interface AuditJobRecord {
@@ -522,12 +524,25 @@ export async function processAuditJob(
     }
 
     let masterDna: SonicDnaFeatures | null = null;
+    let masterMeasuredAt: string | null = null;
+    let realMasterSource: { sourceAudioPath: string; sha256: string; mimeType: string; byteLength: number } | null = null;
     let decodedMaster: Awaited<ReturnType<AuditProcessorDependencies["decode"]>> | null = null;
     let masterRecognition: AuditRecognition | null = null;
     let masterTags: ReturnType<typeof readAudioTags> | null = null;
     const attemptedRecognitionProviders = new Set<string>();
     if (hasMaster) {
       const master = await awaitWithStage(deps, "audio_download", 30_000, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
+      const masterSha256 = await sha256(master);
+      // A master job cannot silently continue with a missing/empty object or synthetic renderer input.
+      // Hash the bytes actually retrieved so all downstream measurements bind to this exact master.
+      requireRealMasterInput({
+        sourceKind: "uploaded_master",
+        sourceAudioPath: job.sourceAudioPath,
+        sha256: masterSha256,
+        mimeType: job.mimeType,
+        byteLength: master.byteLength,
+      });
+      realMasterSource = { sourceAudioPath: job.sourceAudioPath!, sha256: masterSha256, mimeType: job.mimeType!, byteLength: master.byteLength };
       masterTags = readAudioTags(master);
       const sample = await awaitWithStage(deps, "recognition_sample", 30_000, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
       masterRecognition = await awaitWithStage(deps, "audio_recognition", 45_000, (signal) => {
@@ -538,6 +553,7 @@ export async function processAuditJob(
       const dna = await awaitWithStage(deps, "sonic_dna", 90_000, (signal) =>
         analyzePcmWithTimeout(decoded.samples, decoded.sampleRate, decoded.channels, 90_000, signal),
       );
+      masterMeasuredAt = new Date().toISOString();
       decodedMaster = decoded;
       masterDna = {
         ...dna,
@@ -811,7 +827,63 @@ export async function processAuditJob(
     }
     const reportEvidence = playlistDiscovery ? { ...evidence, playlistDiscovery } : evidence;
     const generatedAt = new Date().toISOString();
-    const reportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment };
+    const executionMode = hasMaster && hasCatalog ? "combined" : hasMaster ? "master" : "dsp_link";
+    let realMasterContract: RealMasterAuditContract | null = null;
+    if (masterDna && realMasterSource) {
+      try {
+        realMasterContract = parseRealMasterAuditContract({
+          schemaVersion: "1.0.0", auditId: jobId, source: { sourceKind: "uploaded_master", ...realMasterSource },
+          directSignalMeasurements: [
+            ["duration_seconds", masterDna.durationSeconds, "seconds", "decoded_master_duration"],
+            ["sample_rate_hz", masterDna.sampleRate, "Hz", "audio_decoder"],
+            ["channels", masterDna.channels, "count", "audio_decoder"],
+            ["tempo_bpm", masterDna.bpm, "BPM", "high_frequency_transient_autocorrelation"],
+            ["integrated_loudness_lufs", masterDna.loudnessLufs, "LUFS", "audio_decoder_loudness"],
+            ["loudness_range_lu", masterDna.loudnessRangeLu ?? null, "LU", "audio_decoder_loudness_range"],
+            ["true_peak_dbfs", masterDna.truePeakDbfs ?? null, "dBFS", "audio_decoder_true_peak"],
+            ["rms_level_dbfs", masterDna.rmsLevelDbfs, "dBFS", "pcm_rms"],
+            ["spectral_centroid_hz", masterDna.spectralCentroidHz, "Hz", "fft_spectral_centroid"],
+            ["spectral_bandwidth_hz", masterDna.spectralBandwidthHz, "Hz", "fft_spectral_bandwidth"],
+            ["spectral_rolloff_hz", masterDna.spectralRolloffHz, "Hz", "fft_spectral_rolloff"],
+            ["zero_crossing_rate", masterDna.zeroCrossingRate, "ratio", "pcm_zero_crossing_rate"],
+          ].map(([name, value, unit, method]) => typeof value === "number" && Number.isFinite(value)
+            ? { name, status: "measured", value, unit, method, measuredAt: masterMeasuredAt ?? generatedAt, diagnostics: [] }
+            : buildUnavailableMetric(String(name), "MEASUREMENT_UNAVAILABLE", "The configured analysis stage did not return a finite measurement for this uploaded master.", String(unit), String(method))),
+          calibratedPredictions: [
+            { name: "calibrated_audio_mood", status: "unavailable", label: null, probability: null, reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "No validated and calibrated audio mood model is configured; signal descriptors are not substituted for emotional labels.", stage: "audio_classification", retryable: false }] },
+            { name: "calibrated_key_mode_probability", status: "unavailable", label: null, probability: null, reasonCodes: ["CALIBRATED_CLASSIFIER_NOT_CONFIGURED"], diagnostics: [{ code: "CALIBRATED_CLASSIFIER_NOT_CONFIGURED", message: "The tonal estimator returns candidate scores, not a calibrated class probability; candidate confidence is reported separately.", stage: "key_analysis", retryable: false }] },
+          ],
+          externalRecords: [
+            ...metadataSources.filter((source) => Boolean(source.catalogId && source.retrievedAt)).map((source) => {
+              const recordId = source.catalogId!;
+              const retrievedAt = source.retrievedAt!;
+              const fields = Object.fromEntries(Object.entries({ artist: source.artist, title: source.title, album: source.album, releaseDate: source.releaseDate, isrc: source.isrc, upc: source.upc, label: source.label, genre: source.genre }).filter(([, value]) => value !== null && value !== undefined && value !== ""));
+              const fieldProvenance = Object.fromEntries(Object.keys(fields).map((field) => [field, { provider: source.platform, recordId, retrievedAt }]));
+              return { status: "verified", provider: source.platform, recordId, retrievedAt, sourceUrl: source.canonicalUrl, fields, fieldProvenance };
+            }),
+            ...metadataSources.filter((source) => Boolean(source.catalogId) && !source.retrievedAt).map((source) => ({
+              status: "unavailable", provider: source.platform, reasonCode: "PROVIDER_RETRIEVAL_TIMESTAMP_MISSING",
+              diagnostic: { code: "PROVIDER_RETRIEVAL_TIMESTAMP_MISSING", message: "A catalogue record was returned without a provider-boundary retrieval timestamp; it is not promoted to verified external evidence.", stage: "catalog_provenance", retryable: false }, attemptedAt: generatedAt,
+            })),
+            ...(isrcLookup?.outcomes.filter((outcome) => !metadataSources.some((source) => source.platform === outcome.provider && Boolean(source.catalogId))).map((outcome) => ({
+              status: "unavailable", provider: outcome.provider, reasonCode: outcome.status === "not_configured" ? "PROVIDER_NOT_CONFIGURED" : outcome.status === "partial" ? "NO_UNAMBIGUOUS_RECORD_ID" : "PROVIDER_LOOKUP_UNAVAILABLE",
+              diagnostic: { code: outcome.status === "not_configured" ? "PROVIDER_NOT_CONFIGURED" : outcome.status === "partial" ? "NO_UNAMBIGUOUS_RECORD_ID" : "PROVIDER_LOOKUP_UNAVAILABLE", message: outcome.reason, stage: "isrc_catalog_lookup", retryable: outcome.status === "unavailable" }, attemptedAt: generatedAt,
+            })) ?? []),
+            ...catalogResults.filter((result) => result.status === "unavailable").map((result) => ({
+              status: "unavailable", provider: result.link.platform, reasonCode: "DSP_CATALOG_LOOKUP_UNAVAILABLE",
+              diagnostic: { code: "DSP_CATALOG_LOOKUP_UNAVAILABLE", message: result.error ?? "The DSP catalogue lookup did not return a record.", stage: "catalog_lookup", retryable: true }, attemptedAt: generatedAt,
+            })),
+          ],
+          strategicSynthesis: masterDna.bpm !== null ? [{ claim: "A tempo measurement was returned by analysis of the uploaded master.", evidenceRefs: ["signal:tempo_bpm"], evidenceClass: "OBSERVED", limitations: ["The current estimator score is not a calibrated probability."] }] : [],
+          pipelineDiagnostics: masterDna.limitations.map((message) => ({ code: "ANALYSIS_LIMITATION", message, stage: "sonic_dna", retryable: false })),
+        });
+      } catch (error) {
+        // Preserve actionable schema diagnostics in worker logs; the user-facing failure remains sanitized.
+        console.error("[real-master-contract] validation failed", error);
+        throw error;
+      }
+    }
+    const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment, executionMode, ...(realMasterContract ? { realMasterContract } : {}) };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 

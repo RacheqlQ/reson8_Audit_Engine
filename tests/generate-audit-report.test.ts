@@ -87,7 +87,7 @@ describe("A4 report layout and fixture coverage",()=>{
   tentative.sonicDna.bpm=96;
   expect(sonicDashboardRowsForReport(tentative.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
   const detected=structuredClone(fullAudioFixture) as any;
-  detected.sonicDna.tempoConfidence=0.1;
+  detected.sonicDna.tempoConfidence=0.5;
   expect(sonicDashboardRowsForReport(detected.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).not.toBeNull();
   const zero=structuredClone(fullAudioFixture) as any;
   zero.sonicDna.tempoConfidence=0;
@@ -141,6 +141,14 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Conflict details: artist: Tems vs Wrong Artist");
   expect(report).toContain("Assessment confidence: a model-generated evidence-quality indicator");
   expect(chartLayoutIssuesForReport(input)).toEqual([]);
+ });
+ it("explicitly marks audio mood classification unavailable instead of substituting signal descriptors",()=>{
+  const input=structuredClone(fullAudioFixture) as AuditReportInput;
+  input.evidence={...input.evidence,fixture:false,masterAudio:{evidenceClass:"OBSERVED",provenance:"uploaded_audio_master"}};
+  const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Mood classification: Not performed — no validated audio mood model is configured.");
+  expect(report).toContain("RMS level, spectral centroid and zero-crossing rate are signal descriptors");
+  expect(report).not.toMatch(/Mood classification: (?:Elevated RMS level|High spectral centroid|Moderate RMS level)/i);
  });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
   const pages=planAuditReportPages(fixtures[0],"full");
@@ -256,7 +264,7 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("reports detector-confirmed key and mode when the shared detector gates pass",()=>{
   const input=structuredClone(fullAudioFixture) as any;
-  input.sonicDna={...input.sonicDna,key:"A",mode:"minor",keyConfidence:0.78,keySegmentAgreement:0.9};
+  input.sonicDna={...input.sonicDna,key:"A",mode:"minor",keyConfidence:0.8,keySegmentAgreement:0.9};
   expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
   const dashboardRows=sonicDashboardRowsForReport(input.sonicDna,true);
   expect(dashboardRows.find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
@@ -404,4 +412,47 @@ describe("Sonic DNA provisional candidate reporting", () => {
     expect(rows.find((row) => row.label === "KEY CONFIDENCE DIAGNOSTIC")?.value).toContain("not a calibrated probability");
     expect(rows.find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS")?.value).toBe("18 (multiple tonal windows; provisional)");
   });
+});
+
+describe("Phase 1 real-master report contract",()=>{
+ it("renders source identity, measured values, unavailable diagnostics and calibration abstention",()=>{
+  const input=structuredClone(fullAudioFixture) as AuditReportInput;
+  input.executionMode="master";
+  input.realMasterContract={
+   schemaVersion:"1.0.0",auditId:"audit-real-1",
+   source:{sourceKind:"uploaded_master",sourceAudioPath:"jobs/audit-real-1/master.wav",sha256:"a".repeat(64),mimeType:"audio/wav",byteLength:4096},
+   directSignalMeasurements:[
+    {name:"tempo_bpm",status:"measured",value:96,unit:"BPM",method:"transient_autocorrelation",measuredAt:"2026-11-19T12:00:00.000Z",diagnostics:[]},
+    {name:"true_peak_dbfs",status:"unavailable",value:null,unit:"dBFS",method:"decoder_true_peak",diagnostics:[{code:"DECODER_METRIC_MISSING",message:"The decoder did not return a true-peak measurement.",retryable:false}]},
+   ],
+   calibratedPredictions:[{name:"calibrated_audio_mood",status:"unavailable",label:null,probability:null,reasonCodes:["VALIDATED_MODEL_NOT_CONFIGURED"],diagnostics:[{code:"VALIDATED_MODEL_NOT_CONFIGURED",message:"No calibrated mood model is configured.",retryable:false}]},{name:"calibrated_key_mode_probability",status:"unavailable",label:null,probability:null,reasonCodes:["CALIBRATED_CLASSIFIER_NOT_CONFIGURED"],diagnostics:[{code:"CALIBRATED_CLASSIFIER_NOT_CONFIGURED",message:"The tonal estimator candidate score is not a calibrated class probability.",retryable:false}]},{name:"calibrated_energy_classification",status:"predicted",label:"high",probability:0.84,modelVersion:"energy-model-v2",calibration:{calibrated:true,method:"isotonic",modelVersion:"energy-calibration-v1",validationDataset:"held-out-validation-2026",validationSamples:240,expectedCalibrationError:0.042,brierScore:0.116},featureDrivers:[{feature:"rms_energy",contribution:0.62,direction:"supports"},{feature:"spectral_flux",contribution:-0.18,direction:"opposes"}],diagnostics:[]}],
+   externalRecords:[{status:"verified",provider:"musicbrainz",recordId:"recording-mbid",retrievedAt:"2026-11-19T12:05:00.000Z",fields:{isrc:"USAAA2600001"},fieldProvenance:{isrc:{provider:"musicbrainz",recordId:"recording-mbid",retrievedAt:"2026-11-19T12:05:00.000Z"}}}],
+   strategicSynthesis:[{claim:"Tempo was measured from the uploaded master.",evidenceRefs:["signal:tempo_bpm"],evidenceClass:"OBSERVED",limitations:[]}],
+   pipelineDiagnostics:[],
+  };
+  const pages=planAuditReportPages(input,"full");
+  const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Master evidence contract and provenance");
+  expect(report).toContain("SOURCE SHA-256: "+"a".repeat(64));
+  expect(report).toContain("tempo_bpm: 96 BPM; method transient_autocorrelation");
+  expect(report).toContain("tempo_bpm: 96 BPM; method transient_autocorrelation; measured: 2026-11-19T12:00:00.000Z");
+  expect(report).toContain("true_peak_dbfs: UNAVAILABLE; DECODER_METRIC_MISSING");
+  expect(report).toContain("calibrated_audio_mood: UNAVAILABLE; VALIDATED_MODEL_NOT_CONFIGURED");
+  expect(report).toContain("calibrated_key_mode_probability: UNAVAILABLE; CALIBRATED_CLASSIFIER_NOT_CONFIGURED");
+  expect(report).toContain("calibrated_energy_classification: high (84.0% calibrated; model energy-model-v2; calibration isotonic / energy-calibration-v1");
+  expect(report).toContain("validation held-out-validation-2026 (n=240); ECE 0.042; Brier 0.116");
+  expect(report).toContain("feature drivers: rms_energy supports (0.620), spectral_flux opposes (-0.180)");
+  expect(report).toContain("EXTERNAL RECORD: musicbrainz / recording-mbid; retrieved: 2026-11-19T12:05:00.000Z");
+  expect(report).toContain("field provenance: isrc=musicbrainz/recording-mbid@2026-11-19T12:05:00.000Z");
+  expect(report).toContain("Provenance rule: direct signal measurements are observed from the uploaded master");
+ });
+ it("labels DSP-link-only reports as metadata-only and never claims master measurements",()=>{
+  const input=structuredClone(metadataOnlyFixture) as AuditReportInput;
+  input.executionMode="dsp_link";
+  input.realMasterContract=undefined;
+  const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("AUDIT EXECUTION MODE: METADATA-ONLY — no uploaded master was analysed");
+  expect(report).toContain("No uploaded master was supplied; tempo, key/mode, loudness and spectral measurements require the recording itself.");
+  expect(report).not.toContain("SOURCE SHA-256:");
+ });
 });

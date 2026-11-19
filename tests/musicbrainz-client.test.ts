@@ -94,7 +94,9 @@ describe("MusicBrainz ISRC catalogue client", () => {
       artist: "Evaluation Artist",
       title: "Evaluation Track",
       isrc: "GBAYE1212345",
+      retrievedAt: expect.any(String),
     });
+    expect(Number.isNaN(Date.parse(result.metadata[0].retrievedAt!))).toBe(false);
     expect(result.outcomes.find((outcome) => outcome.provider === "musicbrainz")).toMatchObject({
       status: "recognized",
       reason: expect.stringContaining("ISRC recording match"),

@@ -49,10 +49,13 @@ export async function collectDspMetadata(
             ? (spotifyFailure as Record<string, unknown>).error as string
             : "Spotify API enrichment is unavailable"
           : null;
+      // Capture retrieval time at the provider boundary, not later during report assembly.
+      const retrievedAt = providerError ? undefined : new Date().toISOString();
+      const retrievedMetadata = retrievedAt ? { ...metadata, retrievedAt } : metadata;
       results.push({
         link,
         status: policyUnavailable || spotifyUnavailable ? "unavailable" : metadata.evidenceStatus,
-        metadata,
+        metadata: retrievedMetadata,
         error: providerError,
       });
     } catch (error) {
