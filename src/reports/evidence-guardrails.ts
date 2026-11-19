@@ -102,6 +102,11 @@ function stripUnsupportedTechnicalClaims(value: unknown, suppressLoudnessOptimis
       if (suppressLoudnessOptimisation && /\b(?:LUFS|loudness)\b/i.test(sentence)
         && /\b(?:optimis\w*|increas\w*|rais\w*|louder|target level|push the level)\b/i.test(sentence)) return false;
       if (suppressBrightTimbre && /\bbright(?:ness)?\b/i.test(sentence)) return false;
+      // RMS-envelope spread is an internal signal proxy, not a mastering dynamic-range verdict.
+      if (/\\bdynamic range\\b/i.test(sentence) && /\\b\\d+(?:\\.\\d+)?\\s*dB\\b/i.test(sentence)
+        && !/\\b(?:not|never|cannot|isn't|aren't|not the same)\\b/i.test(sentence)) return false;
+      if (/\\b(?:healthy|excellent|great|good|wide|strong|impressive)\\b/i.test(sentence)
+        && /\\bdynamic range\\b/i.test(sentence)) return false;
       return true;
     });
     return kept.join(" ").trim() || "Not asserted: the measured technical profile does not support that claim.";
