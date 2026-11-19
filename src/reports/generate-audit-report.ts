@@ -222,6 +222,23 @@ export function metadataFieldSource(e:Record<string,unknown>,field:string):strin
  const labels:Record<string,string>={spotify:"Spotify",musicbrainz:"MusicBrainz",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",audd:"AudD recognition",id3:"Embedded audio tags",filename:"Uploaded filename"};
  return typeof provider==="string"&&labels[provider]? "Field source: "+labels[provider] : "Field source: unavailable";
 }
+export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAudio:boolean):Array<{label:string;value:string|null}> {
+ const tempoReliable=hasAudio&&isReliableTempo(s);
+ const keyReliable=hasAudio&&isReliableKey(s);
+ return [
+  {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
+  {label:"KEY / MODE",value:keyReliable?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
+  {label:"TUNING OFFSET CENTS",value:keyReliable?metric(s?.keyTuningCents,0):null},
+  {label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},
+  {label:"LOUDNESS RANGE LRA",value:hasAudio?metric(s?.loudnessRangeLu,1):null},
+  {label:"TRUE PEAK dBFS",value:hasAudio?metric(s?.truePeakDbfs,1):null},
+  {label:"RMS LEVEL dBFS",value:hasAudio?metric(s?.rmsLevelDbfs,1):null},
+  {label:"RMS ENVELOPE SPREAD dB",value:hasAudio?metric(s?.dynamicRangeDb,1):null},
+  {label:"RMS ENERGY",value:hasAudio?metric(s?.rmsEnergy,2):null},
+  {label:"SPECTRAL CENTROID HZ",value:hasAudio?metric(s?.spectralCentroidHz,0):null}
+ ];
+}
+
 function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),counts=countEvidenceLayers(a.evidenceLabels);
 
@@ -236,17 +253,9 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
   ],shows:"Provider lookup outcomes across the submitted track links.",cantShow:"Audience size, stream counts, playlist placement or listener demand."}];
  }
  if(title==="Sonic DNA and technical profile")return [{
-  title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,rows:[
-   {label:"TEMPO BPM",value:hasAudio&&tempoReliable?metric(s?.bpm,1):null},
-   {label:"KEY / MODE",value:hasAudio&&isReliableKey(s)?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
-   {label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},
-   {label:"LOUDNESS RANGE LRA",value:hasAudio?metric(s?.loudnessRangeLu,1):null},
-   {label:"TRUE PEAK dBFS",value:hasAudio?metric(s?.truePeakDbfs,1):null},
-   {label:"RMS LEVEL dBFS",value:hasAudio?metric(s?.rmsLevelDbfs,1):null},
-   {label:"RMS ENVELOPE SPREAD dB",value:hasAudio?metric(s?.dynamicRangeDb,1):null},
-   {label:"RMS ENERGY",value:hasAudio?metric(s?.rmsEnergy,2):null},
-   {label:"SPECTRAL CENTROID HZ",value:hasAudio?metric(s?.spectralCentroidHz,0):null}
-  ],shows:"Confidence-qualified tempo and key/mode plus direct measurements from the uploaded master.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."
+  title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
+  rows:sonicDashboardRowsForReport(s,hasAudio),
+  shows:"Confidence-qualified tempo and key/mode plus direct measurements from the uploaded master.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."
  }];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"RMS / envelope",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
@@ -569,7 +578,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
    const notesDensity=checkPageDensity(noteRects);if(!notesDensity.ok)console.warn("[report-layout] A&R Notes page density is below the preferred threshold.");
   }
  }
- if(tier==="full"&&pdf.getPageCount()<12)console.warn("[report-layout] Full report is below the preferred 12-page target:",pdf.getPageCount());
+ if(tier==="full"&&pdf.getPageCount()<10)console.warn("[report-layout] Full report is below the preferred 10-page target:",pdf.getPageCount());
  if(pdf.getPageCount()>20)console.warn("[report-layout] Report exceeds the preferred 20-page target:",pdf.getPageCount());
  signal?.throwIfAborted();
  const bytes=await pdf.save();
