@@ -258,8 +258,10 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     const rhythmDimension = result.scorecard.rhythmicConsistency;
     const primaryGenre = hasProviderGenre && genre && typeof genre.primaryGenre === "string" ? findGenre(genre.primaryGenre) : null;
     const bpm = typeof sonicDna?.bpm === "number" && Number.isFinite(sonicDna.bpm) ? sonicDna.bpm : null;
-    if (!reliableTempo || !primaryGenre?.tempoHints || bpm === null) {
+    if (!reliableTempo || bpm === null) {
       if (tempoDimension) result.scorecard.tempoLaneFit = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
+    } else if (!primaryGenre?.tempoHints) {
+      if (tempoDimension) result.scorecard.tempoLaneFit = { score: null, rationale: "Not scored: the uploaded-master tempo is confidence-qualified, but no source-backed primary genre with a reference tempo range is available for a defensible tempo-to-lane comparison." };
     } else {
       const [low, high] = primaryGenre.tempoHints;
       const distance = bpm < low ? low - bpm : bpm > high ? bpm - high : 0;
