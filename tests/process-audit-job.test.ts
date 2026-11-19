@@ -146,6 +146,7 @@ describe("processAuditJob", () => {
     const assessmentInputs: Record<string, unknown>[] = [];
     const assessmentCatalogInputs: Record<string, unknown>[] = [];
     const reportInputs: Record<string, unknown>[] = [];
+    let failureMessage = "";
 
     const result = await processAuditJob("job-dsp", {
       getJob: async () => ({
@@ -234,10 +235,10 @@ describe("processAuditJob", () => {
       },
       saveReport: async () => {},
       markCompleted: async () => {},
-      markFailed: async () => {},
+      markFailed: async (_jobId, _claimToken, message) => { failureMessage = message; },
     });
 
-    expect(result.status).toBe("completed");
+    expect(result.status, failureMessage).toBe("completed");
     expect(assessmentCatalogInputs[0]).toMatchObject({ genre: null, catalogPopularity: null });
     expect(assessmentCatalogInputs[0]).not.toHaveProperty("externalIds.spotify");
     expect(assessmentCatalogInputs[0]).not.toHaveProperty("raw.crossReferences.spotify");
