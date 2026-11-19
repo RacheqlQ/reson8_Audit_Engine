@@ -846,7 +846,10 @@ export async function processAuditJob(
           ].map(([name, value, unit, method]) => typeof value === "number" && Number.isFinite(value)
             ? { name, status: "measured", value, unit, method, measuredAt: generatedAt, diagnostics: [] }
             : buildUnavailableMetric(String(name), "MEASUREMENT_UNAVAILABLE", "The configured analysis stage did not return a finite measurement for this uploaded master.", String(unit), String(method))),
-          calibratedPredictions: [{ name: "audio_mood", status: "unavailable", label: null, probability: null, reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "No validated and calibrated audio mood model is configured; signal descriptors are not substituted for emotional labels.", stage: "audio_classification", retryable: false }] }],
+          calibratedPredictions: [
+            { name: "audio_mood", status: "unavailable", label: null, probability: null, reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "No validated and calibrated audio mood model is configured; signal descriptors are not substituted for emotional labels.", stage: "audio_classification", retryable: false }] },
+            { name: "key_mode_classification", status: "unavailable", label: null, probability: null, reasonCodes: ["CALIBRATED_CLASSIFIER_NOT_CONFIGURED"], diagnostics: [{ code: "CALIBRATED_CLASSIFIER_NOT_CONFIGURED", message: "The tonal estimator returns candidate scores, not a calibrated class probability; candidate confidence is reported separately.", stage: "key_analysis", retryable: false }] },
+          ],
           externalRecords: metadataSources.filter((source) => Boolean(source.catalogId)).map((source) => {
             const recordId = source.catalogId!;
             const retrievedAt = generatedAt;
