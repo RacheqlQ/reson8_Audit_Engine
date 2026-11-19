@@ -17,7 +17,7 @@ export interface TempoEstimate {
  abstentionReason:string|null;
 }
 export interface SonicDnaFeatures {
- sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
+ sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; tempoCandidateBpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
  key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; keyTuningCents:number|null; keySegmentAgreement:number|null; keyCandidates:Array<{key:string;mode:"major"|"minor";score:number}>; tuningEvidenceWindows:number; keyAnalysisFftButterflyCount:number; limitations:string[];
  loudnessLufs:number|null; loudnessRangeLu?:number|null; truePeakDbfs?:number|null; rmsLevelDbfs:number; rmsEnergy:number; dynamicRangeDb:number; spectralCentroidHz:number; spectralBandwidthHz:number;
  spectralRolloffHz:number; zeroCrossingRate:number; moodTags:string[]; genreContext:string[]; genreClassification?: GenreFusionResult;
