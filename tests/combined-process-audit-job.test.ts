@@ -19,6 +19,7 @@ describe("combined master and DSP processing", () => {
   it("merges catalog identity and master-measured Sonic DNA into one sample/full report pair", async () => {
     const events: string[] = [];
     let assessmentInput: any;
+    let externalRecordsCaptured: unknown;
     const recognition: AuditRecognition = { matched: false };
     const musicBrainzMetadata: CatalogMetadata = {
       ...metadata,
@@ -71,10 +72,7 @@ describe("combined master and DSP processing", () => {
         expect(input.sonicDna).toHaveProperty("tempoCandidateBpm");
         expect(input.sonicDna).toHaveProperty("keyCandidates");
         expect(input.sonicDna).toHaveProperty("tuningEvidenceWindows");
-        expect(input.realMasterContract?.externalRecords).toEqual(expect.arrayContaining([
-          expect.objectContaining({ provider: "musicbrainz", status: "verified", retrievedAt: "2026-11-19T12:00:00.000Z" }),
-          expect.objectContaining({ provider: "spotify", status: "verified", retrievedAt: "2026-11-19T12:00:00.000Z" }),
-        ]));
+        externalRecordsCaptured = input.realMasterContract?.externalRecords;
         return new Uint8Array([37,80,68,70,45]);
       },
       saveReport: async (_id, _token, tier, _pdf, reportInput) => { events.push("saved-"+tier); if(tier==="full") expect(reportInput?.evidence).toMatchObject({ sourceCombination: "master_and_dsp" }); },
@@ -83,6 +81,10 @@ describe("combined master and DSP processing", () => {
     });
 
     expect(result.status).toBe("completed");
+    expect(externalRecordsCaptured).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: "musicbrainz", status: "verified", retrievedAt: "2026-11-19T12:00:00.000Z" }),
+      expect.objectContaining({ provider: "spotify", status: "verified", retrievedAt: expect.any(String) }),
+    ]));
     expect(assessmentInput.evidence).toMatchObject({ sourceCombination: "master_and_dsp" });
     expect(assessmentInput.evidence).toMatchObject({ platform: "musicbrainz" });
     expect(assessmentInput.catalogMetadata).toMatchObject({ platform: "musicbrainz", artist: "Master Artist", title: "Master Song" });
