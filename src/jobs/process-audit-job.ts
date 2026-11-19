@@ -534,6 +534,11 @@ export async function processAuditJob(
         channels: decoded.channels,
         durationSeconds: Math.floor(decoded.samples.length / Math.max(1, decoded.channels)) / decoded.sampleRate,
       };
+      // Persist the completed measurement before optional, memory-intensive vocal
+      // separation. A worker OOM during vocal analysis must not erase Sonic DNA.
+      await awaitWithStage(deps, "sonic_dna_persist", 15_000, (signal) =>
+        deps.saveSonicDna(jobId, job.claimToken, masterDna!, signal),
+      );
     }
 
     let catalogRecognition: AuditRecognition | null = null;
