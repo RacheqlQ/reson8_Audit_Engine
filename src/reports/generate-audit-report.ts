@@ -224,8 +224,7 @@ export function metadataFieldSource(e:Record<string,unknown>,field:string):strin
 }
 function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),counts=countEvidenceLayers(a.evidenceLabels);
- const playlistRecord=e.playlistDiscovery&&typeof e.playlistDiscovery==="object"?e.playlistDiscovery as Record<string,unknown>:{};
- const firstPlaylist=Array.isArray(playlistRecord.candidates)?playlistRecord.candidates.find((item)=>item&&typeof item==="object") as Record<string,unknown>|undefined:undefined;
+
  if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",evidenceClass:"assessment-derived",rows:[{label:"Measured",value:counts.OBSERVED},{label:"Source matches",value:counts.RECOGNIZED},{label:"Cross-checked",value:counts.RECONCILED},{label:"Hypotheses",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful."}];
  if(title==="Identity and source reconciliation"&&Array.isArray(e.catalogSources)&&e.catalogSources.length>0){
   const sources=e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"));
@@ -252,7 +251,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"RMS / envelope",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
  if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(a.strengths.slice(0,10),a.risks.slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
- if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:firstPlaylist?text(firstPlaylist.name)+" ("+text(firstPlaylist.provider)+")":a.promotionPlan.playlistCategories[0]??"No API-verified playlist candidate"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
+ if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:"See provider-attributed playlist shortlist in A&R positioning"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
  if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",evidenceClass:"illustrative",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
  return [];
 }
@@ -319,21 +318,26 @@ function sections(i:AuditReportInput):Section[]{
   sonicDnaBody.push("No uploaded master was supplied; tempo, key/mode, loudness and spectral measurements require the recording itself.");
  }
 
- const playlistCandidateLines=playlistCandidates.flatMap((target,index)=>{
-  const name=text(target.name),provider=text(target.provider),url=text(target.url),basis=Array.isArray(target.matchBasis)?target.matchBasis.map(text).filter(Boolean):[];
+ const playlistCandidateLines=["spotify","apple_music"].flatMap((providerKey)=>{
+ const providerItems=playlistCandidates.filter((item)=>text(item.provider)===providerKey);
+ if(!providerItems.length)return [];
+ const providerHeading=providerKey==="spotify"?"SPOTIFY PLAYLIST RESULTS":"APPLE MUSIC PLAYLIST RESULTS";
+ return [providerHeading,...providerItems.flatMap((target,index)=>{
+  const name=text(target.name),provider=providerKey==="spotify"?"Spotify":"Apple Music",url=text(target.url),basis=Array.isArray(target.matchBasis)?target.matchBasis.map(text).filter(Boolean):[];
   const presence=target.containsIsrc===true?"The audited ISRC is already present; treat this as existing playlist presence, not an outreach prospect."
    :target.containsIsrc===false?"The inspected playlist tracks did not include this ISRC; this is not proof that the recording is absent from every playlist version."
-   :"Playlist track membership was not inspected by this provider.";
+   :"Playlist track membership was not inspected completely by this provider."; 
   return [
-   "AVAILABLE PLAYLIST "+(index+1)+": "+name+" — "+provider,
+   "AVAILABLE PLAYLIST "+(index+1)+": "+name+" - "+provider,
    "Alignment: "+(basis.join("; ")||"No match rationale supplied"),
-   "Curator: "+text(target.curatorName,"Not supplied")+"; playlist type: "+text(target.playlistType,"Not supplied")+"; track count: "+text(target.trackCount,"Not supplied"),
+   "Playlist owner / curator: "+text(target.curatorName,"Not supplied")+"; playlist type: "+text(target.playlistType,"Not supplied")+"; track count: "+text(target.trackCount,"Not supplied"),
    presence,
    ...(Array.isArray(target.moodMatches)&&target.moodMatches.length?["Mood evidence source: "+text(target.moodSource,"source not supplied")]:[]),
    "Playlist source: "+url+"; checked: "+text(target.retrievedAt,"retrieval time not supplied")
   ];
- });
- const curatorCampaignBody=[
+ })];
+});
+const curatorCampaignBody=[
   ...(verifiedCuratorTargets.length?verifiedCuratorTargets.flatMap((target,index)=>[
    "VERIFIED CURATOR TARGET "+(index+1)+": "+text(target.name)+" — "+text(target.platform),
    "Fit rationale: "+text(target.fitRationale),
