@@ -88,7 +88,7 @@ describe("MusicBrainz ISRC catalogue client", () => {
     });
   });
 
-  it("fails closed on HTTP errors and never treats provider errors as empty matches", async () =>
+  it("fails closed on HTTP errors and never treats provider errors as empty matches", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("unavailable", { status: 503 })));
     await expect(new MusicBrainzClient().lookupIsrc("GBAYE1212345")).rejects.toThrow(/HTTP 503/);
   });
