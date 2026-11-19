@@ -14,6 +14,7 @@ import { readAudioTags } from "../metadata/audio-tags.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
 import { collectIsrcCatalogMetadata, type IsrcCatalogLookup } from "../providers/dsp/isrc-catalog.js";
+import { normalizeIsrc } from "../providers/musicbrainz/client.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 
@@ -569,9 +570,15 @@ export async function processAuditJob(
     }
 
     let isrcLookup: IsrcCatalogLookup | null = null;
-    if (recognition.matched && recognition.isrc && (process.env.MUSICBRAINZ_API_KEY || process.env.MUSICBRAINZ_ID || deps.collectIsrcCatalogMetadata)) {
+    const isrcCandidate = (recognition.matched ? recognition.isrc : null) ?? metadataSources.find((source) => source.isrc)?.isrc ?? null;
+    let normalizedIsrc: string | null = null;
+    if (isrcCandidate) {
+      try { normalizedIsrc = normalizeIsrc(isrcCandidate); }
+      catch { normalizedIsrc = null; }
+    }
+    if (normalizedIsrc && (process.env.MUSICBRAINZ_API_KEY || process.env.MUSICBRAINZ_ID || deps.collectIsrcCatalogMetadata)) {
       isrcLookup = await awaitWithStage(deps, "isrc_catalog_lookup", 30_000, (signal) =>
-        (deps.collectIsrcCatalogMetadata ?? collectIsrcCatalogMetadata)(recognition.isrc!, signal),
+        (deps.collectIsrcCatalogMetadata ?? collectIsrcCatalogMetadata)(normalizedIsrc!, signal),
       );
       for (const source of isrcLookup.metadata) {
         if (!metadataSources.some((existing) => existing.platform === source.platform && existing.catalogId === source.catalogId)) {
