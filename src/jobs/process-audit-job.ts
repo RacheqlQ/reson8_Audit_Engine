@@ -850,13 +850,17 @@ export async function processAuditJob(
             { name: "calibrated_key_mode_probability", status: "unavailable", label: null, probability: null, reasonCodes: ["CALIBRATED_CLASSIFIER_NOT_CONFIGURED"], diagnostics: [{ code: "CALIBRATED_CLASSIFIER_NOT_CONFIGURED", message: "The tonal estimator returns candidate scores, not a calibrated class probability; candidate confidence is reported separately.", stage: "key_analysis", retryable: false }] },
           ],
           externalRecords: [
-            ...metadataSources.filter((source) => Boolean(source.catalogId)).map((source) => {
+            ...metadataSources.filter((source) => Boolean(source.catalogId && source.retrievedAt)).map((source) => {
               const recordId = source.catalogId!;
-              const retrievedAt = generatedAt;
+              const retrievedAt = source.retrievedAt!;
               const fields = Object.fromEntries(Object.entries({ artist: source.artist, title: source.title, album: source.album, releaseDate: source.releaseDate, isrc: source.isrc, upc: source.upc, label: source.label, genre: source.genre }).filter(([, value]) => value !== null && value !== undefined && value !== ""));
               const fieldProvenance = Object.fromEntries(Object.keys(fields).map((field) => [field, { provider: source.platform, recordId, retrievedAt }]));
               return { status: "verified", provider: source.platform, recordId, retrievedAt, sourceUrl: source.canonicalUrl, fields, fieldProvenance };
             }),
+            ...metadataSources.filter((source) => Boolean(source.catalogId) && !source.retrievedAt).map((source) => ({
+              status: "unavailable", provider: source.platform, reasonCode: "PROVIDER_RETRIEVAL_TIMESTAMP_MISSING",
+              diagnostic: { code: "PROVIDER_RETRIEVAL_TIMESTAMP_MISSING", message: "A catalogue record was returned without a provider-boundary retrieval timestamp; it is not promoted to verified external evidence.", stage: "catalog_provenance", retryable: false }, attemptedAt: generatedAt,
+            })),
             ...(isrcLookup?.outcomes.filter((outcome) => !metadataSources.some((source) => source.platform === outcome.provider && Boolean(source.catalogId))).map((outcome) => ({
               status: "unavailable", provider: outcome.provider, reasonCode: outcome.status === "not_configured" ? "PROVIDER_NOT_CONFIGURED" : outcome.status === "partial" ? "NO_UNAMBIGUOUS_RECORD_ID" : "PROVIDER_LOOKUP_UNAVAILABLE",
               diagnostic: { code: outcome.status === "not_configured" ? "PROVIDER_NOT_CONFIGURED" : outcome.status === "partial" ? "NO_UNAMBIGUOUS_RECORD_ID" : "PROVIDER_LOOKUP_UNAVAILABLE", message: outcome.reason, stage: "isrc_catalog_lookup", retryable: outcome.status === "unavailable" }, attemptedAt: generatedAt,
