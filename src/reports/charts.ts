@@ -390,7 +390,7 @@ function drawTension(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<
 export interface SpectrumScale { min:number; max:number; unit:string; }
 export function spectrumScaleForValue(label:string,value:ChartRow["value"]):SpectrumScale|null {
  if(/TEMPO|BPM/.test(label)&&validNumber(value)===null)return null;
- return /TEMPO|BPM/.test(label)?{min:60,max:180,unit:"BPM"}:/RMS|ENERGY/.test(label)?{min:0,max:1,unit:""}:{min:0,max:20,unit:"dB"};
+ return /TEMPO|BPM/.test(label)?{min:60,max:180,unit:"BPM"}:/RMS\s+ENERGY/.test(label)?{min:0,max:1,unit:""}:/RMS\s+ENVELOPE\s+SPREAD/.test(label)?{min:0,max:40,unit:"dB"}:{min:0,max:20,unit:"dB"};
 }
 function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const trackX=g.x+170,trackW=240,trackH=8;
