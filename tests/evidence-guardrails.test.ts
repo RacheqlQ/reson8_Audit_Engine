@@ -243,6 +243,27 @@ describe("Phillo evidence guardrails", () => {
     expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("Key confidence");
   });
 
+  it("keeps RMS-envelope technical readiness unscored without destination-specific delivery targets", () => {
+    const assessment = {
+      ...baseAssessment,
+      scorecard: {
+        ...baseAssessment.scorecard,
+        dynamicRangeLoudness: { score: 78, rationale: "A model-generated technical readiness score." },
+      },
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      dynamicRangeDb: 22.36,
+      loudnessLufs: -15.1,
+      loudnessRangeLu: 10.8,
+      truePeakDbfs: -2.3,
+      rmsLevelDbfs: -20.3,
+    });
+    expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("destination-specific integrated-loudness");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("model-generated");
+  });
+
   it("withholds every numeric score when overall assessment confidence is zero", () => {
     const assessment = {
       ...baseAssessment,
