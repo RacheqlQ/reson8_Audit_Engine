@@ -177,7 +177,7 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const median=sortedScores[Math.floor(sortedScores.length/2)]??0;
  const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
  if(confidence<0.1)
-  return {...emptyTempoEstimate("Tempo candidate prominence is too weak to support a reliable result."),confidence,candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
+  return {...emptyTempoEstimate("Tempo candidate prominence is too weak to support a reliable result."),topCandidateBpm:bestBpm,confidence,candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
  const related=[0.5,1/3,2,3]
   .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
   .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=240&&candidate.bpm!==bestBpm&&candidate.score>=bestScore*0.25)
