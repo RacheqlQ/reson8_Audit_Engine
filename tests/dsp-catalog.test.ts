@@ -56,7 +56,11 @@ describe("authorized catalogue calls without per-provider opt-in flags", () => {
     expect(apple).toMatchObject({ platform: "apple_music", title: "Apple Track", artist: "Apple Artist", evidenceStatus: "recognized" });
     expect(youtube).toMatchObject({ platform: "youtube_music", title: "YouTube Music Track", artist: "YouTube Artist", evidenceStatus: "recognized" });
     expect(deezer).toMatchObject({ platform: "deezer", title: "Deezer Track", artist: "Deezer Artist", evidenceStatus: "recognized" });
-    for (const result of [apple, youtube, deezer]) expect(result.raw).not.toHaveProperty("providerPolicy");
+    for (const result of [apple, youtube, deezer]) {
+      expect(result.raw).not.toHaveProperty("providerPolicy");
+      expect(result.retrievedAt).toMatch(/^\\d{4}-\\d{2}-\\d{2}T/);
+      expect(Number.isFinite(Date.parse(result.retrievedAt!))).toBe(true);
+    }
   });
 
   it("uses Apple Music catalog metadata to retrieve the track ISRC when a developer token is configured", async () => {
