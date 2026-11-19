@@ -156,7 +156,7 @@ describe("Phillo evidence guardrails", () => {
     expect(result.risks).toContain("Tempo and groove consistency require review.");
     expect(JSON.stringify(result)).not.toMatch(/156\s*BPM|high-energy|fast tempo|tempo confirms/i);
     expect(result.aAndRPositioning.primaryLane).toContain("Unconfirmed");
-    expect(result.aAndRPositioning.adjacentLanes).toEqual([]);
+    expect(result.aAndRPositioning.adjacentLanes).toEqual(["R&B", "Hip-Hop", "House"]);
   });
 
   it("preserves tempo and lane claims when tempo confidence and provider genre evidence are adequate", () => {

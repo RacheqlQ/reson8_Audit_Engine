@@ -7,6 +7,7 @@ export interface PlaylistDiscoveryInput {
   primaryGenre: string | null;
   adjacentLanes?: readonly string[];
   moodTags?: readonly string[];
+  moodSource?: string | null;
   storefront?: string;
 }
 
@@ -22,6 +23,7 @@ export interface PlaylistCandidate {
   trackCount: number | null;
   genreMatches: string[];
   moodMatches: string[];
+  moodSource: string | null;
   matchBasis: string[];
   containsIsrc: boolean | null;
   retrievedAt: string;
@@ -103,6 +105,7 @@ function makeCandidate(input: {
   containsIsrc?: boolean | null;
   lanes: readonly string[];
   moods: readonly string[];
+  moodSource?: string | null;
   retrievedAt: string;
 }): PlaylistCandidate | null {
   const text = extractPlaylistText(input.name, input.description);
@@ -129,6 +132,7 @@ function makeCandidate(input: {
     trackCount: input.trackCount ?? null,
     genreMatches,
     moodMatches,
+    moodSource: input.moodSource ?? null,
     matchBasis,
     containsIsrc: input.containsIsrc ?? null,
     retrievedAt: input.retrievedAt,
@@ -194,6 +198,7 @@ export async function discoverPlaylistCandidates(
             containsIsrc: null,
             lanes,
             moods,
+            moodSource: input.moodSource,
             retrievedAt,
           });
           if (candidate) {
@@ -261,6 +266,7 @@ export async function discoverPlaylistCandidates(
           containsIsrc,
           lanes,
           moods,
+          moodSource: input.moodSource,
           retrievedAt,
         });
         if (candidate) {

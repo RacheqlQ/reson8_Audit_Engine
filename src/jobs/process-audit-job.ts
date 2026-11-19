@@ -791,6 +791,7 @@ export async function processAuditJob(
         primaryGenre: genreClassification.primaryGenre,
         adjacentLanes: genreClassification.adjacentLanes,
         moodTags: [...new Set(providerMoodTags)],
+        moodSource: providerMoodTags.length ? "TIDAL catalogue sonic profile" : null,
       };
       try {
         playlistDiscovery = await awaitWithStage(deps, "playlist_discovery", 25_000, (signal) =>

@@ -20,7 +20,7 @@ interface SpotifyErrorPayload {
 export interface SpotifyApiClient {
   getTrack(trackId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
   getTrackByIsrc(isrc: string, signal?: AbortSignal): Promise<Record<string, unknown> | null>;
-  searchPlaylists(query: string, signal?: AbortSignal): Promise<Array<Record<string, unknown>>>;
+  searchPlaylists?(query: string, signal?: AbortSignal): Promise<Array<Record<string, unknown>>>;
   getArtist(artistId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
   getAlbum?(albumId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
 }

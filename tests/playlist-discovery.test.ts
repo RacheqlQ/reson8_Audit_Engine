@@ -32,13 +32,13 @@ describe("ISRC-led DSP playlist discovery",()=>{
   };
   const result=await discoverPlaylistCandidates({
    isrc:"US-ABC-12-34567",artist:"Artist",title:"Track",primaryGenre:"Pop",
-   adjacentLanes:["R&B","Hip-Hop"],moodTags:["Reflective"],storefront:"ng",
+   adjacentLanes:["R&B","Hip-Hop"],moodTags:["Reflective"],moodSource:"TIDAL catalogue sonic profile",storefront:"ng",
   },{spotifyClient,appleMusicToken:"test-token",fetcher,now:()=>new Date("2026-11-19T12:00:00.000Z")});
   expect(result.status).toBe("available");
   expect(result.candidates).toHaveLength(2);
   const apple=result.candidates.find((item)=>item.provider==="apple_music");
   const spotify=result.candidates.find((item)=>item.provider==="spotify");
-  expect(apple).toMatchObject({name:"Reflective Pop Soul",curatorName:"Apple Music",containsIsrc:true,retrievedAt:"2026-11-19T12:00:00.000Z"});
+  expect(apple).toMatchObject({name:"Reflective Pop Soul",curatorName:"Apple Music",containsIsrc:true,moodSource:"TIDAL catalogue sonic profile",retrievedAt:"2026-11-19T12:00:00.000Z"});
   expect(apple?.matchBasis).toContain("The audited recording ISRC is already present in this playlist");
   expect(apple?.matchBasis).toContain("Primary genre match: Pop");
   expect(apple?.matchBasis).toContain("Mood tag match: Reflective");

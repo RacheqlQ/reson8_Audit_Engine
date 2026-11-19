@@ -318,6 +318,7 @@ function sections(i:AuditReportInput):Section[]{
    "Alignment: "+(basis.join("; ")||"No match rationale supplied"),
    "Curator: "+text(target.curatorName,"Not supplied")+"; playlist type: "+text(target.playlistType,"Not supplied")+"; track count: "+text(target.trackCount,"Not supplied"),
    presence,
+   ...(Array.isArray(target.moodMatches)&&target.moodMatches.length?["Mood evidence source: "+text(target.moodSource,"source not supplied")]:[]),
    "Playlist source: "+url+"; checked: "+text(target.retrievedAt,"retrieval time not supplied")
   ];
  });
