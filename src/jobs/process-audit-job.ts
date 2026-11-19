@@ -15,6 +15,7 @@ import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
 import { collectIsrcCatalogMetadata, type IsrcCatalogLookup } from "../providers/dsp/isrc-catalog.js";
 import { normalizeIsrc } from "../providers/musicbrainz/client.js";
+import { providerDecision } from "../providers/provider-policy.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 
@@ -576,7 +577,12 @@ export async function processAuditJob(
       try { normalizedIsrc = normalizeIsrc(isrcCandidate); }
       catch { normalizedIsrc = null; }
     }
-    if (normalizedIsrc) {
+    const isrcLookupAvailable = Boolean(
+      deps.collectIsrcCatalogMetadata
+      || providerDecision("musicbrainz").enabled
+      || (process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET && providerDecision("spotify").enabled),
+    );
+    if (normalizedIsrc && isrcLookupAvailable) {
       isrcLookup = await awaitWithStage(deps, "isrc_catalog_lookup", 30_000, (signal) =>
         (deps.collectIsrcCatalogMetadata ?? collectIsrcCatalogMetadata)(normalizedIsrc!, signal),
       );
