@@ -444,7 +444,9 @@ const curatorCampaignBody=[
    "SOURCE MIME / SIZE: "+i.realMasterContract.source.mimeType+" / "+i.realMasterContract.source.byteLength+" bytes",
    ...i.realMasterContract.directSignalMeasurements.map((m)=>m.name+": "+(m.status==="measured"?text(m.value)+" "+m.unit+"; method "+m.method:"UNAVAILABLE; "+m.diagnostics.map((d)=>d.code+": "+d.message).join("; "))),
    ...i.realMasterContract.calibratedPredictions.map((p)=>p.name+": "+(p.status==="predicted"?p.label+" ("+(p.probability*100).toFixed(1)+"% calibrated; "+p.calibration.validationDataset+")":"UNAVAILABLE; "+p.reasonCodes.join(", ")+" — "+p.diagnostics.map((d)=>d.message).join("; "))),
-   ...i.realMasterContract.externalRecords.map((r)=>r.status==="verified"?"EXTERNAL RECORD: "+r.provider+" / "+r.recordId+"; fields: "+Object.keys(r.fields).join(", "):"EXTERNAL RECORD UNAVAILABLE: "+r.provider+" — "+r.reasonCode+": "+r.diagnostic.message),
+   ...i.realMasterContract.externalRecords.map((r)=>r.status==="verified"
+     ?"EXTERNAL RECORD: "+r.provider+" / "+r.recordId+"; retrieved: "+r.retrievedAt+"; fields: "+Object.keys(r.fields).join(", ")+"; field provenance: "+Object.entries(r.fieldProvenance).map(([field,p])=>field+"="+p.provider+"/"+p.recordId+"@"+p.retrievedAt).join(", ")
+     :"EXTERNAL RECORD UNAVAILABLE: "+r.provider+" — "+r.reasonCode+": "+r.diagnostic.message),
    ...i.realMasterContract.pipelineDiagnostics.map((d)=>"PIPELINE LIMITATION: "+d.code+" — "+d.message),
    "Provenance rule: direct signal measurements are observed from the uploaded master; catalogue records are provider-returned and do not establish streams, listeners, revenue or demand."
   ]
