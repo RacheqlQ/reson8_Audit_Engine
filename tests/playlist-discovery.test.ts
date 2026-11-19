@@ -53,4 +53,22 @@ describe("ISRC-led DSP playlist discovery",()=>{
   expect(result.candidates).toEqual([]);
   expect(result.outcomes.every((outcome)=>outcome.status==="not_configured")).toBe(true);
  });
+
+ it("does not claim an ISRC is absent when Apple Music track pagination is incomplete",async()=>{
+  let trackPage=0;
+  const fetcher=async(input:RequestInfo|URL)=>{
+   const url=String(input);
+   if(url.includes("/search?"))return new Response(JSON.stringify({results:{playlists:{data:[{
+    id:"apple-large",type:"playlists",attributes:{name:"Afrobeats Focus",url:"https://music.apple.com/ng/playlist/afrobeats-focus/pl.apple-large",trackCount:300},
+   }]}}}),{status:200,headers:{"content-type":"application/json"}});
+   trackPage++;
+   return new Response(JSON.stringify({data:[],next:"https://api.music.apple.com/v1/catalog/ng/playlists/apple-large/tracks?offset="+trackPage}),{status:200,headers:{"content-type":"application/json"}});
+  };
+  const result=await discoverPlaylistCandidates({isrc:"USABC1234567",primaryGenre:"Afrobeats"},{
+   spotifyClient:null,appleMusicToken:"test-token",fetcher,now:()=>new Date("2026-11-19T12:00:00.000Z"),
+  });
+  expect(trackPage).toBe(3);
+  expect(result.candidates[0].containsIsrc).toBeNull();
+ });
+
 });

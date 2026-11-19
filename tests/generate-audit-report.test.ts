@@ -339,4 +339,26 @@ describe("report evidence integrity",()=>{
   expect(report).not.toMatch(/Vocal analysis: Not performed|vocal presence\/absence is unknown|temporarily disabled to keep the audit worker|learned audio model: disabled|Learned audio-genre model status: disabled/i);
   expect(report).not.toContain("Not asserted: the measured technical profile does not support that claim.");
  });
+
+  it("lists provider-separated DSP playlist candidates with source-attributed mood alignment",()=>{
+    const input=structuredClone(fullAudioFixture) as any;
+    input.evidence={...input.evidence,playlistDiscovery:{
+      status:"available",moodTagsUsed:["Energetic"],moodSource:"TIDAL catalogue sonic profile",
+      outcomes:[{provider:"spotify",status:"available",reason:"Spotify playlist search returned matching public playlist metadata."},{provider:"apple_music",status:"available",reason:"Apple Music catalog playlist tracks were inspected."}],
+      candidates:[
+        {provider:"spotify",id:"sp-1",name:"Afrobeats Focus",url:"https://open.spotify.com/playlist/sp-1",curatorName:"Owner One",playlistType:null,trackCount:30,genreMatches:["Afrobeats"],moodMatches:["Energetic"],moodSource:"TIDAL catalogue sonic profile",matchBasis:["Primary genre match: Afrobeats","Mood tag match: Energetic"],containsIsrc:null,retrievedAt:"2026-11-19T12:00:00.000Z"},
+        {provider:"apple_music",id:"am-1",name:"Afrobeats Radio",url:"https://music.apple.com/ng/playlist/afrobeats-radio/pl.am-1",curatorName:"Apple Music",playlistType:"editorial",trackCount:50,genreMatches:["Afrobeats"],moodMatches:["Energetic"],moodSource:"TIDAL catalogue sonic profile",matchBasis:["Primary genre match: Afrobeats","Mood tag match: Energetic"],containsIsrc:false,retrievedAt:"2026-11-19T12:00:00.000Z"}
+      ]
+    }};
+    const report=planAuditReportPages(input,"full").flatMap(page=>page.text).join(" ");
+    expect(report).toContain("SPOTIFY PLAYLIST RESULTS");
+    expect(report).toContain("APPLE MUSIC PLAYLIST RESULTS");
+    expect(report).toContain("AVAILABLE PLAYLIST 1: Afrobeats Focus - Spotify");
+    expect(report).toContain("AVAILABLE PLAYLIST 1: Afrobeats Radio - Apple Music");
+    expect(report).toContain("Mood evidence source: TIDAL catalogue sonic profile");
+    expect(report).toContain("Mood search tags: Energetic");
+    expect(report).toContain("not an audio-derived mood measurement");
+    expect(report.indexOf("SPOTIFY PLAYLIST RESULTS")).toBeLessThan(report.indexOf("APPLE MUSIC PLAYLIST RESULTS"));
+  });
+
 });
