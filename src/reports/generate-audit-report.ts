@@ -202,7 +202,7 @@ export function metadataFieldStatus(e:Record<string,unknown>,field:string):strin
 export function metadataFieldSource(e:Record<string,unknown>,field:string):string{
  const provenance=e.fieldProvenance&&typeof e.fieldProvenance==="object"?e.fieldProvenance as Record<string,unknown>:{};
  const provider=provenance[field];
- const labels:Record<string,string>={spotify:"Spotify",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",audd:"AudD recognition",id3:"Embedded audio tags",filename:"Uploaded filename"};
+ const labels:Record<string,string>={spotify:"Spotify",musicbrainz:"MusicBrainz",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",audd:"AudD recognition",id3:"Embedded audio tags",filename:"Uploaded filename"};
  return typeof provider==="string"&&labels[provider]? "Field source: "+labels[provider] : "Field source: unavailable";
 }
 function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
