@@ -47,6 +47,20 @@ export const GENRE_TAXONOMY: readonly GenreDefinition[] = [
   { id: "ambient", label: "Ambient", family: "Electronic", aliases: ["ambient music", "soundscape"], regionTags: ["global"], tempoHints: [50, 100] },
 ] as const;
 
+const ADJACENT_GENRE_IDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  pop: ["rnb", "hip-hop", "house"],
+  rnb: ["pop", "hip-hop", "afro-rnb"],
+  "afro-soul": ["afro-rnb", "highlife", "rnb"],
+  "afro-rnb": ["rnb", "afro-soul", "afrobeats"],
+  afrobeats: ["afro-pop", "afro-fusion", "afroswing"],
+  "afro-pop": ["afrobeats", "afro-fusion", "afro-rnb"],
+  amapiano: ["3-step", "afro-house", "gqom"],
+  "afro-house": ["house", "afro-tech", "amapiano"],
+  "hip-hop": ["rnb", "pop", "afroswing"],
+  house: ["afro-house", "pop", "afro-tech"],
+  reggae: ["rnb", "afrobeats", "hip-hop"],
+});
+
 export interface SceneDefinition {
   id: string;
   label: string;
@@ -93,6 +107,17 @@ for (const scene of SCENE_TAXONOMY) {
 
 export function findGenre(value: string): GenreDefinition | null {
   return genreAliases.get(normalizeGenreToken(value)) ?? null;
+}
+
+export function adjacentGenresFor(value: string | null | undefined): string[] {
+  if (!value) return [];
+  const genre = findGenre(value) ?? GENRE_TAXONOMY.find((item) => item.id === value) ?? null;
+  if (!genre) return [];
+  const byId = new Map(GENRE_TAXONOMY.map((item) => [item.id, item.label]));
+  return (ADJACENT_GENRE_IDS[genre.id] ?? []).flatMap((id) => {
+    const label = byId.get(id);
+    return label ? [label] : [];
+  });
 }
 
 export function findScene(value: string): SceneDefinition | null {
