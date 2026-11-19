@@ -222,7 +222,7 @@ describe("processAuditJob", () => {
         try {
           assessmentInputs.push(input.evidence);
           assessmentCatalogInputs.push(input.catalogMetadata ?? {});
-          expect(input.evidence.metadataSourcesChecked).toEqual(["tidal", "musicbrainz", "spotify", "audd"]);
+          expect(input.evidence.metadataSourcesChecked).toEqual(["tidal", "musicbrainz", "audd"]);
           expect(input.sonicDna).toMatchObject({
             provenance: "tidal_catalog_metadata",
             evidenceClass: "RECOGNIZED",
