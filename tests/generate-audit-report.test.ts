@@ -83,7 +83,7 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("shows tempo only when the master estimate passes the confidence gate",()=>{
   const tentative=structuredClone(fullAudioFixture) as any;
-  tentative.sonicDna.tempoConfidence=0.32;
+  tentative.sonicDna.tempoConfidence=0.08;
   tentative.sonicDna.bpm=96;
   expect(sonicDashboardRowsForReport(tentative.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
   const detected=structuredClone(fullAudioFixture) as any;
@@ -259,7 +259,8 @@ describe("A4 report layout and fixture coverage",()=>{
   input.sonicDna={...input.sonicDna,key:"A",mode:"minor",keyConfidence:0.78,keySegmentAgreement:0.9};
   expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Key / mode: A minor");
+  expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
+  expect(report).toContain("Confirmed key / mode: A minor");
  });
  it("withholds a low-confidence harmonic key and its diagnostic model score from the report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
