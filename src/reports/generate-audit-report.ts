@@ -356,7 +356,7 @@ function sections(i:AuditReportInput):Section[]{
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
   sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confidence-qualified measurements from provisional candidates and unavailable results. Only measurements that pass their metric-specific reliability gate are presented as confirmed.");
-  if(!e.fixture)sonicDnaBody.push("Mood classification: Not performed — no validated audio mood model is configured. RMS level, spectral centroid and zero-crossing rate are signal descriptors, not emotional mood indicators.");
+  sonicDnaBody.push("Mood classification: Not performed — no validated audio mood model is configured. RMS level, spectral centroid and zero-crossing rate are signal descriptors, not emotional mood indicators.");
   if (vocalAnalysisPerformed) {
    const vocalSegments=Array.isArray(vocalFeatures?.activitySegments)?vocalFeatures.activitySegments.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))):[];
    const segmentSummary=vocalSegments.slice(0,8).map((segment)=>metric(segment.startSeconds,2)+"–"+metric(segment.endSeconds,2)+" s").join("; ");
