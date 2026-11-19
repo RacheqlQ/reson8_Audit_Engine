@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MusicBrainzClient, normalizeIsrc } from "../src/providers/musicbrainz/client.js";
+import { collectIsrcCatalogMetadata } from "../src/providers/dsp/isrc-catalog.js";
+import { providerDecision } from "../src/providers/provider-policy.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("MusicBrainz ISRC catalogue client", () => {
@@ -35,6 +38,8 @@ describe("MusicBrainz ISRC catalogue client", () => {
     expect(requestedUrl.pathname).toBe("/ws/2/isrc/GBAYE1212345");
     expect(requestedUrl.searchParams.get("inc")).toContain("recordings");
     expect(requestedUrl.searchParams.get("fmt")).toBe("json");
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((requestInit.headers as Record<string, string>)["User-Agent"]).toContain("https://reson8-audit-engine.onrender.com");
     expect(result).toEqual([{
       recordingId: "recording-mbid",
       title: "Example Track",
@@ -54,7 +59,36 @@ describe("MusicBrainz ISRC catalogue client", () => {
     await expect(new MusicBrainzClient().lookupIsrc("GBAYE1212345")).resolves.toEqual([]);
   });
 
-  it("fails closed on HTTP errors and never treats provider errors as empty matches", async () => {
+  it("uses the configured contact identifier in the MusicBrainz User-Agent", async () => {
+    vi.stubEnv("MUSICBRAINZ_CONTACT", "ops@reson8.example");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ recordings: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new MusicBrainzClient().lookupIsrc("GBAYE1212345");
+
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((requestInit.headers as Record<string, string>)["User-Agent"]).toBe("Reson8AuditEngine/1.0 (ops@reson8.example)");
+  });
+
+  it("does not treat MusicBrainz credentials or an account ID as commercial-use authorization", async () => {
+    vi.stubEnv("MUSICBRAINZ_API_KEY", "present-but-not-an-entitlement");
+    vi.stubEnv("MUSICBRAINZ_ID", "account-id-is-not-contact-or-commercial-permission");
+    vi.stubEnv("SPOTIFY_CLIENT_ID", "");
+    vi.stubEnv("SPOTIFY_CLIENT_SECRET", "");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(providerDecision("musicbrainz")).toMatchObject({ enabled: false, commercialStatus: "unverified" });
+    const result = await collectIsrcCatalogMetadata("GBAYE1212345");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.outcomes.find((outcome) => outcome.provider === "musicbrainz")).toMatchObject({
+      status: "unavailable",
+      reason: expect.stringContaining("commercial"),
+    });
+  });
+
+  it("fails closed on HTTP errors and never treats provider errors as empty matches", async () =>
     vi.stubGlobal("fetch", vi.fn(async () => new Response("unavailable", { status: 503 })));
     await expect(new MusicBrainzClient().lookupIsrc("GBAYE1212345")).rejects.toThrow(/HTTP 503/);
   });
