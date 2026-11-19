@@ -123,3 +123,11 @@ describe("genre evidence fusion", () => {
     expect(correct).toBe(fixtures.length);
   });
 });
+ 
+describe("taxonomy-backed adjacent lanes",()=>{
+ it("returns curated adjacent-lane hypotheses for a provider-confirmed primary genre",()=>{
+  const result=fuseGenreEvidence({providerTags:[{provider:"apple_music",tags:["Pop"]}]});
+  expect(result.primaryGenre).toBe("Pop");
+  expect(result.adjacentLanes).toEqual(["R&B","Hip-Hop","House"]);
+ });
+});

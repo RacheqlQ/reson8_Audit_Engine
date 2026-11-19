@@ -363,3 +363,22 @@ describe("Phillo evidence guardrails", () => {
   });
 
 });
+ 
+describe("deterministic evidence scorecard",()=>{
+ it("scores source-backed metadata completeness and discounts conflicting identity fields",()=>{
+  const result=sanitizeAssessmentForEvidence(baseAssessment,{
+   provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.16,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,
+   rhythmFeatures:{beatGridStatus:"tentative",beatTimesSeconds:Array.from({length:32},(_,index)=>index*0.36)},
+   genreClassification:{primaryGenre:"Pop",abstained:false,genres:[{id:"pop",label:"Pop",confidence:0.9,sources:["apple_music"]}],adjacentLanes:["R&B","Hip-Hop","House"]},
+  },{
+   artist:"Artist",title:"Track",album:"Album",isrc:"USABC1234567",label:"Label",releaseDate:"2025-01-01",genre:"Pop",
+   fieldProvenance:{artist:"tidal",title:"apple_music",album:"tidal",isrc:"musicbrainz",label:"tidal",releaseDate:"apple_music",genre:"apple_music"},
+   reconciliation:{conflicts:[{field:"artist",values:["Artist","Artist & Orchestra"]},{field:"title",values:["Track","Track (Video)"]}]},
+  });
+  expect(result.scorecard.metadataCompleteness.score).toBe(85);
+  expect(result.scorecard.tempoLaneFit.score).toBeNull();
+  expect(result.scorecard.rhythmicConsistency.score).toBeNull();
+  expect(result.scorecard.releaseReadiness.score).toBeNull();
+  expect(result.scorecard.tempoLaneFit.rationale).not.toBe(result.scorecard.rhythmicConsistency.rationale);
+ });
+});

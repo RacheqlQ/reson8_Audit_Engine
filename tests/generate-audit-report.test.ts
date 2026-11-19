@@ -321,3 +321,25 @@ describe("extended Unicode report text normalization",()=>{
   expect(normalized).not.toContain("\uFFFD");
  });
 });
+ 
+describe("report evidence integrity",()=>{
+ it("omits disabled detector status, suppresses unreliable candidate values and supplies taxonomy-backed adjacent lanes",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  const genreClassification={
+   taxonomyVersion:"2026.2",method:"weighted_provider_evidence_with_limited_tempo_prior",
+   primaryGenre:"Pop",genres:[{id:"pop",label:"Pop",confidence:0.9,sources:["apple_music"]}],
+   confidence:0.9,abstained:false,adjacentLanes:["R&B","Hip-Hop","House"],
+   regionTags:[],sceneTags:[],unmappedTags:[],model:{status:"disabled",predictions:[]},
+  };
+  input.sonicDna={...input.sonicDna,provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.16,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,vocalFeatures:{status:"not_analyzed",reason:"Vocal analysis is temporarily disabled to keep the audit worker within its memory limit."},genreClassification};
+  input.evidence={...input.evidence,genreClassification};
+  const report=planAuditReportPages(input,"full").flatMap(page=>page.text).join(" ");
+  expect(report).toContain("Primary lane: Pop");
+  expect(report).toContain("Adjacent lanes: R&B, Hip-Hop, House");
+  expect(report).toContain("Tempo: Not determined");
+  expect(report).toContain("Key / mode: Not determined");
+  expect(report).not.toMatch(/165(?:\.0)?\s*BPM|key confidence estimator score|confidence diagnostic|fft_harmonic_chroma_ensemble|high_frequency_transient_autocorrelation/i);
+  expect(report).not.toMatch(/Vocal analysis: Not performed|vocal presence\/absence is unknown|temporarily disabled to keep the audit worker|learned audio model: disabled|Learned audio-genre model status: disabled/i);
+  expect(report).not.toContain("Not asserted: the measured technical profile does not support that claim.");
+ });
+});
