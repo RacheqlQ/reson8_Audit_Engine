@@ -234,9 +234,9 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Verdict: Insufficient evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
-  expect(report).toMatch(/Metadata completeness — \\d+\\/100/);
+  expect(report).toMatch(/Metadata completeness — \d+\/100/);
   expect(report).toContain("Album metadata is present but conflicting");
-  expect(report).not.toMatch(/128\\s*BPM|high-energy|album title is missing/i);
+  expect(report).not.toMatch(/128\s*BPM|high-energy|album title is missing/i);
  });
  it("reports present-but-conflicting generic release metadata instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
@@ -273,7 +273,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
   expect(report).not.toContain("Tempo confidence score");
-  expect(report).not.toMatch(/128\\s*BPM|high-energy/);
+  expect(report).not.toMatch(/128\s*BPM|high-energy/);
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
