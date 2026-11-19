@@ -142,8 +142,8 @@ describe("GroqClient section groups",()=>{
   const mock=vi.fn(async()=>new Response(JSON.stringify({error:{message:"Failed to validate JSON",code:"json_validate_failed"}}),{status:400}));
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("json_validate_failed:");
-  // Strict schema (3), JSON-object (2), then prompt-only (1) bounded attempts.
-  expect(mock).toHaveBeenCalledTimes(6);
+  // One strict attempt, then bounded JSON-object and prompt-only recovery.
+  expect(mock).toHaveBeenCalledTimes(5);
  });
  it("treats HTTP 413 as permanent and never retries the same request payload",async()=>{
   let calls=0;
@@ -314,10 +314,10 @@ describe("GroqClient section groups",()=>{
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{artist:"Regression Artist",title:"Regression Track"},sonicDna:{provenance:"uploaded_audio_master",bpm:96},catalogMetadata:{apple_music:{title:"Regression Track",isrc:"USAAA2600001"}}});
   expect(evidenceScoreCalls).toBe(4);
-  expect(prompts[1]).toContain("json_validate_failed");
+  expect(prompts[1]).toContain("strict JSON-schema validation failed");
   expect(prompts[1]).toContain("evidenceLabels");
   expect(systemPrompts[0]).toContain("Always include the evidenceLabels array");
-  expect(responseFormats).toEqual(["json_schema","json_schema","json_object","json_object"]);
+  expect(responseFormats).toEqual(["json_schema","json_object","json_object","json_object"]);
   expect(payloads[0].evidence).toEqual(payloads[1].evidence);
   expect(payloads[1].evidence).toEqual(payloads[2].evidence);
   expect(payloads[2].evidence).toEqual(payloads[3].evidence);
@@ -474,7 +474,7 @@ describe("Groq release-section JSON schema recovery", () => {
     const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
     const result = await client.assess({ evidence: { artist: "Regression Artist" }, sonicDna: null });
     expect(releaseCalls).toBe(4);
-    expect(releaseFormats).toEqual(["json_schema", "json_schema", "json_object", "json_object"]);
+    expect(releaseFormats).toEqual(["json_schema", "json_object", "json_object", "json_object"]);
     expect(releasePayloads[0].outputSchema).toBeUndefined();
     expect(releasePayloads[2].outputSchema).toBeDefined();
     expect(releasePayloads[2].outputSchema).toMatchObject({
@@ -514,10 +514,10 @@ describe("Groq JSON-object fallback schema contract", () => {
     });
     const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
     await client.assess({ evidence: {}, sonicDna: null });
-    expect(fallbackPayloads).toHaveLength(2);
+    expect(fallbackPayloads).toHaveLength(3);
     expect(fallbackPayloads[0].outputSchema).toBeDefined();
-    expect(fallbackPayloads[1].outputSchema).toEqual(fallbackPayloads[0].outputSchema);
-    expect(fallbackPayloads[1].correction).toContain("evidenceGaps");
+    expect(fallbackPayloads[2].outputSchema).toEqual(fallbackPayloads[0].outputSchema);
+    expect(fallbackPayloads[2].correction).toContain("evidenceGaps");
     const schema = fallbackPayloads[0].outputSchema;
     expect(schema).toMatchObject({ type: "object" });
     expect(schema.properties).toMatchObject({
