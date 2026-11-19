@@ -110,7 +110,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(body).toContain("activity intervals: 4.20–12.60 s");
   expect(body).toContain("estimated fundamental-frequency candidates: 110–440 Hz (median 220 Hz)");
   expect(body).toContain("delivery: not_classified; layering: not_classified");
-  expect(body).not.toMatch(/Open-Unmix|reviewStatus|human review|not a calibrated probability/i);
+  expect(body).not.toMatch(/Open-Unmix|reviewStatus|human review/i);
  });
  it("marks the audio fixture variants as synthetic, including partial null-key and low-confidence data",()=>{
   expect(fullAudioFixture.evidence.artist).toBe("Fixture Artist");

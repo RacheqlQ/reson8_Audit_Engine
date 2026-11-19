@@ -335,6 +335,7 @@ function sections(i:AuditReportInput):Section[]{
   sonicDnaBody.push("An uploaded master was supplied, but completed master-derived measurements are not available in this report.");
  } else {
   sonicDnaBody.push("No uploaded master was supplied; tempo, key/mode, loudness and spectral measurements require the recording itself.");
+  sonicDnaBody.push("Required next input: upload the actual master audio file. Do not infer genre, production quality or mastering readiness from DSP metadata alone.");
  }
 
  const playlistCandidateLines=["spotify","apple_music"].flatMap((providerKey)=>{
