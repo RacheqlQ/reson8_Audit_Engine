@@ -474,7 +474,7 @@ describe("Groq release-section JSON schema recovery", () => {
     const client = new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {});
     const result = await client.assess({ evidence: { artist: "Regression Artist" }, sonicDna: null });
     expect(releaseCalls).toBe(4);
-    expect(releaseFormats).toEqual(["json_schema", "json_schema", "json_object", "json_object"]);
+    expect(releaseFormats).toEqual(["json_schema", "json_object", "json_object", "json_object"]);
     expect(releasePayloads[0].outputSchema).toBeUndefined();
     expect(releasePayloads[2].outputSchema).toBeDefined();
     expect(releasePayloads[2].outputSchema).toMatchObject({
