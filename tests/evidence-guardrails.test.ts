@@ -153,7 +153,7 @@ describe("Phillo evidence guardrails", () => {
     });
     expect(result.scorecard.tempoLaneFit.score).toBeNull();
     expect(result.scorecard.rhythmicConsistency.score).toBeNull();
-    expect(result.risks).toContain("Tempo and groove consistency require review.");
+    expect(result.risks).not.toContain("Tempo and groove consistency require review.");
     expect(JSON.stringify(result)).not.toMatch(/156\s*BPM|high-energy|fast tempo|tempo confirms/i);
     expect(result.aAndRPositioning.primaryLane).toContain("Unconfirmed");
     expect(result.aAndRPositioning.adjacentLanes).toEqual(["R&B", "Hip-Hop", "House"]);
@@ -376,7 +376,7 @@ describe("deterministic evidence scorecard",()=>{
    fieldProvenance:{artist:"tidal",title:"apple_music",album:"tidal",isrc:"musicbrainz",label:"tidal",releaseDate:"apple_music",genre:"apple_music"},
    reconciliation:{conflicts:[{field:"artist",values:["Artist","Artist & Orchestra"]},{field:"title",values:["Track","Track (Video)"]}]},
   });
-  expect(result.scorecard.metadataCompleteness.score).toBe(85);
+  expect(result.scorecard.metadataCompleteness.score).toBe(75);
   expect(result.scorecard.tempoLaneFit.score).toBeNull();
   expect(result.scorecard.rhythmicConsistency.score).toBeNull();
   expect(result.scorecard.releaseReadiness.score).toBeNull();

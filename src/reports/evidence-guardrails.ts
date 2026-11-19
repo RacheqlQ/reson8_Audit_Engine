@@ -272,12 +272,10 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       };
     }
     const metadata = deriveMetadataCompleteness(evidence);
-    if (result.scorecard.metadataCompleteness) {
-      result.scorecard.metadataCompleteness = metadata ?? {
-        score: null,
-        rationale: hasAlbumConflict(evidence) ? "Not scored: fewer than two source-attributed identity fields are available; the album conflict is documented in reconciliation." : "Not scored: fewer than two source-attributed core release fields are available.",
-      };
-    }
+    result.scorecard.metadataCompleteness = metadata ?? {
+      score: null,
+      rationale: hasAlbumConflict(evidence) ? "Not scored: fewer than two source-attributed identity fields are available; the album conflict is documented in reconciliation." : "Not scored: fewer than two source-attributed core release fields are available.",
+    };
     const readinessVerified = evidence?.rightsClearanceVerified === true
       && evidence?.deliveryConfirmed === true
       && evidence?.releaseStatusVerified === true
