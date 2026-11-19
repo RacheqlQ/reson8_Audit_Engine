@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { planAuditReportPages, type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import {
+  planAuditReportPages,
+  signalDashboardRowsForReport,
+  sonicDashboardRowsForReport,
+  type AuditReportInput,
+} from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
+const rows = (input: AuditReportInput) => ({
+  musical: sonicDashboardRowsForReport(input.sonicDna as unknown as Record<string, unknown> | null, Boolean(input.sonicDna)),
+  signal: signalDashboardRowsForReport(input.sonicDna as unknown as Record<string, unknown> | null, Boolean(input.sonicDna)),
+});
+const reportText = (input: AuditReportInput, tier: "sample" | "full" = "full") =>
+  planAuditReportPages(input, tier).flatMap((section) => [section.title, ...section.text]).join(" ");
+
 describe("uploaded master provenance in reports", () => {
-  it("reports an observed master submission even when Sonic DNA measurements are absent", () => {
+  it("reports a submitted master even when completed Sonic DNA measurements are absent", () => {
     const input = structuredClone(fullAudioFixture) as AuditReportInput;
     input.sonicDna = null;
     input.evidence = {
@@ -12,16 +24,14 @@ describe("uploaded master provenance in reports", () => {
       masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" },
       sourceCombination: "master_and_dsp",
     };
-
-    const report = planAuditReportPages(input, "full")
-      .flatMap((section) => [section.title, ...section.text])
-      .join(" ");
-
+    const report = reportText(input);
     expect(report).toContain("Uploaded master submitted; master-derived measurements are reported separately.");
-    expect(report).toContain("Master audio submitted; master-derived Sonic DNA measurements unavailable.");
+    expect(report).toContain("An uploaded master was supplied, but completed master-derived measurements are not available in this report.");
+    expect(sonicDashboardRowsForReport(null, false).every((row) => row.value === null)).toBe(true);
     expect(report).not.toContain("Not measured: no master audio supplied.");
   });
-  it("reports measured integrated loudness and explicitly discloses unperformed vocal analysis", () => {
+
+  it("renders unit-correct master metrics without disabled-analysis disclosures", () => {
     const input = structuredClone(fullAudioFixture) as AuditReportInput;
     input.sonicDna = {
       ...input.sonicDna,
@@ -40,17 +50,19 @@ describe("uploaded master provenance in reports", () => {
         reason: "No vocal separation or vocal-activity model is configured.",
       },
     };
-    const report = planAuditReportPages(input, "full")
-      .flatMap((section) => [section.title, ...section.text])
-      .join(" ");
-    expect(report).toContain("Integrated loudness (EBU R128): -11.3 LUFS");
-    expect(report).toContain("Loudness range (EBU R128 LRA): 4.2 LU");
-    expect(report).toContain("True peak: -1.1 dBFS");
-    expect(report).toContain("Source format: 48000 Hz; 2 channel(s)");
-    expect(report).toContain("Spectral profile: centroid 1850 Hz");
-    expect(report).toContain("RMS envelope spread (p95/p10; internal proxy): 13.1 dB");
-    expect(report).toContain("Vocal analysis: Not performed");
-    expect(report.toLowerCase()).toContain("vocal presence/absence is unknown");
+    const report = reportText(input);
+    const { musical, signal } = rows(input);
+    expect(musical.find((row) => row.label === "INTEGRATED LOUDNESS LUFS")?.value).toBe("-11.3");
+    expect(musical.find((row) => row.label === "LOUDNESS RANGE LRA")?.value).toBe("4.2");
+    expect(musical.find((row) => row.label === "TRUE PEAK dBFS")?.value).toBe("-1.1");
+    expect(musical.find((row) => row.label === "RMS ENVELOPE SPREAD dB")?.value).toBe("13.1");
+    expect(signal.find((row) => row.label === "SAMPLE RATE HZ")?.value).toBe("48000");
+    expect(signal.find((row) => row.label === "CHANNELS")?.value).toBe("2");
+    expect(signal.find((row) => row.label === "SPECTRAL CENTROID HZ")?.value).toBe("1850");
+    expect(signal.find((row) => row.label === "SPECTRAL BANDWIDTH HZ")?.value).toBe("900");
+    expect(signal.find((row) => row.label === "SPECTRAL ROLLOFF HZ")?.value).toBe("6200");
+    expect(signal.find((row) => row.label === "ZERO CROSSING RATE")?.value).toBe("0.0450");
+    expect(report).not.toMatch(/Vocal analysis: Not performed|vocal presence\/absence is unknown|temporarily disabled to keep the audit worker|learned audio model: disabled/i);
   });
 
   it("states the combined master-plus-DSP source mode and actual provider lookup outcome", () => {
@@ -62,9 +74,7 @@ describe("uploaded master provenance in reports", () => {
       masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" },
       catalogSources: [{ platform: "apple_music", status: "recognized", reason: "Provider returned track metadata.", canonicalUrl: "https://music.apple.com/us/album/song/1?i=2" }],
     };
-    const report = planAuditReportPages(input, "full")
-      .flatMap((section) => [section.title, ...section.text])
-      .join(" ");
+    const report = reportText(input);
     expect(report).toContain("Submitted source combination: Combined — uploaded master audio + submitted DSP catalog link.");
     expect(report).toContain("Apple Music — recognized — Provider returned track metadata. — https://music.apple.com/us/album/song/1?i=2");
   });
@@ -78,14 +88,12 @@ describe("uploaded master provenance in reports", () => {
       masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" },
       catalogSources: [],
     };
-    const report = planAuditReportPages(input, "full")
-      .flatMap((section) => [section.title, ...section.text])
-      .join(" ");
+    const report = reportText(input);
     expect(report).toContain("Submitted source combination: Combined — uploaded master audio + submitted DSP catalog link.");
     expect(report).toContain("No DSP provider lookup result was recorded");
   });
 
-  it("shows low-confidence key and tempo candidates with their detector abstention diagnostics", () => {
+  it("withholds low-confidence tempo and key candidates from the technical dashboard", () => {
     const input = structuredClone(fullAudioFixture) as AuditReportInput;
     input.sonicDna = {
       ...input.sonicDna,
@@ -115,17 +123,14 @@ describe("uploaded master provenance in reports", () => {
       },
       limitations: ["Key and mode confidence was below threshold; no key is asserted."],
     };
-    const report = planAuditReportPages(input, "full")
-      .flatMap((section) => [section.title, ...section.text])
-      .join(" ");
-    expect(report).toContain("Tempo: Tentative candidate — 190.0 BPM");
-    expect(report).toContain("abstention: Tempo candidate prominence is too weak");
-    expect(report).toContain("Key / mode: Tentative segment candidate — A minor (3/4 analysed windows; not verified)");
-    expect(report).toContain("Key and mode confidence was below threshold");
-    expect(report).not.toContain("Key / mode: A minor");
+    const report = reportText(input);
+    const musical = rows(input).musical;
+    expect(musical.find((row) => row.label === "TEMPO BPM")?.value).toBeNull();
+    expect(musical.find((row) => row.label === "KEY / MODE")?.value).toBeNull();
+    expect(report).not.toMatch(/190\.0 BPM|Tempo candidate prominence|candidateBpms|insufficient_evidence|Key and mode confidence|segmentChroma|A minor/);
   });
 
-  it("reports periodicity measurements without promoting them to vocal detection", () => {
+  it("keeps signal periodicity as a signal metric without inferring vocal presence", () => {
     const input = structuredClone(fullAudioFixture) as AuditReportInput;
     input.sonicDna = {
       ...input.sonicDna,
@@ -142,17 +147,12 @@ describe("uploaded master provenance in reports", () => {
         limitations: ["Periodic energy is not proof of human vocals."],
       },
     };
-    const report = planAuditReportPages(input, "full")
-      .flatMap((section) => [section.title, ...section.text])
-      .join(" ");
-    expect(report).toContain("Limited signal-periodicity diagnostics were performed");
-    expect(report).toContain("Voice-range periodicity diagnostic (not vocal detection)");
-    expect(report).toContain("median 220.0 Hz");
-    expect(report).toContain("singing, speech, vocal presence/absence and vocal arrangement remain undetermined");
-    expect(report).not.toContain("Vocal analysis: Performed");
+    const report = reportText(input);
+    expect(rows(input).signal.find((row) => row.label === "SIGNAL PERIODICITY ACTIVITY RATIO")?.value).toBe("0.62");
+    expect(report).not.toMatch(/Limited signal-periodicity diagnostics|Voice-range periodicity|median 220\.0 Hz|singing, speech, vocal presence\/absence|Vocal analysis: Performed/);
   });
 
-  it("states mood and musical-context availability separately from signal descriptors", () => {
+  it("does not present signal descriptors as an audio-derived mood classification", () => {
     const input = structuredClone(fullAudioFixture) as AuditReportInput;
     input.sonicDna = {
       ...input.sonicDna,
@@ -160,12 +160,10 @@ describe("uploaded master provenance in reports", () => {
       moodTags: ["Moderate RMS level", "Elevated zero-crossing rate"],
       genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop", sources: ["apple_music"] }], model: { status: "disabled" } },
     };
-    const report = planAuditReportPages(input, "sample")
-      .flatMap((section) => [section.title, ...section.text])
-      .join(" ");
-    expect(report).toContain("Mood classification: Not performed");
-    expect(report).toContain("signal descriptors are not a mood classification");
-    expect(report).toContain("Musical context: provider/catalog evidence");
+    const report = reportText(input, "sample");
+    expect(report).toContain("Mood alignment was not asserted because no source-attributed DSP mood tags were available");
+    expect(report).not.toContain("Mood classification: Not performed");
+    expect(report).not.toMatch(/model:.*disabled|Learned audio-genre model status/i);
   });
 
   it("does not repeat RMS-envelope spread as a mastering dynamic-range verdict", () => {
@@ -180,12 +178,10 @@ describe("uploaded master provenance in reports", () => {
       ...input.assessment.strengths,
       "Healthy measured dynamic range of 22.36 dB provides excellent transient preservation.",
     ];
-    const report = planAuditReportPages(input, "sample")
-      .flatMap((section) => [section.title, ...section.text])
-      .join(" ");
-    expect(report).toContain("RMS envelope spread (p95/p10; internal proxy): 22.4 dB");
-    expect(report).toContain("Loudness range (EBU R128 LRA): 10.8 LU");
+    const report = reportText(input, "sample");
+    const musical = rows(input).musical;
+    expect(musical.find((row) => row.label === "RMS ENVELOPE SPREAD dB")?.value).toBe("22.4");
+    expect(musical.find((row) => row.label === "LOUDNESS RANGE LRA")?.value).toBe("10.8");
     expect(report).not.toMatch(/healthy measured dynamic range of 22\.36 dB/i);
   });
-
 });

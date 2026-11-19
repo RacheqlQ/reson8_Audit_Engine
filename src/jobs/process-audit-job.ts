@@ -14,6 +14,7 @@ import { readAudioTags } from "../metadata/audio-tags.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
 import { collectIsrcCatalogMetadata, type IsrcCatalogLookup } from "../providers/dsp/isrc-catalog.js";
+import type { PlaylistDiscoveryInput, PlaylistDiscoveryResult } from "../providers/dsp/playlist-discovery.js";
 import { normalizeIsrc } from "../providers/musicbrainz/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
@@ -39,6 +40,7 @@ export interface AuditProcessorDependencies {
   markProcessing(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   collectCatalogMetadata(url: string, signal?: AbortSignal): Promise<CatalogMetadata>;
   collectIsrcCatalogMetadata?(isrc: string, signal?: AbortSignal): Promise<IsrcCatalogLookup>;
+  discoverPlaylists?(input: PlaylistDiscoveryInput, signal?: AbortSignal): Promise<PlaylistDiscoveryResult>;
   recognizeUrl(url: string, signal?: AbortSignal): Promise<AuditRecognition>;
   downloadMaster(path: string, signal?: AbortSignal): Promise<Uint8Array>;
   createRecognitionSample(master: Uint8Array, mimeType: string, signal?: AbortSignal): Promise<Uint8Array>;
@@ -428,6 +430,9 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
     key: dna.key,
     mode: dna.mode,
     keyConfidence: dna.keyConfidence,
+    keyTuningCents: dna.keyTuningCents,
+    keySegmentAgreement: dna.keySegmentAgreement,
+    keyAnalysisFftButterflyCount: dna.keyAnalysisFftButterflyCount,
     limitations: dna.limitations,
     loudnessLufs: dna.loudnessLufs,
     loudnessRangeLu: dna.loudnessRangeLu ?? null,
@@ -571,7 +576,7 @@ export async function processAuditJob(
     }
 
     let isrcLookup: IsrcCatalogLookup | null = null;
-    const isrcCandidate = (recognition.matched ? recognition.isrc : null) ?? metadataSources.find((source) => source.isrc)?.isrc ?? null;
+    const isrcCandidate = (recognition.matched ? recognition.isrc : null) ?? metadataSources.find((source) => source.isrc)?.isrc ?? masterTags?.isrc ?? null;
     let normalizedIsrc: string | null = null;
     if (isrcCandidate) {
       try { normalizedIsrc = normalizeIsrc(isrcCandidate); }
@@ -776,8 +781,34 @@ export async function processAuditJob(
     }, signal));
     await awaitWithStage(deps, "assessment_persist", 15_000, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
 
+    let playlistDiscovery: PlaylistDiscoveryResult | null = null;
+    if (normalizedIsrc && deps.discoverPlaylists) {
+      const providerMoodTags = metadataSources.flatMap((source) => source.sonicProfile?.moodTags ?? []);
+      const playlistInput: PlaylistDiscoveryInput = {
+        isrc: normalizedIsrc,
+        artist: assessmentIdentity.artist ?? identity.artist,
+        title: assessmentIdentity.title ?? identity.title,
+        primaryGenre: genreClassification.primaryGenre,
+        adjacentLanes: genreClassification.adjacentLanes,
+        moodTags: [...new Set(providerMoodTags)],
+        moodSource: providerMoodTags.length ? "TIDAL catalogue sonic profile" : null,
+      };
+      try {
+        playlistDiscovery = await awaitWithStage(deps, "playlist_discovery", 25_000, (signal) =>
+          deps.discoverPlaylists!(playlistInput, signal),
+        );
+      } catch (error) {
+        if (deps.signal?.aborted) throw leaseLostError(deps.signal);
+        playlistDiscovery = {
+          status: "unavailable",
+          candidates: [],
+          outcomes: [{ provider: "spotify", status: "unavailable", reason: error instanceof Error ? error.message.slice(0, 180) : "Playlist discovery was unavailable." }],
+        };
+      }
+    }
+    const reportEvidence = playlistDiscovery ? { ...evidence, playlistDiscovery } : evidence;
     const generatedAt = new Date().toISOString();
-    const reportInput = { auditId: jobId, generatedAt, evidence, sonicDna, assessment };
+    const reportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 

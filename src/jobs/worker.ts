@@ -3,6 +3,7 @@ import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
 import { getAssessmentProviderReadiness, providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
+import { discoverPlaylistCandidates } from "../providers/dsp/playlist-discovery.js";
 import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
 import { generateAuditReport } from "../reports/generate-audit-report.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
@@ -93,6 +94,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     recognize: (sample, signal) => audd ? audd.recognize(sample, signal) : Promise.resolve({ matched: false }),
     recognizeUrl: (url, signal) => audd ? audd.recognizeUrl(url, signal) : Promise.resolve({ matched: false }),
     collectCatalogMetadata: (url, signal) => collectCatalogMetadata(url, signal),
+    discoverPlaylists: (input, signal) => discoverPlaylistCandidates(input, {}, signal),
     saveRecognition: async (jobId, _claimToken, recognition, signal) => store.saveRecognition(jobId, _claimToken, recognition, signal),
     saveSonicDna: async (jobId, _claimToken, dna, signal) => store.saveSonicDna(jobId, _claimToken, dna, signal),
     saveEvidence: async (jobId, _claimToken, recognition, reconciliation, metadata, signal, metadataSources) =>

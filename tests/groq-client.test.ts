@@ -192,7 +192,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key",undefined,mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{artist:"Fixture Artist"},sonicDna:null});
-  expect(mock).toHaveBeenCalledTimes(9);expect(maxActive).toBe(1);expect(result.scorecard.tempoLaneFit.score).toBeNull();expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();expect(result.commercialRead.marketability).toBe("undetermined");expect(result.scorecard.metadataCompleteness.score).toBe(65);expect(result.scorecard.releaseReadiness.score).toBeNull();
+  expect(mock).toHaveBeenCalledTimes(9);expect(maxActive).toBe(1);expect(result.scorecard.tempoLaneFit.score).toBeNull();expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();expect(result.commercialRead.marketability).toBe("undetermined");expect(result.scorecard.metadataCompleteness.score).toBeNull();expect(result.scorecard.releaseReadiness.score).toBeNull();
   expect(result.evidenceLabels[0].label).toBe("INDUSTRY PRACTICE");expect(result.humanListeningChecklist.length).toBeGreaterThanOrEqual(5);
   expect(result.productionArrangementGuidance).toBeTruthy();expect(result.promotionPlan.playlistCategories.length).toBeGreaterThanOrEqual(3);expect(result.promotionPlan.pitchingAngles.length).toBeGreaterThanOrEqual(3);
   for(const call of mock.mock.calls){const body=JSON.parse(String(call[1]?.body));expect(body.model).toBe(DEFAULT_GROQ_MODEL);expect(body.response_format.type).toBe("json_schema");expect(body.messages[0].content).toContain("Never invent streams");expect(body.messages[1].content).toContain(GROQ_PROMPT_VERSION);}
@@ -265,7 +265,8 @@ describe("GroqClient section groups",()=>{
   expect(prompts[0]).toContain("scorecard.rhythmicConsistency.rationale");
   expect(prompts[0]).toContain("at least 25 words");
   expect(prompts[1]).toContain("scorecard.rhythmicConsistency.rationale must contain at least 25 words");
-  expect(result.scorecard.rhythmicConsistency.rationale).toBe(minimum);
+  expect(result.scorecard.rhythmicConsistency.rationale.split(/\s+/).length).toBeGreaterThanOrEqual(25);
+   expect(result.scorecard.rhythmicConsistency.rationale).toContain("Not scored:");
  });
  it("honours the provider retry delay in a 429 body and succeeds without losing the request",async()=>{
   let narrativeCalls=0;const sleeps:number[]=[];

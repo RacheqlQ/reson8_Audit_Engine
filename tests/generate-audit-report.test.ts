@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,sonicDashboardRowsForReport,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelDisplayStatus,chartPanelHeight,constellationLabelLineCount } from "../src/reports/charts.js";
@@ -81,19 +81,20 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(normalized).toContain("Café - \"mix\"...");
   expect(normalized).not.toContain("?");
  });
- it("reports detected, tentative half/double and not-determined tempo tiers",()=>{
+ it("shows tempo only when the master estimate passes the confidence gate",()=>{
   const tentative=structuredClone(fullAudioFixture) as any;
   tentative.sonicDna.tempoConfidence=0.32;
   tentative.sonicDna.bpm=96;
-  const tentativeBody=planAuditReportPages(tentative).flatMap(section=>section.text).join(" ");
-  expect(tentativeBody).toContain("Tentative candidate — 96.0 BPM (half-time 48.0; double-time 192.0)");
+  expect(sonicDashboardRowsForReport(tentative.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
+  const detected=structuredClone(fullAudioFixture) as any;
+  detected.sonicDna.tempoConfidence=0.9;
+  expect(sonicDashboardRowsForReport(detected.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).not.toBeNull();
   const zero=structuredClone(fullAudioFixture) as any;
   zero.sonicDna.tempoConfidence=0;
-  const zeroBody=planAuditReportPages(zero).flatMap(section=>section.text).join(" ");
-  expect(zeroBody).toContain("Tempo: Not determined");
-  expect(zeroBody).not.toMatch(/Tempo: Detected|Tempo: Tentative/);
+  expect(sonicDashboardRowsForReport(zero.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
+  const body=planAuditReportPages(tentative).flatMap(section=>section.text).join(" ");
+  expect(body).not.toMatch(/Tentative candidate|96.0 BPM|Tempo: Detected|Tempo: Tentative/);
  });
-
  it("renders measured vocal presence, activity timestamps and pitch without inventing delivery or lyrics",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.sonicDna.vocalFeatures={
@@ -106,13 +107,10 @@ describe("A4 report layout and fixture coverage",()=>{
   };
   const body=planAuditReportPages(input).flatMap((section)=>section.text).join(" ");
   expect(body).toContain("Vocal presence: likely_present");
-  expect(body).toContain("Vocal activity timestamps (first 12): 4.20–12.60 s");
-  expect(body).toContain("Estimated fundamental-frequency candidates: 110–440 Hz (median 220 Hz)");
-  expect(body).toContain("Delivery: not_classified; layering: not_classified");
-  expect(body).toContain("lyrics: not_requested");
-  expect(body).toContain("human review: not_human_reviewed");
-  expect(body).toContain("automated vocal analysis has not been human-validated");
-  expect(body).toContain("not a calibrated probability");
+  expect(body).toContain("activity intervals: 4.20–12.60 s");
+  expect(body).toContain("estimated fundamental-frequency candidates: 110–440 Hz (median 220 Hz)");
+  expect(body).toContain("delivery: not_classified; layering: not_classified");
+  expect(body).not.toMatch(/Open-Unmix|reviewStatus|human review/i);
  });
  it("marks the audio fixture variants as synthetic, including partial null-key and low-confidence data",()=>{
   expect(fullAudioFixture.evidence.artist).toBe("Fixture Artist");
@@ -166,13 +164,13 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("collapses all missing audio measurements into one empty state without master-derived provenance claims",()=>{
   const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");
-  expect(report).toContain("Not measured: no master audio supplied.");
-  expect(report).toContain("Key / mode: Not measured");
+  expect(report).toContain("No uploaded master was supplied; tempo, key/mode, loudness and spectral measurements require the recording itself.");
+  expect(sonicDashboardRowsForReport(null,false).every(row=>row.value===null)).toBe(true);
   expect(report).not.toContain("Measured from the uploaded master");
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
   expect(report).toContain("Required next input: upload the actual master audio file");
-  expect(report).toContain("Do not infer genre, vocal presence, production quality or mastering readiness from DSP metadata alone");
+  expect(report).toContain("Do not infer genre, production quality or mastering readiness from DSP metadata alone");
  });
  it("builds the A&R Notes decision-context structure used by the generated PDF",()=>{
   const context=buildArNotesDecisionContext(ambiguousAudioFixture as any);
@@ -227,18 +225,18 @@ describe("A4 report layout and fixture coverage",()=>{
  it("renders the generic ambiguous-audio regression fixture with tempo, key, genre and commercial claims withheld",()=>{
   const pages=planAuditReportPages(ambiguousAudioFixture as any,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Tempo: Not determined");
-  expect(report).not.toContain("Tempo confidence score");
-  expect(report).toContain("Key / mode: Not determined");
-  expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
+  const rows=sonicDashboardRowsForReport((ambiguousAudioFixture as any).sonicDna,true);
+  expect(rows.find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
+  expect(rows.find(row=>row.label==="KEY / MODE")?.value).toBeNull();
+  expect(report).not.toMatch(/Tempo confidence score|Key confidence estimator score|Tempo: Detected|Key \/ mode: C major/);
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Verdict: Insufficient evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
-  expect(report).toContain("Metadata completeness — NOT SCORED");
+  expect(report).toMatch(/Metadata completeness — \d+\/100/);
   expect(report).toContain("Album metadata is present but conflicting");
-  expect(report).not.toMatch(/128\\s*BPM|high-energy|album title is missing/i);
+  expect(report).not.toMatch(/128\s*BPM|high-energy|album title is missing/i);
  });
  it("reports present-but-conflicting generic release metadata instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
@@ -256,13 +254,13 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(sourceBackedReport).toContain("Album: Conflicting source values");
   expect(sourceBackedReport).toContain("album: Sample Release - EP vs Sample Release");
  });
- it("withholds a low-confidence harmonic key from the report while retaining the diagnostic confidence",()=>{
+ it("withholds a low-confidence harmonic key and its diagnostic model score from the report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Key / mode: Not determined");
-  expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
+  expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBeNull();
+  expect(report).not.toContain("Key confidence estimator score");
   expect(report).not.toContain("Key / mode: C major");
  });
  it("withholds zero-confidence BPM and tempo-derived A&R assertions from the rendered report",()=>{
@@ -273,7 +271,7 @@ describe("A4 report layout and fixture coverage",()=>{
   input.assessment.aAndRPositioning.adjacentLanes=[];
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Tempo: Not determined");
+  expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
   expect(report).not.toContain("Tempo confidence score");
   expect(report).not.toMatch(/128\s*BPM|high-energy/);
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
@@ -320,4 +318,47 @@ describe("extended Unicode report text normalization",()=>{
   expect(normalized).not.toContain("?");
   expect(normalized).not.toContain("\uFFFD");
  });
+});
+ 
+describe("report evidence integrity",()=>{
+ it("omits disabled detector status, suppresses unreliable candidate values and supplies taxonomy-backed adjacent lanes",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  const genreClassification={
+   taxonomyVersion:"2026.2",method:"weighted_provider_evidence_with_limited_tempo_prior",
+   primaryGenre:"Pop",genres:[{id:"pop",label:"Pop",confidence:0.9,sources:["apple_music"]}],
+   confidence:0.9,abstained:false,adjacentLanes:["R&B","Hip-Hop","House"],
+   regionTags:[],sceneTags:[],unmappedTags:[],model:{status:"disabled",predictions:[]},
+  };
+  input.sonicDna={...input.sonicDna,provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.16,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,vocalFeatures:{status:"not_analyzed",reason:"Vocal analysis is temporarily disabled to keep the audit worker within its memory limit."},genreClassification};
+  input.evidence={...input.evidence,genreClassification};
+  const report=planAuditReportPages(input,"full").flatMap(page=>page.text).join(" ");
+  expect(report).toContain("Primary lane: Pop");
+  expect(report).toContain("Adjacent lanes: R&B, Hip-Hop, House");
+  expect(chartLayoutIssuesForReport(input)).toEqual([]);
+  expect(report).not.toMatch(/165(?:\.0)?\s*BPM|key confidence estimator score|confidence diagnostic|fft_harmonic_chroma_ensemble|high_frequency_transient_autocorrelation/i);
+  expect(report).not.toMatch(/Vocal analysis: Not performed|vocal presence\/absence is unknown|temporarily disabled to keep the audit worker|learned audio model: disabled|Learned audio-genre model status: disabled/i);
+  expect(report).not.toContain("Not asserted: the measured technical profile does not support that claim.");
+ });
+
+  it("lists provider-separated DSP playlist candidates with source-attributed mood alignment",()=>{
+    const input=structuredClone(fullAudioFixture) as any;
+    input.evidence={...input.evidence,playlistDiscovery:{
+      status:"available",moodTagsUsed:["Energetic"],moodSource:"TIDAL catalogue sonic profile",
+      outcomes:[{provider:"spotify",status:"available",reason:"Spotify playlist search returned matching public playlist metadata."},{provider:"apple_music",status:"available",reason:"Apple Music catalog playlist tracks were inspected."}],
+      candidates:[
+        {provider:"spotify",id:"sp-1",name:"Afrobeats Focus",url:"https://open.spotify.com/playlist/sp-1",curatorName:"Owner One",playlistType:null,trackCount:30,genreMatches:["Afrobeats"],moodMatches:["Energetic"],moodSource:"TIDAL catalogue sonic profile",matchBasis:["Primary genre match: Afrobeats","Mood tag match: Energetic"],containsIsrc:null,retrievedAt:"2026-11-19T12:00:00.000Z"},
+        {provider:"apple_music",id:"am-1",name:"Afrobeats Radio",url:"https://music.apple.com/ng/playlist/afrobeats-radio/pl.am-1",curatorName:"Apple Music",playlistType:"editorial",trackCount:50,genreMatches:["Afrobeats"],moodMatches:["Energetic"],moodSource:"TIDAL catalogue sonic profile",matchBasis:["Primary genre match: Afrobeats","Mood tag match: Energetic"],containsIsrc:false,retrievedAt:"2026-11-19T12:00:00.000Z"}
+      ]
+    }};
+    const report=planAuditReportPages(input,"full").flatMap(page=>page.text).join(" ");
+    expect(report).toContain("SPOTIFY PLAYLIST RESULTS");
+    expect(report).toContain("APPLE MUSIC PLAYLIST RESULTS");
+    expect(report).toContain("AVAILABLE PLAYLIST 1: Afrobeats Focus - Spotify");
+    expect(report).toContain("AVAILABLE PLAYLIST 1: Afrobeats Radio - Apple Music");
+    expect(report).toContain("Mood evidence source: TIDAL catalogue sonic profile");
+    expect(report).toContain("Mood search tags: Energetic");
+    expect(report).toContain("not an audio-derived mood measurement");
+    expect(report.indexOf("SPOTIFY PLAYLIST RESULTS")).toBeLessThan(report.indexOf("APPLE MUSIC PLAYLIST RESULTS"));
+  });
+
 });

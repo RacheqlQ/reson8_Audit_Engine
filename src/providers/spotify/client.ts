@@ -20,6 +20,7 @@ interface SpotifyErrorPayload {
 export interface SpotifyApiClient {
   getTrack(trackId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
   getTrackByIsrc(isrc: string, signal?: AbortSignal): Promise<Record<string, unknown> | null>;
+  searchPlaylists?(query: string, signal?: AbortSignal): Promise<Array<Record<string, unknown>>>;
   getArtist(artistId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
   getAlbum?(albumId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
 }
@@ -32,6 +33,7 @@ export class SpotifyClient implements SpotifyApiClient {
     private readonly clientId = process.env.SPOTIFY_CLIENT_ID,
     private readonly clientSecret = process.env.SPOTIFY_CLIENT_SECRET,
     private readonly market = process.env.SPOTIFY_MARKET ?? "US",
+    private readonly playlistMarket = process.env.SPOTIFY_PLAYLIST_MARKET ?? "NG",
   ) {
     if (!clientId || !clientSecret) {
       throw new Error("Spotify client credentials are required");
@@ -217,6 +219,21 @@ export class SpotifyClient implements SpotifyApiClient {
     );
 
     return payload.tracks?.items?.[0] ?? null;
+  }
+
+  async searchPlaylists(query: string, signal?: AbortSignal): Promise<Array<Record<string, unknown>>> {
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) return [];
+    const params = new URLSearchParams({
+      q: normalizedQuery,
+      type: "playlist",
+      market: this.playlistMarket,
+      limit: "10",
+    });
+    const payload = await this.spotifyRequest<{
+      playlists?: { items?: Array<Record<string, unknown>> | null };
+    }>(`https://api.spotify.com/v1/search?${params.toString()}`, {}, signal);
+    return (payload.playlists?.items ?? []).filter((item) => Boolean(item && typeof item === "object"));
   }
 
   async getArtist(artistId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {

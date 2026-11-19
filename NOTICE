@@ -7,8 +7,8 @@ Operationally authorized integrations (subject to credentials and source-specifi
 - Google Gemini API: https://ai.google.dev/gemini-api/terms
 - Ollama Cloud: https://ollama.com/terms
 - AudD: https://audd.io/terms/
-- Spotify: https://developer.spotify.com/terms
-- Apple Music / iTunes lookup: https://developer.apple.com/musickit/
+- Spotify catalogue and public playlist search: https://developer.spotify.com/terms (Spotify search content is never passed to an AI model; report display includes the Spotify icon and direct playlist link)
+- Apple Music / iTunes lookup and optional playlist catalogue search: https://developer.apple.com/musickit/
 - YouTube Music oEmbed: https://developers.google.com/youtube/terms/api-services-terms-of-service
 - TIDAL: https://developer.tidal.com/
 - Audiomack official Data API: https://api.audiomack.com/

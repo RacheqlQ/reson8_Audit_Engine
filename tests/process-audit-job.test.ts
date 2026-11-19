@@ -42,7 +42,9 @@ describe("processAuditJob", () => {
   it("persists Sonic DNA before reconciliation, then assesses and completes a queued master", async () => {
     const events: string[] = [];
     let failureMessage = "";
+    let failureCode = "";
     let reconciledIdentity: unknown = null;
+    let persistedDna: Record<string, unknown> | null = null;
     const result = await processAuditJob("job-123", {
       getJob: async () => ({
         id: "job-123",
@@ -87,6 +89,7 @@ describe("processAuditJob", () => {
         return analyzeVocalStem([vocal], [mix], sampleRate);
       },
       saveSonicDna: async (_jobId, _claimToken, dna) => {
+        persistedDna = dna as unknown as Record<string, unknown>;
         const hasVocalResult = (dna.vocalFeatures as { status?: string }).status === "analyzed";
         events.push(hasVocalResult ? "dna-final" : "dna-base");
         if (hasVocalResult) {
@@ -96,12 +99,16 @@ describe("processAuditJob", () => {
         expect(dna.channels).toBe(2);
         expect(dna.durationSeconds).toBe(4 / 44100);
       },
+      discoverPlaylists: async (input) => { events.push("playlist-discovery"); expect(input.isrc).toBe("NGABC2600001"); return { status: "available" as const, outcomes: [{ provider: "apple_music" as const, status: "available" as const, reason: "Deterministic test provider result." }], candidates: [{ provider: "apple_music" as const, id: "pl-test", name: "Afrobeats Discovery", url: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", sourceUrl: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", curatorName: "Apple Music", playlistType: "editorial", description: "Afrobeats selections", trackCount: 20, genreMatches: ["Afrobeats"], moodMatches: [], matchBasis: ["Primary genre match: Afrobeats"], containsIsrc: false, retrievedAt: "2026-11-19T12:00:00.000Z" }] }; },
       generateAssessment: async (input) => {
         events.push("assessment");
         expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
+        expect(input.sonicDna).toHaveProperty("keySegmentAgreement", persistedDna?.keySegmentAgreement);
+        expect(input.sonicDna).toHaveProperty("keyTuningCents", persistedDna?.keyTuningCents);
+        expect(input.evidence).not.toHaveProperty("playlistDiscovery");
         expect(input.evidence).toMatchObject({
           auditType: "MASTER-BASED AUDIT",
-          metadataSourcesChecked: ["id3", "filename", "audd"],
+          metadataSourcesChecked: ["musicbrainz", "id3", "filename", "audd"],
           artist: "Embedded Artist",
           title: "Embedded Title",
           album: "Embedded Album",
@@ -112,6 +119,7 @@ describe("processAuditJob", () => {
       },
       saveAssessment: async () => events.push("assessment-saved"),
       generateReport: async (_input, tier) => {
+        expect((_input.evidence as Record<string, unknown>).playlistDiscovery).toMatchObject({ status: "available", candidates: [{ name: "Afrobeats Discovery", provider: "apple_music" }] });
         events.push(`report-${tier}`);
         return new Uint8Array([37, 80, 68, 70, 45]);
       },
@@ -121,10 +129,10 @@ describe("processAuditJob", () => {
         events.push(`report-saved-${tier}`);
       },
       markCompleted: async () => events.push("completed"),
-      markFailed: async (_jobId, _claimToken, message) => { failureMessage = message; events.push("failed"); },
+      markFailed: async (_jobId, _claimToken, message, _signal, errorCode) => { failureMessage = message; failureCode = errorCode ?? ""; events.push("failed"); },
     });
 
-    expect(result.status, failureMessage + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity)).toBe("completed");
+    expect(result.status, failureMessage + " | code: " + failureCode + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity)).toBe("completed");
     expect(events).toEqual([
       "processing",
       "dna-base",
@@ -134,6 +142,7 @@ describe("processAuditJob", () => {
       "evidence",
       "assessment",
       "assessment-saved",
+      "playlist-discovery",
       "report-sample",
       "report-saved-sample",
       "report-full",

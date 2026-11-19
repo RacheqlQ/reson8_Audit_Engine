@@ -1,4 +1,4 @@
-import { findGenre, findScene, GENRE_TAXONOMY_VERSION, type GenreDefinition } from "./taxonomy.js";
+import { adjacentGenresFor, findGenre, findScene, GENRE_TAXONOMY_VERSION, type GenreDefinition } from "./taxonomy.js";
 import type { GenreModelResult } from "./model.js";
 
 export interface ProviderGenreTags {
@@ -17,6 +17,7 @@ export interface GenreFusionResult {
   taxonomyVersion: string;
   method: "weighted_provider_evidence_with_limited_tempo_prior";
   primaryGenre: string | null;
+  adjacentLanes: string[];
   genres: GenreCandidate[];
   confidence: number;
   abstained: boolean;
@@ -124,6 +125,7 @@ export function fuseGenreEvidence(input: GenreFusionInput): GenreFusionResult {
     taxonomyVersion: GENRE_TAXONOMY_VERSION,
     method: "weighted_provider_evidence_with_limited_tempo_prior",
     primaryGenre: abstained ? null : first.label,
+    adjacentLanes: abstained ? [] : adjacentGenresFor(first.label),
     genres: candidates.filter((candidate) => candidate.confidence >= 0.2).slice(0, 8),
     confidence: abstained ? first?.confidence ?? 0 : first.confidence,
     abstained,

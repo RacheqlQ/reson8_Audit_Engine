@@ -67,7 +67,8 @@ describe("Phillo evidence guardrails", () => {
       genreClassification: { primaryGenre: "Afrobeats", abstained: false },
     });
     expect(result.commercialRead.marketability).toBe("undetermined");
-    expect(result.commercialRead.rationale).toContain("No verified, source-attributed commercial-performance metrics");
+    expect(result.commercialRead.rationale).toContain("ISRC-linked catalogue evidence");
+    expect(result.commercialRead.rationale).toContain("verified DSP analytics for a defined reporting period");
   });
 
   it("reconciles present-but-conflicting album metadata instead of calling it missing", () => {
@@ -86,7 +87,7 @@ describe("Phillo evidence guardrails", () => {
       reconciliation: { conflicts: [{ field: "album", values: ["Hole-Hearted - EP", "Hole-Hearted"] }] },
     });
     expect(result.scorecard.metadataCompleteness.score).toBeNull();
-    expect(result.scorecard.metadataCompleteness.rationale).toContain("present but conflicting");
+    expect(result.scorecard.metadataCompleteness.rationale).toContain("album conflict is documented");
     expect(result.evidenceGaps.join(" ")).toContain("Album metadata is present but conflicting");
     expect(JSON.stringify(result)).not.toMatch(/album (?:title )?(?:is )?(?:missing|unavailable)/i);
   });
@@ -139,7 +140,7 @@ describe("Phillo evidence guardrails", () => {
       genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop" }] },
     });
     expect(result.aAndRPositioning.primaryLane).toBe("Pop");
-    expect(result.aAndRPositioning.adjacentLanes).toEqual([]);
+    expect(result.aAndRPositioning.adjacentLanes).toEqual(["R&B", "Hip-Hop", "House"]);
   });
 
   it("nulls tempo-derived scores and removes unsupported tempo claims when confidence is zero", () => {
@@ -152,7 +153,7 @@ describe("Phillo evidence guardrails", () => {
     });
     expect(result.scorecard.tempoLaneFit.score).toBeNull();
     expect(result.scorecard.rhythmicConsistency.score).toBeNull();
-    expect(result.risks).toContain("Tempo and groove consistency require review.");
+    expect(result.risks).not.toContain("Tempo and groove consistency require review.");
     expect(JSON.stringify(result)).not.toMatch(/156\s*BPM|high-energy|fast tempo|tempo confirms/i);
     expect(result.aAndRPositioning.primaryLane).toContain("Unconfirmed");
     expect(result.aAndRPositioning.adjacentLanes).toEqual([]);
@@ -165,7 +166,7 @@ describe("Phillo evidence guardrails", () => {
       tempoConfidence: 0.82,
       genreClassification: { primaryGenre: "Afrobeats", abstained: false },
     });
-    expect(result.scorecard.tempoLaneFit.score).toBe(80);
+    expect(result.scorecard.tempoLaneFit.score).toBe(100);
     expect(result.aAndRPositioning.primaryLane).toBe("Afrobeats");
   });
 
@@ -362,4 +363,23 @@ describe("Phillo evidence guardrails", () => {
     expect(result.strengths).toEqual([]);
   });
 
+});
+ 
+describe("deterministic evidence scorecard",()=>{
+ it("scores source-backed metadata completeness and discounts conflicting identity fields",()=>{
+  const result=sanitizeAssessmentForEvidence(baseAssessment,{
+   provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.16,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,
+   rhythmFeatures:{beatGridStatus:"tentative",beatTimesSeconds:Array.from({length:32},(_,index)=>index*0.36)},
+   genreClassification:{primaryGenre:"Pop",abstained:false,genres:[{id:"pop",label:"Pop",confidence:0.9,sources:["apple_music"]}],adjacentLanes:["R&B","Hip-Hop","House"]},
+  },{
+   artist:"Artist",title:"Track",album:"Album",isrc:"USABC1234567",label:"Label",releaseDate:"2025-01-01",genre:"Pop",
+   fieldProvenance:{artist:"tidal",title:"apple_music",album:"tidal",isrc:"musicbrainz",label:"tidal",releaseDate:"apple_music",genre:"apple_music"},
+   reconciliation:{conflicts:[{field:"artist",values:["Artist","Artist & Orchestra"]},{field:"title",values:["Track","Track (Video)"]}]},
+  });
+  expect(result.scorecard.metadataCompleteness.score).toBe(75);
+  expect(result.scorecard.tempoLaneFit.score).toBeNull();
+  expect(result.scorecard.rhythmicConsistency.score).toBeNull();
+  expect(result.scorecard.releaseReadiness.score).toBeNull();
+  expect(result.scorecard.tempoLaneFit.rationale).not.toBe(result.scorecard.rhythmicConsistency.rationale);
+ });
 });
