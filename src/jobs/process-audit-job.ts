@@ -576,7 +576,7 @@ export async function processAuditJob(
     }
 
     let isrcLookup: IsrcCatalogLookup | null = null;
-    const isrcCandidate = (recognition.matched ? recognition.isrc : null) ?? metadataSources.find((source) => source.isrc)?.isrc ?? reconciliation.identity.isrc ?? null;
+    const isrcCandidate = (recognition.matched ? recognition.isrc : null) ?? metadataSources.find((source) => source.isrc)?.isrc ?? masterTags?.isrc ?? null;
     let normalizedIsrc: string | null = null;
     if (isrcCandidate) {
       try { normalizedIsrc = normalizeIsrc(isrcCandidate); }
