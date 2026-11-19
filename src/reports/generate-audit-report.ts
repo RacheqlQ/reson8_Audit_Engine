@@ -236,14 +236,23 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  const keyReliable=hasAudio&&isReliableKey(s);
  const tempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
  const tempoConfidence=typeof s?.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)?s.tempoConfidence:null;
+ const rhythm=s?.rhythmFeatures&&typeof s.rhythmFeatures==="object"?s.rhythmFeatures as Record<string,unknown>:{};
+ const tempoScores=Array.isArray(rhythm.candidateScores)?rhythm.candidateScores.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
+ const leadingTempoScore=tempoScores.find((item)=>item.bpm===tempoCandidate);
+ const tempoReason=text(rhythm.abstentionReason);
+ const beatTimes=Array.isArray(rhythm.beatTimesSeconds)?rhythm.beatTimesSeconds:[];
  const harmonic=s?.harmonicFeatures&&typeof s.harmonicFeatures==="object"?s.harmonicFeatures as Record<string,unknown>:{};
  const keyCandidates=Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")).slice(0,3).map((item)=>[text(item.key),text(item.mode),typeof item.score==="number"?"score "+item.score.toFixed(3):""].filter(Boolean).join(" ")).join("; "):"";
  return [
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
-  {label:"TEMPO CANDIDATE BPM",value:!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" (provisional; prominence diagnostic "+(tempoConfidence===null?"not available":tempoConfidence.toFixed(2))+")":null},
+  {label:"TEMPO CANDIDATE BPM",value:!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" (provisional; prominence diagnostic "+(tempoConfidence===null?"not available":tempoConfidence.toFixed(2))+(leadingTempoScore&&typeof leadingTempoScore.score==="number"?"; candidate score "+leadingTempoScore.score.toFixed(3):"")+")":null},
+  {label:"TEMPO CANDIDATE REASON",value:!tempoReliable&&tempoCandidate!==null?(tempoReason||"Candidate did not pass the tempo reliability gate."):null},
+  {label:"BEAT GRID STATUS",value:beatTimes.length?String(rhythm.beatGridStatus||"provisional")+" (candidate; not independently validated)":"Not established"},
+  {label:"BEAT TIMESTAMP COUNT",value:beatTimes.length?String(beatTimes.length)+" generated timestamps; count is not a reliability measure":"No beat timestamps generated"},
   {label:"KEY / MODE",value:keyReliable?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
   {label:"KEY / MODE CANDIDATES",value:!keyReliable&&keyCandidates?keyCandidates:null},
-  {label:"TUNING OFFSET CENTS",value:isReliableTuning(s)?metric(s?.keyTuningCents,0):null},
+  {label:"KEY CANDIDATE REASON",value:!keyReliable?text(harmonic.limitation)||"Key and mode did not pass the reliability gate.":null},
+  {label:"TUNING OFFSET CANDIDATE CENTS",value:hasMultipleTuningWindows(s)?metric(s?.keyTuningCents,0)+" (multiple tonal windows; provisional)":null},
   {label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},
   {label:"LOUDNESS RANGE LRA",value:hasAudio?metric(s?.loudnessRangeLu,1):null},
   {label:"TRUE PEAK dBFS",value:hasAudio?metric(s?.truePeakDbfs,1):null},
