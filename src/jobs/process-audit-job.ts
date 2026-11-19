@@ -576,7 +576,7 @@ export async function processAuditJob(
           vocalFeatures = unavailableVocalAnalysis(error instanceof Error ? error.message : "Vocal analysis did not complete.");
         }
       } else {
-        vocalFeatures = unavailableVocalAnalysis("Vocal separation is not configured in this worker build.");
+        vocalFeatures = unavailableVocalAnalysis("Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.");
       }
       masterDna = {
         ...masterDna,
