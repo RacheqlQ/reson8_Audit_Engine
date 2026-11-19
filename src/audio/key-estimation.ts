@@ -17,6 +17,8 @@ export interface KeyEstimate {
   analysisWindows: number;
   fftButterflyCount: number;
   segmentChroma: KeySegmentDiagnostic[];
+  topCandidates: Array<{ key: string; mode: Mode; score: number }>;
+  tuningEvidenceWindows: number;
   limitation: string | null;
 }
 
@@ -278,7 +280,7 @@ function emptyEstimate(limitation: string): KeyEstimate {
   return {
     key: null, mode: null, confidence: null, tuningCents: null,
     segmentAgreement: null, method: "fft_harmonic_chroma_ensemble",
-    analysisWindows: 0, fftButterflyCount: 0, segmentChroma: [], limitation,
+    analysisWindows: 0, fftButterflyCount: 0, segmentChroma: [], topCandidates: [], tuningEvidenceWindows: 0, limitation,
   };
 }
 
@@ -335,6 +337,9 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   const ranked = rankCandidates(normalizedAggregate);
   const best = ranked[0];
   const second = ranked[1];
+  const topCandidates = ranked.slice(0, 5).map((candidate) => ({
+    key: NOTES[candidate.key], mode: candidate.mode, score: Number(candidate.score.toFixed(6)),
+  }));
   const agreement = segmentWinners.filter((winner) => winner.key === best.key && winner.mode === best.mode).length / segmentWinners.length;
   const margin = best.score - second.score;
   const confidence = clamp((margin * 2.5 + 0.08) * (0.35 + 0.65 * agreement));
@@ -344,19 +349,19 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      fftButterflyCount, segmentChroma, limitation: "Key estimates varied across audio segments; no single key is asserted.",
+      fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, limitation: "Key estimates varied across audio segments; no single key is asserted.",
     };
   }
   if (confidence < 0.12 || margin < 0.015) {
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      fftButterflyCount, segmentChroma, limitation: "Key and mode confidence was below threshold; no key is asserted.",
+      fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, limitation: "Key and mode confidence was below threshold; no key is asserted.",
     };
   }
   return {
     key: NOTES[best.key], mode: best.mode, confidence, tuningCents,
     segmentAgreement: agreement, method: "fft_harmonic_chroma_ensemble",
-    analysisWindows: segmentProfiles.length, fftButterflyCount, segmentChroma, limitation: null,
+    analysisWindows: segmentProfiles.length, fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, limitation: null,
   };
 }
