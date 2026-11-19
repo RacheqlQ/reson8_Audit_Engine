@@ -39,6 +39,7 @@ describe("multi-DSP audit processing", () => {
         workerId: "multi-dsp-test",
       }),
       markProcessing: async () => {},
+      collectIsrcCatalogMetadata: async (isrc) => ({ isrc, metadata: [], outcomes: [{ provider: "musicbrainz", status: "partial", reason: "No fixture match; external lookup intentionally mocked." }] }),
       collectCatalogMetadata: async (url) => {
         collected.push(url);
         const platform = url.includes("spotify") ? "spotify"
