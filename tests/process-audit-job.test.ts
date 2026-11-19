@@ -86,8 +86,11 @@ describe("processAuditJob", () => {
         return analyzeVocalStem([vocal], [mix], sampleRate);
       },
       saveSonicDna: async (_jobId, _claimToken, dna) => {
-        events.push("dna");
-        expect(dna.vocalFeatures).toMatchObject({ status: "analyzed", voicePresence: "likely_present" });
+        const hasVocalResult = (dna.vocalFeatures as { status?: string }).status === "analyzed";
+        events.push(hasVocalResult ? "dna-final" : "dna-base");
+        if (hasVocalResult) {
+          expect(dna.vocalFeatures).toMatchObject({ status: "analyzed", voicePresence: "likely_present" });
+        }
         expect(dna.sampleRate).toBe(44100);
         expect(dna.channels).toBe(2);
         expect(dna.durationSeconds).toBe(4 / 44100);
@@ -124,8 +127,9 @@ describe("processAuditJob", () => {
     expect(events).toEqual([
       "processing",
       "recognition",
+      "dna-base",
       "vocal-analysis",
-      "dna",
+      "dna-final",
       "evidence",
       "assessment",
       "assessment-saved",
