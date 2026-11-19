@@ -350,7 +350,7 @@ function sections(i:AuditReportInput):Section[]{
   return [
    "AVAILABLE PLAYLIST "+(index+1)+": "+name+" - "+provider,
    "Alignment: "+(basis.join("; ")||"No match rationale supplied"),
-   "Playlist owner / curator: "+(text(target.curatorName)||"Not supplied")+"; playlist type: "+(text(target.playlistType)||"Not supplied")+"; track count: "+text(target.trackCount,"Not supplied"),
+   "Playlist owner / curator: "+(text(target.curatorName)||"Not supplied")+"; playlist type: "+(text(target.playlistType)||"Not supplied")+"; track count: "+(text(target.trackCount)||"Not supplied"),
    presence,
    ...(Array.isArray(target.moodMatches)&&target.moodMatches.length?["Mood evidence source: "+(text(target.moodSource)||"source not supplied")]:[]),
    "Playlist source: "+url+"; checked: "+(text(target.retrievedAt)||"retrieval time not supplied")
