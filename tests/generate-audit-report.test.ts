@@ -413,3 +413,39 @@ describe("Sonic DNA provisional candidate reporting", () => {
     expect(rows.find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS")?.value).toBe("18 (multiple tonal windows; provisional)");
   });
 });
+
+describe("Phase 1 real-master report contract",()=>{
+ it("renders source identity, measured values, unavailable diagnostics and calibration abstention",()=>{
+  const input=structuredClone(fullAudioFixture) as AuditReportInput;
+  input.executionMode="master";
+  input.realMasterContract={
+   schemaVersion:"1.0.0",auditId:"audit-real-1",
+   source:{sourceKind:"uploaded_master",sourceAudioPath:"jobs/audit-real-1/master.wav",sha256:"a".repeat(64),mimeType:"audio/wav",byteLength:4096},
+   directSignalMeasurements:[
+    {name:"tempo_bpm",status:"measured",value:96,unit:"BPM",method:"transient_autocorrelation",measuredAt:"2026-11-19T12:00:00.000Z",diagnostics:[]},
+    {name:"true_peak_dbfs",status:"unavailable",value:null,unit:"dBFS",method:"decoder_true_peak",diagnostics:[{code:"DECODER_METRIC_MISSING",message:"The decoder did not return a true-peak measurement.",retryable:false}]},
+   ],
+   calibratedPredictions:[{name:"audio_mood",status:"unavailable",label:null,probability:null,reasonCodes:["VALIDATED_MODEL_NOT_CONFIGURED"],diagnostics:[{code:"VALIDATED_MODEL_NOT_CONFIGURED",message:"No calibrated mood model is configured.",retryable:false}]}],
+   externalRecords:[],
+   strategicSynthesis:[{claim:"Tempo was measured from the uploaded master.",evidenceRefs:["signal:tempo_bpm"],evidenceClass:"OBSERVED",limitations:[]}],
+   pipelineDiagnostics:[],
+  };
+  const pages=planAuditReportPages(input,"full");
+  const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("Master evidence contract and provenance");
+  expect(report).toContain("SOURCE SHA-256: "+"a".repeat(64));
+  expect(report).toContain("tempo_bpm: 96 BPM; method transient_autocorrelation");
+  expect(report).toContain("true_peak_dbfs: UNAVAILABLE; DECODER_METRIC_MISSING");
+  expect(report).toContain("audio_mood: UNAVAILABLE; VALIDATED_MODEL_NOT_CONFIGURED");
+  expect(report).toContain("Provenance rule: direct signal measurements are observed from the uploaded master");
+ });
+ it("labels DSP-link-only reports as metadata-only and never claims master measurements",()=>{
+  const input=structuredClone(metadataOnlyFixture) as AuditReportInput;
+  input.executionMode="dsp_link";
+  input.realMasterContract=undefined;
+  const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
+  expect(report).toContain("AUDIT EXECUTION MODE: METADATA-ONLY — no uploaded master was analysed");
+  expect(report).toContain("No uploaded master was supplied; tempo, key/mode, loudness and spectral measurements require the recording itself.");
+  expect(report).not.toContain("SOURCE SHA-256:");
+ });
+});
