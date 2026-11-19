@@ -126,8 +126,8 @@ describe("processAuditJob", () => {
     expect(result.status, failureMessage + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity)).toBe("completed");
     expect(events).toEqual([
       "processing",
-      "recognition",
       "dna-base",
+      "recognition",
       "vocal-analysis",
       "dna-final",
       "evidence",
@@ -307,8 +307,10 @@ describe("processAuditJob", () => {
     expect(events).toContain("recognition-saved");
     expect(events).toContain("evidence-saved");
     expect(events).toContain("sonic-dna-saved");
-    expect(events.indexOf("recognition-saved")).toBeLessThan(events.indexOf("sonic-dna-saved"));
-    expect(events.indexOf("sonic-dna-saved")).toBeLessThan(events.indexOf("evidence-saved"));
+    // The master measurement is persisted immediately after analysis, before
+    // recognition/reconciliation; the enriched DNA write may follow recognition.
+    expect(events.indexOf("sonic-dna-saved")).toBeLessThan(events.indexOf("recognition-saved"));
+    expect(events.indexOf("recognition-saved")).toBeLessThan(events.indexOf("evidence-saved"));
     expect(events.indexOf("evidence-saved")).toBeLessThan(events.indexOf("audit_failed"));
     expect(events).toContain("audit_failed");
     expect(events).not.toContain("assessment-saved");
