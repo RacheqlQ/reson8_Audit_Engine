@@ -238,19 +238,36 @@ export async function discoverPlaylistCandidates(
         const name = clean(attributes.name);
         if (!name) continue;
         const url = playlistUrl("apple_music", id, attributes.url);
-        const tracksPayload = await appleRequest("https://api.music.apple.com/v1/catalog/" + storefront + "/playlists/" + encodeURIComponent(id) + "/tracks?limit=100", appleToken, fetcher, signal);
-        const tracks = Array.isArray(tracksPayload.data) ? tracksPayload.data as Array<Record<string, unknown>> : [];
+        const tracks: Array<Record<string, unknown>> = [];
+        let nextUrl: string | null = "https://api.music.apple.com/v1/catalog/" + storefront + "/playlists/" + encodeURIComponent(id) + "/tracks?limit=100";
+        let totalTracks: number | null = null;
+        for (let page = 0; nextUrl && page < 3; page++) {
+          const tracksPayload = await appleRequest(nextUrl, appleToken, fetcher, signal);
+          const pageTracks = Array.isArray(tracksPayload.data) ? tracksPayload.data as Array<Record<string, unknown>> : [];
+          tracks.push(...pageTracks);
+          const meta = tracksPayload.meta && typeof tracksPayload.meta === "object" ? tracksPayload.meta as Record<string, unknown> : {};
+          if (typeof meta.total === "number" && Number.isFinite(meta.total)) totalTracks = meta.total;
+          nextUrl = clean(tracksPayload.next) || null;
+          const isrc = input.isrc?.replace(/[\s-]/g, "").toUpperCase() ?? "";
+          if (isrc && tracks.some((track) => {
+            const trackAttributes = track.attributes && typeof track.attributes === "object" ? track.attributes as Record<string, unknown> : {};
+            return clean(trackAttributes.isrc).replace(/[\s-]/g, "").toUpperCase() === isrc;
+          })) {
+            nextUrl = null;
+            break;
+          }
+        }
         const trackGenres = tracks.flatMap((track) => {
           const trackAttributes = track.attributes && typeof track.attributes === "object" ? track.attributes as Record<string, unknown> : {};
           return Array.isArray(trackAttributes.genreNames) ? trackAttributes.genreNames.filter((value): value is string => typeof value === "string") : [];
         });
         const isrc = input.isrc?.replace(/[\s-]/g, "").toUpperCase() ?? "";
-        const containsIsrc = isrc
-          ? tracks.some((track) => {
-              const trackAttributes = track.attributes && typeof track.attributes === "object" ? track.attributes as Record<string, unknown> : {};
-              return clean(trackAttributes.isrc).replace(/[\s-]/g, "").toUpperCase() === isrc;
-            })
-          : null;
+        const isrcPresent = isrc && tracks.some((track) => {
+          const trackAttributes = track.attributes && typeof track.attributes === "object" ? track.attributes as Record<string, unknown> : {};
+          return clean(trackAttributes.isrc).replace(/[\s-]/g, "").toUpperCase() === isrc;
+        });
+        const membershipComplete = !nextUrl;
+        const containsIsrc = isrc ? (isrcPresent ? true : membershipComplete ? false : null) : null;
         const candidate = makeCandidate({
           provider: "apple_music",
           id,
@@ -261,7 +278,7 @@ export async function discoverPlaylistCandidates(
           description: attributes.description && typeof attributes.description === "object"
             ? clean((attributes.description as Record<string, unknown>).standard)
             : null,
-          trackCount: typeof playlistsCount(attributes) === "number" ? playlistsCount(attributes) : tracks.length,
+          trackCount: playlistsCount(attributes) ?? totalTracks,
           trackGenres,
           containsIsrc,
           lanes,
@@ -283,10 +300,7 @@ export async function discoverPlaylistCandidates(
     outcomes.push({ provider: "apple_music", status: "not_configured", reason: "Apple Music developer token is not configured." });
   }
 
-  const ordered = [...candidates.values()].sort((a, b) => {
-    if (a.containsIsrc !== b.containsIsrc) return a.containsIsrc === true ? -1 : b.containsIsrc === true ? 1 : 0;
-    return b.matchBasis.length - a.matchBasis.length || a.name.localeCompare(b.name);
-  });
+  const ordered = [...candidates.values()];
   const configured = outcomes.some((outcome) => outcome.status !== "not_configured");
   const status = ordered.length
     ? outcomes.some((outcome) => outcome.status === "unavailable") ? "partial" : "available"
