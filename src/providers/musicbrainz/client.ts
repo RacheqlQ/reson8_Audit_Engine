@@ -14,7 +14,15 @@ export interface MusicBrainzRecordingEvidence {
 }
 
 const API_BASE = "https://musicbrainz.org/ws/2";
-const USER_AGENT = "Reson8AuditEngine/1.0 (https://reson8-audit-engine.onrender.com)";
+const DEFAULT_CONTACT = "https://reson8-audit-engine.onrender.com";
+
+function musicBrainzUserAgent(): string {
+  const configuredContact = process.env.MUSICBRAINZ_CONTACT?.trim();
+  const contact = configuredContact && !/[\\r\\n]/.test(configuredContact)
+    ? configuredContact
+    : DEFAULT_CONTACT;
+  return `Reson8AuditEngine/1.0 (${contact})`;
+}
 const ISRC_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/;
 
 let requestQueue: Promise<void> = Promise.resolve();
@@ -122,7 +130,7 @@ export class MusicBrainzClient {
     const response = await fetch(url, {
       headers: {
         Accept: "application/json",
-        "User-Agent": USER_AGENT,
+        "User-Agent": musicBrainzUserAgent(),
       },
       signal,
       redirect: "error",
