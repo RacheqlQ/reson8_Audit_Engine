@@ -148,14 +148,13 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
   .filter((item,index,items)=>items.indexOf(item)===index)
   .slice(0,2)
   .map((item)=>item.length>150?item.slice(0,147)+"...":item);
- const nextAction=typeof safeAssessment.releaseStrategy?.recommendation==="string"&&safeAssessment.releaseStrategy.recommendation.trim()
-  ?safeAssessment.releaseStrategy.recommendation
-  :"Resolve the highest-priority identity, rights and measurement gaps before external pitching.";
+ const safeSummary=val(safeAssessment.executiveSummary,"Further listening and source verification are required.");
+ const nextAction="Reconcile source-specific identity and rights fields, review the submitted master, and document unavailable analysis before external pitching.";
  return {
   heading:"DECISION CONTEXT",
   verdict:coverVerdictLabel(input).toUpperCase(),
   summary:[
-   "Decision basis: "+val(safeAssessment.commercialRead?.rationale,"Commercial evidence remains insufficient for a release verdict."),
+   "Decision basis: "+safeSummary,
    "Open diligence: "+(openItems.join(" ")||"No additional diligence items were recorded."),
    "Next action: "+nextAction,
   ].join(" "),
