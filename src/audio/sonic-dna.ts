@@ -244,7 +244,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
   harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:key.method,tuningCents:key.tuningCents,segmentAgreement:key.segmentAgreement,analysisWindows:key.analysisWindows,fftButterflyCount:key.fftButterflyCount,segmentChroma:key.segmentChroma,topCandidates:key.topCandidates,tuningEvidenceWindows:key.tuningEvidenceWindows,limitation:key.limitation},
   vocalFeatures:{...vocalDiagnostics},
   bpm:tempo.bpm,tempoCandidateBpm:tempo.topCandidateBpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
-  key:key.key,mode:key.mode,keyConfidence:key.confidence,keyTuningCents:key.tuningCents,keySegmentAgreement:key.segmentAgreement,keyAnalysisFftButterflyCount:key.fftButterflyCount,limitations,
+  key:key.key,mode:key.mode,keyConfidence:key.confidence,keyTuningCents:key.tuningCents,keySegmentAgreement:key.segmentAgreement,keyCandidates:key.topCandidates,tuningEvidenceWindows:key.tuningEvidenceWindows,keyAnalysisFftButterflyCount:key.fftButterflyCount,limitations,
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
   dynamicRangeDb:20*Math.log10(p95/p10),spectralCentroidHz:centroid,spectralBandwidthHz:bandwidth,
   spectralRolloffHz:rolloff,zeroCrossingRate:crossings/Math.max(1,a.length-1),
