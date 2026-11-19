@@ -18,7 +18,7 @@ const DEFAULT_CONTACT = "https://reson8-audit-engine.onrender.com";
 
 function musicBrainzUserAgent(): string {
   const configuredContact = process.env.MUSICBRAINZ_CONTACT?.trim();
-  const contact = configuredContact && !/[\\r\\n]/.test(configuredContact)
+  const contact = configuredContact && !/[\r\n]/.test(configuredContact)
     ? configuredContact
     : DEFAULT_CONTACT;
   return `Reson8AuditEngine/1.0 (${contact})`;
