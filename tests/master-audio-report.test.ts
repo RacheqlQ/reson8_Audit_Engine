@@ -152,4 +152,40 @@ describe("uploaded master provenance in reports", () => {
     expect(report).not.toContain("Vocal analysis: Performed");
   });
 
+  it("states mood and musical-context availability separately from signal descriptors", () => {
+    const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      moodTags: ["Moderate RMS level", "Elevated zero-crossing rate"],
+      genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop", sources: ["apple_music"] }], model: { status: "disabled" } },
+    };
+    const report = planAuditReportPages(input, "sample")
+      .flatMap((section) => [section.title, ...section.text])
+      .join(" ");
+    expect(report).toContain("Mood classification: Not performed");
+    expect(report).toContain("signal descriptors are not a mood classification");
+    expect(report).toContain("Musical context: provider/catalog evidence");
+  });
+
+  it("does not repeat RMS-envelope spread as a mastering dynamic-range verdict", () => {
+    const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      loudnessRangeLu: 10.8,
+      dynamicRangeDb: 22.36,
+    };
+    input.assessment.strengths = [
+      ...input.assessment.strengths,
+      "Healthy measured dynamic range of 22.36 dB provides excellent transient preservation.",
+    ];
+    const report = planAuditReportPages(input, "sample")
+      .flatMap((section) => [section.title, ...section.text])
+      .join(" ");
+    expect(report).toContain("RMS envelope spread (p95/p10; internal proxy): 22.4 dB");
+    expect(report).toContain("Loudness range (EBU R128 LRA): 10.8 LU");
+    expect(report).not.toMatch(/healthy measured dynamic range of 22\.36 dB/i);
+  });
+
 });
