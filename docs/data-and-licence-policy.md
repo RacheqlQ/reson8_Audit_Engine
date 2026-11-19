@@ -46,9 +46,9 @@
 
 Registry authorization removes policy-based blocking; it does not create a client, install a dependency, or prove that a third-party service is configured.
 
-**Implemented and callable in this Node service when credentials/configuration are present:** Groq, Gemini, Ollama Cloud, AudD, Spotify, Apple/iTunes lookup, YouTube Music oEmbed, TIDAL, Audiomack official Data API and Deezer public track metadata.
+**Implemented and callable in this Node service when credentials/configuration are present:** Groq, Gemini, Ollama Cloud, AudD, Spotify, Apple/iTunes lookup, YouTube Music oEmbed, TIDAL, Audiomack official Data API, Deezer public track metadata, and MusicBrainz ISRC-to-recording lookup. MusicBrainz public read-only lookup uses a descriptive User-Agent and a one-request-per-second process-wide throttle; it does not use an API key for read-only requests.
 
-**Authorized in the registry but not currently wired as callable integrations/models in this service:** MusicBrainz, ListenBrainz, YouTube Data API, Last.fm, Chartmetric, Soundcharts, Luminate, Beat This!, Essentia, madmom, FMAK and GiantSteps. These are no longer blocked by a policy flag; no API/model call can occur until a real integration or compatible model runtime is implemented. Do not report them as measured or provider-observed until such an integration has actually run. Model and dataset licences and vendor agreements remain conditions of actual use.
+**Authorized in the registry but not currently wired as callable integrations/models in this service:** ListenBrainz, YouTube Data API, Last.fm, Chartmetric, Soundcharts, Luminate, Beat This!, Essentia, madmom, FMAK and GiantSteps. These are no longer blocked by a policy flag; no API/model call can occur until a real integration or compatible model runtime is implemented. Do not report them as measured or provider-observed until such an integration has actually run. Model and dataset licences and vendor agreements remain conditions of actual use.
 
 ## Runtime policy implementation
 
