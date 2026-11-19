@@ -314,7 +314,7 @@ describe("GroqClient section groups",()=>{
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{artist:"Regression Artist",title:"Regression Track"},sonicDna:{provenance:"uploaded_audio_master",bpm:96},catalogMetadata:{apple_music:{title:"Regression Track",isrc:"USAAA2600001"}}});
   expect(evidenceScoreCalls).toBe(4);
-  expect(prompts[1]).toContain("json_validate_failed");
+  expect(prompts[1]).toContain("strict JSON-schema validation failed");
   expect(prompts[1]).toContain("evidenceLabels");
   expect(systemPrompts[0]).toContain("Always include the evidenceLabels array");
   expect(responseFormats).toEqual(["json_schema","json_object","json_object","json_object"]);
