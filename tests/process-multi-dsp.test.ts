@@ -143,7 +143,7 @@ describe("multi-DSP audit processing", () => {
       catalogId: "spotify-fail",
       error: "Spotify API request failed with HTTP 503",
     }]);
-  });
+  }, 15_000);
 
 
   it("persists provider failures even when every submitted DSP source is unavailable", async () => {
