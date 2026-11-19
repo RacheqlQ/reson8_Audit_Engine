@@ -70,21 +70,34 @@ describe("MusicBrainz ISRC catalogue client", () => {
     expect((requestInit.headers as Record<string, string>)["User-Agent"]).toBe("Reson8AuditEngine/1.0 (ops@reson8.example)");
   });
 
-  it("does not treat MusicBrainz credentials or an account ID as commercial-use authorization", async () => {
+  it("enables live MusicBrainz ISRC lookup for evaluation without treating credentials as commercial authorization", async () => {
     vi.stubEnv("MUSICBRAINZ_API_KEY", "present-but-not-an-entitlement");
     vi.stubEnv("MUSICBRAINZ_ID", "account-id-is-not-contact-or-commercial-permission");
     vi.stubEnv("SPOTIFY_CLIENT_ID", "");
     vi.stubEnv("SPOTIFY_CLIENT_SECRET", "");
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      recordings: [{
+        id: "evaluation-recording-id",
+        title: "Evaluation Track",
+        "artist-credit": [{ name: "Evaluation Artist" }],
+        releases: [{ id: "evaluation-release-id", title: "Evaluation EP", date: "2025-01-01" }],
+      }],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    expect(providerDecision("musicbrainz")).toMatchObject({ enabled: false, commercialStatus: "unverified" });
+    expect(providerDecision("musicbrainz")).toMatchObject({ enabled: true, commercialStatus: "unverified" });
     const result = await collectIsrcCatalogMetadata("GBAYE1212345");
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.metadata[0]).toMatchObject({
+      platform: "musicbrainz",
+      artist: "Evaluation Artist",
+      title: "Evaluation Track",
+      isrc: "GBAYE1212345",
+    });
     expect(result.outcomes.find((outcome) => outcome.provider === "musicbrainz")).toMatchObject({
-      status: "unavailable",
-      reason: expect.stringContaining("commercial"),
+      status: "recognized",
+      reason: expect.stringContaining("ISRC recording match"),
     });
   });
 
