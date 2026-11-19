@@ -379,7 +379,7 @@ describe("Phillo evidence guardrails", () => {
 describe("deterministic evidence scorecard",()=>{
  it("scores source-backed metadata completeness and discounts conflicting identity fields",()=>{
   const result=sanitizeAssessmentForEvidence(baseAssessment,{
-   provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.16,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,
+   provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.08,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,
    rhythmFeatures:{beatGridStatus:"tentative",beatTimesSeconds:Array.from({length:32},(_,index)=>index*0.36)},
    genreClassification:{primaryGenre:"Pop",abstained:false,genres:[{id:"pop",label:"Pop",confidence:0.9,sources:["apple_music"]}],adjacentLanes:["R&B","Hip-Hop","House"]},
   },{
