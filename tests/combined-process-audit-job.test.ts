@@ -68,6 +68,9 @@ describe("combined master and DSP processing", () => {
         events.push("generated-"+tier);
         expect(input.evidence).toMatchObject({ sourceCombination: "master_and_dsp", artist: "Master Artist", title: "Master Song" });
         expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master", evidenceClass: "OBSERVED" });
+        expect(input.sonicDna).toHaveProperty("tempoCandidateBpm");
+        expect(input.sonicDna).toHaveProperty("keyCandidates");
+        expect(input.sonicDna).toHaveProperty("tuningEvidenceWindows");
         return new Uint8Array([37,80,68,70,45]);
       },
       saveReport: async (_id, _token, tier, _pdf, reportInput) => { events.push("saved-"+tier); if(tier==="full") expect(reportInput?.evidence).toMatchObject({ sourceCombination: "master_and_dsp" }); },
