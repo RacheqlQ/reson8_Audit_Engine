@@ -164,13 +164,13 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("collapses all missing audio measurements into one empty state without master-derived provenance claims",()=>{
   const report=planAuditReportPages(fixtures[2],"full").flatMap(p=>p.text).join(" ");
-  expect(report).toContain("Not measured: no master audio supplied.");
-  expect(report).toContain("Key / mode: Not measured");
+  expect(report).toContain("No uploaded master was supplied; tempo, key/mode, loudness and spectral measurements require the recording itself.");
+  expect(sonicDashboardRowsForReport(null,false).every(row=>row.value===null)).toBe(true);
   expect(report).not.toContain("Measured from the uploaded master");
   expect(report).not.toContain("fixture.sonicDna.bpm");
   expect(report).toContain("No uploaded audio master or Sonic DNA measurements are supplied");
   expect(report).toContain("Required next input: upload the actual master audio file");
-  expect(report).toContain("Do not infer genre, vocal presence, production quality or mastering readiness from DSP metadata alone");
+  expect(report).toContain("Do not infer genre, production quality or mastering readiness from DSP metadata alone");
  });
  it("builds the A&R Notes decision-context structure used by the generated PDF",()=>{
   const context=buildArNotesDecisionContext(ambiguousAudioFixture as any);
@@ -259,8 +259,8 @@ describe("A4 report layout and fixture coverage",()=>{
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Key / mode: Not determined");
-  expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
+  expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBeNull();
+  expect(report).not.toContain("Key confidence estimator score");
   expect(report).not.toContain("Key / mode: C major");
  });
  it("withholds zero-confidence BPM and tempo-derived A&R assertions from the rendered report",()=>{
@@ -271,9 +271,9 @@ describe("A4 report layout and fixture coverage",()=>{
   input.assessment.aAndRPositioning.adjacentLanes=[];
   const pages=planAuditReportPages(input,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Tempo: Not determined");
+  expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
   expect(report).not.toContain("Tempo confidence score");
-  expect(report).not.toMatch(/128\s*BPM|high-energy/);
+  expect(report).not.toMatch(/128\\s*BPM|high-energy/);
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
