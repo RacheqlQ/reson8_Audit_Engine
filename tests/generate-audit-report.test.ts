@@ -362,3 +362,32 @@ describe("report evidence integrity",()=>{
   });
 
 });
+
+
+describe("Sonic DNA provisional candidate reporting", () => {
+  it("shows tempo and key candidates without promoting them to confirmed measurements", () => {
+    const rows = sonicDashboardRowsForReport({
+      provenance: "uploaded_audio_master",
+      bpm: null,
+      tempoCandidateBpm: 165,
+      tempoConfidence: 0.16,
+      key: null,
+      mode: null,
+      keyConfidence: 0.12,
+      keySegmentAgreement: 0.5,
+      keyTuningCents: 18,
+      tuningEvidenceWindows: 3,
+      harmonicFeatures: {
+        topCandidates: [
+          { key: "C", mode: "major", score: 0.42 },
+          { key: "A", mode: "minor", score: 0.39 },
+        ],
+      },
+    }, true);
+    expect(rows.find((row) => row.label === "TEMPO BPM")?.value).toBeNull();
+    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 (provisional");
+    expect(rows.find((row) => row.label === "KEY / MODE")?.value).toBeNull();
+    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("C major");
+    expect(rows.find((row) => row.label === "TUNING OFFSET CENTS")?.value).toBe("18");
+  });
+});
