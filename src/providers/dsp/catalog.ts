@@ -125,7 +125,7 @@ async function apple(u: URL, signal?: AbortSignal) {
         if (attributes) {
           const stringValue = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : null;
           const genres = Array.isArray(attributes.genreNames)
-            ? attributes.genreNames.filter((value): value is string => typeof value === "string" && value.trim()) : [];
+            ? attributes.genreNames.filter((value): value is string => typeof value === "string" && value.trim().length > 0) : [];
           const previews = Array.isArray(attributes.previews)
             ? attributes.previews.filter((value): value is Record<string, unknown> => Boolean(value && typeof value === "object")) : [];
           const artwork = attributes.artwork && typeof attributes.artwork === "object"
