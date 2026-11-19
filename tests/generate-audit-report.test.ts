@@ -87,7 +87,7 @@ describe("A4 report layout and fixture coverage",()=>{
   tentative.sonicDna.bpm=96;
   expect(sonicDashboardRowsForReport(tentative.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
   const detected=structuredClone(fullAudioFixture) as any;
-  detected.sonicDna.tempoConfidence=0.9;
+  detected.sonicDna.tempoConfidence=0.1;
   expect(sonicDashboardRowsForReport(detected.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).not.toBeNull();
   const zero=structuredClone(fullAudioFixture) as any;
   zero.sonicDna.tempoConfidence=0;
