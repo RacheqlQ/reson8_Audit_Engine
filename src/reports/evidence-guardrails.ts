@@ -102,18 +102,18 @@ function stripUnsupportedTechnicalClaims(
  rmsEnvelopeSpreadDb?: number,
 ): unknown {
  if (typeof value === "string") {
-  const sentences = value.split(/(?<=[.!?])\\s+(?=[A-Z])/);
+  const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
   const kept = sentences.flatMap((sentence) => {
-   if (suppressLoudnessOptimisation && /\\b(?:LUFS|loudness)\\b/i.test(sentence)
-     && /\\b(?:optimis\\w*|increas\\w*|rais\\w*|louder|target level|push the level)\\b/i.test(sentence)) return [];
-   if (suppressBrightTimbre && /\\bbright(?:ness)?\\b/i.test(sentence)) return [];
+   if (suppressLoudnessOptimisation && /\b(?:LUFS|loudness)\b/i.test(sentence)
+     && /\b(?:optimis\w*|increas\w*|rais\w*|louder|target level|push the level)\b/i.test(sentence)) return [];
+   if (suppressBrightTimbre && /\bbright(?:ness)?\b/i.test(sentence)) return [];
    // The stored dynamicRangeDb field is an RMS-envelope proxy, not EBU LRA or mastering dynamic range.
-   if (/\\bdynamic range\\b/i.test(sentence) && /\\b\\d+(?:\\.\\d+)?\\s*dB\\b/i.test(sentence)) {
-    if (/\\b(?:healthy|excellent|great|good|wide|strong|impressive)\\b/i.test(sentence)) return [];
-    const measured = sentence.match(/\\b(\\d+(?:\\.\\d+)?)\\s*dB\\b/i);
+   if (/\bdynamic range\b/i.test(sentence) && /\b\d+(?:\.\d+)?\s*dB\b/i.test(sentence)) {
+    if (/\b(?:healthy|excellent|great|good|wide|strong|impressive)\b/i.test(sentence)) return [];
+    const measured = sentence.match(/\b(\d+(?:\.\d+)?)\s*dB\b/i);
     if (typeof rmsEnvelopeSpreadDb === "number" && measured
       && Math.abs(Number(measured[1]) - rmsEnvelopeSpreadDb) < 0.011) {
-     return [sentence.replace(/\\bdynamic range\\b/ig, "RMS-envelope spread (internal proxy; not mastering dynamic range)")];
+     return [sentence.replace(/\bdynamic range\b/ig, "RMS-envelope spread (internal proxy; not mastering dynamic range)")];
     }
     return [];
    }
