@@ -227,15 +227,10 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     result.aAndRPositioning.adjacentLanes = [];
     result.aAndRPositioning.rationale = GENRE_UNCONFIRMED_RATIONALE;
   }
-  const hasDynamicRangeMeasurement = typeof sonicDna?.dynamicRangeDb === "number" && Number.isFinite(sonicDna.dynamicRangeDb);
-  const hasLoudnessMeasurement = typeof sonicDna?.loudnessLufs === "number" && Number.isFinite(sonicDna.loudnessLufs);
-  const hasRmsMeasurement = typeof sonicDna?.rmsLevelDbfs === "number" && Number.isFinite(sonicDna.rmsLevelDbfs);
-  if (!hasDynamicRangeMeasurement || (!hasLoudnessMeasurement && !hasRmsMeasurement)) {
-    const dynamicRangeDimension = mutable.scorecard?.dynamicRangeLoudness;
-    if (dynamicRangeDimension && typeof dynamicRangeDimension === "object") {
-      dynamicRangeDimension.score = null;
-      dynamicRangeDimension.rationale = "Not scored: direct dynamic-range and loudness/RMS measurements are unavailable from the uploaded master. No mastering-quality conclusion can be inferred.";
-    }
+  const dynamicRangeDimension = mutable.scorecard?.dynamicRangeLoudness;
+  if (dynamicRangeDimension && typeof dynamicRangeDimension === "object") {
+    dynamicRangeDimension.score = null;
+    dynamicRangeDimension.rationale = "Not scored: RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied.";
   }
   if (sonicDna?.channels === 1 && Array.isArray(mutable.risks)
     && !mutable.risks.some((risk: unknown) => typeof risk === "string" && /mono master delivery risk/i.test(risk))) {
@@ -290,9 +285,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
         case "rhythmicConsistency":
           return "Not scored: overall assessment confidence is zero. BPM and rhythm measurements, where present, are not sufficient for a final consistency rating without human listening and segment-level review.";
         case "dynamicRangeLoudness":
-          return hasDynamicRangeMeasurement && (hasLoudnessMeasurement || hasRmsMeasurement)
-            ? "Not scored: overall assessment confidence is zero. Direct loudness and dynamic-range measurements are reported separately and do not establish mastering quality or artistic merit."
-            : "Not scored: overall assessment confidence is zero. Direct dynamic-range and loudness/RMS measurements are unavailable; no mastering-quality conclusion can be inferred.";
+          return "Not scored: RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied.";
         case "metadataCompleteness":
           return "Not scored: overall assessment confidence is zero. Identity fields and source conflicts are shown in the reconciliation section; no numeric metadata-completeness rating is issued at this confidence level.";
         case "releaseReadiness":
