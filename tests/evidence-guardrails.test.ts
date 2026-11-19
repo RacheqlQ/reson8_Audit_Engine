@@ -55,10 +55,10 @@ describe("Phillo evidence guardrails", () => {
     expect(result.scorecard.tempoLaneFit.rationale).not.toContain("did not pass the confidence gate");
   });
 
-  it("withholds key labels unless confidence and segment agreement both reach the 80% reporting target", () => {
-    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.8, keySegmentAgreement: 0.8 })).toBe(true);
-    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.79, keySegmentAgreement: 0.95 })).toBe(false);
-    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.6 })).toBe(false);
+  it("uses the same key confidence and segment agreement floors as the detector", () => {
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.12, keySegmentAgreement: 0.6 })).toBe(true);
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.119, keySegmentAgreement: 0.95 })).toBe(false);
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.599 })).toBe(false);
     expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.95, harmonicFeatures: { status: "insufficient_evidence" } })).toBe(false);
     expect(isReliableKey({ key: null, mode: null, keyConfidence: 0.99, keySegmentAgreement: 1 })).toBe(false);
   });
