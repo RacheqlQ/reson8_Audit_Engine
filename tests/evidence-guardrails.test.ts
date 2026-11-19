@@ -140,7 +140,7 @@ describe("Phillo evidence guardrails", () => {
       genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop" }] },
     });
     expect(result.aAndRPositioning.primaryLane).toBe("Pop");
-    expect(result.aAndRPositioning.adjacentLanes).toEqual(["R&B", "Hip-Hop", "House"]);
+    expect(result.aAndRPositioning.adjacentLanes).toEqual([]);
   });
 
   it("nulls tempo-derived scores and removes unsupported tempo claims when confidence is zero", () => {
@@ -156,7 +156,7 @@ describe("Phillo evidence guardrails", () => {
     expect(result.risks).not.toContain("Tempo and groove consistency require review.");
     expect(JSON.stringify(result)).not.toMatch(/156\s*BPM|high-energy|fast tempo|tempo confirms/i);
     expect(result.aAndRPositioning.primaryLane).toContain("Unconfirmed");
-    expect(result.aAndRPositioning.adjacentLanes).toEqual(["R&B", "Hip-Hop", "House"]);
+    expect(result.aAndRPositioning.adjacentLanes).toEqual([]);
   });
 
   it("preserves tempo and lane claims when tempo confidence and provider genre evidence are adequate", () => {

@@ -42,6 +42,7 @@ describe("processAuditJob", () => {
   it("persists Sonic DNA before reconciliation, then assesses and completes a queued master", async () => {
     const events: string[] = [];
     let failureMessage = "";
+    let failureCode = "";
     let reconciledIdentity: unknown = null;
     let persistedDna: Record<string, unknown> | null = null;
     const result = await processAuditJob("job-123", {
@@ -98,7 +99,7 @@ describe("processAuditJob", () => {
         expect(dna.channels).toBe(2);
         expect(dna.durationSeconds).toBe(4 / 44100);
       },
-      discoverPlaylists: async (input) => ({ status: "available" as const, outcomes: [{ provider: "apple_music" as const, status: "available" as const, reason: "Deterministic test provider result." }], candidates: [{ provider: "apple_music" as const, id: "pl-test", name: "Afrobeats Discovery", url: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", sourceUrl: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", curatorName: "Apple Music", playlistType: "editorial", description: "Afrobeats selections", trackCount: 20, genreMatches: ["Afrobeats"], moodMatches: [], matchBasis: ["Primary genre match: Afrobeats"], containsIsrc: false, retrievedAt: "2026-11-19T12:00:00.000Z" }] }),
+      discoverPlaylists: async (input) => { events.push("playlist-discovery"); expect(input.isrc).toBe("NGABC2600001"); return { status: "available" as const, outcomes: [{ provider: "apple_music" as const, status: "available" as const, reason: "Deterministic test provider result." }], candidates: [{ provider: "apple_music" as const, id: "pl-test", name: "Afrobeats Discovery", url: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", sourceUrl: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", curatorName: "Apple Music", playlistType: "editorial", description: "Afrobeats selections", trackCount: 20, genreMatches: ["Afrobeats"], moodMatches: [], matchBasis: ["Primary genre match: Afrobeats"], containsIsrc: false, retrievedAt: "2026-11-19T12:00:00.000Z" }] }; },
       generateAssessment: async (input) => {
         events.push("assessment");
         expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
@@ -128,10 +129,10 @@ describe("processAuditJob", () => {
         events.push(`report-saved-${tier}`);
       },
       markCompleted: async () => events.push("completed"),
-      markFailed: async (_jobId, _claimToken, message) => { failureMessage = message; events.push("failed"); },
+      markFailed: async (_jobId, _claimToken, message, _signal, errorCode) => { failureMessage = message; failureCode = errorCode ?? ""; events.push("failed"); },
     });
 
-    expect(result.status, failureMessage + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity)).toBe("completed");
+    expect(result.status, failureMessage + " | code: " + failureCode + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity)).toBe("completed");
     expect(events).toEqual([
       "processing",
       "dna-base",
@@ -141,6 +142,7 @@ describe("processAuditJob", () => {
       "evidence",
       "assessment",
       "assessment-saved",
+      "playlist-discovery",
       "report-sample",
       "report-saved-sample",
       "report-full",
