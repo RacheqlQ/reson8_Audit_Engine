@@ -59,6 +59,9 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
       const hasGenreClaim = suppressGenre && GENRE_TAXONOMY.some((genre) =>
         genre.label.length >= 4 && lower.includes(genre.label.toLocaleLowerCase()),
       );
+      const contradictsProviderGenre = !suppressGenre
+        && /\\bgenre\\b/i.test(sentence)
+        && /\\b(?:unverified|unknown|undetermined|not established|not confirmed)\\b/i.test(sentence);
       const commercialTerms = /\b(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|marketability|commercial performance|commercial potential|commercial success|commercially (?:promising|viable|strong|successful|attractive|competitive)|demand|traction|market fit)\b/i;
       const cautionaryCommercialContext = /\b(?:cannot|can't|could not|unable|withheld|requires? review)\b/i.test(sentence)
         || /\bno\s+(?:(?:verified|source-attributed|reliable|supporting|sufficient)\s+)*(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|commercial (?:performance|potential|success|metrics?)|market demand|traction|market fit|evidence)\b/i.test(sentence)
@@ -74,7 +77,7 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
         || /\b(?:key|mode|tonic)\s*(?:is|of|:|at|centered on)\s+[A-G]\s*(?:major|minor)\b/i.test(sentence)
         || /\bin\s+[A-G]\s*(?:major|minor)\b/.test(sentence);
       const hasUnsupportedKeyClaim = suppressKey && keyClaim;
-      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !hasCommercialClaim && !hasUnsupportedVocalClaim && !hasUnsupportedKeyClaim;
+      return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !contradictsProviderGenre && !hasCommercialClaim && !hasUnsupportedVocalClaim && !hasUnsupportedKeyClaim;
     });
     return kept.join(" ").trim();
   }
@@ -139,7 +142,7 @@ function sanitizeAlbumConflictClaims(value:unknown):unknown {
  if(typeof value==="string"){
   const sentences=value.split(/(?<=[.!?])\s+(?=[A-Z])/);
   const kept=sentences.filter(sentence=>!(/\balbum\b/i.test(sentence)&&/\b(?:missing|unavailable|not supplied|not provided|absent|not present)\b/i.test(sentence)));
-  return kept.join(" ").trim()||ALBUM_CONFLICT_RATIONALE;
+  return kept.join(" ").trim();
  }
  if(Array.isArray(value))return value.map(sanitizeAlbumConflictClaims);
  if(value&&typeof value==="object")return Object.fromEntries(Object.entries(value as Record<string,unknown>).map(([key,item])=>[key,sanitizeAlbumConflictClaims(item)]));
@@ -182,7 +185,9 @@ export function deriveMetadataCompleteness(evidence?: Record<string, unknown> | 
   const conflicted = new Set(Array.isArray(conflicts) ? conflicts.flatMap((item) =>
     item && typeof item === "object" && typeof (item as Record<string, unknown>).field === "string"
       ? [(item as Record<string, unknown>).field as string] : []) : []);
-  const providers = Array.isArray(evidence.sourceProviders) ? evidence.sourceProviders : [];
+  const reconciledFields = evidence.reconciliation && typeof evidence.reconciliation === "object"
+    && Array.isArray((evidence.reconciliation as Record<string, unknown>).reconciledFields)
+    ? new Set((evidence.reconciliation as Record<string, unknown>).reconciledFields as string[]) : new Set<string>();
   let available = 0;
   let score = 0;
   for (const [field, weight] of Object.entries(METADATA_FIELD_WEIGHTS)) {
@@ -190,8 +195,9 @@ export function deriveMetadataCompleteness(evidence?: Record<string, unknown> | 
     const present = typeof raw === "string" ? raw.trim().length > 0 : Array.isArray(raw) ? raw.length > 0 : false;
     if (!present) continue;
     available++;
-    const sourceAttributed = typeof provenance[field] === "string" && Boolean((provenance[field] as string).trim())
-      || providers.length > 0;
+    const sourceAttributed = (typeof provenance[field] === "string" && Boolean((provenance[field] as string).trim()))
+      || (Array.isArray(provenance[field]) && (provenance[field] as unknown[]).length > 0)
+      || reconciledFields.has(field);
     score += weight * (sourceAttributed ? 1 : 0.5) * (conflicted.has(field) ? 0.5 : 1);
   }
   if (available < 2) return null;
@@ -227,9 +233,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     if (Array.isArray(result.evidenceGaps) && !result.evidenceGaps.some((gap:unknown)=>typeof gap==="string"&&/album metadata is present but conflicting/i.test(gap))) {
       result.evidenceGaps.push(ALBUM_CONFLICT_RATIONALE);
     }
-    if (Array.isArray(result.risks) && !result.risks.some((risk:unknown)=>typeof risk==="string"&&/album metadata is present but conflicting/i.test(risk))) {
-      result.risks.push(ALBUM_CONFLICT_RATIONALE);
-    }
+
   }
 
   const mutable = result as Record<string, any>;
@@ -271,7 +275,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     if (result.scorecard.metadataCompleteness) {
       result.scorecard.metadataCompleteness = metadata ?? {
         score: null,
-        rationale: hasAlbumConflict(evidence) ? ALBUM_CONFLICT_RATIONALE : "Not scored: fewer than two source-attributed core release fields are available.",
+        rationale: hasAlbumConflict(evidence) ? "Not scored: fewer than two source-attributed identity fields are available; the album conflict is documented in reconciliation." : "Not scored: fewer than two source-attributed core release fields are available.",
       };
     }
     const readinessVerified = evidence?.rightsClearanceVerified === true
@@ -289,6 +293,12 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     const primaryLane = typeof genre.primaryGenre === "string" ? findGenre(genre.primaryGenre)?.label : null;
     result.aAndRPositioning.primaryLane = primaryLane ?? "Unconfirmed — no taxonomy-backed genre label";
     result.aAndRPositioning.adjacentLanes = adjacentGenresFor(primaryLane);
+  }
+  if (!reliableTempo && Array.isArray(mutable.risks)) {
+    mutable.risks = mutable.risks.filter((risk: unknown) => typeof risk !== "string" || !/tempo and groove consistency require review|tempo confidence.*(?:low|below)|tempo estimate.*(?:unreliable|uncertain)/i.test(risk));
+  }
+  if (!isReliableKey(sonicDna as Record<string, unknown> | null | undefined) && Array.isArray(mutable.risks)) {
+    mutable.risks = mutable.risks.filter((risk: unknown) => typeof risk !== "string" || !/key(?: and mode)? .*?(?:unverified|unknown|not determined|confidence)/i.test(risk));
   }
   if (!hasProviderGenre && result.aAndRPositioning) {
     result.aAndRPositioning.primaryLane = "Unconfirmed — insufficient provider-backed genre evidence";
