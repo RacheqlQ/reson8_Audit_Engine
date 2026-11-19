@@ -101,6 +101,7 @@ describe("multi-DSP audit processing", () => {
 
   it("persists a failed provider result while continuing with another DSP source", async () => {
     const failed: Array<{ platform: string; catalogId: string; error: string }> = [];
+    const isrcLookups: string[] = [];
     const urls = [
       "https://open.spotify.com/track/spotify-fail",
       "https://tidal.com/browse/track/tidal-good",
@@ -113,6 +114,17 @@ describe("multi-DSP audit processing", () => {
         workerId: "provider-failure-test",
       }),
       markProcessing: async () => {},
+      // Keep this DSP failure test hermetic: the real MusicBrainz provider is
+      // enabled by policy and the successful TIDAL fixture contains an ISRC.
+      // ISRC reconciliation is covered by its own provider tests.
+      collectIsrcCatalogMetadata: async (isrc) => {
+        isrcLookups.push(isrc);
+        return {
+          isrc,
+          metadata: [],
+          outcomes: [{ provider: "musicbrainz" as const, status: "partial" as const, reason: "No fixture match; external lookup intentionally mocked." }],
+        };
+      },
       collectCatalogMetadata: async (url) => {
         if (url.includes("spotify")) throw new Error("Spotify API request failed with HTTP 503");
         return source("tidal", url);
@@ -138,6 +150,7 @@ describe("multi-DSP audit processing", () => {
     });
 
     expect(result.status).toBe("completed");
+    expect(isrcLookups).toEqual(["NGABC2000001"]);
     expect(failed).toEqual([{
       platform: "spotify",
       catalogId: "spotify-fail",
