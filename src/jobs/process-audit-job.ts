@@ -849,13 +849,23 @@ export async function processAuditJob(
             { name: "audio_mood", status: "unavailable", label: null, probability: null, reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "No validated and calibrated audio mood model is configured; signal descriptors are not substituted for emotional labels.", stage: "audio_classification", retryable: false }] },
             { name: "key_mode_classification", status: "unavailable", label: null, probability: null, reasonCodes: ["CALIBRATED_CLASSIFIER_NOT_CONFIGURED"], diagnostics: [{ code: "CALIBRATED_CLASSIFIER_NOT_CONFIGURED", message: "The tonal estimator returns candidate scores, not a calibrated class probability; candidate confidence is reported separately.", stage: "key_analysis", retryable: false }] },
           ],
-          externalRecords: metadataSources.filter((source) => Boolean(source.catalogId)).map((source) => {
-            const recordId = source.catalogId!;
-            const retrievedAt = generatedAt;
-            const fields = Object.fromEntries(Object.entries({ artist: source.artist, title: source.title, album: source.album, releaseDate: source.releaseDate, isrc: source.isrc, upc: source.upc, label: source.label, genre: source.genre }).filter(([, value]) => value !== null && value !== undefined && value !== ""));
-            const fieldProvenance = Object.fromEntries(Object.keys(fields).map((field) => [field, { provider: source.platform, recordId, retrievedAt }]));
-            return { status: "verified", provider: source.platform, recordId, retrievedAt, sourceUrl: source.canonicalUrl, fields, fieldProvenance };
-          }),
+          externalRecords: [
+            ...metadataSources.filter((source) => Boolean(source.catalogId)).map((source) => {
+              const recordId = source.catalogId!;
+              const retrievedAt = generatedAt;
+              const fields = Object.fromEntries(Object.entries({ artist: source.artist, title: source.title, album: source.album, releaseDate: source.releaseDate, isrc: source.isrc, upc: source.upc, label: source.label, genre: source.genre }).filter(([, value]) => value !== null && value !== undefined && value !== ""));
+              const fieldProvenance = Object.fromEntries(Object.keys(fields).map((field) => [field, { provider: source.platform, recordId, retrievedAt }]));
+              return { status: "verified", provider: source.platform, recordId, retrievedAt, sourceUrl: source.canonicalUrl, fields, fieldProvenance };
+            }),
+            ...(isrcLookup?.outcomes.filter((outcome) => !metadataSources.some((source) => source.platform === outcome.provider && Boolean(source.catalogId))).map((outcome) => ({
+              status: "unavailable", provider: outcome.provider, reasonCode: outcome.status === "not_configured" ? "PROVIDER_NOT_CONFIGURED" : outcome.status === "partial" ? "NO_UNAMBIGUOUS_RECORD_ID" : "PROVIDER_LOOKUP_UNAVAILABLE",
+              diagnostic: { code: outcome.status === "not_configured" ? "PROVIDER_NOT_CONFIGURED" : outcome.status === "partial" ? "NO_UNAMBIGUOUS_RECORD_ID" : "PROVIDER_LOOKUP_UNAVAILABLE", message: outcome.reason, stage: "isrc_catalog_lookup", retryable: outcome.status === "unavailable" }, attemptedAt: generatedAt,
+            })) ?? []),
+            ...catalogResults.filter((result) => result.status === "unavailable").map((result) => ({
+              status: "unavailable", provider: result.link.platform, reasonCode: "DSP_CATALOG_LOOKUP_UNAVAILABLE",
+              diagnostic: { code: "DSP_CATALOG_LOOKUP_UNAVAILABLE", message: result.error ?? "The DSP catalogue lookup did not return a record.", stage: "catalog_lookup", retryable: true }, attemptedAt: generatedAt,
+            })),
+          ],
           strategicSynthesis: masterDna.bpm !== null ? [{ claim: "A tempo measurement was returned by analysis of the uploaded master.", evidenceRefs: ["signal:tempo_bpm"], evidenceClass: "OBSERVED", limitations: ["The current estimator score is not a calibrated probability."] }] : [],
           pipelineDiagnostics: masterDna.limitations.map((message) => ({ code: "ANALYSIS_LIMITATION", message, stage: "sonic_dna", retryable: false })),
         })
