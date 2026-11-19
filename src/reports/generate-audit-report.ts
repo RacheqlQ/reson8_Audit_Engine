@@ -356,26 +356,6 @@ function sections(i:AuditReportInput):Section[]{
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
   sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confidence-qualified measurements from provisional candidates and unavailable results. Only measurements that pass their metric-specific reliability gate are presented as confirmed.");
-  const tempoReliable=isReliableTempo(s);
-  const keyReliable=isReliableKey(s);
-  if(tempoReliable&&typeof s?.bpm==="number"&&Number.isFinite(s.bpm)){
-   const diagnostic=typeof s.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)
-    ?"; detector prominence score "+s.tempoConfidence.toFixed(2)+" (diagnostic, not a calibrated probability)":"";
-   sonicDnaBody.push("Confirmed tempo: "+metric(s.bpm,1)+" BPM"+diagnostic+".");
-  }else if(typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)){
-   sonicDnaBody.push("Provisional tempo candidate: "+metric(s.tempoCandidateBpm,1)+" BPM; it did not pass the detector confidence gate.");
-  }else{
-   sonicDnaBody.push("Tempo: Not determined — "+val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.abstentionReason,"no supported tempo result was returned")+".");
-  }
-  if(keyReliable){
-   const diagnostic=typeof s?.keyConfidence==="number"&&Number.isFinite(s.keyConfidence)
-    ?"; detector score "+s.keyConfidence.toFixed(2)+" and segment agreement "+(typeof s.keySegmentAgreement==="number"?s.keySegmentAgreement.toFixed(2):"not available")+" (diagnostics, not calibrated probabilities)":"";
-   sonicDnaBody.push("Confirmed key / mode: "+text(s?.key)+" "+text(s?.mode)+diagnostic+".");
-  }else{
-   const candidates=Array.isArray(s?.keyCandidates)?s.keyCandidates:Array.isArray((s?.harmonicFeatures as Record<string,unknown>|undefined)?.topCandidates)?(s?.harmonicFeatures as Record<string,unknown>).topCandidates as unknown[]:[];
-   const candidateSummary=candidates.slice(0,3).map((item)=>item&&typeof item==="object"?[text((item as Record<string,unknown>).key),text((item as Record<string,unknown>).mode)].filter(Boolean).join(" "):"").filter(Boolean).join(", ");
-   sonicDnaBody.push(candidateSummary?"Provisional key / mode candidates: "+candidateSummary+".":"Key / mode: Not determined — "+val((s?.harmonicFeatures as Record<string,unknown>|undefined)?.limitation,"the key detector did not confirm a single key and mode")+".");
-  }
   if (vocalAnalysisPerformed) {
    const vocalSegments=Array.isArray(vocalFeatures?.activitySegments)?vocalFeatures.activitySegments.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))):[];
    const segmentSummary=vocalSegments.slice(0,8).map((segment)=>metric(segment.startSeconds,2)+"–"+metric(segment.endSeconds,2)+" s").join("; ");
@@ -500,7 +480,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
  header(page,"Audit findings",pageNo,fonts,C.blue,input.evidence.fixture===true);
  const chromeRects=():ReportRect[]=>[{x:M,y:H-44,width:220,height:10,id:"header-brand"},{x:M,y:H-64,width:W-2*M,height:8,id:"header-title"},{x:M,y:H-68,width:W-2*M,height:0.7,id:"header-rule"},{x:M,y:43,width:W-2*M,height:0.7,id:"footer-rule"},{x:M,y:25,width:250,height:10,id:"footer-text"},{x:W-M-18,y:25,width:18,height:10,id:"footer-page-number"}];
  const validate=(checkDensity=true)=>{const layout=checkLayout([...chromeRects(),...rects]);if(!layout.ok)console.warn("[report-layout] Page "+pageNo+" layout warnings:",layout.errors);if(!checkDensity)return;const density=checkPageDensity(rects);if(!density.ok||1-density.emptyRatio<.6)console.warn("[report-layout] Page "+pageNo+" content occupancy is below the 60% minimum target ("+Math.round((1-density.emptyRatio)*100)+"%).");};
- const nextPage=(title:string,accent:typeof C[keyof typeof C])=>{validate();pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent,input.evidence.fixture===true);y=TOP;rects=[];};
+ const nextPage=(title:string,accent:typeof C[keyof typeof C],checkDensity=true)=>{validate(checkDensity);pageNo++;page=pdf.addPage([W,H]);header(page,title,pageNo,fonts,accent,input.evidence.fixture===true);y=TOP;rects=[];};
  for(let si=0;si<selected.length;si++){
   const section=selected[si],accent=C[section.accent],titleLines=wrap(section.title,fonts.bold,19.5,W-2*M-34),titleH=titleLines.length*25+10;
   const sonicBlock=section.title==="Sonic DNA and technical profile";
@@ -548,7 +528,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
    const layoutIssues=chartPanelLayoutErrors(panel.kind??"bars",panel.rows,M,y-8,panelHeight);if(layoutIssues.length)console.warn("[report-layout] Chart layout warnings:",layoutIssues);
    // Keep the chart on this page whenever its complete card clears the footer; low page fill alone is not a reason to orphan it.
    if(y-8-panelHeight<BOTTOM+45){
-    nextPage(section.title,accent);
+    nextPage(section.title,accent,false);
     const visualHeading=wrap(section.title,fonts.bold,14,W-2*M-20);
     visualHeading.forEach((part,index)=>page.drawText(part,{x:M+8,y:TOP-20-index*18,size:14,font:fonts.bold,color:accent}));
     page.drawText("Visual summary of the evidence and recommendations in this section.",{x:M+8,y:TOP-20-visualHeading.length*18,size:9.7,font:fonts.regular,color:C.muted});
