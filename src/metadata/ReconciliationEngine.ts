@@ -18,7 +18,7 @@ export interface MetadataReconciliation {
   conflicts: readonly MetadataConflict[];
 }
 
-const PROVIDERS = ["spotify", "tidal", "apple_music", "deezer", "youtube_music", "audiomack", "audd", "id3"] as const;
+const PROVIDERS = ["spotify", "musicbrainz", "tidal", "apple_music", "deezer", "youtube_music", "audiomack", "audd", "id3"] as const;
 const FIELDS = [
   "title",
   "artist",
