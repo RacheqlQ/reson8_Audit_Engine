@@ -247,6 +247,25 @@ export async function collectCatalogMetadata(input:string, signal?:AbortSignal):
       return metadata;
     }
   }
-  switch(platform){case"spotify":return spotify(u,signal);case"apple_music":return apple(u,signal);case"deezer":return deezer(u,signal);case"youtube_music":return youtube(u,signal);case"tidal":return tidal(u,signal);case"audiomack":return audiomack(u,signal);default:throw new Error("Unsupported DSP or catalog URL");}
+  let metadata: CatalogMetadata;
+  switch(platform){
+    case "spotify": metadata = await spotify(u,signal); break;
+    case "apple_music": metadata = await apple(u,signal); break;
+    case "deezer": metadata = await deezer(u,signal); break;
+    case "youtube_music": metadata = await youtube(u,signal); break;
+    case "tidal": metadata = await tidal(u,signal); break;
+    case "audiomack": metadata = await audiomack(u,signal); break;
+    default: throw new Error("Unsupported DSP or catalog URL");
+  }
+  // Spotify's adapter intentionally returns a partial result when its API lookup
+  // fails so the wider audit can continue. Do not timestamp that fallback as a
+  // successful provider retrieval. All other returned adapter results represent
+  // a completed provider response (including partial-but-real catalogue records).
+  const spotifyLookupFailed = metadata.platform === "spotify"
+    && metadata.raw.spotifyEnrichment
+    && typeof metadata.raw.spotifyEnrichment === "object"
+    && (metadata.raw.spotifyEnrichment as Record<string, unknown>).status === "unavailable";
+  if (!spotifyLookupFailed) metadata.retrievedAt ??= new Date().toISOString();
+  return metadata;
 }
 export function detectDspPlatform(input:string):DspPlatform{try{return HOSTS[normalizeUrl(input).hostname.toLowerCase()]??"unknown";}catch{return"unknown";}}
