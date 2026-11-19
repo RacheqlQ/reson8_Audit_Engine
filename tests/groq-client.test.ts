@@ -142,8 +142,8 @@ describe("GroqClient section groups",()=>{
   const mock=vi.fn(async()=>new Response(JSON.stringify({error:{message:"Failed to validate JSON",code:"json_validate_failed"}}),{status:400}));
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("json_validate_failed:");
-  // Strict schema (3), JSON-object (2), then prompt-only (1) bounded attempts.
-  expect(mock).toHaveBeenCalledTimes(6);
+  // One strict attempt, then bounded JSON-object and prompt-only recovery.
+  expect(mock).toHaveBeenCalledTimes(5);
  });
  it("treats HTTP 413 as permanent and never retries the same request payload",async()=>{
   let calls=0;
@@ -317,7 +317,7 @@ describe("GroqClient section groups",()=>{
   expect(prompts[1]).toContain("json_validate_failed");
   expect(prompts[1]).toContain("evidenceLabels");
   expect(systemPrompts[0]).toContain("Always include the evidenceLabels array");
-  expect(responseFormats).toEqual(["json_schema","json_schema","json_object","json_object"]);
+  expect(responseFormats).toEqual(["json_schema","json_object","json_object","json_object"]);
   expect(payloads[0].evidence).toEqual(payloads[1].evidence);
   expect(payloads[1].evidence).toEqual(payloads[2].evidence);
   expect(payloads[2].evidence).toEqual(payloads[3].evidence);
