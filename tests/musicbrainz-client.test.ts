@@ -13,7 +13,7 @@ describe("MusicBrainz ISRC catalogue client", () => {
   });
 
   it("resolves an ISRC to recording identity and release label evidence", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       recordings: [{
         id: "recording-mbid",
         title: "Example Track",
