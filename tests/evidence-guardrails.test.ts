@@ -239,7 +239,7 @@ describe("Phillo evidence guardrails", () => {
       rmsLevelDbfs: null,
     });
     expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();
-    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("dynamic-range and loudness/RMS measurements are unavailable");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("destination-specific integrated-loudness");
     expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("Key confidence");
   });
 
