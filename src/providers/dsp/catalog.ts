@@ -22,6 +22,8 @@ export interface CatalogMetadata {
   isrc: string | null; upc: string | null; catalogPopularity: number | null; catalogPopularityScale: "0_1" | "0_100" | null; label: string | null; genre: string | null;
   artworkUrl: string | null; previewUrl: string | null; externalIds: Record<string,string>; sonicProfile: CatalogSonicProfile | null;
   raw: Record<string,unknown>; evidenceStatus: "recognized" | "partial";
+  /** Timestamp captured immediately after the provider response was received. */
+  retrievedAt?: string;
 }
 
 const HOSTS: Record<string,DspPlatform> = {
