@@ -19,7 +19,18 @@ describe("combined master and DSP processing", () => {
   it("merges catalog identity and master-measured Sonic DNA into one sample/full report pair", async () => {
     const events: string[] = [];
     let assessmentInput: any;
-    const recognition: AuditRecognition = { matched: true, artist: "Master Artist", title: "Master Song", isrc: "US-ABC-12-34567" };
+    const recognition: AuditRecognition = { matched: false };
+    const musicBrainzMetadata: CatalogMetadata = {
+      ...metadata,
+      platform: "musicbrainz",
+      sourceUrl: "https://musicbrainz.org/ws/2/isrc/USABC1234567",
+      canonicalUrl: "https://musicbrainz.org/recording/recording-mbid",
+      catalogId: "recording-mbid",
+      catalogPopularity: null,
+      catalogPopularityScale: null,
+      externalIds: { musicbrainz: "recording-mbid" },
+      raw: { provider: "musicbrainz" },
+    };
 
     const result = await processAuditJob("combined-1", {
       getJob: async () => ({
@@ -29,6 +40,11 @@ describe("combined master and DSP processing", () => {
       }),
       markProcessing: async () => { events.push("processing"); },
       collectCatalogMetadata: async () => { events.push("catalog"); return metadata; },
+      collectIsrcCatalogMetadata: async (isrc) => {
+        events.push("isrc-catalog");
+        expect(isrc).toBe("USABC1234567");
+        return { isrc: "USABC1234567", metadata: [musicBrainzMetadata], outcomes: [{ provider: "musicbrainz", status: "recognized", reason: "MusicBrainz returned an ISRC recording match." }] };
+      },
       saveCatalogMetadata: async () => { events.push("catalog-saved"); },
       recognizeUrl: async () => ({ matched: false }),
       downloadMaster: async () => { events.push("master-downloaded"); return new Uint8Array([1,2,3]); },
@@ -61,10 +77,11 @@ describe("combined master and DSP processing", () => {
 
     expect(result.status).toBe("completed");
     expect(assessmentInput.evidence).toMatchObject({ sourceCombination: "master_and_dsp" });
-    expect(assessmentInput.evidence).not.toHaveProperty("platform");
-    expect(assessmentInput.catalogMetadata).toBeNull();
+    expect(assessmentInput.evidence).toMatchObject({ platform: "musicbrainz" });
+    expect(assessmentInput.catalogMetadata).toMatchObject({ platform: "musicbrainz", artist: "Master Artist", title: "Master Song" });
     expect(assessmentInput.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
     expect(events).toContain("catalog-saved");
+    expect(events).toContain("isrc-catalog");
     expect(events).toContain("master-downloaded");
     expect(events).toContain("dna-saved");
     expect(events).toContain("saved-sample");

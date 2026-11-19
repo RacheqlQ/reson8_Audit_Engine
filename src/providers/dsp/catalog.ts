@@ -5,7 +5,7 @@ import { normalizeTidalTrack } from "../tidal/normalize.js";
 import { AudiomackClient } from "../audiomack/client.js";
 import { providerDecision, type ProviderId } from "../provider-policy.js";
 
-export type DspPlatform = "spotify" | "apple_music" | "youtube_music" | "deezer" | "tidal" | "audiomack" | "unknown";
+export type DspPlatform = "spotify" | "apple_music" | "youtube_music" | "deezer" | "tidal" | "audiomack" | "musicbrainz" | "unknown";
 
 export interface CatalogSonicProfile {
   provenance: "tidal_catalog_metadata";

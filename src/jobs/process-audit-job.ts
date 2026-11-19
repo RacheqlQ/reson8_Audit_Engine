@@ -13,6 +13,9 @@ import { reconcileMetadata, type MetadataReconciliation } from "../metadata/Reco
 import { readAudioTags } from "../metadata/audio-tags.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
+import { collectIsrcCatalogMetadata, type IsrcCatalogLookup } from "../providers/dsp/isrc-catalog.js";
+import { normalizeIsrc } from "../providers/musicbrainz/client.js";
+import { providerDecision } from "../providers/provider-policy.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 
@@ -35,6 +38,7 @@ export interface AuditProcessorDependencies {
   getJob(jobId: string, signal?: AbortSignal): Promise<AuditJobRecord | null>;
   markProcessing(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   collectCatalogMetadata(url: string, signal?: AbortSignal): Promise<CatalogMetadata>;
+  collectIsrcCatalogMetadata?(isrc: string, signal?: AbortSignal): Promise<IsrcCatalogLookup>;
   recognizeUrl(url: string, signal?: AbortSignal): Promise<AuditRecognition>;
   downloadMaster(path: string, signal?: AbortSignal): Promise<Uint8Array>;
   createRecognitionSample(master: Uint8Array, mimeType: string, signal?: AbortSignal): Promise<Uint8Array>;
@@ -263,6 +267,7 @@ function assessmentCatalogMetadataInput(metadata: CatalogMetadata | readonly Cat
       releaseDate: source.releaseDate,
       genres: source.genre ? [source.genre] : [],
     };
+    if (source.platform === "musicbrainz") result.musicbrainz = fields;
     if (source.platform === "tidal") result.tidal = fields;
     if (source.platform === "apple_music") result.apple_music = fields;
     if (source.platform === "deezer") result.deezer = fields;
@@ -287,6 +292,7 @@ function catalogMetadataInput(metadata: CatalogMetadata | readonly CatalogMetada
       genres: source.genre ? [source.genre] : [],
     };
     if (source.platform === "spotify") result.spotify = fields;
+    if (source.platform === "musicbrainz") result.musicbrainz = fields;
     if (source.platform === "tidal") result.tidal = fields;
     if (source.platform === "apple_music") result.apple_music = fields;
     if (source.platform === "deezer") result.deezer = fields;
@@ -564,6 +570,33 @@ export async function processAuditJob(
       await awaitWithStage(deps, "recognition_persist", 15_000, (signal) => deps.saveRecognition(jobId, job.claimToken, recognition, signal));
     }
 
+    let isrcLookup: IsrcCatalogLookup | null = null;
+    const isrcCandidate = (recognition.matched ? recognition.isrc : null) ?? metadataSources.find((source) => source.isrc)?.isrc ?? null;
+    let normalizedIsrc: string | null = null;
+    if (isrcCandidate) {
+      try { normalizedIsrc = normalizeIsrc(isrcCandidate); }
+      catch { normalizedIsrc = null; }
+    }
+    const isrcLookupAvailable = Boolean(
+      deps.collectIsrcCatalogMetadata
+      || providerDecision("musicbrainz").enabled
+      || (process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET && providerDecision("spotify").enabled),
+    );
+    if (normalizedIsrc && isrcLookupAvailable) {
+      isrcLookup = await awaitWithStage(deps, "isrc_catalog_lookup", 30_000, (signal) =>
+        (deps.collectIsrcCatalogMetadata ?? collectIsrcCatalogMetadata)(normalizedIsrc!, signal),
+      );
+      for (const source of isrcLookup.metadata) {
+        if (!metadataSources.some((existing) => existing.platform === source.platform && existing.catalogId === source.catalogId)) {
+          metadataSources.push(source);
+          await awaitWithStage(deps, "catalog_persist", 15_000, (signal) =>
+            deps.saveCatalogMetadata(jobId, job.claimToken, source, signal),
+          );
+        }
+      }
+      metadata = metadata ?? metadataSources[0];
+    }
+
     if (masterDna && decodedMaster) {
       let vocalFeatures: VocalAnalysisResult;
       if (deps.analyzeVocals) {
@@ -641,8 +674,11 @@ export async function processAuditJob(
       identity: identityEvidence(identity),
       reconciliation: reconciliationEvidence(reconciliation),
       genreClassification,
-      metadataSourcesChecked: [...catalogResults.map((result) => result.link.platform), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...attemptedRecognitionProviders],
-      catalogSources: catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
+      metadataSourcesChecked: [...catalogResults.map((result) => result.link.platform), ...(isrcLookup?.outcomes.map((outcome) => outcome.provider) ?? []), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...attemptedRecognitionProviders],
+      catalogSources: [
+        ...catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
+        ...(isrcLookup?.outcomes.map((outcome) => ({ platform: outcome.provider, catalogId: isrcLookup?.isrc ?? null, canonicalUrl: outcome.provider === "musicbrainz" ? `https://musicbrainz.org/ws/2/isrc/${encodeURIComponent(isrcLookup!.isrc)}` : null, status: outcome.status === "not_configured" ? "unavailable" : outcome.status, reason: outcome.reason })) ?? []),
+      ],
       sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
@@ -702,13 +738,16 @@ export async function processAuditJob(
       genreClassification,
       metadataSourcesChecked: [
         ...catalogResults.filter((result) => result.link.platform !== "spotify").map((result) => result.link.platform),
+        ...(isrcLookup?.outcomes.filter((outcome) => outcome.provider !== "spotify").map((outcome) => outcome.provider) ?? []),
         ...(masterTags ? ["id3"] : []),
         ...(job.filename ? ["filename"] : []),
         ...attemptedRecognitionProviders,
       ],
-      catalogSources: catalogResults
-        .filter((result) => result.link.platform !== "spotify")
-        .map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
+      catalogSources: [
+        ...catalogResults.filter((result) => result.link.platform !== "spotify")
+          .map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
+        ...(isrcLookup?.outcomes.filter((outcome) => outcome.provider !== "spotify").map((outcome) => ({ platform: outcome.provider, catalogId: isrcLookup?.isrc ?? null, canonicalUrl: `https://musicbrainz.org/ws/2/isrc/${encodeURIComponent(isrcLookup!.isrc)}`, status: outcome.status === "not_configured" ? "unavailable" : outcome.status, reason: outcome.reason })) ?? []),
+      ],
       sourceCombination: evidence.sourceCombination,
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };

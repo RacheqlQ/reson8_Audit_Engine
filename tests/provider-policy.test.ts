@@ -6,7 +6,7 @@ import { normalizeDspTrackLinks } from "../src/providers/dsp/intake.js";
 describe("provider authorization registry", () => {
   it("records terms, attribution and retention for every registered source", () => {
     for (const policy of Object.values(PROVIDER_POLICY)) {
-      expect(policy.commercialStatus).toBe("allowed");
+      expect(policy.commercialStatus).toBe(policy.id === "musicbrainz" ? "unverified" : "allowed");
       expect(policy.termsUrl).toMatch(/^https:\/\//);
       expect(policy.attribution.length).toBeGreaterThan(5);
       expect(policy.retention.length).toBeGreaterThan(5);
@@ -16,7 +16,11 @@ describe("provider authorization registry", () => {
 
   it("authorizes every explicitly approved source from the registry without environment opt-in flags", () => {
     for (const provider of Object.keys(PROVIDER_POLICY) as Array<keyof typeof PROVIDER_POLICY>) {
-      expect(providerDecision(provider)).toMatchObject({ enabled: true, reason: null, commercialStatus: "allowed" });
+      if (provider === "musicbrainz") {
+        expect(providerDecision(provider)).toMatchObject({ enabled: false, reason: "disabled by data policy", commercialStatus: "unverified" });
+      } else {
+        expect(providerDecision(provider)).toMatchObject({ enabled: true, reason: null, commercialStatus: "allowed" });
+      }
     }
   });
 
