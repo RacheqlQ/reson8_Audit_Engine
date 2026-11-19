@@ -400,7 +400,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
         marketability: "undetermined",
         rationale: hasVerifiedCommercialMetrics(evidence)
           ? "Verified commercial metrics are present, but overall A&R assessment confidence is zero. They remain source evidence and do not establish a reliable track-specific commercial verdict."
-          : "No verified, source-attributed commercial-performance metrics are available. Overall A&R assessment confidence is zero, so no commercial verdict can be issued.",
+          : "ISRC-linked catalogue evidence may support recording identity and release context, but this audit has zero assessment confidence and no source-attributed DSP performance data. Streams, listeners, saves, sales, revenue, playlist conversion and campaign outcomes remain unverified; no commercial verdict can be issued.",
       };
     }
     if (mutable.aAndRPositioning) {
