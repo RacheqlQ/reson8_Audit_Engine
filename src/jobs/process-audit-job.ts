@@ -576,7 +576,7 @@ export async function processAuditJob(
       try { normalizedIsrc = normalizeIsrc(isrcCandidate); }
       catch { normalizedIsrc = null; }
     }
-    if (normalizedIsrc && (process.env.MUSICBRAINZ_API_KEY || process.env.MUSICBRAINZ_ID || deps.collectIsrcCatalogMetadata)) {
+    if (normalizedIsrc) {
       isrcLookup = await awaitWithStage(deps, "isrc_catalog_lookup", 30_000, (signal) =>
         (deps.collectIsrcCatalogMetadata ?? collectIsrcCatalogMetadata)(normalizedIsrc!, signal),
       );
