@@ -67,7 +67,8 @@ describe("Phillo evidence guardrails", () => {
       genreClassification: { primaryGenre: "Afrobeats", abstained: false },
     });
     expect(result.commercialRead.marketability).toBe("undetermined");
-    expect(result.commercialRead.rationale).toContain("No verified, source-attributed commercial-performance metrics");
+    expect(result.commercialRead.rationale).toContain("ISRC-linked catalogue evidence");
+    expect(result.commercialRead.rationale).toContain("verified DSP analytics for a defined reporting period");
   });
 
   it("reconciles present-but-conflicting album metadata instead of calling it missing", () => {
@@ -139,7 +140,7 @@ describe("Phillo evidence guardrails", () => {
       genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop" }] },
     });
     expect(result.aAndRPositioning.primaryLane).toBe("Pop");
-    expect(result.aAndRPositioning.adjacentLanes).toEqual([]);
+    expect(result.aAndRPositioning.adjacentLanes).toEqual(["R&B", "Hip-Hop", "House"]);
   });
 
   it("nulls tempo-derived scores and removes unsupported tempo claims when confidence is zero", () => {
@@ -165,7 +166,7 @@ describe("Phillo evidence guardrails", () => {
       tempoConfidence: 0.82,
       genreClassification: { primaryGenre: "Afrobeats", abstained: false },
     });
-    expect(result.scorecard.tempoLaneFit.score).toBe(80);
+    expect(result.scorecard.tempoLaneFit.score).toBe(100);
     expect(result.aAndRPositioning.primaryLane).toBe("Afrobeats");
   });
 

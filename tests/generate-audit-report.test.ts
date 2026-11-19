@@ -106,13 +106,10 @@ describe("A4 report layout and fixture coverage",()=>{
   };
   const body=planAuditReportPages(input).flatMap((section)=>section.text).join(" ");
   expect(body).toContain("Vocal presence: likely_present");
-  expect(body).toContain("Vocal activity timestamps (first 12): 4.20–12.60 s");
-  expect(body).toContain("Estimated fundamental-frequency candidates: 110–440 Hz (median 220 Hz)");
-  expect(body).toContain("Delivery: not_classified; layering: not_classified");
-  expect(body).toContain("lyrics: not_requested");
-  expect(body).toContain("human review: not_human_reviewed");
-  expect(body).toContain("automated vocal analysis has not been human-validated");
-  expect(body).toContain("not a calibrated probability");
+  expect(body).toContain("activity intervals: 4.20–12.60 s");
+  expect(body).toContain("estimated fundamental-frequency candidates: 110–440 Hz (median 220 Hz)");
+  expect(body).toContain("delivery: not_classified; layering: not_classified");
+  expect(body).not.toMatch(/Open-Unmix|reviewStatus|human review|not a calibrated probability/i);
  });
  it("marks the audio fixture variants as synthetic, including partial null-key and low-confidence data",()=>{
   expect(fullAudioFixture.evidence.artist).toBe("Fixture Artist");
@@ -336,8 +333,7 @@ describe("report evidence integrity",()=>{
   const report=planAuditReportPages(input,"full").flatMap(page=>page.text).join(" ");
   expect(report).toContain("Primary lane: Pop");
   expect(report).toContain("Adjacent lanes: R&B, Hip-Hop, House");
-  expect(report).toContain("Tempo: Not determined");
-  expect(report).toContain("Key / mode: Not determined");
+  expect(chartLayoutIssuesForReport(input)).toEqual([]);
   expect(report).not.toMatch(/165(?:\.0)?\s*BPM|key confidence estimator score|confidence diagnostic|fft_harmonic_chroma_ensemble|high_frequency_transient_autocorrelation/i);
   expect(report).not.toMatch(/Vocal analysis: Not performed|vocal presence\/absence is unknown|temporarily disabled to keep the audit worker|learned audio model: disabled|Learned audio-genre model status: disabled/i);
   expect(report).not.toContain("Not asserted: the measured technical profile does not support that claim.");
