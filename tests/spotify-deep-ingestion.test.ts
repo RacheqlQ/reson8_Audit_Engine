@@ -41,4 +41,27 @@ describe("Spotify provider readiness", () => {
     expect(result).toMatchObject({ platform: "spotify", title: "Approved Track", artist: "Approved Artist", isrc: "NGABC2600001", evidenceStatus: "recognized" });
     expect(result.raw).not.toHaveProperty("providerPolicy");
   });
+  it("searches public playlist metadata in the configured playlist market and caps each query at ten results", async () => {
+    process.env.SPOTIFY_CLIENT_ID = "test-client";
+    process.env.SPOTIFY_CLIENT_SECRET = "test-secret";
+    process.env.SPOTIFY_PLAYLIST_MARKET = "NG";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("accounts.spotify.com/api/token")) return new Response(JSON.stringify({ access_token: "test-access-token", token_type: "Bearer", expires_in: 3600 }), { status: 200 });
+      if (url.includes("api.spotify.com/v1/search")) {
+        expect(url).toContain("type=playlist");
+        expect(url).toContain("market=NG");
+        expect(url).toContain("limit=10");
+        return new Response(JSON.stringify({ playlists: { items: [{ id: "playlist-1", name: "Afrobeats Focus", owner: { display_name: "Curator" }, external_urls: { spotify: "https://open.spotify.com/playlist/playlist-1" }, items: { total: 30 } }] } }), { status: 200 });
+      }
+      throw new Error("Unexpected Spotify request: " + url);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { SpotifyClient } = await import("../src/providers/spotify/client.js");
+    const client = new SpotifyClient();
+    const items = await client.searchPlaylists("Afrobeats reflective");
+    expect(items).toHaveLength(1);
+    expect(items[0].name).toBe("Afrobeats Focus");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

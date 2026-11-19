@@ -186,6 +186,7 @@ export async function discoverPlaylistCandidates(
           if (!id || !name) continue;
           const owner = item.owner && typeof item.owner === "object" ? item.owner as Record<string, unknown> : {};
           const external = item.external_urls && typeof item.external_urls === "object" ? item.external_urls as Record<string, unknown> : {};
+          const items = item.items && typeof item.items === "object" ? item.items as Record<string, unknown> : {};
           const tracks = item.tracks && typeof item.tracks === "object" ? item.tracks as Record<string, unknown> : {};
           const candidate = makeCandidate({
             provider: "spotify",
@@ -194,7 +195,7 @@ export async function discoverPlaylistCandidates(
             url: playlistUrl("spotify", id, external.spotify),
             curatorName: clean(owner.display_name) || null,
             description: clean(item.description) || null,
-            trackCount: typeof tracks.total === "number" ? tracks.total : null,
+            trackCount: typeof items.total === "number" ? items.total : typeof tracks.total === "number" ? tracks.total : null,
             containsIsrc: null,
             lanes,
             moods,
