@@ -58,6 +58,8 @@ describe("authorized catalogue calls without per-provider opt-in flags", () => {
     expect(deezer).toMatchObject({ platform: "deezer", title: "Deezer Track", artist: "Deezer Artist", evidenceStatus: "recognized" });
     for (const result of [apple, youtube, deezer]) {
       expect(result.raw).not.toHaveProperty("providerPolicy");
+    expect(result.retrievedAt).toMatch(/^\\d{4}-\\d{2}-\\d{2}T/);
+    expect(Number.isFinite(Date.parse(result.retrievedAt!))).toBe(true);
       expect(result.retrievedAt).toMatch(/^\\d{4}-\\d{2}-\\d{2}T/);
       expect(Number.isFinite(Date.parse(result.retrievedAt!))).toBe(true);
     }
@@ -85,6 +87,8 @@ describe("authorized catalogue calls without per-provider opt-in flags", () => {
       evidenceStatus: "recognized",
     });
     expect(result.externalIds.apple_music).toBe("67890");
+    expect(result.retrievedAt).toMatch(/^\\d{4}-\\d{2}-\\d{2}T/);
+    expect(Number.isFinite(Date.parse(result.retrievedAt!))).toBe(true);
   });
 
   it("calls Audiomack official signed Data API with credentials and no provider enable flag", async () => {
