@@ -298,7 +298,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   const dynamicRangeDimension = mutable.scorecard?.dynamicRangeLoudness;
   if (dynamicRangeDimension && typeof dynamicRangeDimension === "object") {
     dynamicRangeDimension.score = null;
-    dynamicRangeDimension.rationale = "Not scored: RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness targets. No destination-specific loudness or true-peak target was supplied.";
+    dynamicRangeDimension.rationale = "Not scored: RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied.";
   }
   if (sonicDna?.channels === 1 && Array.isArray(mutable.risks)
     && !mutable.risks.some((risk: unknown) => typeof risk === "string" && /mono master delivery risk/i.test(risk))) {

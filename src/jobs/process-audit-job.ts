@@ -14,7 +14,7 @@ import { readAudioTags } from "../metadata/audio-tags.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
 import { collectIsrcCatalogMetadata, type IsrcCatalogLookup } from "../providers/dsp/isrc-catalog.js";
-import { discoverPlaylistCandidates, type PlaylistDiscoveryInput, type PlaylistDiscoveryResult } from "../providers/dsp/playlist-discovery.js";
+import type { PlaylistDiscoveryInput, PlaylistDiscoveryResult } from "../providers/dsp/playlist-discovery.js";
 import { normalizeIsrc } from "../providers/musicbrainz/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
