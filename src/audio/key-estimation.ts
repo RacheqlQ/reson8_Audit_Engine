@@ -46,6 +46,9 @@ const PENTATONIC = {
   minor: [1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0],
 };
 
+export const MIN_RELIABLE_KEY_CONFIDENCE = 0.12;
+export const MIN_KEY_SEGMENT_AGREEMENT = 0.6;
+
 type Mode = "major" | "minor";
 interface Candidate { key: number; mode: Mode; score: number; }
 
@@ -345,14 +348,14 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   const confidence = clamp((margin * 2.5 + 0.08) * (0.35 + 0.65 * agreement));
   const tuningCents = tuningValues.length ? weightedMedian(tuningValues) : 0;
 
-  if (agreement < 0.6) {
+  if (agreement < MIN_KEY_SEGMENT_AGREEMENT) {
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
       fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, limitation: "Key estimates varied across audio segments; no single key is asserted.",
     };
   }
-  if (confidence < 0.12 || margin < 0.015) {
+  if (confidence < MIN_RELIABLE_KEY_CONFIDENCE || margin < 0.015) {
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
