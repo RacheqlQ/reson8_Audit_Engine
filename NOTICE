@@ -15,7 +15,7 @@ Operationally authorized integrations (subject to credentials and source-specifi
 - Deezer public track metadata: https://developers.deezer.com/
 
 Authorized in the registry but not yet wired as callable integrations/models in this service
-- MusicBrainz: https://musicbrainz.org/doc/MusicBrainz_Database/License
+- MusicBrainz ISRC lookup: https://musicbrainz.org/doc/MusicBrainz_API
 - ListenBrainz: https://listenbrainz.org/
 - YouTube Data API: https://developers.google.com/youtube/terms/api-services-terms-of-service
 - Last.fm: https://www.last.fm/api/tos
