@@ -4,9 +4,10 @@ import { loadReportFonts } from "./fonts.js";
 import { isReliableKey, isReliableTempo, hasMultipleTuningWindows, sanitizeAssessmentForEvidence } from "./evidence-guardrails.js";
 import { buildStrengthRiskChartRows, chartPanelHeight, chartPanelLayoutErrors, countEvidenceLayers, drawChartPanel, type ChartPanelInput } from "./charts.js";
 import { hasSubmittedMasterAudio } from "../audio/master-audio-evidence.js";
+import type { RealMasterAuditContract } from "../audio/real-master-contract.js";
 
 export type AuditReportTier = "sample" | "full";
-export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; }
+export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; executionMode?:"master"|"combined"|"dsp_link"; realMasterContract?:RealMasterAuditContract; }
 export interface ReportRect { x:number;y:number;width:number;height:number;id:string; }
 export interface ReportPagePlan { title:string;text:string[]; }
 const W=595.28,H=841.89,M=48,TOP=735,BOTTOM=76,AVAILABLE=TOP-BOTTOM;
@@ -434,7 +435,20 @@ const curatorCampaignBody=[
  e.isrc ? "Marketing application: use the reconciled recording identity and provider-backed genre lanes to search current DSP playlist catalogues. Where returned, candidate playlists are listed in A&R positioning; catalogue presence is not evidence of demand or campaign results." : "Marketing targeting remains limited until a recording-level identifier is available."
 ]},
  {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>(({OBSERVED:"Measured from the uploaded master",RECOGNIZED:"Returned by an external identification source",RECONCILED:"Cross-checked across independent sources",INFERRED:"Analytical hypothesis — not independently verified","INDUSTRY PRACTICE":"General industry guidance"} as Record<string,string>)[x.label]??"Evidence item")+" — "+x.claim+" [Source: "+x.source+"]")},
- {title:"Sonic DNA and technical profile",accent:"blue",body:sonicDnaBody},
+ {title:"Sonic DNA and technical profile",accent:"blue",body:["AUDIT EXECUTION MODE: "+(i.executionMode==="dsp_link"?"METADATA-ONLY — no uploaded master was analysed; Sonic DNA measurements are not claimed.":i.executionMode==="combined"?"COMBINED — uploaded master measurements are separate from DSP catalogue records.":i.executionMode==="master"?"UPLOADED MASTER — direct signal measurements are derived from the submitted audio.":sourceCombinationLabel),...sonicDnaBody]},
+ ...(i.realMasterContract? [{
+  title:"Master evidence contract and provenance",accent:"teal" as const,
+  body:[
+   "SOURCE FILE: "+i.realMasterContract.source.sourceAudioPath,
+   "SOURCE SHA-256: "+i.realMasterContract.source.sha256,
+   "SOURCE MIME / SIZE: "+i.realMasterContract.source.mimeType+" / "+i.realMasterContract.source.byteLength+" bytes",
+   ...i.realMasterContract.directSignalMeasurements.map((m)=>m.name+": "+(m.status==="measured"?text(m.value)+" "+m.unit+"; method "+m.method:"UNAVAILABLE; "+m.diagnostics.map((d)=>d.code+": "+d.message).join("; "))),
+   ...i.realMasterContract.calibratedPredictions.map((p)=>p.name+": "+(p.status==="predicted"?p.label+" ("+(p.probability*100).toFixed(1)+"% calibrated; "+p.calibration.validationDataset+")":"UNAVAILABLE; "+p.reasonCodes.join(", ")+" — "+p.diagnostics.map((d)=>d.message).join("; "))),
+   ...i.realMasterContract.externalRecords.map((r)=>r.status==="verified"?"EXTERNAL RECORD: "+r.provider+" / "+r.recordId+"; fields: "+Object.keys(r.fields).join(", "):"EXTERNAL RECORD UNAVAILABLE: "+r.provider+" — "+r.reasonCode+": "+r.diagnostic.message),
+   ...i.realMasterContract.pipelineDiagnostics.map((d)=>"PIPELINE LIMITATION: "+d.code+" — "+d.message),
+   "Provenance rule: direct signal measurements are observed from the uploaded master; catalogue records are provider-returned and do not establish streams, listeners, revenue or demand."
+  ]
+ }] : []),
  {title:"Creative identity and A&R positioning",accent:"violet",body:["Provider-backed genre evidence: "+primaryGenre+(genreSources.length?"; contributing sources: "+genreSources.join(", "):""),a.creativeIdentity.replace(/automated classification model has abstained/gi,""),"Primary lane: "+a.aAndRPositioning.primaryLane,"Adjacent lanes: "+(a.aAndRPositioning.adjacentLanes.length?a.aAndRPositioning.adjacentLanes.join(", "):"Not established — no supported adjacent-lane evidence is available."),
  ...(playlistCandidateLines.length?["DSP playlist candidates aligned to the confirmed genre/adjacent lanes:",...playlistCandidateLines]:["No aligned DSP playlist candidates are currently available from the configured catalogue search APIs."]),
  playlistMoodSummary,
