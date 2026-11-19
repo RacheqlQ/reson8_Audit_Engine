@@ -64,3 +64,20 @@ describe("DSP key estimator", () => {
     }));
   });
 });
+
+
+describe("key-estimation candidate and independent tuning diagnostics", () => {
+  it("retains ranked key candidates and tuning evidence when segment disagreement withholds the key", () => {
+    const first = chord([261.6256, 329.6276, 391.9954], 6);
+    const second = chord([369.9944, 466.1638, 554.3653], 6);
+    const combined = new Float32Array(first.length + second.length);
+    combined.set(first);
+    combined.set(second, first.length);
+    const result = estimateKey(combined, 8000);
+    expect(result.key).toBeNull();
+    expect(result.topCandidates.length).toBeGreaterThan(0);
+    expect(result.topCandidates[0]).toMatchObject({ key: expect.any(String), mode: expect.any(String) });
+    expect(result.tuningCents).not.toBeNull();
+    expect(result.tuningEvidenceWindows).toBeGreaterThan(0);
+  });
+});

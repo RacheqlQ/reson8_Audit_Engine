@@ -1,6 +1,7 @@
 import { adjacentGenresFor, findGenre, GENRE_TAXONOMY } from "../genre/taxonomy.js";
-export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.5;
-export const MIN_RELIABLE_KEY_CONFIDENCE = 0.8;
+import { MIN_RELIABLE_KEY_CONFIDENCE, MIN_KEY_SEGMENT_AGREEMENT } from "../audio/key-estimation.js";
+import { MIN_RELIABLE_TEMPO_CONFIDENCE } from "../audio/sonic-dna.js";
+export { MIN_RELIABLE_KEY_CONFIDENCE, MIN_RELIABLE_TEMPO_CONFIDENCE };
 
 type TempoEvidence = {
   bpm?: unknown;
@@ -31,6 +32,14 @@ export function isReliableTempo(value: TempoEvidence): boolean {
   return true;
 }
 
+export function hasMultipleTuningWindows(value: Record<string, unknown> | null | undefined): boolean {
+  if (!value) return false;
+  const tuning = value.keyTuningCents;
+  const windows = value.tuningEvidenceWindows;
+  return typeof tuning === "number" && Number.isFinite(tuning) && tuning >= -50 && tuning <= 50
+    && typeof windows === "number" && Number.isInteger(windows) && windows >= 2;
+}
+
 export function isReliableKey(value: Record<string, unknown> | null | undefined): boolean {
   if (!value) return false;
   const key = value.key;
@@ -44,7 +53,7 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
     && typeof confidence === "number" && Number.isFinite(confidence)
     && confidence >= MIN_RELIABLE_KEY_CONFIDENCE && confidence <= 1
     && typeof agreement === "number" && Number.isFinite(agreement)
-    && agreement >= 0.8 && agreement <= 1;
+    && agreement >= MIN_KEY_SEGMENT_AGREEMENT && agreement <= 1;
 }
 
 function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean, suppressVocal: boolean, suppressKey: boolean): unknown {
@@ -90,7 +99,7 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
 }
 
 const TEMPO_UNAVAILABLE_RATIONALE = "Not scored: the uploaded-master tempo estimate did not pass the confidence gate, so a numeric tempo-to-lane comparison would not be sufficiently supported for this release.";
-const RHYTHM_UNAVAILABLE_RATIONALE = "Not scored: the audio worker did not return a stable beat grid with at least eight measured timestamps, so timing consistency cannot be calculated reliably.";
+const RHYTHM_UNAVAILABLE_RATIONALE = "Not scored: the current detector generates a provisional beat-grid candidate but does not independently validate beat timing. A timestamp count alone is not proof of rhythmic consistency.";
 
 const GENRE_UNCONFIRMED_RATIONALE =
   "No definitive provider-backed primary genre is available because the supplied genre classification abstained or lacks a supported primary genre. Keep lane positioning unconfirmed until named source evidence supports a cautious hypothesis.";
@@ -250,8 +259,10 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     const rhythmDimension = result.scorecard.rhythmicConsistency;
     const primaryGenre = hasProviderGenre && genre && typeof genre.primaryGenre === "string" ? findGenre(genre.primaryGenre) : null;
     const bpm = typeof sonicDna?.bpm === "number" && Number.isFinite(sonicDna.bpm) ? sonicDna.bpm : null;
-    if (!reliableTempo || !primaryGenre?.tempoHints || bpm === null) {
+    if (!reliableTempo || bpm === null) {
       if (tempoDimension) result.scorecard.tempoLaneFit = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
+    } else if (!primaryGenre?.tempoHints) {
+      if (tempoDimension) result.scorecard.tempoLaneFit = { score: null, rationale: "Not scored: the uploaded-master tempo is confidence-qualified, but no source-backed primary genre with a reference tempo range is available for a defensible tempo-to-lane comparison." };
     } else {
       const [low, high] = primaryGenre.tempoHints;
       const distance = bpm < low ? low - bpm : bpm > high ? bpm - high : 0;

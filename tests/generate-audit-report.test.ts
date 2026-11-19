@@ -83,11 +83,11 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("shows tempo only when the master estimate passes the confidence gate",()=>{
   const tentative=structuredClone(fullAudioFixture) as any;
-  tentative.sonicDna.tempoConfidence=0.32;
+  tentative.sonicDna.tempoConfidence=0.08;
   tentative.sonicDna.bpm=96;
   expect(sonicDashboardRowsForReport(tentative.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
   const detected=structuredClone(fullAudioFixture) as any;
-  detected.sonicDna.tempoConfidence=0.9;
+  detected.sonicDna.tempoConfidence=0.1;
   expect(sonicDashboardRowsForReport(detected.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).not.toBeNull();
   const zero=structuredClone(fullAudioFixture) as any;
   zero.sonicDna.tempoConfidence=0;
@@ -254,6 +254,14 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(sourceBackedReport).toContain("Album: Conflicting source values");
   expect(sourceBackedReport).toContain("album: Sample Release - EP vs Sample Release");
  });
+ it("reports detector-confirmed key and mode when the shared detector gates pass",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.sonicDna={...input.sonicDna,key:"A",mode:"minor",keyConfidence:0.78,keySegmentAgreement:0.9};
+  expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
+  const dashboardRows=sonicDashboardRowsForReport(input.sonicDna,true);
+  expect(dashboardRows.find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
+  expect(dashboardRows.find(row=>row.label==="TEMPO BPM")?.value).toBe("96.0");
+ });
  it("withholds a low-confidence harmonic key and its diagnostic model score from the report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
@@ -329,7 +337,7 @@ describe("report evidence integrity",()=>{
    confidence:0.9,abstained:false,adjacentLanes:["R&B","Hip-Hop","House"],
    regionTags:[],sceneTags:[],unmappedTags:[],model:{status:"disabled",predictions:[]},
   };
-  input.sonicDna={...input.sonicDna,provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.16,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,vocalFeatures:{status:"not_analyzed",reason:"Vocal analysis is temporarily disabled to keep the audit worker within its memory limit."},genreClassification};
+  input.sonicDna={...input.sonicDna,provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.08,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,vocalFeatures:{status:"not_analyzed",reason:"Vocal analysis is temporarily disabled to keep the audit worker within its memory limit."},genreClassification};
   input.evidence={...input.evidence,genreClassification};
   const report=planAuditReportPages(input,"full").flatMap(page=>page.text).join(" ");
   expect(report).toContain("Primary lane: Pop");
@@ -361,4 +369,39 @@ describe("report evidence integrity",()=>{
     expect(report.indexOf("SPOTIFY PLAYLIST RESULTS")).toBeLessThan(report.indexOf("APPLE MUSIC PLAYLIST RESULTS"));
   });
 
+});
+
+
+describe("Sonic DNA provisional candidate reporting", () => {
+  it("shows tempo and key candidates without promoting them to confirmed measurements", () => {
+    const rows = sonicDashboardRowsForReport({
+      provenance: "uploaded_audio_master",
+      bpm: null,
+      tempoCandidateBpm: 165,
+      tempoConfidence: 0.16,
+      key: null,
+      mode: null,
+      keyConfidence: 0.12,
+      keySegmentAgreement: 0.5,
+      keyTuningCents: 18,
+      tuningEvidenceWindows: 3,
+      rhythmFeatures: { abstentionReason: "Tempo candidate prominence is too weak to support a reliable result.", beatGridStatus: "tentative", beatTimesSeconds: Array.from({ length: 512 }, (_, index) => index * 0.36) },
+      harmonicFeatures: {
+        limitation: "Key estimates varied across audio segments; no single key is asserted.",
+        topCandidates: [
+          { key: "C", mode: "major", score: 0.42 },
+          { key: "A", mode: "minor", score: 0.39 },
+        ],
+      },
+    }, true);
+    expect(rows.find((row) => row.label === "TEMPO BPM")?.value).toBeNull();
+    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 (provisional");
+    expect(rows.find((row) => row.label === "TEMPO DETECTION REASON")?.value).toContain("reliable result");
+    expect(rows.find((row) => row.label === "BEAT GRID STATUS")?.value).toContain("tentative (candidate; not independently validated)");
+    expect(rows.find((row) => row.label === "BEAT TIMESTAMP COUNT")?.value).toContain("512 generated timestamps");
+    expect(rows.find((row) => row.label === "KEY / MODE")?.value).toBeNull();
+    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("C major");
+    expect(rows.find((row) => row.label === "KEY CONFIDENCE DIAGNOSTIC")?.value).toContain("not a calibrated probability");
+    expect(rows.find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS")?.value).toBe("18 (multiple tonal windows; provisional)");
+  });
 });

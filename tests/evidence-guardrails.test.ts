@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isReliableKey, isReliableTempo, sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
+import { isReliableKey, isReliableTempo, hasMultipleTuningWindows, sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
 
 const baseAssessment = {
   executiveSummary: "The recording is a 156 BPM high-energy release with a strong rhythmic lane.",
@@ -35,19 +35,30 @@ describe("Phillo evidence guardrails", () => {
     expect(isReliableTempo({ bpm: 156, tempoConfidence: 0, rhythmFeatures: { status: "measured" } })).toBe(false);
   });
 
-  it("accepts only bounded BPM with explicit confidence at or above the conservative reporting gate", () => {
-    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.5 })).toBe(true);
-    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.49 })).toBe(false);
+  it("uses the same tempo acceptance floor as the detector", () => {
+    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.1 })).toBe(true);
+    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.099 })).toBe(false);
     expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.9, abstentionReason: "ambiguous pulse" })).toBe(false);
     expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.9, rhythmFeatures: { status: "measured", abstentionReason: "ambiguous pulse" } })).toBe(false);
     expect(isReliableTempo({ bpm: 0, tempoConfidence: 0.9 })).toBe(false);
     expect(isReliableTempo({ bpm: null, tempoConfidence: 0.9 })).toBe(false);
   });
 
-  it("withholds key labels unless confidence and segment agreement both reach the 80% reporting target", () => {
-    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.8, keySegmentAgreement: 0.8 })).toBe(true);
-    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.79, keySegmentAgreement: 0.95 })).toBe(false);
-    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.6 })).toBe(false);
+  it("does not mislabel a missing genre tempo range as a failed tempo-confidence gate", () => {
+    const result = sanitizeAssessmentForEvidence(baseAssessment, {
+      bpm: 96,
+      tempoConfidence: 0.94,
+      genreClassification: { primaryGenre: null, abstained: true },
+    });
+    expect(result.scorecard.tempoLaneFit.score).toBeNull();
+    expect(result.scorecard.tempoLaneFit.rationale).toContain("tempo is confidence-qualified");
+    expect(result.scorecard.tempoLaneFit.rationale).not.toContain("did not pass the confidence gate");
+  });
+
+  it("uses the same key confidence and segment agreement floors as the detector", () => {
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.12, keySegmentAgreement: 0.6 })).toBe(true);
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.119, keySegmentAgreement: 0.95 })).toBe(false);
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.599 })).toBe(false);
     expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.95, harmonicFeatures: { status: "insufficient_evidence" } })).toBe(false);
     expect(isReliableKey({ key: null, mode: null, keyConfidence: 0.99, keySegmentAgreement: 1 })).toBe(false);
   });
@@ -368,7 +379,7 @@ describe("Phillo evidence guardrails", () => {
 describe("deterministic evidence scorecard",()=>{
  it("scores source-backed metadata completeness and discounts conflicting identity fields",()=>{
   const result=sanitizeAssessmentForEvidence(baseAssessment,{
-   provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.16,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,
+   provenance:"uploaded_audio_master",bpm:165,tempoConfidence:0.08,key:"C",mode:"major",keyConfidence:0.12,keySegmentAgreement:0.5,
    rhythmFeatures:{beatGridStatus:"tentative",beatTimesSeconds:Array.from({length:32},(_,index)=>index*0.36)},
    genreClassification:{primaryGenre:"Pop",abstained:false,genres:[{id:"pop",label:"Pop",confidence:0.9,sources:["apple_music"]}],adjacentLanes:["R&B","Hip-Hop","House"]},
   },{
@@ -382,4 +393,17 @@ describe("deterministic evidence scorecard",()=>{
   expect(result.scorecard.releaseReadiness.score).toBeNull();
   expect(result.scorecard.tempoLaneFit.rationale).not.toBe(result.scorecard.rhythmicConsistency.rationale);
  });
+});
+
+
+describe("independent tuning reliability", () => {
+  it("accepts a measured tuning offset even when key confidence is unresolved", () => {
+    expect(hasMultipleTuningWindows({ key: null, mode: null, keyConfidence: 0.12, keyTuningCents: 18, tuningEvidenceWindows: 3 })).toBe(true);
+  });
+
+  it("rejects tuning offsets without multiple supporting tonal windows", () => {
+    expect(hasMultipleTuningWindows({ keyTuningCents: 18, tuningEvidenceWindows: 1 })).toBe(false);
+    expect(hasMultipleTuningWindows({ keyTuningCents: null, tuningEvidenceWindows: 4 })).toBe(false);
+    expect(hasMultipleTuningWindows({ keyTuningCents: 62, tuningEvidenceWindows: 4 })).toBe(false);
+  });
 });

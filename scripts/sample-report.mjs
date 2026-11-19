@@ -81,6 +81,12 @@ for(const [name,input] of variants){
   const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
   const chartLabels=[safeAssessment.aAndRPositioning.primaryLane,...safeAssessment.aAndRPositioning.adjacentLanes].filter(value=>typeof value==="string"&&value.trim());
   const normalizedExtracted=extracted.replace(/\s+/g," ");
+  if(name==="ambiguous-audio-low-confidence"){
+   for(const expected of ["128 (provisional","C major","14 (multiple tonal windows; provisional)"]){
+    if(!normalizedExtracted.includes(expected))throw new Error(filename+" is missing the expected provisional audio evidence: "+expected);
+   }
+   if(/TEMPO BPM\s+128(?:\.0)?\s+BPM/.test(normalizedExtracted))throw new Error(filename+" promoted a zero-confidence tempo candidate to a confirmed BPM result");
+  }
   for(const label of chartLabels){
    if(!normalizedExtracted.includes(normalizeReportText(label).replace(/\s+/g," ").trim()))throw new Error(filename+" is missing a complete lane-constellation label: "+label);
   }
