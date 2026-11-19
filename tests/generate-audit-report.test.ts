@@ -377,7 +377,9 @@ describe("Sonic DNA provisional candidate reporting", () => {
       keySegmentAgreement: 0.5,
       keyTuningCents: 18,
       tuningEvidenceWindows: 3,
+      rhythmFeatures: { beatGridStatus: "tentative", beatTimesSeconds: Array.from({ length: 512 }, (_, index) => index * 0.36) },
       harmonicFeatures: {
+        limitation: "Key estimates varied across audio segments; no single key is asserted.",
         topCandidates: [
           { key: "C", mode: "major", score: 0.42 },
           { key: "A", mode: "minor", score: 0.39 },
@@ -386,6 +388,9 @@ describe("Sonic DNA provisional candidate reporting", () => {
     }, true);
     expect(rows.find((row) => row.label === "TEMPO BPM")?.value).toBeNull();
     expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 (provisional");
+    expect(rows.find((row) => row.label === "TEMPO CANDIDATE REASON")?.value).toContain("reliability");
+    expect(rows.find((row) => row.label === "BEAT GRID STATUS")?.value).toContain("tentative (candidate; not independently validated)");
+    expect(rows.find((row) => row.label === "BEAT TIMESTAMP COUNT")?.value).toContain("512 generated timestamps");
     expect(rows.find((row) => row.label === "KEY / MODE")?.value).toBeNull();
     expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("C major");
     expect(rows.find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS")?.value).toBe("18 (multiple tonal windows; provisional)");
