@@ -1,4 +1,6 @@
 import { estimateKey } from "./key-estimation.js";
+
+export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.1;
 import { analyzeVocalSignalDiagnostics } from "./vocal-signal-diagnostics.js";
 import type { GenreFusionResult } from "../genre/fusion.js";
 export interface TempoEstimate {
@@ -176,7 +178,7 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const sortedScores=[...scores.values()].sort((a,b)=>a-b);
  const median=sortedScores[Math.floor(sortedScores.length/2)]??0;
  const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
- if(confidence<0.1)
+ if(confidence<MIN_RELIABLE_TEMPO_CONFIDENCE)
   return {...emptyTempoEstimate("Tempo candidate prominence is too weak to support a reliable result."),topCandidateBpm:bestBpm,confidence,candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
  const related=[0.5,1/3,2,3]
   .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
