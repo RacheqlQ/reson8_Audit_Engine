@@ -239,8 +239,29 @@ describe("Phillo evidence guardrails", () => {
       rmsLevelDbfs: null,
     });
     expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();
-    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("dynamic-range and loudness/RMS measurements are unavailable");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("destination-specific integrated-loudness");
     expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("Key confidence");
+  });
+
+  it("keeps RMS-envelope technical readiness unscored without destination-specific delivery targets", () => {
+    const assessment = {
+      ...baseAssessment,
+      scorecard: {
+        ...baseAssessment.scorecard,
+        dynamicRangeLoudness: { score: 78, rationale: "A model-generated technical readiness score." },
+      },
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      dynamicRangeDb: 22.36,
+      loudnessLufs: -15.1,
+      loudnessRangeLu: 10.8,
+      truePeakDbfs: -2.3,
+      rmsLevelDbfs: -20.3,
+    });
+    expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("destination-specific integrated-loudness");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("model-generated");
   });
 
   it("withholds every numeric score when overall assessment confidence is zero", () => {
@@ -264,7 +285,7 @@ describe("Phillo evidence guardrails", () => {
     expect(Object.values(result.scorecard).every((dimension) => dimension.score === null)).toBe(true);
     expect(Object.values(result.scorecard).every((dimension) => /overall assessment confidence is zero/i.test(dimension.rationale))).toBe(true);
     expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("Key confidence");
-    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("Direct dynamic-range and loudness/RMS measurements are unavailable");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("destination-specific integrated-loudness");
   });
 
   it("removes specific key and mode assertions from narrative when key confidence is below the reporting gate", () => {
@@ -311,7 +332,7 @@ describe("Phillo evidence guardrails", () => {
     const claims = result.evidenceLabels.map((entry) => entry.claim).join(" ");
     expect(claims).not.toMatch(/tempo|BPM|key and mode|major|vocal|instrumental/i);
     expect(claims).toContain("RMS loudness level: -11.32 dBFS");
-    expect(claims).toContain("Measured dynamic range: 13.11 dB");
+    expect(claims).toContain("Measured RMS-envelope spread (internal proxy; not mastering dynamic range): 13.11 dB");
   });
 
   it("fills all five scorecard dimensions when a zero-confidence assessment is incomplete", () => {

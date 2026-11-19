@@ -143,10 +143,22 @@ export function paginateArNotesSummary(lines:string[]):string[][] {
 }
 export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecisionContext {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
+ const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[])]
+  .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
+  .filter((item,index,items)=>items.indexOf(item)===index)
+  .slice(0,1)
+  .map((item)=>item.length>105?item.slice(0,102)+"...":item);
+ const fullSummary=val(safeAssessment.executiveSummary,"Further listening and source verification are required.");
+ const safeSummary=fullSummary.length>180?fullSummary.slice(0,177)+"...":fullSummary;
+ const nextAction="Verify identity, rights and the submitted master before pitching.";
  return {
   heading:"DECISION CONTEXT",
   verdict:coverVerdictLabel(input).toUpperCase(),
-  summary:val(safeAssessment.executiveSummary,"No executive summary supplied."),
+  summary:[
+   "Decision basis: "+safeSummary,
+   "Open diligence: "+(openItems.join(" ")||"No additional diligence items were recorded."),
+   "Next action: "+nextAction,
+  ].join(" "),
   prompts:[
    "What evidence would change the current decision?",
    "Which identity, rights or source gaps remain unresolved?",
@@ -209,7 +221,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  {title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,rows:[
   {label:tempoReliable?"BPM":"BPM CANDIDATE (TENTATIVE)",value:hasAudio&&typeof s?.bpm==="number"&&typeof s?.tempoConfidence==="number"&&s.tempoConfidence>0?metric(s.bpm,1):null},
   {label:"KEY / MODE",value:hasAudio&&isReliableKey(s)?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
-  {label:"KEY CONFIDENCE",value:hasAudio&&typeof s?.keyConfidence==="number"?Math.round(s.keyConfidence*100)+"%":null},
+  {label:"KEY SCORE (UNCALIBRATED)",value:hasAudio&&typeof s?.keyConfidence==="number"?Math.round(s.keyConfidence*100)+"%":null},
   {label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},
   {label:"RMS LEVEL dBFS",value:hasAudio?metric(s?.rmsLevelDbfs,1):null},
   {label:"LOUDNESS RANGE LRA",value:hasAudio?metric(s?.loudnessRangeLu,1):null},
@@ -223,7 +235,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
   {label:"RMS ENVELOPE SPREAD",value:hasAudio?metric(s?.dynamicRangeDb,1):null}
  ],shows:tempoReliable?"Confidence-qualified tempo plus master-derived energy measurements.":"Tempo candidate is shown for review, not as a confirmed beat grid; RMS energy and envelope spread are signal descriptors.",cantShow:"A genre verdict or listener reaction from these measurements alone."}];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
- if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"Dynamic / RMS level",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
+ if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"RMS / envelope",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
  if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(a.strengths.slice(0,10),a.risks.slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
  if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:a.promotionPlan.playlistCategories[0]??"Category to investigate"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
  if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",evidenceClass:"illustrative",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
@@ -314,11 +326,13 @@ function sections(i:AuditReportInput):Section[]{
    "Spectral profile: centroid " + metric(s?.spectralCentroidHz,0) + " Hz; bandwidth " + metric(s?.spectralBandwidthHz,0) + " Hz; 85% rolloff " + metric(s?.spectralRolloffHz,0) + " Hz; zero-crossing rate " + metric(s?.zeroCrossingRate,3),
    "Measurement note: EBU R128 LUFS/LRA and true peak are separate from the internal RMS-envelope spread; RMS level, RMS energy and spectral descriptors are signal measurements, not subjective mastering-quality scores.",
    "Tempo estimator: " + val(rhythmDiagnostics.method) + "; confidence diagnostic: " + metric(s?.tempoConfidence,2) + "; candidates: " + val(rhythmDiagnostics.candidateBpms) + "; abstention: " + val(rhythmDiagnostics.abstentionReason,"none recorded"),
-   "Key detector: " + val(harmonicDiagnostics.method) + "; confidence diagnostic: " + metric(s?.keyConfidence,2) + "; segment agreement: " + metric(s?.keySegmentAgreement,2) + "; abstention: " + val(harmonicDiagnostics.limitation??(Array.isArray(s?.limitations)?s.limitations.find((item)=>typeof item==="string"&&item.toLowerCase().includes("key")):null),"none recorded"),
+   "Key detector: " + val(harmonicDiagnostics.method) + "; confidence diagnostic: " + metric(s?.keyConfidence,2) + "; segment agreement: " + metric(s?.keySegmentAgreement,2,"Unavailable — analyser did not return segment agreement") + "; abstention: " + val(harmonicDiagnostics.limitation??(Array.isArray(s?.limitations)?s.limitations.find((item)=>typeof item==="string"&&item.toLowerCase().includes("key")):null),"none recorded"),
    "Beat-grid diagnostic: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatGridStatus) + "; beat timestamps: " + val((s?.rhythmFeatures as Record<string,unknown>|undefined)?.beatTimesSeconds ? ((s?.rhythmFeatures as Record<string,unknown>).beatTimesSeconds as unknown[]).length : 0) + "; downbeat grouping is a four-beat diagnostic assumption, not a verified bar structure.",
-   "Key analysis: method " + val((s?.harmonicFeatures as Record<string,unknown>|undefined)?.method) + "; tuning offset " + metric(s?.keyTuningCents,2) + " cents; segment agreement " + metric(s?.keySegmentAgreement,2) + ". Key confidence is an estimator diagnostic, not calibrated accuracy.",
+   "Key analysis: method " + val((s?.harmonicFeatures as Record<string,unknown>|undefined)?.method) + "; tuning offset " + metric(s?.keyTuningCents,2,"Unavailable — analyser did not return tuning offset") + " cents; segment agreement " + metric(s?.keySegmentAgreement,2,"Unavailable — analyser did not return segment agreement") + ". Key confidence is an estimator diagnostic, not calibrated accuracy.",
    "Rhythm scope: onset periodicity and candidate beat timestamps are measured; groove, swing, syncopation, verified bar structure and section boundaries are not independently classified in this analysis version.",
-   "Rule-based signal descriptors (not an emotion or mood classifier): " + val(s?.moodTags)
+   "Rule-based signal descriptors (not an emotion or mood classifier): " + val(s?.moodTags),
+   "Mood classification: Not performed — signal descriptors are not a mood classification; no validated mood classifier is configured.",
+   "Musical context: provider/catalog evidence — " + (primaryGenre.startsWith("No primary genre") ? "not established from available provider metadata" : primaryGenre) + "; audio-only genre classification remains " + val(genreModel.status,"not configured") + "."
   );
   if (vocalAnalysisPerformed) {
    const vocalSegments = Array.isArray(vocalFeatures?.activitySegments)
@@ -440,10 +454,10 @@ function sections(i:AuditReportInput):Section[]{
 ]},
  {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>(({OBSERVED:"Measured from the uploaded master",RECOGNIZED:"Returned by an external identification source",RECONCILED:"Cross-checked across independent sources",INFERRED:"Analytical hypothesis — not independently verified","INDUSTRY PRACTICE":"General industry guidance"} as Record<string,string>)[x.label]??"Evidence item")+" — "+x.claim+" [Source: "+x.source+"]")},
  {title:"Sonic DNA and technical profile",accent:"blue",body:sonicDnaBody},
- {title:"Creative identity and A&R positioning",accent:"violet",body:["Provider-backed genre evidence: "+primaryGenre+(genreSources.length?"; contributing sources: "+genreSources.join(", "):""),"Learned audio-genre model status: "+val(genreModel.status,"not recorded")+". Provider tags are catalog/metadata evidence, not an audio-only genre prediction.",a.creativeIdentity.replace(/automated classification model has abstained/gi,"the learned audio-genre model is disabled; no audio-only genre verdict is available"),"Primary lane: "+a.aAndRPositioning.primaryLane,"Adjacent lanes: "+a.aAndRPositioning.adjacentLanes.join(", "),a.aAndRPositioning.rationale]},
+ {title:"Creative identity and A&R positioning",accent:"violet",body:["Provider-backed genre evidence: "+primaryGenre+(genreSources.length?"; contributing sources: "+genreSources.join(", "):""),"Learned audio-genre model status: "+val(genreModel.status,"not recorded")+". Provider tags are catalog/metadata evidence, not an audio-only genre prediction.",a.creativeIdentity.replace(/automated classification model has abstained/gi,"the learned audio-genre model is disabled; no audio-only genre verdict is available"),"Primary lane: "+a.aAndRPositioning.primaryLane,"Adjacent lanes: "+(a.aAndRPositioning.adjacentLanes.length?a.aAndRPositioning.adjacentLanes.join(", "):"Not established — no supported adjacent-lane evidence is available."),a.aAndRPositioning.rationale]},
  {title:"Strengths and creative leverage",accent:"teal",body:a.strengths.length?a.strengths:["No audio-measured strengths are asserted without an uploaded master."]},
  {title:"Risks and diligence",accent:"coral",body:a.risks},
- {title:"Evidence-derived scorecard",accent:"blue",body:[score("Tempo and lane fit",a.scorecard.tempoLaneFit),score("Rhythmic consistency",a.scorecard.rhythmicConsistency),score("Dynamic range and RMS signal level",a.scorecard.dynamicRangeLoudness),score("Metadata completeness",a.scorecard.metadataCompleteness),score("Release readiness",a.scorecard.releaseReadiness)]},
+ {title:"Evidence-derived scorecard",accent:"blue",body:[score("Tempo and lane fit",a.scorecard.tempoLaneFit),score("Rhythmic consistency",a.scorecard.rhythmicConsistency),score("RMS-envelope spread and RMS signal level",a.scorecard.dynamicRangeLoudness),score("Metadata completeness",a.scorecard.metadataCompleteness),score("Release readiness",a.scorecard.releaseReadiness)]},
  {title:"Human listening checklist (unscored)",accent:"violet",body:a.humanListeningChecklist},
  {title:"Production and arrangement guidance",accent:"teal",body:[a.productionArrangementGuidance,industryPractice("General lane craft knowledge, not track-specific evidence."),industryPractice(a.industryPractice),...a.listeningChecks]},
  {title:"Comparable lanes and listening references to verify",accent:"violet",body:["Analytical hypotheses — comparisons not independently verified",a.laneHypothesis,...a.referencesToVerify,a.verificationMethod]},

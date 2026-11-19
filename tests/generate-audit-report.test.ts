@@ -148,7 +148,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const pages=planAuditReportPages(fixtures[0],"full");
   const report=pages.flatMap(p=>[p.title,...p.text]).join(" ");
   expect(report).toContain("Tempo and lane fit");expect(report).toContain("Rhythmic consistency");
-  expect(report).toContain("Dynamic range and RMS signal level");expect(report).toContain("Human listening checklist");
+  expect(report).toContain("RMS-envelope spread and RMS signal level");expect(report).toContain("Human listening checklist");
   expect(report).toContain("General industry guidance");expect(report).toContain("references to verify");
  });
  it("prints field-level source attribution and leaves absent provenance explicitly unavailable",()=>{
@@ -213,9 +213,12 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(generated.getForm().getTextField("ar_notes").acroField.getWidgets()).toHaveLength(1);
  });
 
- it("preserves the complete executive summary in the shared A&R Notes decision context",()=>{
+ it("builds an actionable A&R Notes decision context instead of repeating the executive summary",()=>{
   const context=buildArNotesDecisionContext(longFormAudioFixture as any);
-  expect(context.summary).toBe(longFormAudioFixture.assessment.executiveSummary);
+  expect(context.summary).toContain("Decision basis:");
+  expect(context.summary).toContain("Open diligence:");
+  expect(context.summary).toContain("Next action:");
+  expect(context.summary).not.toBe(longFormAudioFixture.assessment.executiveSummary);
   expect(context.prompts).toHaveLength(3);
  });
  it("uses the evidence-sanitized commercial verdict on the PDF cover",()=>{

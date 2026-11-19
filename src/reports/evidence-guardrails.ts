@@ -95,21 +95,36 @@ const GENRE_UNCONFIRMED_RATIONALE =
 const ALBUM_CONFLICT_RATIONALE =
  "Album metadata is present but conflicting across supplied sources. Preserve the source-specific values and reconcile them before treating the album field as complete; do not describe the field as missing.";
 
-function stripUnsupportedTechnicalClaims(value: unknown, suppressLoudnessOptimisation: boolean, suppressBrightTimbre: boolean): unknown {
-  if (typeof value === "string") {
-    const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
-    const kept = sentences.filter((sentence) => {
-      if (suppressLoudnessOptimisation && /\b(?:LUFS|loudness)\b/i.test(sentence)
-        && /\b(?:optimis\w*|increas\w*|rais\w*|louder|target level|push the level)\b/i.test(sentence)) return false;
-      if (suppressBrightTimbre && /\bbright(?:ness)?\b/i.test(sentence)) return false;
-      return true;
-    });
-    return kept.join(" ").trim() || "Not asserted: the measured technical profile does not support that claim.";
-  }
-  if (Array.isArray(value)) return value.map((item) => stripUnsupportedTechnicalClaims(item, suppressLoudnessOptimisation, suppressBrightTimbre));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-    .map(([key, item]) => [key, stripUnsupportedTechnicalClaims(item, suppressLoudnessOptimisation, suppressBrightTimbre)]));
-  return value;
+function stripUnsupportedTechnicalClaims(
+ value: unknown,
+ suppressLoudnessOptimisation: boolean,
+ suppressBrightTimbre: boolean,
+ rmsEnvelopeSpreadDb?: number,
+): unknown {
+ if (typeof value === "string") {
+  const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
+  const kept = sentences.flatMap((sentence) => {
+   if (suppressLoudnessOptimisation && /\b(?:LUFS|loudness)\b/i.test(sentence)
+     && /\b(?:optimis\w*|increas\w*|rais\w*|louder|target level|push the level)\b/i.test(sentence)) return [];
+   if (suppressBrightTimbre && /\bbright(?:ness)?\b/i.test(sentence)) return [];
+   // The stored dynamicRangeDb field is an RMS-envelope proxy, not EBU LRA or mastering dynamic range.
+   if (/\bdynamic range\b/i.test(sentence) && /\b\d+(?:\.\d+)?\s*dB\b/i.test(sentence)) {
+    if (/\b(?:healthy|excellent|great|good|wide|strong|impressive)\b/i.test(sentence)) return [];
+    const measured = sentence.match(/\b(\d+(?:\.\d+)?)\s*dB\b/i);
+    if (typeof rmsEnvelopeSpreadDb === "number" && measured
+      && Math.abs(Number(measured[1]) - rmsEnvelopeSpreadDb) < 0.011) {
+     return [sentence.replace(/\bdynamic range\b/ig, "RMS-envelope spread (internal proxy; not mastering dynamic range)")];
+    }
+    return [];
+   }
+   return [sentence];
+  });
+  return kept.join(" ").trim() || "Not asserted: the measured technical profile does not support that claim.";
+ }
+ if (Array.isArray(value)) return value.map((item) => stripUnsupportedTechnicalClaims(item, suppressLoudnessOptimisation, suppressBrightTimbre, rmsEnvelopeSpreadDb));
+ if (value && typeof value === "object") return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+  .map(([key, item]) => [key, stripUnsupportedTechnicalClaims(item, suppressLoudnessOptimisation, suppressBrightTimbre, rmsEnvelopeSpreadDb)]));
+ return value;
 }
 
 function hasAlbumConflict(evidence:Record<string,unknown>|null|undefined):boolean {
@@ -173,7 +188,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   const suppressLoudnessOptimisation = typeof measuredLoudness === "number" && Number.isFinite(measuredLoudness) && Math.abs(measuredLoudness + 11) <= 0.6;
   const measuredCentroid = sonicDna?.spectralCentroidHz;
   const suppressBrightTimbre = typeof measuredCentroid === "number" && Number.isFinite(measuredCentroid) && measuredCentroid <= 2_000;
-  result = stripUnsupportedTechnicalClaims(result, suppressLoudnessOptimisation, suppressBrightTimbre) as T;
+  result = stripUnsupportedTechnicalClaims(result, suppressLoudnessOptimisation, suppressBrightTimbre, typeof sonicDna?.dynamicRangeDb === "number" ? sonicDna.dynamicRangeDb : undefined) as T;
 
   if (hasAlbumConflict(evidence)) {
     result = sanitizeAlbumConflictClaims(result) as T;
@@ -212,15 +227,10 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     result.aAndRPositioning.adjacentLanes = [];
     result.aAndRPositioning.rationale = GENRE_UNCONFIRMED_RATIONALE;
   }
-  const hasDynamicRangeMeasurement = typeof sonicDna?.dynamicRangeDb === "number" && Number.isFinite(sonicDna.dynamicRangeDb);
-  const hasLoudnessMeasurement = typeof sonicDna?.loudnessLufs === "number" && Number.isFinite(sonicDna.loudnessLufs);
-  const hasRmsMeasurement = typeof sonicDna?.rmsLevelDbfs === "number" && Number.isFinite(sonicDna.rmsLevelDbfs);
-  if (!hasDynamicRangeMeasurement || (!hasLoudnessMeasurement && !hasRmsMeasurement)) {
-    const dynamicRangeDimension = mutable.scorecard?.dynamicRangeLoudness;
-    if (dynamicRangeDimension && typeof dynamicRangeDimension === "object") {
-      dynamicRangeDimension.score = null;
-      dynamicRangeDimension.rationale = "Not scored: direct dynamic-range and loudness/RMS measurements are unavailable from the uploaded master. No mastering-quality conclusion can be inferred.";
-    }
+  const dynamicRangeDimension = mutable.scorecard?.dynamicRangeLoudness;
+  if (dynamicRangeDimension && typeof dynamicRangeDimension === "object") {
+    dynamicRangeDimension.score = null;
+    dynamicRangeDimension.rationale = "Not scored: RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied.";
   }
   if (sonicDna?.channels === 1 && Array.isArray(mutable.risks)
     && !mutable.risks.some((risk: unknown) => typeof risk === "string" && /mono master delivery risk/i.test(risk))) {
@@ -275,9 +285,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
         case "rhythmicConsistency":
           return "Not scored: overall assessment confidence is zero. BPM and rhythm measurements, where present, are not sufficient for a final consistency rating without human listening and segment-level review.";
         case "dynamicRangeLoudness":
-          return hasDynamicRangeMeasurement && (hasLoudnessMeasurement || hasRmsMeasurement)
-            ? "Not scored: overall assessment confidence is zero. Direct loudness and dynamic-range measurements are reported separately and do not establish mastering quality or artistic merit."
-            : "Not scored: overall assessment confidence is zero. Direct dynamic-range and loudness/RMS measurements are unavailable; no mastering-quality conclusion can be inferred.";
+          return "Not scored: overall assessment confidence is zero. RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied.";
         case "metadataCompleteness":
           return "Not scored: overall assessment confidence is zero. Identity fields and source conflicts are shown in the reconciliation section; no numeric metadata-completeness rating is issued at this confidence level.";
         case "releaseReadiness":
