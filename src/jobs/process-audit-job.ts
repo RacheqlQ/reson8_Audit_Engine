@@ -4,6 +4,7 @@ import type { ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { isPdf } from "../reports/pdf-output.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
+import { parseRealMasterAuditContract, buildUnavailableMetric, type RealMasterAuditContract } from "../audio/real-master-contract.js";
 import { unavailableVocalAnalysis, type VocalAnalysisResult } from "../audio/vocal-analysis.js";
 import { analyzePcmWithTimeout } from "../audio/sonic-dna-worker-client.js";
 import { fuseGenreEvidence, type ProviderGenreTags } from "../genre/fusion.js";
@@ -524,21 +525,24 @@ export async function processAuditJob(
     }
 
     let masterDna: SonicDnaFeatures | null = null;
+    let realMasterSource: { sourceAudioPath: string; sha256: string; mimeType: string; byteLength: number } | null = null;
     let decodedMaster: Awaited<ReturnType<AuditProcessorDependencies["decode"]>> | null = null;
     let masterRecognition: AuditRecognition | null = null;
     let masterTags: ReturnType<typeof readAudioTags> | null = null;
     const attemptedRecognitionProviders = new Set<string>();
     if (hasMaster) {
       const master = await awaitWithStage(deps, "audio_download", 30_000, (signal) => deps.downloadMaster(job.sourceAudioPath!, signal));
+      const masterSha256 = await sha256(master);
       // A master job cannot silently continue with a missing/empty object or synthetic renderer input.
       // Hash the bytes actually retrieved so all downstream measurements bind to this exact master.
       requireRealMasterInput({
         sourceKind: "uploaded_master",
         sourceAudioPath: job.sourceAudioPath,
-        sha256: await sha256(master),
+        sha256: masterSha256,
         mimeType: job.mimeType,
         byteLength: master.byteLength,
       });
+      realMasterSource = { sourceAudioPath: job.sourceAudioPath!, sha256: masterSha256, mimeType: job.mimeType!, byteLength: master.byteLength };
       masterTags = readAudioTags(master);
       const sample = await awaitWithStage(deps, "recognition_sample", 30_000, (signal) => deps.createRecognitionSample(master, job.mimeType!, signal));
       masterRecognition = await awaitWithStage(deps, "audio_recognition", 45_000, (signal) => {
