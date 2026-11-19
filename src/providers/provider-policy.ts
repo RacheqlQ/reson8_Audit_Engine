@@ -3,6 +3,7 @@ export type CommercialStatus = "allowed" | "unverified" | "denied";
 export interface ProviderPolicy {
   id: string;
   commercialStatus: CommercialStatus;
+  operationalEnabled?: boolean;
   termsUrl: string;
   attribution: string;
   retention: string;
@@ -71,10 +72,10 @@ export const PROVIDER_POLICY = {
     decisionNote: "Operational use explicitly authorized by the product owner; comply with applicable Audiomack API terms and written permissions where required.",
   },
   musicbrainz: {
-    id: "musicbrainz", commercialStatus: "unverified", termsUrl: "https://musicbrainz.org/doc/MusicBrainz_API",
+    id: "musicbrainz", commercialStatus: "unverified", operationalEnabled: true, termsUrl: "https://musicbrainz.org/doc/MusicBrainz_API",
     attribution: "Attribute MusicBrainz and identify the accessed database/API fields.",
     retention: "Respect field-level database licences, API rate limits and applicable caching rules.",
-    decisionNote: "Public web-service access is documented as free for non-commercial use. Commercial use must remain disabled until the applicable commercial plan or permission is verified; an API key or account ID is not proof of permission.",
+    decisionNote: "Operationally enabled for evaluation and internal report inspection only. Commercial-use permission remains unverified; do not distribute or sell reports containing MusicBrainz-derived data commercially until the applicable commercial plan or written permission is confirmed. An API key or account ID is not proof of permission.",
   },
   listenbrainz: {
     id: "listenbrainz", commercialStatus: "allowed", termsUrl: "https://github.com/metabrainz/listenbrainz-server",
@@ -163,11 +164,11 @@ export interface ProviderDecision {
 /** Provider authorization is registry-driven; no per-provider opt-in flags exist. */
 export function providerDecision(provider: ProviderId): ProviderDecision {
   const policy: ProviderPolicy = PROVIDER_POLICY[provider];
-  const enabled = policy.commercialStatus === "allowed";
+  const enabled = policy.operationalEnabled ?? policy.commercialStatus === "allowed";
   return {
     provider,
     enabled,
-    reason: enabled ? null : "disabled by data policy",
+    reason: enabled ? null : policy.commercialStatus === "unverified" ? "commercial-use permission unverified; operational lookup disabled" : "disabled by data policy",
     commercialStatus: policy.commercialStatus,
   };
 }

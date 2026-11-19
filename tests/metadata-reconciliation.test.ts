@@ -39,6 +39,30 @@ describe("Metadata reconciliation", () => {
     expect(result.conflicts).toEqual([]);
   });
 
+  it("reconciles MusicBrainz ISRC metadata with an independent DSP source", () => {
+    const result = reconcileMetadata({
+      musicbrainz: {
+        title: "Free Mind",
+        artist: "Tems",
+        isrc: "NGABC2000001",
+      },
+      tidal: {
+        title: "Free Mind",
+        artist: "Tems",
+        isrc: "NG-ABC-20-00001",
+      },
+    });
+
+    expect(result.status).toBe("reconciled");
+    expect(result.reconciledFields).toEqual(["title", "artist", "isrc"]);
+    expect(result.identity.sourceProviders).toEqual(["musicbrainz", "tidal"]);
+    expect(result.identity.fieldProvenance).toMatchObject({
+      title: "musicbrainz",
+      artist: "musicbrainz",
+      isrc: "musicbrainz",
+    });
+  });
+
   it("does not call conflicting provider claims reconciled", () => {
     const result = reconcileMetadata({
       spotify: {

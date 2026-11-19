@@ -17,11 +17,17 @@ describe("provider authorization registry", () => {
   it("authorizes every explicitly approved source from the registry without environment opt-in flags", () => {
     for (const provider of Object.keys(PROVIDER_POLICY) as Array<keyof typeof PROVIDER_POLICY>) {
       if (provider === "musicbrainz") {
-        expect(providerDecision(provider)).toMatchObject({ enabled: false, reason: "disabled by data policy", commercialStatus: "unverified" });
+        expect(providerDecision(provider)).toMatchObject({ enabled: true, reason: null, commercialStatus: "unverified" });
       } else {
         expect(providerDecision(provider)).toMatchObject({ enabled: true, reason: null, commercialStatus: "allowed" });
       }
     }
+  });
+
+  it("enables MusicBrainz for evaluation while preserving unverified commercial status", () => {
+    expect(PROVIDER_POLICY.musicbrainz.operationalEnabled).toBe(true);
+    expect(PROVIDER_POLICY.musicbrainz.commercialStatus).toBe("unverified");
+    expect(PROVIDER_POLICY.musicbrainz.decisionNote).toMatch(/evaluation.*commercial-use permission remains unverified/i);
   });
 
   it("does not confuse missing integration credentials with a policy denial", async () => {

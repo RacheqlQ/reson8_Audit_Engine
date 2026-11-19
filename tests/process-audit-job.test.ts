@@ -59,6 +59,7 @@ describe("processAuditJob", () => {
       }),
       markProcessing: async () => events.push("processing"),
       collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
+      collectIsrcCatalogMetadata: async () => ({ isrc: "NGABC2600001", metadata: [], outcomes: [{ provider: "musicbrainz", status: "partial", reason: "No fixture match; external lookup intentionally mocked." }] }),
       recognizeUrl: async () => ({ matched: false as const }),
       downloadMaster: async () => id3Fixture(),
       createRecognitionSample: async () => new Uint8Array([4, 5]),
@@ -145,6 +146,9 @@ describe("processAuditJob", () => {
     const assessmentInputs: Record<string, unknown>[] = [];
     const assessmentCatalogInputs: Record<string, unknown>[] = [];
     const reportInputs: Record<string, unknown>[] = [];
+    let failureMessage = "";
+    let failureCode = "";
+    let stageError = "";
 
     const result = await processAuditJob("job-dsp", {
       getJob: async () => ({
@@ -189,6 +193,10 @@ describe("processAuditJob", () => {
           genreContext: ["R&B"],
         },
       }),
+      collectIsrcCatalogMetadata: async (isrc) => ({ isrc, metadata: [], outcomes: [
+        { provider: "musicbrainz", status: "partial", reason: "No fixture match; external lookup intentionally mocked." },
+        { provider: "spotify", status: "not_configured", reason: "Spotify credentials are not configured in this deterministic test." },
+      ] }),
       recognizeUrl: async () => ({
         matched: true as const,
         artist: null,
@@ -198,9 +206,11 @@ describe("processAuditJob", () => {
       }),
       saveRecognition: async () => {},
       saveEvidence: async (_jobId, _claimToken, recognition, reconciliation, metadata) => {
-        expect(recognition.matched).toBe(true);
-        expect(reconciliation.status).toBe("partial");
-        expect(metadata?.platform).toBe("tidal");
+        try {
+          expect(recognition.matched).toBe(true);
+          expect(reconciliation.status).toBe("partial");
+          expect(metadata?.platform).toBe("tidal");
+        } catch (error) { stageError = `saveEvidence: ${error instanceof Error ? error.message : String(error)}`; throw error; }
       },
       saveCatalogMetadata: async () => {},
       downloadMaster: async () => new Uint8Array(),
@@ -209,30 +219,32 @@ describe("processAuditJob", () => {
       decode: async () => ({ samples: new Float32Array(), sampleRate: 44100, channels: 1 }),
       saveSonicDna: async () => {},
       generateAssessment: async (input) => {
-        assessmentInputs.push(input.evidence);
-        assessmentCatalogInputs.push(input.catalogMetadata ?? {});
-        expect(input.evidence.metadataSourcesChecked).toEqual(["tidal", "audd"]);
-        expect(input.sonicDna).toMatchObject({
-          provenance: "tidal_catalog_metadata",
-          evidenceClass: "RECOGNIZED",
-          bpm: 96,
-          key: "A",
-          mode: "minor",
-          genreContext: ["R&B"],
-        });
-        return assessment;
+        try {
+          assessmentInputs.push(input.evidence);
+          assessmentCatalogInputs.push(input.catalogMetadata ?? {});
+          expect(input.evidence.metadataSourcesChecked).toEqual(["tidal", "musicbrainz", "audd"]);
+          expect(input.sonicDna).toMatchObject({
+            provenance: "tidal_catalog_metadata",
+            evidenceClass: "RECOGNIZED",
+            bpm: 96,
+            key: "A",
+            mode: "minor",
+            genreContext: ["R&B"],
+          });
+          return assessment;
+        } catch (error) { stageError = `generateAssessment: ${error instanceof Error ? error.message : String(error)}`; throw error; }
       },
       saveAssessment: async () => {},
       generateReport: async (input) => {
-        reportInputs.push(input.evidence);
-        return new Uint8Array([37, 80, 68, 70, 45]);
+        try { reportInputs.push(input.evidence); return new Uint8Array([37, 80, 68, 70, 45]); }
+        catch (error) { stageError = `generateReport: ${error instanceof Error ? error.message : String(error)}`; throw error; }
       },
       saveReport: async () => {},
       markCompleted: async () => {},
-      markFailed: async () => {},
+      markFailed: async (_jobId, _claimToken, message, _signal, errorCode) => { failureMessage = message; failureCode = errorCode ?? ""; },
     });
 
-    expect(result.status).toBe("completed");
+    expect(result.status, `${failureMessage} | code=${failureCode} | stage=${stageError}`).toBe("completed");
     expect(assessmentCatalogInputs[0]).toMatchObject({ genre: null, catalogPopularity: null });
     expect(assessmentCatalogInputs[0]).not.toHaveProperty("externalIds.spotify");
     expect(assessmentCatalogInputs[0]).not.toHaveProperty("raw.crossReferences.spotify");
