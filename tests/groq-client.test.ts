@@ -265,7 +265,7 @@ describe("GroqClient section groups",()=>{
   expect(prompts[0]).toContain("scorecard.rhythmicConsistency.rationale");
   expect(prompts[0]).toContain("at least 25 words");
   expect(prompts[1]).toContain("scorecard.rhythmicConsistency.rationale must contain at least 25 words");
-  expect(result.scorecard.rhythmicConsistency.rationale.split(/\\s+/).length).toBeGreaterThanOrEqual(25);
+  expect(result.scorecard.rhythmicConsistency.rationale.split(/\s+/).length).toBeGreaterThanOrEqual(25);
    expect(result.scorecard.rhythmicConsistency.rationale).toContain("Not scored:");
  });
  it("honours the provider retry delay in a 429 body and succeeds without losing the request",async()=>{

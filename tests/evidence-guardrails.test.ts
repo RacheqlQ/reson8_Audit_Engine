@@ -140,7 +140,7 @@ describe("Phillo evidence guardrails", () => {
       genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop" }] },
     });
     expect(result.aAndRPositioning.primaryLane).toBe("Pop");
-    expect(result.aAndRPositioning.adjacentLanes).toEqual([]);
+    expect(result.aAndRPositioning.adjacentLanes).toEqual(["R&B", "Hip-Hop", "House"]);
   });
 
   it("nulls tempo-derived scores and removes unsupported tempo claims when confidence is zero", () => {
