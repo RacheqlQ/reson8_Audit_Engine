@@ -480,19 +480,11 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           ? " " + providerLabel + " returned failed_generation diagnostics; do not copy unsupported content."
           : " " + providerLabel + " supplied no failed_generation diagnostics.";
 
-        if (responseMode === "json_schema" && strictSchemaRetries < 2) {
+        if (responseMode === "json_schema" && strictSchemaRetries < 1) {
           strictSchemaRetries++;
-          if (strictSchemaRetries === 2) {
-            responseMode = "json_object";
-            lastError = "" + providerLabel + " strict JSON-schema validation failed twice for " + groupName + ": " + message + "." + diagnostic
-              + " Switch to JSON-object mode and return one complete object matching the exact outputSchema.";
-          } else {
-            const requiredFields = Object.keys((outputSchema as { properties?: Record<string, unknown> }).properties ?? {}).join(", ")
-              || "all required schema properties";
-            lastError = "" + providerLabel + " returned json_validate_failed for the " + groupName + " section: " + message + "." + diagnostic
-              + " Retry strict mode with one complete JSON object including every required property: " + requiredFields
-              + ". Satisfy every nested field, type, enum and nullable value.";
-          }
+          responseMode = "json_object";
+          lastError = "" + providerLabel + " strict JSON-schema validation failed for " + groupName + ": " + message + "." + diagnostic
+            + " Switch immediately to JSON-object mode and return one complete object matching the exact outputSchema. The application will enforce local Zod and section word-count validation.";
           continue;
         }
 
