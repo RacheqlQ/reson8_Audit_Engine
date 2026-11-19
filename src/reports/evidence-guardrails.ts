@@ -31,7 +31,7 @@ export function isReliableTempo(value: TempoEvidence): boolean {
   return true;
 }
 
-export function isReliableTuning(value: Record<string, unknown> | null | undefined): boolean {
+export function hasMultipleTuningWindows(value: Record<string, unknown> | null | undefined): boolean {
   if (!value) return false;
   const tuning = value.keyTuningCents;
   const windows = value.tuningEvidenceWindows;
