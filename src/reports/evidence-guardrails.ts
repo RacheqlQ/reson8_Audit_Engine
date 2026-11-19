@@ -1,8 +1,7 @@
 import { adjacentGenresFor, findGenre, GENRE_TAXONOMY } from "../genre/taxonomy.js";
-// These are detector acceptance floors, not separate stricter PDF thresholds.
-// estimateTempo abstains below 0.10; estimateKey withholds below 0.12 or <0.60 segment agreement.
-export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.1;
-export const MIN_RELIABLE_KEY_CONFIDENCE = 0.12;
+import { MIN_RELIABLE_KEY_CONFIDENCE, MIN_KEY_SEGMENT_AGREEMENT } from "../audio/key-estimation.js";
+import { MIN_RELIABLE_TEMPO_CONFIDENCE } from "../audio/sonic-dna.js";
+export { MIN_RELIABLE_KEY_CONFIDENCE, MIN_RELIABLE_TEMPO_CONFIDENCE };
 
 type TempoEvidence = {
   bpm?: unknown;
@@ -54,7 +53,7 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
     && typeof confidence === "number" && Number.isFinite(confidence)
     && confidence >= MIN_RELIABLE_KEY_CONFIDENCE && confidence <= 1
     && typeof agreement === "number" && Number.isFinite(agreement)
-    && agreement >= 0.6 && agreement <= 1;
+    && agreement >= MIN_KEY_SEGMENT_AGREEMENT && agreement <= 1;
 }
 
 function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppressGenre: boolean, suppressCommercial: boolean, suppressVocal: boolean, suppressKey: boolean): unknown {
