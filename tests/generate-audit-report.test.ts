@@ -213,9 +213,12 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(generated.getForm().getTextField("ar_notes").acroField.getWidgets()).toHaveLength(1);
  });
 
- it("preserves the complete executive summary in the shared A&R Notes decision context",()=>{
+ it("builds an actionable A&R Notes decision context instead of repeating the executive summary",()=>{
   const context=buildArNotesDecisionContext(longFormAudioFixture as any);
-  expect(context.summary).toBe(longFormAudioFixture.assessment.executiveSummary);
+  expect(context.summary).toContain("Decision basis:");
+  expect(context.summary).toContain("Open diligence:");
+  expect(context.summary).toContain("Next action:");
+  expect(context.summary).not.toBe(longFormAudioFixture.assessment.executiveSummary);
   expect(context.prompts).toHaveLength(3);
  });
  it("uses the evidence-sanitized commercial verdict on the PDF cover",()=>{
