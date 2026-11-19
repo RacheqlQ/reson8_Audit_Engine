@@ -167,7 +167,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
  }else if(kind==="sonic"){
   const columns=[x+18,x+184,x+350],metricTop=contentTop-22;
   rows.slice(0,10).forEach((row,i)=>{
-   const cx=columns[i%3],cy=metricTop-Math.floor(i/3)*43;
+   const cx=columns[i%3],cy=metricTop-Math.floor(i/3)*40;
    result.push({x:cx,y:cy-44,width:145,height:44,id:"shape-sonic-metric-"+i});
   });
  }else if(kind==="bars"){
@@ -307,7 +307,7 @@ function ring(p:PDFPage,cx:number,cy:number,r:number,value:number|null,c:ReturnT
 function drawSonic(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const cols=[g.x+18,g.x+184,g.x+350],top=g.contentTop-22;
  rows.slice(0,10).forEach((row,i)=>{
-  const col=i%3,r=Math.floor(i/3),x=cols[col],y=top-r*43,c=color(i),v=validNumber(row.value);
+  const col=i%3,r=Math.floor(i/3),x=cols[col],y=top-r*40,c=color(i),v=validNumber(row.value);
   const label=row.label.toUpperCase();
   tracked(p,label,x,y,b,6.3,C.muted,.35);
   const isPercent=/CONFIDENCE|SCORE|PERCENT/i.test(label)||typeof row.value==="string"&&/%$/.test(row.value);
