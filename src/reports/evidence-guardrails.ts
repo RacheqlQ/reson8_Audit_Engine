@@ -89,8 +89,8 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
   return value;
 }
 
-const TEMPO_UNAVAILABLE_RATIONALE = "Not scored: no confidence-qualified tempo measurement is available.";
-const RHYTHM_UNAVAILABLE_RATIONALE = "Not scored: no stable beat grid with enough measured timestamps is available.";
+const TEMPO_UNAVAILABLE_RATIONALE = "Not scored: the uploaded-master tempo estimate did not pass the confidence gate, so a numeric tempo-to-lane comparison would not be sufficiently supported for this release.";
+const RHYTHM_UNAVAILABLE_RATIONALE = "Not scored: the audio worker did not return a stable beat grid with at least eight measured timestamps, so timing consistency cannot be calculated reliably.";
 
 const GENRE_UNCONFIRMED_RATIONALE =
   "No definitive provider-backed primary genre is available because the supplied genre classification abstained or lacks a supported primary genre. Keep lane positioning unconfirmed until named source evidence supports a cautious hypothesis.";
@@ -203,7 +203,7 @@ export function deriveMetadataCompleteness(evidence?: Record<string, unknown> | 
   if (available < 2) return null;
   return {
     score: Math.round(score),
-    rationale: "Deterministic completeness score across eight core release fields; source-attributed values receive full credit and conflicting fields receive half credit.",
+    rationale: "Deterministic completeness score across eight core release fields. Source-attributed values receive full credit; conflicting fields receive half credit, and absent fields receive no credit for this release.",
   };
 }
 
@@ -237,6 +237,14 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   }
 
   const mutable = result as Record<string, any>;
+  const scorecardDefaults = {
+    tempoLaneFit: { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE },
+    rhythmicConsistency: { score: null, rationale: RHYTHM_UNAVAILABLE_RATIONALE },
+    dynamicRangeLoudness: { score: null, rationale: "Not scored: RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied for this release." },
+    metadataCompleteness: { score: null, rationale: "Not scored: fewer than two source-attributed core release fields are available to support a reproducible completeness assessment; populate and reconcile identity metadata first for this release." },
+    releaseReadiness: { score: null, rationale: "Not scored: source-verified rights clearance, delivery confirmation, release status and master approval are not all present for this specific release; no readiness score is inferred." },
+  };
+  mutable.scorecard = { ...scorecardDefaults, ...(mutable.scorecard ?? {}) };
   if (result.scorecard) {
     const tempoDimension = result.scorecard.tempoLaneFit;
     const rhythmDimension = result.scorecard.rhythmicConsistency;
@@ -250,7 +258,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       const score = Math.round(Math.max(0, 1 - distance / Math.max(12, high - low)) * 100);
       if (tempoDimension) result.scorecard.tempoLaneFit = {
         score,
-        rationale: "Taxonomy tempo-band fit: " + bpm.toFixed(1) + " BPM against the " + primaryGenre.label + " reference band of " + low + "–" + high + " BPM; this is a positioning heuristic, not a market-performance score.",
+        rationale: "Taxonomy tempo-band fit compares the confidence-qualified uploaded-master BPM against the " + primaryGenre.label + " reference range of " + low + "–" + high + " BPM; this is a positioning heuristic, not a market-performance or audience-response score.",
       };
     }
     const rhythm = sonicDna?.rhythmFeatures && typeof sonicDna.rhythmFeatures === "object"
@@ -268,13 +276,13 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       const score = Math.round(Math.max(0, Math.min(1, 1 - coefficientOfVariation / 0.2)) * 100);
       if (rhythmDimension) result.scorecard.rhythmicConsistency = {
         score,
-        rationale: "Beat-interval regularity score derived from " + intervals.length + " measured intervals; it describes timing consistency, not groove quality or listener response.",
+        rationale: "Beat-interval regularity is calculated from " + intervals.length + " measured intervals using their coefficient of variation; it describes timing consistency, not groove quality, emotional feel or listener response.",
       };
     }
     const metadata = deriveMetadataCompleteness(evidence);
     result.scorecard.metadataCompleteness = metadata ?? {
       score: null,
-      rationale: hasAlbumConflict(evidence) ? "Not scored: fewer than two source-attributed identity fields are available; the album conflict is documented in reconciliation." : "Not scored: fewer than two source-attributed core release fields are available.",
+      rationale: hasAlbumConflict(evidence) ? "Not scored: fewer than two source-attributed identity fields are available for a stable completeness estimate; the album conflict is documented in the reconciliation section and remains unresolved." : "Not scored: fewer than two source-attributed core release fields are available to support a reproducible completeness assessment; populate and reconcile identity metadata first for this release.",
     };
     const readinessVerified = evidence?.rightsClearanceVerified === true
       && evidence?.deliveryConfirmed === true
@@ -306,7 +314,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   const dynamicRangeDimension = mutable.scorecard?.dynamicRangeLoudness;
   if (dynamicRangeDimension && typeof dynamicRangeDimension === "object") {
     dynamicRangeDimension.score = null;
-    dynamicRangeDimension.rationale = "Not scored: RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied.";
+    dynamicRangeDimension.rationale = "Not scored: RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied for this release.";
   }
   if (sonicDna?.channels === 1 && Array.isArray(mutable.risks)
     && !mutable.risks.some((risk: unknown) => typeof risk === "string" && /mono master delivery risk/i.test(risk))) {
@@ -357,15 +365,15 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     const dimensionAbstentionRationale = (dimension: string): string => {
       switch (dimension) {
         case "tempoLaneFit":
-          return "Not scored: overall assessment confidence is zero. Technical tempo measurements alone do not establish artistic positioning or a reliable lane-fit score.";
+          return "Not scored: overall assessment confidence is zero; no numeric tempo-lane rating is issued until a confidence-qualified measurement and source-backed genre lane can be reviewed for this release."
         case "rhythmicConsistency":
-          return "Not scored: overall assessment confidence is zero; no numeric rhythm rating is issued.";
+          return "Not scored: overall assessment confidence is zero; no numeric rhythm rating is issued until a stable beat grid and enough measured timestamps are available for this release."
         case "dynamicRangeLoudness":
-          return "Not scored: overall assessment confidence is zero. RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied.";
+          return "Not scored: overall assessment confidence is zero. RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied for this release."
         case "metadataCompleteness":
-          return "Not scored: overall assessment confidence is zero. Identity fields and source conflicts are shown in the reconciliation section; no numeric metadata-completeness rating is issued at this confidence level.";
+          return "Not scored: overall assessment confidence is zero. Identity fields and source conflicts are shown in the reconciliation section; no numeric metadata-completeness rating is issued until the source records can be reviewed for this release."
         case "releaseReadiness":
-          return "Not scored: overall assessment confidence is zero. No numeric release-readiness rating is issued; audience, market, campaign and release evidence must be reviewed separately.";
+          return "Not scored: overall assessment confidence is zero. No numeric release-readiness rating is issued until source-verified rights, delivery, release status and master approval are available for this release."
         default:
           return "Not scored: overall assessment confidence is zero. The available evidence cannot support a numeric rating for this dimension; complete the listed evidence and human-review steps before assigning a score.";
       }
