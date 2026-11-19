@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import type { ArAssessment } from "../providers/groq/client.js";
 import { loadReportFonts } from "./fonts.js";
-import { isReliableKey, isReliableTempo, sanitizeAssessmentForEvidence } from "./evidence-guardrails.js";
+import { isReliableKey, isReliableTempo, isReliableTuning, sanitizeAssessmentForEvidence } from "./evidence-guardrails.js";
 import { buildStrengthRiskChartRows, chartPanelHeight, chartPanelLayoutErrors, countEvidenceLayers, drawChartPanel, type ChartPanelInput } from "./charts.js";
 import { hasSubmittedMasterAudio } from "../audio/master-audio-evidence.js";
 
@@ -234,10 +234,16 @@ export function metadataFieldSource(e:Record<string,unknown>,field:string):strin
 export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAudio:boolean):Array<{label:string;value:string|null}> {
  const tempoReliable=hasAudio&&isReliableTempo(s);
  const keyReliable=hasAudio&&isReliableKey(s);
+ const tempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
+ const tempoConfidence=typeof s?.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)?s.tempoConfidence:null;
+ const harmonic=s?.harmonicFeatures&&typeof s.harmonicFeatures==="object"?s.harmonicFeatures as Record<string,unknown>:{};
+ const keyCandidates=Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")).slice(0,3).map((item)=>[text(item.key),text(item.mode),typeof item.score==="number"?"score "+item.score.toFixed(3):""].filter(Boolean).join(" ")).join("; "):"";
  return [
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
+  {label:"TEMPO CANDIDATE BPM",value:!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" (provisional; prominence diagnostic "+(tempoConfidence===null?"not available":tempoConfidence.toFixed(2))+")":null},
   {label:"KEY / MODE",value:keyReliable?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
-  {label:"TUNING OFFSET CENTS",value:keyReliable?metric(s?.keyTuningCents,0):null},
+  {label:"KEY / MODE CANDIDATES",value:!keyReliable&&keyCandidates?keyCandidates:null},
+  {label:"TUNING OFFSET CENTS",value:isReliableTuning(s)?metric(s?.keyTuningCents,0):null},
   {label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},
   {label:"LOUDNESS RANGE LRA",value:hasAudio?metric(s?.loudnessRangeLu,1):null},
   {label:"TRUE PEAK dBFS",value:hasAudio?metric(s?.truePeakDbfs,1):null},
