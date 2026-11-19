@@ -311,7 +311,7 @@ describe("Phillo evidence guardrails", () => {
     const claims = result.evidenceLabels.map((entry) => entry.claim).join(" ");
     expect(claims).not.toMatch(/tempo|BPM|key and mode|major|vocal|instrumental/i);
     expect(claims).toContain("RMS loudness level: -11.32 dBFS");
-    expect(claims).toContain("Measured dynamic range: 13.11 dB");
+    expect(claims).toContain("Measured RMS-envelope spread (internal proxy; not mastering dynamic range): 13.11 dB");
   });
 
   it("fills all five scorecard dimensions when a zero-confidence assessment is incomplete", () => {
