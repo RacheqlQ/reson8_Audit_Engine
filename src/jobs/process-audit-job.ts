@@ -822,7 +822,39 @@ export async function processAuditJob(
     }
     const reportEvidence = playlistDiscovery ? { ...evidence, playlistDiscovery } : evidence;
     const generatedAt = new Date().toISOString();
-    const reportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment };
+    const executionMode = hasMaster && hasCatalog ? "combined" : hasMaster ? "master" : "dsp_link";
+    const realMasterContract: RealMasterAuditContract | null = masterDna && realMasterSource
+      ? parseRealMasterAuditContract({
+          schemaVersion: "1.0.0", auditId: jobId, source: { sourceKind: "uploaded_master", ...realMasterSource },
+          directSignalMeasurements: [
+            ["duration_seconds", masterDna.durationSeconds, "seconds", "decoded_master_duration"],
+            ["sample_rate_hz", masterDna.sampleRate, "Hz", "audio_decoder"],
+            ["channels", masterDna.channels, "count", "audio_decoder"],
+            ["tempo_bpm", masterDna.bpm, "BPM", "high_frequency_transient_autocorrelation"],
+            ["integrated_loudness_lufs", masterDna.loudnessLufs, "LUFS", "audio_decoder_loudness"],
+            ["loudness_range_lu", masterDna.loudnessRangeLu ?? null, "LU", "audio_decoder_loudness_range"],
+            ["true_peak_dbfs", masterDna.truePeakDbfs ?? null, "dBFS", "audio_decoder_true_peak"],
+            ["rms_level_dbfs", masterDna.rmsLevelDbfs, "dBFS", "pcm_rms"],
+            ["spectral_centroid_hz", masterDna.spectralCentroidHz, "Hz", "fft_spectral_centroid"],
+            ["spectral_bandwidth_hz", masterDna.spectralBandwidthHz, "Hz", "fft_spectral_bandwidth"],
+            ["spectral_rolloff_hz", masterDna.spectralRolloffHz, "Hz", "fft_spectral_rolloff"],
+            ["zero_crossing_rate", masterDna.zeroCrossingRate, "ratio", "pcm_zero_crossing_rate"],
+          ].map(([name, value, unit, method]) => typeof value === "number" && Number.isFinite(value)
+            ? { name, status: "measured", value, unit, method, measuredAt: generatedAt, diagnostics: [] }
+            : buildUnavailableMetric(String(name), "MEASUREMENT_UNAVAILABLE", "The configured analysis stage did not return a finite measurement for this uploaded master.", String(unit), String(method))),
+          calibratedPredictions: [{ name: "audio_mood", status: "unavailable", label: null, probability: null, reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "No validated and calibrated audio mood model is configured; signal descriptors are not substituted for emotional labels.", stage: "audio_classification", retryable: false }] }],
+          externalRecords: metadataSources.filter((source) => Boolean(source.catalogId)).map((source) => {
+            const recordId = source.catalogId!;
+            const retrievedAt = generatedAt;
+            const fields = Object.fromEntries(Object.entries({ artist: source.artist, title: source.title, album: source.album, releaseDate: source.releaseDate, isrc: source.isrc, upc: source.upc, label: source.label, genre: source.genre }).filter(([, value]) => value !== null && value !== undefined && value !== ""));
+            const fieldProvenance = Object.fromEntries(Object.keys(fields).map((field) => [field, { provider: source.platform, recordId, retrievedAt }]));
+            return { status: "verified", provider: source.platform, recordId, retrievedAt, sourceUrl: source.canonicalUrl, fields, fieldProvenance };
+          }),
+          strategicSynthesis: masterDna.bpm !== null ? [{ claim: "A tempo measurement was returned by analysis of the uploaded master.", evidenceRefs: ["signal:tempo_bpm"], evidenceClass: "OBSERVED", limitations: ["The current estimator score is not a calibrated probability."] }] : [],
+          pipelineDiagnostics: masterDna.limitations.map((message) => ({ code: "ANALYSIS_LIMITATION", message, stage: "sonic_dna", retryable: false })),
+        })
+      : null;
+    const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment, executionMode, ...(realMasterContract ? { realMasterContract } : {}) };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
