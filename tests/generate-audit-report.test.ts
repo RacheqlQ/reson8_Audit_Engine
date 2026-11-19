@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,sonicDashboardRowsForReport,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelDisplayStatus,chartPanelHeight,constellationLabelLineCount } from "../src/reports/charts.js";
@@ -81,19 +81,20 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(normalized).toContain("Café - \"mix\"...");
   expect(normalized).not.toContain("?");
  });
- it("reports detected, tentative half/double and not-determined tempo tiers",()=>{
+ it("shows tempo only when the master estimate passes the confidence gate",()=>{
   const tentative=structuredClone(fullAudioFixture) as any;
   tentative.sonicDna.tempoConfidence=0.32;
   tentative.sonicDna.bpm=96;
-  const tentativeBody=planAuditReportPages(tentative).flatMap(section=>section.text).join(" ");
-  expect(tentativeBody).toContain("Tentative candidate — 96.0 BPM (half-time 48.0; double-time 192.0)");
+  expect(sonicDashboardRowsForReport(tentative.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
+  const detected=structuredClone(fullAudioFixture) as any;
+  detected.sonicDna.tempoConfidence=0.9;
+  expect(sonicDashboardRowsForReport(detected.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).not.toBeNull();
   const zero=structuredClone(fullAudioFixture) as any;
   zero.sonicDna.tempoConfidence=0;
-  const zeroBody=planAuditReportPages(zero).flatMap(section=>section.text).join(" ");
-  expect(zeroBody).toContain("Tempo: Not determined");
-  expect(zeroBody).not.toMatch(/Tempo: Detected|Tempo: Tentative/);
+  expect(sonicDashboardRowsForReport(zero.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
+  const body=planAuditReportPages(tentative).flatMap(section=>section.text).join(" ");
+  expect(body).not.toMatch(/Tentative candidate|96.0 BPM|Tempo: Detected|Tempo: Tentative/);
  });
-
  it("renders measured vocal presence, activity timestamps and pitch without inventing delivery or lyrics",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.sonicDna.vocalFeatures={
@@ -224,16 +225,16 @@ describe("A4 report layout and fixture coverage",()=>{
  it("renders the generic ambiguous-audio regression fixture with tempo, key, genre and commercial claims withheld",()=>{
   const pages=planAuditReportPages(ambiguousAudioFixture as any,"full");
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Tempo: Not determined");
-  expect(report).not.toContain("Tempo confidence score");
-  expect(report).toContain("Key / mode: Not determined");
-  expect(report).toContain("Key confidence estimator score (not calibrated accuracy): 0.06");
+  const rows=sonicDashboardRowsForReport((ambiguousAudioFixture as any).sonicDna,true);
+  expect(rows.find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
+  expect(rows.find(row=>row.label==="KEY / MODE")?.value).toBeNull();
+  expect(report).not.toMatch(/Tempo confidence score|Key confidence estimator score|Tempo: Detected|Key \/ mode: C major/);
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
   expect(report).toContain("Verdict: Insufficient evidence");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
-  expect(report).toContain("Metadata completeness — NOT SCORED");
+  expect(report).toMatch(/Metadata completeness — \\d+\\/100/);
   expect(report).toContain("Album metadata is present but conflicting");
   expect(report).not.toMatch(/128\\s*BPM|high-energy|album title is missing/i);
  });
@@ -253,7 +254,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(sourceBackedReport).toContain("Album: Conflicting source values");
   expect(sourceBackedReport).toContain("album: Sample Release - EP vs Sample Release");
  });
- it("withholds a low-confidence harmonic key from the report while retaining the diagnostic confidence",()=>{
+ it("withholds a low-confidence harmonic key and its diagnostic model score from the report",()=>{
   const input=structuredClone(fullAudioFixture) as any;
   input.sonicDna={...input.sonicDna,key:"C",mode:"major",keyConfidence:0.06,keySegmentAgreement:0.16};
   const pages=planAuditReportPages(input,"full");
