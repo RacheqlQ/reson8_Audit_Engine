@@ -160,7 +160,7 @@ describe("Sonic DNA",()=>{
   const result=analyzePcm(bright,sampleRate);
   expect(result.moodTags).toEqual([]);
   expect(result.spectralCentroidHz).toBeGreaterThan(3000);
-  expect(result.rmsLevelDbfs).toBeFinite();
+  expect(Number.isFinite(result.rmsLevelDbfs)).toBe(true);
  });
 
  it("does not assert genre from tempo alone",()=>{
