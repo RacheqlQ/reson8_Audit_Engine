@@ -148,7 +148,7 @@ describe("A4 report layout and fixture coverage",()=>{
   const pages=planAuditReportPages(fixtures[0],"full");
   const report=pages.flatMap(p=>[p.title,...p.text]).join(" ");
   expect(report).toContain("Tempo and lane fit");expect(report).toContain("Rhythmic consistency");
-  expect(report).toContain("Dynamic range and RMS signal level");expect(report).toContain("Human listening checklist");
+  expect(report).toContain("RMS-envelope spread and RMS signal level");expect(report).toContain("Human listening checklist");
   expect(report).toContain("General industry guidance");expect(report).toContain("references to verify");
  });
  it("prints field-level source attribution and leaves absent provenance explicitly unavailable",()=>{
