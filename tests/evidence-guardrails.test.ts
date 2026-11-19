@@ -36,8 +36,8 @@ describe("Phillo evidence guardrails", () => {
   });
 
   it("uses the same tempo acceptance floor as the detector", () => {
-    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.1 })).toBe(true);
-    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.099 })).toBe(false);
+    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.5 })).toBe(true);
+    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.499 })).toBe(false);
     expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.9, abstentionReason: "ambiguous pulse" })).toBe(false);
     expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.9, rhythmFeatures: { status: "measured", abstentionReason: "ambiguous pulse" } })).toBe(false);
     expect(isReliableTempo({ bpm: 0, tempoConfidence: 0.9 })).toBe(false);
@@ -56,9 +56,9 @@ describe("Phillo evidence guardrails", () => {
   });
 
   it("uses the same key confidence and segment agreement floors as the detector", () => {
-    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.12, keySegmentAgreement: 0.6 })).toBe(true);
-    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.119, keySegmentAgreement: 0.95 })).toBe(false);
-    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.599 })).toBe(false);
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.8, keySegmentAgreement: 0.8 })).toBe(true);
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.799, keySegmentAgreement: 0.95 })).toBe(false);
+    expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.799 })).toBe(false);
     expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.95, harmonicFeatures: { status: "insufficient_evidence" } })).toBe(false);
     expect(isReliableKey({ key: null, mode: null, keyConfidence: 0.99, keySegmentAgreement: 1 })).toBe(false);
   });
