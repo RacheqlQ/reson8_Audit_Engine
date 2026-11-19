@@ -121,9 +121,9 @@ describe("processAuditJob", () => {
       generateReport: async (_input, tier) => {
         expect((_input.evidence as Record<string, unknown>).playlistDiscovery).toMatchObject({ status: "available", candidates: [{ name: "Afrobeats Discovery", provider: "apple_music" }] });
         expect(_input.executionMode).toBe("master");
-        const measuredTempo = (_input.realMasterContract as { directSignalMeasurements: Array<{ name: string; measuredAt?: string }> }).directSignalMeasurements.find((metric) => metric.name === "tempo_bpm");
-        expect(measuredTempo?.measuredAt).toEqual(expect.any(String));
-        expect(Number.isNaN(Date.parse(measuredTempo!.measuredAt!))).toBe(false);
+        const measuredSignal = (_input.realMasterContract as { directSignalMeasurements: Array<{ status: string; measuredAt?: string }> }).directSignalMeasurements.find((metric) => metric.status === "measured");
+        expect(measuredSignal?.measuredAt).toEqual(expect.any(String));
+        expect(Number.isNaN(Date.parse(measuredSignal!.measuredAt!))).toBe(false);
         expect(_input.realMasterContract).toMatchObject({ schemaVersion: "1.0.0", auditId: "job-123", source: { sourceKind: "uploaded_master", sourceAudioPath: "owner-123/job-123/master.wav", mimeType: "audio/mpeg", byteLength: id3Fixture().byteLength } });
         expect((_input.realMasterContract as { externalRecords: Array<{ provider: string; status: string }> }).externalRecords).toEqual(expect.arrayContaining([
           expect.objectContaining({ provider: "musicbrainz", status: "unavailable" }),
