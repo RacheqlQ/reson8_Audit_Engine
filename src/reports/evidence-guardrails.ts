@@ -31,6 +31,14 @@ export function isReliableTempo(value: TempoEvidence): boolean {
   return true;
 }
 
+export function isReliableTuning(value: Record<string, unknown> | null | undefined): boolean {
+  if (!value) return false;
+  const tuning = value.keyTuningCents;
+  const windows = value.tuningEvidenceWindows;
+  return typeof tuning === "number" && Number.isFinite(tuning) && tuning >= -50 && tuning <= 50
+    && typeof windows === "number" && Number.isInteger(windows) && windows >= 2;
+}
+
 export function isReliableKey(value: Record<string, unknown> | null | undefined): boolean {
   if (!value) return false;
   const key = value.key;
@@ -90,7 +98,7 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
 }
 
 const TEMPO_UNAVAILABLE_RATIONALE = "Not scored: the uploaded-master tempo estimate did not pass the confidence gate, so a numeric tempo-to-lane comparison would not be sufficiently supported for this release.";
-const RHYTHM_UNAVAILABLE_RATIONALE = "Not scored: the audio worker did not return a stable beat grid with at least eight measured timestamps, so timing consistency cannot be calculated reliably.";
+const RHYTHM_UNAVAILABLE_RATIONALE = "Not scored: the current detector generates a provisional beat-grid candidate but does not independently validate beat timing. A timestamp count alone is not proof of rhythmic consistency.";
 
 const GENRE_UNCONFIRMED_RATIONALE =
   "No definitive provider-backed primary genre is available because the supplied genre classification abstained or lacks a supported primary genre. Keep lane positioning unconfirmed until named source evidence supports a cautious hypothesis.";
