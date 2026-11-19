@@ -377,7 +377,7 @@ describe("Sonic DNA provisional candidate reporting", () => {
       keySegmentAgreement: 0.5,
       keyTuningCents: 18,
       tuningEvidenceWindows: 3,
-      rhythmFeatures: { beatGridStatus: "tentative", beatTimesSeconds: Array.from({ length: 512 }, (_, index) => index * 0.36) },
+      rhythmFeatures: { abstentionReason: "Tempo candidate prominence is too weak to support a reliable result.", beatGridStatus: "tentative", beatTimesSeconds: Array.from({ length: 512 }, (_, index) => index * 0.36) },
       harmonicFeatures: {
         limitation: "Key estimates varied across audio segments; no single key is asserted.",
         topCandidates: [
