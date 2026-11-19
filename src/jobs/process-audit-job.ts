@@ -4,7 +4,7 @@ import type { ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { isPdf } from "../reports/pdf-output.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
-import { parseRealMasterAuditContract, buildUnavailableMetric, type RealMasterAuditContract } from "../audio/real-master-contract.js";
+import { parseRealMasterAuditContract, buildUnavailableMetric, requireRealMasterInput, type RealMasterAuditContract } from "../audio/real-master-contract.js";
 import { unavailableVocalAnalysis, type VocalAnalysisResult } from "../audio/vocal-analysis.js";
 import { analyzePcmWithTimeout } from "../audio/sonic-dna-worker-client.js";
 import { fuseGenreEvidence, type ProviderGenreTags } from "../genre/fusion.js";
@@ -19,7 +19,6 @@ import type { PlaylistDiscoveryInput, PlaylistDiscoveryResult } from "../provide
 import { normalizeIsrc } from "../providers/musicbrainz/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
-import { requireRealMasterInput } from "../audio/real-master-contract.js";
 import { sha256 } from "./content-hash.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 
