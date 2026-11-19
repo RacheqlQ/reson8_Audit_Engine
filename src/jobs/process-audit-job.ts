@@ -828,8 +828,10 @@ export async function processAuditJob(
     const reportEvidence = playlistDiscovery ? { ...evidence, playlistDiscovery } : evidence;
     const generatedAt = new Date().toISOString();
     const executionMode = hasMaster && hasCatalog ? "combined" : hasMaster ? "master" : "dsp_link";
-    const realMasterContract: RealMasterAuditContract | null = masterDna && realMasterSource
-      ? parseRealMasterAuditContract({
+    let realMasterContract: RealMasterAuditContract | null = null;
+    if (masterDna && realMasterSource) {
+      try {
+        realMasterContract = parseRealMasterAuditContract({
           schemaVersion: "1.0.0", auditId: jobId, source: { sourceKind: "uploaded_master", ...realMasterSource },
           directSignalMeasurements: [
             ["duration_seconds", masterDna.durationSeconds, "seconds", "decoded_master_duration"],
@@ -874,8 +876,13 @@ export async function processAuditJob(
           ],
           strategicSynthesis: masterDna.bpm !== null ? [{ claim: "A tempo measurement was returned by analysis of the uploaded master.", evidenceRefs: ["signal:tempo_bpm"], evidenceClass: "OBSERVED", limitations: ["The current estimator score is not a calibrated probability."] }] : [],
           pipelineDiagnostics: masterDna.limitations.map((message) => ({ code: "ANALYSIS_LIMITATION", message, stage: "sonic_dna", retryable: false })),
-        })
-      : null;
+        });
+      } catch (error) {
+        // Preserve actionable schema diagnostics in worker logs; the user-facing failure remains sanitized.
+        console.error("[real-master-contract] validation failed", error);
+        throw error;
+      }
+    }
     const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment, executionMode, ...(realMasterContract ? { realMasterContract } : {}) };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
