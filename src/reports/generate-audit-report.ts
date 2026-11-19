@@ -239,6 +239,19 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  ];
 }
 
+export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAudio:boolean):Array<{label:string;value:string|null}> {
+ const vocal=s?.vocalFeatures&&typeof s.vocalFeatures==="object"?s.vocalFeatures as Record<string,unknown>:{};
+ return [
+  {label:"SAMPLE RATE HZ",value:hasAudio?metric(s?.sampleRate,0):null},
+  {label:"CHANNELS",value:hasAudio?metric(s?.channels,0):null},
+  {label:"SPECTRAL CENTROID HZ",value:hasAudio?metric(s?.spectralCentroidHz,0):null},
+  {label:"SPECTRAL BANDWIDTH HZ",value:hasAudio?metric(s?.spectralBandwidthHz,0):null},
+  {label:"SPECTRAL ROLLOFF HZ",value:hasAudio?metric(s?.spectralRolloffHz,0):null},
+  {label:"ZERO CROSSING RATE",value:hasAudio?metric(s?.zeroCrossingRate,4):null},
+  {label:"SIGNAL PERIODICITY ACTIVITY RATIO",value:hasAudio?metric(vocal.periodicityActivityRatio,2):null}
+ ];
+}
+
 function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),counts=countEvidenceLayers(a.evidenceLabels);
 
@@ -252,11 +265,18 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
    {label:"Unavailable",value:count("unavailable")},
   ],shows:"Provider lookup outcomes across the submitted track links.",cantShow:"Audience size, stream counts, playlist placement or listener demand."}];
  }
- if(title==="Sonic DNA and technical profile")return [{
-  title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
-  rows:sonicDashboardRowsForReport(s,hasAudio),
-  shows:"Confidence-qualified tempo and key/mode plus direct measurements from the uploaded master.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."
- }];
+ if(title==="Sonic DNA and technical profile")return [
+  {
+   title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
+   rows:sonicDashboardRowsForReport(s,hasAudio),
+   shows:"Confidence-qualified tempo and key/mode plus direct loudness and RMS measurements from the uploaded master.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."
+  },
+  {
+   title:"Signal characteristics",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
+   rows:signalDashboardRowsForReport(s,hasAudio),
+   shows:"File format and signal-derived spectral/periodicity measurements with their original units.",cantShow:"Vocal presence, musical mood, genre or commercial performance."
+  }
+ ];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"RMS / envelope",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
  if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(a.strengths.slice(0,10),a.risks.slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
