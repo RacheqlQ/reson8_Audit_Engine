@@ -59,6 +59,7 @@ describe("processAuditJob", () => {
       }),
       markProcessing: async () => events.push("processing"),
       collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
+      collectIsrcCatalogMetadata: async () => ({ isrc: "NGABC2600001", metadata: [], outcomes: [{ provider: "musicbrainz", status: "partial", reason: "No fixture match; external lookup intentionally mocked." }] }),
       recognizeUrl: async () => ({ matched: false as const }),
       downloadMaster: async () => id3Fixture(),
       createRecognitionSample: async () => new Uint8Array([4, 5]),
