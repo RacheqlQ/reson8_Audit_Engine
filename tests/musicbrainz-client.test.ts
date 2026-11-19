@@ -61,7 +61,7 @@ describe("MusicBrainz ISRC catalogue client", () => {
 
   it("uses the configured contact identifier in the MusicBrainz User-Agent", async () => {
     vi.stubEnv("MUSICBRAINZ_CONTACT", "ops@reson8.example");
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ recordings: [] }), { status: 200 }));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ recordings: [] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await new MusicBrainzClient().lookupIsrc("GBAYE1212345");
