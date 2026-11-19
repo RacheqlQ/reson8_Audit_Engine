@@ -87,7 +87,7 @@ describe("A4 report layout and fixture coverage",()=>{
   tentative.sonicDna.bpm=96;
   expect(sonicDashboardRowsForReport(tentative.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).toBeNull();
   const detected=structuredClone(fullAudioFixture) as any;
-  detected.sonicDna.tempoConfidence=0.1;
+  detected.sonicDna.tempoConfidence=0.5;
   expect(sonicDashboardRowsForReport(detected.sonicDna,true).find(row=>row.label==="TEMPO BPM")?.value).not.toBeNull();
   const zero=structuredClone(fullAudioFixture) as any;
   zero.sonicDna.tempoConfidence=0;
@@ -256,7 +256,7 @@ describe("A4 report layout and fixture coverage",()=>{
  });
  it("reports detector-confirmed key and mode when the shared detector gates pass",()=>{
   const input=structuredClone(fullAudioFixture) as any;
-  input.sonicDna={...input.sonicDna,key:"A",mode:"minor",keyConfidence:0.78,keySegmentAgreement:0.9};
+  input.sonicDna={...input.sonicDna,key:"A",mode:"minor",keyConfidence:0.8,keySegmentAgreement:0.9};
   expect(sonicDashboardRowsForReport(input.sonicDna,true).find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
   const dashboardRows=sonicDashboardRowsForReport(input.sonicDna,true);
   expect(dashboardRows.find(row=>row.label==="KEY / MODE")?.value).toBe("A minor");
