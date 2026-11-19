@@ -27,7 +27,7 @@ describe("DSP provider registry", () => {
     expect(results.map((result) => result.metadata?.platform)).toEqual(["spotify", "tidal"]);
     expect(results.every((result) => result.status === "recognized")).toBe(true);
     for (const result of results) {
-      expect(result.metadata?.retrievedAt).toMatch(/^\\d{4}-\\d{2}-\\d{2}T/);
+      expect(result.metadata?.retrievedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect(Number.isNaN(Date.parse(result.metadata!.retrievedAt!))).toBe(false);
     }
   });
