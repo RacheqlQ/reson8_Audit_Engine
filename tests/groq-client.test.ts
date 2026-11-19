@@ -202,10 +202,11 @@ describe("GroqClient section groups",()=>{
   const result=await client.assess({evidence:{},sonicDna:null});
   expect(result.scorecard.metadataCompleteness.score).toBeNull();expect(result.scorecard.releaseReadiness.score).toBeNull();
  });
- it("retains dynamic-range scoring only when uploaded-master measurements exist",async()=>{
+ it("withholds technical delivery-readiness scoring without destination-specific targets",async()=>{
   const {mock}=fetchMock();const client=new GroqClient("test-key","test-model",mock as typeof fetch);
   const result=await client.assess({evidence:{},sonicDna:{provenance:"uploaded_audio_master",bpm:96,dynamicRangeDb:8.4,rmsLevelDbfs:-12.0}});
-  expect(result.scorecard.dynamicRangeLoudness.score).toBe(76);
+  expect(result.scorecard.dynamicRangeLoudness.score).toBeNull();
+  expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("destination-specific");
  });
  it("retries a section once after schema validation fails",async()=>{const {mock,counts}=fetchMock("production");const client=new GroqClient("test-key","test-model",mock as typeof fetch);await client.assess({evidence:{},sonicDna:null});expect(counts.get("production")).toBe(2);expect(mock).toHaveBeenCalledTimes(10);});
  it("gives evidence-score word-count failures an explicit repair instruction",async()=>{
