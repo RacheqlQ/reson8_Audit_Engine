@@ -143,10 +143,22 @@ export function paginateArNotesSummary(lines:string[]):string[][] {
 }
 export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecisionContext {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
+ const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[])]
+  .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
+  .filter((item,index,items)=>items.indexOf(item)===index)
+  .slice(0,2)
+  .map((item)=>item.length>150?item.slice(0,147)+"...":item);
+ const nextAction=typeof safeAssessment.releaseStrategy?.recommendation==="string"&&safeAssessment.releaseStrategy.recommendation.trim()
+  ?safeAssessment.releaseStrategy.recommendation
+  :"Resolve the highest-priority identity, rights and measurement gaps before external pitching.";
  return {
   heading:"DECISION CONTEXT",
   verdict:coverVerdictLabel(input).toUpperCase(),
-  summary:val(safeAssessment.executiveSummary,"No executive summary supplied."),
+  summary:[
+   "Decision basis: "+val(safeAssessment.commercialRead?.rationale,"Commercial evidence remains insufficient for a release verdict."),
+   "Open diligence: "+(openItems.join(" ")||"No additional diligence items were recorded."),
+   "Next action: "+nextAction,
+  ].join(" "),
   prompts:[
    "What evidence would change the current decision?",
    "Which identity, rights or source gaps remain unresolved?",
