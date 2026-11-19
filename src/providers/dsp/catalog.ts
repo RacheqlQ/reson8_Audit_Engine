@@ -100,6 +100,59 @@ async function apple(u: URL, signal?: AbortSignal) {
   const pathStorefront = u.pathname.split("/").filter(Boolean)[0]?.toLowerCase();
   const queryStorefront = u.searchParams.get("country")?.toLowerCase();
   const storefront = pathStorefront && /^[a-z]{2}$/.test(pathStorefront) ? pathStorefront : queryStorefront;
+  const appleStorefront = storefront && /^[a-z]{2}$/.test(storefront)
+    ? storefront : (process.env.APPLE_MUSIC_STOREFRONT ?? "ng").toLowerCase();
+  const developerToken = process.env.APPLE_MUSIC_DEVELOPER_TOKEN?.trim();
+  let appleApiFailure: Record<string, unknown> | null = null;
+
+  // The public iTunes lookup response is not a dependable source of ISRC.
+  // When the configured Apple Music developer token is present, prefer the
+  // catalog song resource, whose attributes include the recording ISRC.
+  if (developerToken) {
+    try {
+      const catalogUrl = "https://api.music.apple.com/v1/catalog/"
+        + encodeURIComponent(appleStorefront) + "/songs/" + encodeURIComponent(metadata.catalogId);
+      const catalogResponse = await fetch(catalogUrl, {
+        signal, redirect: "error",
+        headers: { Authorization: "Bearer " + developerToken },
+      });
+      if (catalogResponse.ok) {
+        const payload = await catalogResponse.json() as { data?: Array<Record<string, unknown>> };
+        const song = payload.data?.find((item) => item.type === "songs") ?? payload.data?.[0];
+        const attributes = song?.attributes && typeof song.attributes === "object"
+          ? song.attributes as Record<string, unknown> : null;
+        if (attributes) {
+          const stringValue = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : null;
+          const genres = Array.isArray(attributes.genreNames)
+            ? attributes.genreNames.filter((value): value is string => typeof value === "string" && value.trim()) : [];
+          const previews = Array.isArray(attributes.previews)
+            ? attributes.previews.filter((value): value is Record<string, unknown> => Boolean(value && typeof value === "object")) : [];
+          const artwork = attributes.artwork && typeof attributes.artwork === "object"
+            ? attributes.artwork as Record<string, unknown> : {};
+          metadata.canonicalUrl = stringValue(attributes.url) ?? metadata.canonicalUrl;
+          metadata.artist = stringValue(attributes.artistName);
+          metadata.title = stringValue(attributes.name);
+          metadata.album = stringValue(attributes.albumName);
+          metadata.releaseDate = stringValue(attributes.releaseDate)?.slice(0, 10) ?? null;
+          metadata.genre = genres[0] ?? null;
+          metadata.isrc = stringValue(attributes.isrc);
+          metadata.previewUrl = stringValue(previews[0]?.url);
+          if (song?.id) metadata.externalIds.apple_music = String(song.id);
+          if (typeof artwork.url === "string") metadata.artworkUrl = artwork.url;
+          metadata.raw = { appleMusicCatalog: song };
+          metadata.evidenceStatus = metadata.title && metadata.artist ? "recognized" : "partial";
+          return metadata;
+        }
+        appleApiFailure = { status: "unavailable", reason: "Apple Music catalog returned no song attributes." };
+      } else {
+        appleApiFailure = { status: "unavailable", reason: "Apple Music catalog returned HTTP " + catalogResponse.status };
+      }
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason;
+      appleApiFailure = { status: "unavailable", reason: error instanceof Error ? error.message.slice(0, 180) : "Apple Music catalog lookup failed." };
+    }
+  }
+
   const lookup = new URL("https://itunes.apple.com/lookup");
   lookup.searchParams.set("id", metadata.catalogId);
   lookup.searchParams.set("entity", "song");
@@ -123,7 +176,7 @@ async function apple(u: URL, signal?: AbortSignal) {
   metadata.previewUrl = String(track.previewUrl ?? "") || null;
   metadata.isrc = String(track.isrc ?? "") || null;
   if (track.trackId) metadata.externalIds.apple_music = String(track.trackId);
-  metadata.raw = track;
+  metadata.raw = appleApiFailure ? { appleMusicCatalogLookup: appleApiFailure, itunesLookup: track } : track;
   metadata.evidenceStatus = metadata.title && metadata.artist ? "recognized" : "partial";
   return metadata;
 }
