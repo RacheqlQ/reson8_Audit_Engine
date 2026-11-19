@@ -35,9 +35,9 @@ describe("Phillo evidence guardrails", () => {
     expect(isReliableTempo({ bpm: 156, tempoConfidence: 0, rhythmFeatures: { status: "measured" } })).toBe(false);
   });
 
-  it("accepts only bounded BPM with explicit confidence at or above the conservative reporting gate", () => {
-    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.5 })).toBe(true);
-    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.49 })).toBe(false);
+  it("uses the same tempo acceptance floor as the detector", () => {
+    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.1 })).toBe(true);
+    expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.099 })).toBe(false);
     expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.9, abstentionReason: "ambiguous pulse" })).toBe(false);
     expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.9, rhythmFeatures: { status: "measured", abstentionReason: "ambiguous pulse" } })).toBe(false);
     expect(isReliableTempo({ bpm: 0, tempoConfidence: 0.9 })).toBe(false);
