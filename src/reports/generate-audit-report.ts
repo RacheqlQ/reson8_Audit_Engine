@@ -174,10 +174,12 @@ function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready
 function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
 function professionalEvidenceLanguage(value:string):string {
  return value
-  .replace(/Vocal analysis:\\s*Not performed[^.]*\\./gi,"")
-  .replace(/learned audio(?:-genre)? model(?: status)?:\\s*disabled[^.]*\\.?/gi,"")
-  .replace(/(?:vocal analysis|learned audio model) (?:is|was) temporarily disabled[^.]*\\./gi,"")
-  .replace(/\\bOBSERVED\\b/g,"Measured from the uploaded master")
+  .replace(/Vocal analysis:\s*Not performed[^.]*\./gi,"")
+  .replace(/vocal presence\/absence is unknown[^.]*\./gi,"")
+  .replace(/learned audio(?:-genre)? model(?: status)?:\s*disabled[^.]*\.?/gi,"")
+  .replace(/(?:vocal analysis|learned audio model) (?:is|was) temporarily disabled[^.]*\./gi,"")
+  .replace(/vocal analysis (?:was|is) not performed[^.]*\./gi,"")
+  .replace(/\bOBSERVED\b/g,"Measured from the uploaded master")
   .replace(/\bRECOGNIZED\b/g,"Returned by an external source")
   .replace(/\bRECONCILED\b/g,"Cross-checked across independent sources")
   .replace(/\bINFERRED\b/g,"Analytical hypothesis")
@@ -210,6 +212,8 @@ export function metadataFieldSource(e:Record<string,unknown>,field:string):strin
 }
 function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),counts=countEvidenceLayers(a.evidenceLabels);
+ const playlistRecord=e.playlistDiscovery&&typeof e.playlistDiscovery==="object"?e.playlistDiscovery as Record<string,unknown>:{};
+ const firstPlaylist=Array.isArray(playlistRecord.candidates)?playlistRecord.candidates.find((item)=>item&&typeof item==="object") as Record<string,unknown>|undefined:undefined;
  if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",evidenceClass:"assessment-derived",rows:[{label:"Measured",value:counts.OBSERVED},{label:"Source matches",value:counts.RECOGNIZED},{label:"Cross-checked",value:counts.RECONCILED},{label:"Hypotheses",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful."}];
  if(title==="Identity and source reconciliation"&&Array.isArray(e.catalogSources)&&e.catalogSources.length>0){
   const sources=e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"));
@@ -236,7 +240,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"RMS / envelope",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
  if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(a.strengths.slice(0,10),a.risks.slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
- if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:a.promotionPlan.playlistCategories[0]??"Category to investigate"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
+ if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:firstPlaylist?text(firstPlaylist.name)+" ("+text(firstPlaylist.provider)+")":a.promotionPlan.playlistCategories[0]??"No API-verified playlist candidate"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
  if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",evidenceClass:"illustrative",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
  return [];
 }
@@ -317,7 +321,6 @@ function sections(i:AuditReportInput):Section[]{
   ];
  });
  const curatorCampaignBody=[
-  ...playlistCandidateLines,
   ...(verifiedCuratorTargets.length?verifiedCuratorTargets.flatMap((target,index)=>[
    "VERIFIED CURATOR TARGET "+(index+1)+": "+text(target.name)+" — "+text(target.platform),
    "Fit rationale: "+text(target.fitRationale),
@@ -326,7 +329,6 @@ function sections(i:AuditReportInput):Section[]{
    "Official source: "+text(target.sourceUrl),
    "Verified on: "+text(target.verifiedAt)
   ]):["No named curator contact or official submission opportunity has been independently verified. Playlist catalog availability does not establish an open submission route, acceptance or placement."]),
-  ...(playlistCandidates.length?[]:["No genre- or mood-aligned playlist candidates were returned by the configured DSP catalog searches."]),
   ...(playlistOutcomes.length?["DSP playlist-search outcomes: "+playlistOutcomes.map((outcome)=>text(outcome.provider)+" — "+text(outcome.status)+" — "+text(outcome.reason)).join("; ")]:[]),
   "Playlist discovery is a targeting aid only; it does not establish curator interest, editorial acceptance, placement, audience size or commercial performance."
  ];
