@@ -1,4 +1,4 @@
-import { MusicBrainzClient } from "../musicbrainz/client.js";
+import { MusicBrainzClient, normalizeIsrc } from "../musicbrainz/client.js";
 import { SpotifyClient } from "../spotify/client.js";
 import { normalizeSpotifyTrack } from "../spotify/normalize.js";
 import { providerDecision } from "../provider-policy.js";
