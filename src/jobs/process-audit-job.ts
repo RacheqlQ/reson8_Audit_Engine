@@ -568,7 +568,7 @@ export async function processAuditJob(
     }
 
     let isrcLookup: IsrcCatalogLookup | null = null;
-    if (recognition.matched && recognition.isrc) {
+    if (recognition.matched && recognition.isrc && (process.env.MUSICBRAINZ_API_KEY || process.env.MUSICBRAINZ_ID || deps.collectIsrcCatalogMetadata)) {
       isrcLookup = await awaitWithStage(deps, "isrc_catalog_lookup", 30_000, (signal) =>
         (deps.collectIsrcCatalogMetadata ?? collectIsrcCatalogMetadata)(recognition.isrc!, signal),
       );
