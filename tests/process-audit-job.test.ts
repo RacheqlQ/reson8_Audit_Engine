@@ -43,7 +43,6 @@ describe("processAuditJob", () => {
     const events: string[] = [];
     let failureMessage = "";
     let failureCode = "";
-    let failureCause = "";
     let reconciledIdentity: unknown = null;
     let persistedDna: Record<string, unknown> | null = null;
     const result = await processAuditJob("job-123", {
@@ -103,14 +102,13 @@ describe("processAuditJob", () => {
       discoverPlaylists: async (input) => { events.push("playlist-discovery"); expect(input.isrc).toBe("NGABC2600001"); return { status: "available" as const, outcomes: [{ provider: "apple_music" as const, status: "available" as const, reason: "Deterministic test provider result." }], candidates: [{ provider: "apple_music" as const, id: "pl-test", name: "Afrobeats Discovery", url: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", sourceUrl: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", curatorName: "Apple Music", playlistType: "editorial", description: "Afrobeats selections", trackCount: 20, genreMatches: ["Afrobeats"], moodMatches: [], matchBasis: ["Primary genre match: Afrobeats"], containsIsrc: false, retrievedAt: "2026-11-19T12:00:00.000Z" }] }; },
       generateAssessment: async (input) => {
         events.push("assessment");
-        try {
         expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
         expect(input.sonicDna).toHaveProperty("keySegmentAgreement", persistedDna?.keySegmentAgreement);
         expect(input.sonicDna).toHaveProperty("keyTuningCents", persistedDna?.keyTuningCents);
         expect(input.evidence).not.toHaveProperty("playlistDiscovery");
         expect(input.evidence).toMatchObject({
           auditType: "MASTER-BASED AUDIT",
-          metadataSourcesChecked: ["id3", "filename", "audd"],
+          metadataSourcesChecked: ["musicbrainz", "id3", "filename", "audd"],
           artist: "Embedded Artist",
           title: "Embedded Title",
           album: "Embedded Album",
@@ -118,7 +116,6 @@ describe("processAuditJob", () => {
           genres: ["Afrobeats"],
         });
         return assessment;
-        } catch (error) { failureCause = error instanceof Error ? error.message : String(error); throw error; }
       },
       saveAssessment: async () => events.push("assessment-saved"),
       generateReport: async (_input, tier) => {
@@ -135,7 +132,7 @@ describe("processAuditJob", () => {
       markFailed: async (_jobId, _claimToken, message, _signal, errorCode) => { failureMessage = message; failureCode = errorCode ?? ""; events.push("failed"); },
     });
 
-    expect(result.status, failureMessage + " | code: " + failureCode + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity) + " | cause: " + failureCause).toBe("completed");
+    expect(result.status, failureMessage + " | code: " + failureCode + " | events: " + events.join(",") + " | identity: " + JSON.stringify(reconciledIdentity)).toBe("completed");
     expect(events).toEqual([
       "processing",
       "dna-base",
