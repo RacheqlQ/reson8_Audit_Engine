@@ -77,7 +77,7 @@ describe("combined master and DSP processing", () => {
 
     expect(result.status).toBe("completed");
     expect(assessmentInput.evidence).toMatchObject({ sourceCombination: "master_and_dsp" });
-    expect(assessmentInput.evidence).not.toHaveProperty("platform");
+    expect(assessmentInput.evidence).toMatchObject({ platform: "musicbrainz" });
     expect(assessmentInput.catalogMetadata).toMatchObject({ platform: "musicbrainz", artist: "Master Artist", title: "Master Song" });
     expect(assessmentInput.sonicDna).toMatchObject({ provenance: "uploaded_audio_master" });
     expect(events).toContain("catalog-saved");
