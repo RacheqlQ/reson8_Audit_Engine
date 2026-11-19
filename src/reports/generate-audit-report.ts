@@ -314,11 +314,17 @@ function sections(i:AuditReportInput):Section[]{
   if (vocalAnalysisPerformed) {
    const vocalSegments=Array.isArray(vocalFeatures?.activitySegments)?vocalFeatures.activitySegments.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))):[];
    const segmentSummary=vocalSegments.slice(0,8).map((segment)=>metric(segment.startSeconds,2)+"–"+metric(segment.endSeconds,2)+" s").join("; ");
+   const pitch=vocalFeatures?.pitch&&typeof vocalFeatures.pitch==="object"?vocalFeatures.pitch as Record<string,unknown>:{};
+   const pitchRange=typeof pitch.lowerHz==="number"&&typeof pitch.upperHz==="number"
+    ?metric(pitch.lowerHz,0)+"–"+metric(pitch.upperHz,0)+" Hz (median "+metric(pitch.medianHz,0)+" Hz)":"Not determined";
    sonicDnaBody.push(
     "Vocal presence: "+val(vocalFeatures?.voicePresence,"Not determined")
     +"; estimated activity: "+(typeof vocalFeatures?.vocalActivityRatio==="number"?(vocalFeatures.vocalActivityRatio*100).toFixed(1)+"%":"Not measured")
     +"; active duration: "+metric(vocalFeatures?.activeDurationSeconds,2)+" s"
     +(segmentSummary?"; activity intervals: "+segmentSummary:"")
+    +"; estimated fundamental-frequency candidates: "+pitchRange
+    +"; delivery: "+val(vocalFeatures?.delivery,"Not classified")
+    +"; layering: "+val(vocalFeatures?.layering,"Not classified")
    );
   }
  } else if (s) {
