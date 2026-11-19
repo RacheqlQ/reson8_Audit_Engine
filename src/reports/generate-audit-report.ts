@@ -303,7 +303,7 @@ function sections(i:AuditReportInput):Section[]{
   ? playlistDiscovery.outcomes.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))) : [];
  const playlistMoodTags=Array.isArray(playlistDiscovery.moodTagsUsed)?playlistDiscovery.moodTagsUsed.map(text).filter(Boolean):[];
  const playlistMoodSummary=playlistMoodTags.length
-  ? "Mood search tags: "+playlistMoodTags.join(", ")+" [Source: "+text(playlistDiscovery.moodSource,"DSP catalogue metadata")+"]; these are provider-supplied catalogue descriptors, not an audio-derived mood measurement."
+  ? "Mood search tags: "+playlistMoodTags.join(", ")+" [Source: "+(text(playlistDiscovery.moodSource)||"DSP catalogue metadata")+"]; these are provider-supplied catalogue descriptors, not an audio-derived mood measurement."
   : "Mood alignment was not asserted because no source-attributed DSP mood tags were available; playlist matching is limited to the confirmed genre and adjacent lanes.";
  const vocalFeatures=s?.vocalFeatures&&typeof s.vocalFeatures==="object"&&!Array.isArray(s.vocalFeatures)?s.vocalFeatures as Record<string,unknown>:null;
  const vocalStatus=String(vocalFeatures?.status??"not_recorded");
@@ -350,10 +350,10 @@ function sections(i:AuditReportInput):Section[]{
   return [
    "AVAILABLE PLAYLIST "+(index+1)+": "+name+" - "+provider,
    "Alignment: "+(basis.join("; ")||"No match rationale supplied"),
-   "Playlist owner / curator: "+text(target.curatorName,"Not supplied")+"; playlist type: "+text(target.playlistType,"Not supplied")+"; track count: "+text(target.trackCount,"Not supplied"),
+   "Playlist owner / curator: "+(text(target.curatorName)||"Not supplied")+"; playlist type: "+(text(target.playlistType)||"Not supplied")+"; track count: "+text(target.trackCount,"Not supplied"),
    presence,
-   ...(Array.isArray(target.moodMatches)&&target.moodMatches.length?["Mood evidence source: "+text(target.moodSource,"source not supplied")]:[]),
-   "Playlist source: "+url+"; checked: "+text(target.retrievedAt,"retrieval time not supplied")
+   ...(Array.isArray(target.moodMatches)&&target.moodMatches.length?["Mood evidence source: "+(text(target.moodSource)||"source not supplied")]:[]),
+   "Playlist source: "+url+"; checked: "+(text(target.retrievedAt)||"retrieval time not supplied")
   ];
  })];
 });
