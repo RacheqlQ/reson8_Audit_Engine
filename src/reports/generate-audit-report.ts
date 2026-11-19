@@ -443,7 +443,9 @@ const curatorCampaignBody=[
    "SOURCE SHA-256: "+i.realMasterContract.source.sha256,
    "SOURCE MIME / SIZE: "+i.realMasterContract.source.mimeType+" / "+i.realMasterContract.source.byteLength+" bytes",
    ...i.realMasterContract.directSignalMeasurements.map((m)=>m.name+": "+(m.status==="measured"?text(m.value)+" "+m.unit+"; method "+m.method+"; measured: "+m.measuredAt:"UNAVAILABLE; "+m.diagnostics.map((d)=>d.code+": "+d.message).join("; "))),
-   ...i.realMasterContract.calibratedPredictions.map((p)=>p.name+": "+(p.status==="predicted"?p.label+" ("+(p.probability*100).toFixed(1)+"% calibrated; "+p.calibration.validationDataset+")":"UNAVAILABLE; "+p.reasonCodes.join(", ")+" — "+p.diagnostics.map((d)=>d.message).join("; "))),
+   ...i.realMasterContract.calibratedPredictions.map((p)=>p.name+": "+(p.status==="predicted"
+     ?p.label+" ("+(p.probability*100).toFixed(1)+"% calibrated; model "+p.modelVersion+"; calibration "+p.calibration.method+" / "+p.calibration.modelVersion+"; validation "+p.calibration.validationDataset+" (n="+p.calibration.validationSamples+"); ECE "+p.calibration.expectedCalibrationError.toFixed(3)+"; Brier "+p.calibration.brierScore.toFixed(3)+"; feature drivers: "+(p.featureDrivers.length?p.featureDrivers.map((d)=>d.feature+" "+d.direction+" ("+d.contribution.toFixed(3)+")").join(", "):"none recorded")+(p.diagnostics.length?"; diagnostics: "+p.diagnostics.map((d)=>d.code+": "+d.message).join("; "):""))
+     :"UNAVAILABLE; "+p.reasonCodes.join(", ")+" — "+p.diagnostics.map((d)=>d.code+": "+d.message).join("; "))),
    ...i.realMasterContract.externalRecords.map((r)=>r.status==="verified"
      ?"EXTERNAL RECORD: "+r.provider+" / "+r.recordId+"; retrieved: "+r.retrievedAt+"; fields: "+Object.keys(r.fields).join(", ")+"; field provenance: "+Object.entries(r.fieldProvenance).map(([field,p])=>field+"="+p.provider+"/"+p.recordId+"@"+p.retrievedAt).join(", ")
      :"EXTERNAL RECORD UNAVAILABLE: "+r.provider+" — "+r.reasonCode+": "+r.diagnostic.message),
