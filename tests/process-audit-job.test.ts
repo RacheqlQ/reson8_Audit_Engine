@@ -120,12 +120,18 @@ describe("processAuditJob", () => {
       saveAssessment: async () => events.push("assessment-saved"),
       generateReport: async (_input, tier) => {
         expect((_input.evidence as Record<string, unknown>).playlistDiscovery).toMatchObject({ status: "available", candidates: [{ name: "Afrobeats Discovery", provider: "apple_music" }] });
+        expect(_input.executionMode).toBe("master");
+        expect(_input.realMasterContract).toMatchObject({ schemaVersion: "1.0.0", auditId: "job-123", source: { sourceKind: "uploaded_master", sourceAudioPath: "owner-123/job-123/master.wav", mimeType: "audio/mpeg", byteLength: id3Fixture().byteLength } });
+        expect((_input.realMasterContract as { calibratedPredictions: Array<{ name: string; status: string }> }).calibratedPredictions).toEqual(expect.arrayContaining([
+          expect.objectContaining({ name: "audio_mood", status: "unavailable" }),
+          expect.objectContaining({ name: "key_mode_classification", status: "unavailable" }),
+        ]));
         events.push(`report-${tier}`);
         return new Uint8Array([37, 80, 68, 70, 45]);
       },
       saveReport: async (_jobId, _claimToken, tier, pdf, reportInput) => {
         expect(Buffer.from(pdf.subarray(0, 5)).toString("ascii")).toBe("%PDF-");
-        if (tier === "full") expect(reportInput).toMatchObject({ auditId: "job-123" });
+        if (tier === "full") expect(reportInput).toMatchObject({ auditId: "job-123", executionMode: "master", realMasterContract: { schemaVersion: "1.0.0", source: { sha256: expect.stringMatching(/^[a-f0-9]{64}$/) } } });
         events.push(`report-saved-${tier}`);
       },
       markCompleted: async () => events.push("completed"),
