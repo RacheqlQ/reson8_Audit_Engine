@@ -22,7 +22,7 @@ export interface CatalogMetadata {
   isrc: string | null; upc: string | null; catalogPopularity: number | null; catalogPopularityScale: "0_1" | "0_100" | null; label: string | null; genre: string | null;
   artworkUrl: string | null; previewUrl: string | null; externalIds: Record<string,string>; sonicProfile: CatalogSonicProfile | null;
   raw: Record<string,unknown>; evidenceStatus: "recognized" | "partial";
-  /** Timestamp captured immediately after the provider response was received. */
+  /** UTC collector timestamp recorded after a successful provider adapter result; not a provider-supplied timestamp. */
   retrievedAt?: string;
 }
 
