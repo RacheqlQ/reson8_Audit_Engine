@@ -60,8 +60,8 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
         genre.label.length >= 4 && lower.includes(genre.label.toLocaleLowerCase()),
       );
       const contradictsProviderGenre = !suppressGenre
-        && /\\bgenre\\b/i.test(sentence)
-        && /\\b(?:unverified|unknown|undetermined|not established|not confirmed)\\b/i.test(sentence);
+        && /\bgenre\b/i.test(sentence)
+        && /\b(?:unverified|unknown|undetermined|not established|not confirmed)\b/i.test(sentence);
       const commercialTerms = /\b(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|completion rate|marketability|commercial performance|commercial potential|commercial success|commercially (?:promising|viable|strong|successful|attractive|competitive)|demand|traction|market fit)\b/i;
       const cautionaryCommercialContext = /\b(?:cannot|can't|could not|unable|withheld|requires? review)\b/i.test(sentence)
         || /\bno\s+(?:(?:verified|source-attributed|reliable|supporting|sufficient)\s+)*(?:streams?|monthly listeners?|listeners?|saves?|sales?|revenue|playlist adds?|conversions?|commercial (?:performance|potential|success|metrics?)|market demand|traction|market fit|evidence)\b/i.test(sentence)

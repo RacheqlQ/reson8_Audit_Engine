@@ -35,6 +35,8 @@ describe("ISRC-led DSP playlist discovery",()=>{
    adjacentLanes:["R&B","Hip-Hop"],moodTags:["Reflective"],moodSource:"TIDAL catalogue sonic profile",storefront:"ng",
   },{spotifyClient,appleMusicToken:"test-token",fetcher,now:()=>new Date("2026-11-19T12:00:00.000Z")});
   expect(result.status).toBe("available");
+  expect(result.moodTagsUsed).toEqual(["Reflective"]);
+  expect(result.moodSource).toBe("TIDAL catalogue sonic profile");
   expect(result.candidates).toHaveLength(2);
   const apple=result.candidates.find((item)=>item.provider==="apple_music");
   const spotify=result.candidates.find((item)=>item.provider==="spotify");

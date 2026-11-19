@@ -447,7 +447,7 @@ export async function generateAuditReport(input:AuditReportInput,tier:AuditRepor
     const r={x:M,y:y-height,width:W-2*M,height,id:"section-"+si+"-paragraph-"+pi+"-part-"+chunk};rects.push(r);
 
     for(let li=0;li<count;li++){
-      const line=lines[offset+li],spotifyAttribution=offset+li===0&&/^AVAILABLE PLAYLIST/.test(line)&&/ - Spotify$/.test(line);
+      const line=lines[offset+li],spotifyAttribution=(offset+li===0&&line==="SPOTIFY PLAYLIST RESULTS")||(offset+li===0&&/^AVAILABLE PLAYLIST/.test(line)&&/ - Spotify$/.test(line));
       const textX=M+(spotifyAttribution?31:8);
       if(spotifyAttribution)drawSpotifyMark(page,M+8,y-li*lineHeight-4,18);
       if(fonts.regular.widthOfTextAtSize(line,size)>W-textX-M+.01)console.warn("[report-layout] Text width overflow:",r.id);

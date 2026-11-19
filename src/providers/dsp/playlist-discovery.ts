@@ -36,6 +36,8 @@ export interface PlaylistDiscoveryOutcome {
 }
 
 export interface PlaylistDiscoveryResult {
+  moodTagsUsed?: string[];
+  moodSource?: string | null;
   status: "available" | "partial" | "no_matches" | "not_configured" | "unavailable";
   candidates: PlaylistCandidate[];
   outcomes: PlaylistDiscoveryOutcome[];
@@ -306,7 +308,7 @@ export async function discoverPlaylistCandidates(
   const status = ordered.length
     ? outcomes.some((outcome) => outcome.status === "unavailable") ? "partial" : "available"
     : configured ? outcomes.some((outcome) => outcome.status === "unavailable") ? "unavailable" : "no_matches" : "not_configured";
-  return { status, candidates: ordered.slice(0, 12), outcomes };
+  return { status, candidates: ordered.slice(0, 12), outcomes, moodTagsUsed: moods, moodSource: input.moodSource ?? null };
 }
 
 function playlistsCount(attributes: Record<string, unknown>): number | null {

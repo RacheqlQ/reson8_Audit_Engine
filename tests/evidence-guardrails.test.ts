@@ -87,7 +87,7 @@ describe("Phillo evidence guardrails", () => {
       reconciliation: { conflicts: [{ field: "album", values: ["Hole-Hearted - EP", "Hole-Hearted"] }] },
     });
     expect(result.scorecard.metadataCompleteness.score).toBeNull();
-    expect(result.scorecard.metadataCompleteness.rationale).toContain("present but conflicting");
+    expect(result.scorecard.metadataCompleteness.rationale).toContain("album conflict is documented");
     expect(result.evidenceGaps.join(" ")).toContain("Album metadata is present but conflicting");
     expect(JSON.stringify(result)).not.toMatch(/album (?:title )?(?:is )?(?:missing|unavailable)/i);
   });
