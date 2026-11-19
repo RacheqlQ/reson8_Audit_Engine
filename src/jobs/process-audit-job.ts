@@ -265,6 +265,7 @@ function assessmentCatalogMetadataInput(metadata: CatalogMetadata | readonly Cat
       releaseDate: source.releaseDate,
       genres: source.genre ? [source.genre] : [],
     };
+    if (source.platform === "musicbrainz") result.musicbrainz = fields;
     if (source.platform === "tidal") result.tidal = fields;
     if (source.platform === "apple_music") result.apple_music = fields;
     if (source.platform === "deezer") result.deezer = fields;
