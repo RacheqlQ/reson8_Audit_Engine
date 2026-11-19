@@ -55,7 +55,7 @@ describe("Phillo evidence guardrails", () => {
     expect(result.scorecard.tempoLaneFit.rationale).not.toContain("did not pass the confidence gate");
   });
 
-  it("uses the same key confidence and segment agreement floors as the detector", () => {
+  it("enforces the approved key reportability floors while retaining lower provisional candidates", () => {
     expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.8, keySegmentAgreement: 0.8 })).toBe(true);
     expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.799, keySegmentAgreement: 0.95 })).toBe(false);
     expect(isReliableKey({ key: "C", mode: "major", keyConfidence: 0.95, keySegmentAgreement: 0.799 })).toBe(false);
