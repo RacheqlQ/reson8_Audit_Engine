@@ -429,12 +429,19 @@ function drawBars(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typ
  rows.slice(0,6).forEach((r,i)=>{const y=g.contentTop-20-i*19,c=color(i);text(p,r.label.slice(0,25),g.x+13,y,b,7,c);text(p,shown(r.value).slice(0,48),g.x+178,y,f,7,C.ink);});
 }
 function drawConstellation(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
- const labelHeights=constellationLabelRowHeights(rows,g.width),labelTotal=labelHeights.reduce((sum,value)=>sum+value,0);
+ const visibleRows=rows.slice(0,5),labelHeights=constellationLabelRowHeights(visibleRows,g.width),labelTotal=labelHeights.reduce((sum,value)=>sum+value,0);
  const cx=g.x+g.width/2,graphBottom=g.contentBottom+labelTotal+10,cy=graphBottom+56,radiusX=Math.min(g.width*.2,88),radiusY=38;
  p.drawCircle({x:cx,y:cy,size:23,borderColor:C.violet,borderWidth:1.4,color:C.paper});
- rows.slice(0,5).forEach((row,i)=>{
-  const angle=-Math.PI/2+i*2*Math.PI/5,px=cx+Math.cos(angle)*radiusX,py=cy+Math.sin(angle)*radiusY;
-  line(p,cx,cy,px,py,color(i),1);p.drawCircle({x:px,y:py,size:15,borderColor:color(i),borderWidth:1,color:C.white});
+ text(p,"PRIMARY",cx-12,cy-2,b,4.5,C.violet);
+ const adjacentRows=visibleRows.slice(1);
+ if(adjacentRows.length===0){
+  text(p,"No adjacent lanes established",cx-49,cy-34,f,6,C.muted);
+ }
+ adjacentRows.forEach((row,i)=>{
+  const angle=-Math.PI/2+i*2*Math.PI/Math.max(adjacentRows.length,3),px=cx+Math.cos(angle)*radiusX,py=cy+Math.sin(angle)*radiusY;
+  line(p,cx,cy,px,py,color(i+1),1);p.drawCircle({x:px,y:py,size:15,borderColor:color(i+1),borderWidth:1,color:C.white});
+ });
+ visibleRows.forEach((row,i)=>{
   const labelWidth=(g.width-36)/2,rowIndex=Math.floor(i/2),column=i%2;
   const rowTop=graphBottom-7-labelHeights.slice(0,rowIndex).reduce((sum,value)=>sum+value,0);
   const labelX=g.x+12+column*(labelWidth+12),labelBottom=rowTop-labelHeights[rowIndex]+2;
