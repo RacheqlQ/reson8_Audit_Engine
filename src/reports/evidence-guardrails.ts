@@ -1,6 +1,8 @@
 import { adjacentGenresFor, findGenre, GENRE_TAXONOMY } from "../genre/taxonomy.js";
-export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.5;
-export const MIN_RELIABLE_KEY_CONFIDENCE = 0.8;
+// These are detector acceptance floors, not separate stricter PDF thresholds.
+// estimateTempo abstains below 0.10; estimateKey withholds below 0.12 or <0.60 segment agreement.
+export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.1;
+export const MIN_RELIABLE_KEY_CONFIDENCE = 0.12;
 
 type TempoEvidence = {
   bpm?: unknown;
