@@ -310,13 +310,13 @@ function drawSonic(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<ty
   const col=i%3,r=Math.floor(i/3),x=cols[col],y=top-r*40,c=color(i),v=validNumber(row.value);
   const label=row.label.toUpperCase();
   tracked(p,label,x,y,b,6.3,C.muted,.35);
-  const isPercent=/CONFIDENCE|SCORE|PERCENT/i.test(label)||typeof row.value==="string"&&/%$/.test(row.value);
+  const display=shown(row.value);
+  const isPercent=(/CONFIDENCE|SCORE|PERCENT/i.test(label)&&v!==null)||(typeof row.value==="string"&&/%$/.test(row.value));
   if(isPercent){
    const parsed=v??(typeof row.value==="string"&&/%$/.test(row.value)?Number.parseFloat(row.value):null),n=typeof parsed==="number"&&Number.isFinite(parsed)?parsed:null;
    ring(p,x+22,y-24,13,n===null?null:n,c,f,b);
    if(n===null)text(p,"Not determined",x+41,y-27,f,6.2,C.muted);
   }else if(v!==null){
-   const display=shown(row.value);
    const unit=/LUFS/i.test(label)?"LUFS":/\bLRA\b/i.test(label)?"LU":/BPM/i.test(label)?"BPM":/RANGE|SPREAD/i.test(label)?"dB":/HZ|ROLLOFF|CENTROID/i.test(label)?"Hz":"";
    let metricSize=25;
    const maxMetricWidth=unit?102:138;
@@ -324,9 +324,14 @@ function drawSonic(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<ty
    text(p,display,x,y-28,b,metricSize,c);
    const unitX=x+b.widthOfTextAtSize(display,metricSize)+5;
    if(unit&&unitX+b.widthOfTextAtSize(unit,7)<=x+150)text(p,unit,unitX,y-26,b,7,C.muted);
-  }else if(/KEY/i.test(label)&&shown(row.value)!=="Not determined"){
-   let keySize=15;const keyText=shown(row.value);while(keySize>9&&b.widthOfTextAtSize(keyText,keySize)>138)keySize-=1;
-   text(p,keyText,x,y-27,b,keySize,c);
+  }else if(/^KEY \/ MODE$/.test(label)&&display!=="Not determined"){
+   let keySize=15;while(keySize>9&&b.widthOfTextAtSize(display,keySize)>138)keySize-=1;
+   text(p,display,x,y-27,b,keySize,c);
+  }else if(display!=="Not determined"&&display!=="Not supplied"&&display!=="null"){
+   const valueLines=wrap(display,f,7.2,145);
+   const visible=valueLines.slice(0,2);
+   if(valueLines.length>2&&visible.length)visible[1]=visible[1].replace(/[.…]*$/,"")+"…";
+   visible.forEach((valueLine,index)=>text(p,valueLine,x,y-18-index*8.5,f,7.2,c));
   }else{
    ring(p,x+14,y-24,11,null,c,f,b);
    text(p,"Not determined",x+33,y-26,f,6.0,C.muted);
