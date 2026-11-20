@@ -118,7 +118,7 @@ function safeAuditErrorCode(error: unknown): string {
 function safeStackFingerprint(error: unknown): string {
   const stack = error instanceof Error ? error.stack ?? "" : "";
   const frames = stack.split("\n").slice(1).map(line => {
-    const match = line.match(/^\s*at\s+([A-Za-z0-9_.$<>-]+)(?:\s+\\(|$)/);
+    const match = line.match(/^\s*at\s+([A-Za-z0-9_.$<>-]+)(?:\s+\(|$)/);
     return match?.[1] ?? "";
   }).filter(Boolean).slice(0, 4);
   if (!frames.length) return "stk-unknown";
