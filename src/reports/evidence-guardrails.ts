@@ -19,7 +19,7 @@ export function isReliableTempo(value: TempoEvidence): boolean {
   if (!value || typeof value !== "object") return false;
   const bpm = value.bpm;
   const confidence = value.tempoConfidence;
-  if (typeof bpm !== "number" || !Number.isFinite(bpm) || bpm < 40 || bpm > 240) return false;
+  if (typeof bpm !== "number" || !Number.isFinite(bpm) || bpm < 40 || bpm > 220) return false;
   if (typeof confidence !== "number" || !Number.isFinite(confidence)) return false;
   if (confidence < MIN_RELIABLE_TEMPO_CONFIDENCE || confidence > 1) return false;
   if (typeof value.abstentionReason === "string" && value.abstentionReason.trim()) return false;
