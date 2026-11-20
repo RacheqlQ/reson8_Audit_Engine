@@ -75,16 +75,16 @@ describe("native PDF chart helpers", () => {
     expect(rects.some((rect) => rect.id === "label-spectrum-value-0")).toBe(true);
   });
 
-  it("keeps all ten primary Sonic DNA measurements, including provisional tuning evidence, inside the dashboard card", async () => {
-    const rows: ChartRow[] = Array.from({length:10},(_,index)=>({
-      label:["TEMPO BPM","TEMPO CANDIDATE BPM","TEMPO DETECTION REASON","BEAT GRID STATUS","BEAT TIMESTAMP COUNT","KEY / MODE","KEY / MODE CANDIDATES","KEY CONFIDENCE DIAGNOSTIC","KEY CANDIDATE REASON","TUNING OFFSET CANDIDATE CENTS"][index],
-      value:index===0?"96.0":index===5?"A minor":index===9?"14 (multiple tonal windows; provisional)":index===6?"C major":index===1?"128 (provisional; prominence diagnostic 0.00)":"Not determined",
+  it("keeps the expanded Sonic DNA dashboard rows, including alternate tempo and provisional tuning evidence, inside the dashboard card", async () => {
+    const rows: ChartRow[] = Array.from({length:13},(_,index)=>({
+      label:["TEMPO BPM","TEMPO ALTERNATE INTERPRETATION","TEMPO CANDIDATE BPM","TEMPO DETECTION REASON","TEMPO WINDOW CONSENSUS","BEAT GRID STATUS","BEAT TIMESTAMP COUNT","KEY / MODE","KEY / MODE CANDIDATES","KEY WINDOW CONSENSUS","KEY CONFIDENCE DIAGNOSTIC","KEY CANDIDATE REASON","TUNING OFFSET CANDIDATE CENTS"][index],
+      value:index===0?"96.0":index===7?"A minor":index===12?"14 (multiple tonal windows; provisional)":index===8?"C major":index===1?"48 BPM (half-time interpretation; alternate metrical level)":"Not determined",
     }));
     const height=chartPanelHeight("sonic",rows);
     const rects=chartPanelLayoutRects("sonic",rows,48,700,height);
     const card=rects.find(rect=>rect.id==="card-bounds");
-    expect(height).toBe(270);
-    expect(rects.filter(rect=>rect.id.startsWith("shape-sonic-metric-"))).toHaveLength(10);
+    expect(height).toBe(340);
+    expect(rects.filter(rect=>rect.id.startsWith("shape-sonic-metric-"))).toHaveLength(13);
     expect(chartPanelLayoutErrors("sonic",rows,48,700,height)).toEqual([]);
     expect(card).toBeDefined();
     if(card)expect(chartShapeBoundsErrors(card,rects.filter(rect=>rect.id.startsWith("shape-sonic-metric-")))).toEqual([]);

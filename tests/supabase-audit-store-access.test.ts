@@ -242,10 +242,12 @@ describe("Sonic DNA diagnostic event persistence", () => {
         downbeatCandidateTimesSeconds: [0.2],
         beatGridStatus: "tentative",
         downbeatGridAssumption: "four-beat grouping for diagnostics only",
+        windowConsensus: { winner: "120", windowCount: 4, observedAgreement: 1, lowerAgreementBound: 0.5, upperAgreementBound: 1, iterations: 1000, method: "deterministic_window_bootstrap" },
       },
       harmonicFeatures: {
         method: "fft_harmonic_chroma_ensemble",
         segmentChroma: [{ startSeconds: 0, endSeconds: 4, chroma: Array(12).fill(1 / 12) }],
+        windowConsensus: { winner: "C:major", windowCount: 8, observedAgreement: 0.875, lowerAgreementBound: 0.5, upperAgreementBound: 1, iterations: 1000, method: "deterministic_window_bootstrap" },
       },
       vocalFeatures: {},
       bpm: 100, alternateTempo: 50, tempoConfidence: 0.91,
@@ -267,11 +269,13 @@ describe("Sonic DNA diagnostic event persistence", () => {
         onsetEnvelope: [0, 0.5, 1],
         beatTimesSeconds: [0.2, 0.8, 1.4],
         downbeatCandidateTimesSeconds: [0.2],
+        windowConsensus: { winner: "120", windowCount: 4, observedAgreement: 1, lowerAgreementBound: 0.5, upperAgreementBound: 1, iterations: 1000, method: "deterministic_window_bootstrap" },
       },
       key: {
         tuningCents: 7.5,
         segmentAgreement: 0.9,
         segmentChroma: [{ startSeconds: 0, endSeconds: 4 }],
+        windowConsensus: { winner: "C:major", windowCount: 8, observedAgreement: 0.875, lowerAgreementBound: 0.5, upperAgreementBound: 1, iterations: 1000, method: "deterministic_window_bootstrap" },
       },
     });
     expect(JSON.stringify(requestBody.p_payload.eventPayload)).not.toContain("samples");

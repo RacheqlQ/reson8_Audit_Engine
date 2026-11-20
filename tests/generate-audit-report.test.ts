@@ -380,6 +380,29 @@ describe("report evidence integrity",()=>{
 });
 
 
+describe("Phase 2 window-consensus report diagnostics", () => {
+ it("renders tempo and key window stability without presenting bootstrap bounds as calibrated confidence", () => {
+  const rows=sonicDashboardRowsForReport({
+   provenance:"uploaded_audio_master",
+   rhythmFeatures:{windowConsensus:{winner:"120",windowCount:6,observedAgreement:1,lowerAgreementBound:0.67,upperAgreementBound:1,method:"deterministic_window_bootstrap"}},
+   harmonicFeatures:{windowConsensus:{winner:"C:major",windowCount:8,observedAgreement:0.875,lowerAgreementBound:0.5,upperAgreementBound:1,method:"deterministic_window_bootstrap"}},
+  },true);
+  expect(rows.find(row=>row.label==="TEMPO WINDOW CONSENSUS")?.value).toContain("120 across 6 windows");
+  expect(rows.find(row=>row.label==="TEMPO WINDOW CONSENSUS")?.value).toContain("not a calibrated probability");
+  expect(rows.find(row=>row.label==="KEY WINDOW CONSENSUS")?.value).toContain("C:major across 8 windows");
+  expect(rows.find(row=>row.label==="KEY WINDOW CONSENSUS")?.value).toContain("95% bootstrap resampling interval");
+ });
+ it("states unavailable when window evidence is absent or tied",()=>{
+  const rows=sonicDashboardRowsForReport({
+   provenance:"uploaded_audio_master",
+   rhythmFeatures:{windowConsensus:{winner:null,windowCount:0,observedAgreement:null,lowerAgreementBound:null,upperAgreementBound:null}},
+   harmonicFeatures:{windowConsensus:{winner:null,windowCount:4,observedAgreement:null,lowerAgreementBound:null,upperAgreementBound:null}},
+  },true);
+  expect(rows.find(row=>row.label==="TEMPO WINDOW CONSENSUS")?.value).toContain("no usable analysis windows");
+  expect(rows.find(row=>row.label==="KEY WINDOW CONSENSUS")?.value).toContain("No stable majority");
+ });
+});
+
 describe("Sonic DNA provisional candidate reporting", () => {
   it("shows tempo and key candidates without promoting them to confirmed measurements", () => {
     const rows = sonicDashboardRowsForReport({

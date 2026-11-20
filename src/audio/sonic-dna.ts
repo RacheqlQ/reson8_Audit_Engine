@@ -1,4 +1,6 @@
-import { estimateKey } from "./key-estimation.js";
+import { estimateKey, MIN_RELIABLE_KEY_CONFIDENCE, MIN_KEY_SEGMENT_AGREEMENT, type KeyEstimate } from "./key-estimation.js";
+import { estimateGoertzelKey, estimateLowFrequencyEnvelopeTempo, type IndependentKeyEstimate, type IndependentTempoEstimate } from "./independent-estimators.js";
+import { bootstrapCategoricalConsensus, type BootstrapConsensusDiagnostics } from "./ensemble-consensus.js";
 
 export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.5;
 import { analyzeVocalSignalDiagnostics } from "./vocal-signal-diagnostics.js";
@@ -17,6 +19,8 @@ export interface TempoEstimate {
  beatGridStatus:"tentative"|"not_determined";
  downbeatGridAssumption:"four-beat grouping for diagnostics only"|null;
  abstentionReason:string|null;
+ windowConsensus:BootstrapConsensusDiagnostics;
+ independentEstimator?:IndependentTempoEstimate;
 }
 export interface SonicDnaFeatures {
  sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; tempoCandidateBpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
@@ -27,6 +31,23 @@ export interface SonicDnaFeatures {
 const EPSILON=1e-12;
 export const MAX_ANALYSIS_SAMPLES=3_000_000;
 const NOTES=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+
+export function classifyRelativeMajorMinorAmbiguity(
+ primary:Pick<KeyEstimate,"key"|"mode"|"confidence"|"segmentAgreement">,
+ independent:Pick<IndependentKeyEstimate,"key"|"mode"|"score"|"margin">,
+):boolean {
+ if(!primary.key||!primary.mode||!independent.key||!independent.mode||primary.mode===independent.mode)return false;
+ const primaryPitch=NOTES.indexOf(primary.key as typeof NOTES[number]);
+ const independentPitch=NOTES.indexOf(independent.key as typeof NOTES[number]);
+ if(primaryPitch<0||independentPitch<0)return false;
+ const distance=(independentPitch-primaryPitch+12)%12;
+ const relativePair=distance===3||distance===9;
+ const primaryIsStrong=typeof primary.confidence==="number"&&primary.confidence>=MIN_RELIABLE_KEY_CONFIDENCE
+  &&typeof primary.segmentAgreement==="number"&&primary.segmentAgreement>=MIN_KEY_SEGMENT_AGREEMENT;
+ const independentIsStrong=independent.score>=0.15&&typeof independent.margin==="number"&&independent.margin>=0.025;
+ return relativePair&&primaryIsStrong&&independentIsStrong;
+}
+
 function rms(s:Float32Array):number { if(!s.length)return 0; let sum=0; for(const x of s)sum+=x*x; return Math.sqrt(sum/s.length); }
 function percentile(a:number[],p:number):number { if(!a.length)return 0; const i=(a.length-1)*p,l=Math.floor(i),u=Math.ceil(i); return l===u?a[l]:a[l]+(a[u]-a[l])*(i-l); }
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));
@@ -80,7 +101,7 @@ function emptyTempoEstimate(reason:string):TempoEstimate {
   bpm:null,topCandidateBpm:null,alternateTempo:null,confidence:null,method:"high_frequency_transient_autocorrelation",
   candidateBpms:[],candidateScores:[],onsetEnvelope:[],beatTimesSeconds:[],
   downbeatCandidateTimesSeconds:[],beatGridStatus:"not_determined",
-  downbeatGridAssumption:null,abstentionReason:reason,
+  downbeatGridAssumption:null,abstentionReason:reason,windowConsensus:bootstrapCategoricalConsensus([]),
  };
 }
 
@@ -131,7 +152,7 @@ function deriveBeatGrid(novelty:number[],bpm:number,framesPerSecond:number):{
  * de-emphasizes sustained tones. Confidence is a signal-prominence diagnostic,
  * not a calibrated probability of BPM accuracy.
  */
-export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstimate {
+function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate {
  const method="high_frequency_transient_autocorrelation" as const;
  if(sampleRate<=0||samples.length<sampleRate*4||rms(samples)<1e-5)
   return emptyTempoEstimate("Insufficient duration or signal energy for tempo analysis.");
@@ -197,8 +218,35 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
   downbeatCandidateTimesSeconds:beatGrid.downbeatCandidateTimesSeconds,
   beatGridStatus:beatGrid.beatTimesSeconds.length?"tentative":"not_determined",
   downbeatGridAssumption:beatGrid.downbeatCandidateTimesSeconds.length?"four-beat grouping for diagnostics only":null,
-  abstentionReason:null,
+  abstentionReason:null,windowConsensus:bootstrapCategoricalConsensus([]),
  };
+}
+
+
+/**
+ * Analyse the complete clip, then independently re-run the same tempo detector
+ * on up to six non-overlapping 8-second windows. This is window stability
+ * evidence, not a multi-model ensemble or a calibrated probability.
+ */
+export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstimate {
+ const overall=estimateTempoCore(samples,sampleRate);
+ if(sampleRate<=0||samples.length<sampleRate*8)return overall;
+ const windowSamples=Math.floor(sampleRate*8),windowCount=Math.min(6,Math.floor(samples.length/windowSamples));
+ const labels:string[]=[];
+ for(let window=0;window<windowCount;window++){
+  const start=window*windowSamples;
+  const estimate=estimateTempoCore(samples.subarray(start,start+windowSamples),sampleRate);
+  if(estimate.bpm!==null)labels.push(String(Math.round(estimate.bpm)));
+ }
+ const windowConsensus=bootstrapCategoricalConsensus(labels,{iterations:1000,seed:17});
+ const independentEstimator=estimateLowFrequencyEnvelopeTempo(samples,sampleRate);
+ const tempoRatio=overall.bpm!==null&&independentEstimator.bpm!==null?overall.bpm/independentEstimator.bpm:null;
+ const octaveRelated=tempoRatio!==null&&[0.5,1,2].some(ratio=>Math.abs(tempoRatio-ratio)<=Math.max(0.03,ratio*0.03));
+ const unstableWindows=windowConsensus.windowCount>=3&&(windowConsensus.winner===null||(windowConsensus.observedAgreement??0)<0.6);
+ const materialDisagreement=overall.bpm!==null&&independentEstimator.bpm!==null&&!octaveRelated&&independentEstimator.score>=0.4&&unstableWindows;
+ return materialDisagreement
+  ? {...overall,bpm:null,confidence:null,abstentionReason:"Independent tempo pathways materially disagreed and the primary tempo windows were unstable; no single tempo is asserted.",windowConsensus,independentEstimator}
+  : {...overall,alternateTempo:overall.alternateTempo??(octaveRelated?independentEstimator.bpm:null),windowConsensus,independentEstimator};
 }
 
 export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):SonicDnaFeatures {
@@ -232,21 +280,26 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  const frames:number[]=[],frame=Math.max(256,Math.floor(rate*0.05));
  for(let s=0;s<a.length;s+=frame){const end=Math.min(a.length,s+frame);let sum=0;for(let i=s;i<end;i++)sum+=a[i]*a[i];frames.push(Math.sqrt(sum/Math.max(1,end-s)));}
  frames.sort((x,y)=>x-y);
- const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),key=estimateKey(a,rate);
+ const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),key=estimateKey(a,rate),independentKey:IndependentKeyEstimate=estimateGoertzelKey(a,rate),independentKeyDisagrees=key.key!==null&&independentKey.key!==null&&(key.key!==independentKey.key||key.mode!==independentKey.mode);
+ const relativeMajorMinorAmbiguity=classifyRelativeMajorMinorAmbiguity(key,independentKey);
+ const resolvedKey:KeyEstimate=relativeMajorMinorAmbiguity?{
+  ...key,key:null,mode:null,
+  limitation:"Independent audio estimators support relative major/minor tonal centres; pitch-class evidence does not resolve the tonic. No key or mode is asserted.",
+ }:key;
  // Signal descriptors are reported in their own numeric fields. Do not
  // relabel RMS, zero-crossing rate, or spectral centroid as emotional mood.
  // A validated, licensed mood model is not currently integrated.
  const moodTags:string[]=[];
  const limitations:string[]=[];
- if(key.limitation)limitations.push(key.limitation);
+ if(resolvedKey.limitation)limitations.push(resolvedKey.limitation);
  if(tempo.bpm===null)limitations.push("Tempo could not be determined reliably from the supplied audio.");
  return {
   sampleRate,channels:Number.isInteger(channels)&&channels>0?channels:1,durationSeconds:prepared.durationSeconds,
-  rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:tempo.method,candidateBpms:tempo.candidateBpms,candidateScores:tempo.candidateScores,onsetEnvelope:tempo.onsetEnvelope,beatTimesSeconds:tempo.beatTimesSeconds,downbeatCandidateTimesSeconds:tempo.downbeatCandidateTimesSeconds,beatGridStatus:tempo.beatGridStatus,downbeatGridAssumption:tempo.downbeatGridAssumption,abstentionReason:tempo.abstentionReason},
-  harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:key.method,tuningCents:key.tuningCents,segmentAgreement:key.segmentAgreement,analysisWindows:key.analysisWindows,fftButterflyCount:key.fftButterflyCount,segmentChroma:key.segmentChroma,topCandidates:key.topCandidates,tuningEvidenceWindows:key.tuningEvidenceWindows,limitation:key.limitation},
+  rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:tempo.method,candidateBpms:tempo.candidateBpms,candidateScores:tempo.candidateScores,onsetEnvelope:tempo.onsetEnvelope,beatTimesSeconds:tempo.beatTimesSeconds,downbeatCandidateTimesSeconds:tempo.downbeatCandidateTimesSeconds,beatGridStatus:tempo.beatGridStatus,downbeatGridAssumption:tempo.downbeatGridAssumption,abstentionReason:tempo.abstentionReason,windowConsensus:tempo.windowConsensus,independentEstimator:tempo.independentEstimator??null},
+  harmonicFeatures:{status:resolvedKey.key===null?"insufficient_evidence":"measured",key:resolvedKey.key,mode:resolvedKey.mode,confidence:resolvedKey.confidence,method:resolvedKey.method,tuningCents:resolvedKey.tuningCents,segmentAgreement:resolvedKey.segmentAgreement,analysisWindows:resolvedKey.analysisWindows,fftButterflyCount:resolvedKey.fftButterflyCount,segmentChroma:resolvedKey.segmentChroma,topCandidates:resolvedKey.topCandidates,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,limitation:resolvedKey.limitation,windowConsensus:resolvedKey.windowConsensus,independentEstimator:independentKey,independentEstimatorDisagrees:independentKeyDisagrees,relativeMajorMinorAmbiguity},
   vocalFeatures:{...vocalDiagnostics},
   bpm:tempo.bpm,tempoCandidateBpm:tempo.topCandidateBpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
-  key:key.key,mode:key.mode,keyConfidence:key.confidence,keyTuningCents:key.tuningCents,keySegmentAgreement:key.segmentAgreement,keyCandidates:key.topCandidates,tuningEvidenceWindows:key.tuningEvidenceWindows,keyAnalysisFftButterflyCount:key.fftButterflyCount,limitations,
+  key:resolvedKey.key,mode:resolvedKey.mode,keyConfidence:resolvedKey.confidence,keyTuningCents:resolvedKey.tuningCents,keySegmentAgreement:resolvedKey.segmentAgreement,keyCandidates:resolvedKey.topCandidates,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,keyAnalysisFftButterflyCount:resolvedKey.fftButterflyCount,limitations,
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
   dynamicRangeDb:20*Math.log10(p95/p10),spectralCentroidHz:centroid,spectralBandwidthHz:bandwidth,
   spectralRolloffHz:rolloff,zeroCrossingRate:crossings/Math.max(1,a.length-1),
