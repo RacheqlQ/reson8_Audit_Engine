@@ -172,6 +172,19 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
 }
 function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
  const e=rec(input.evidence),a=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)),sonic=rec(input.sonicDna);
+ const notesContext=buildArNotesDecisionContext(input);
+ const technicalProfile=[
+  typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?"Duration "+sonic.durationSeconds.toFixed(1)+"s":null,
+  typeof sonic.sampleRate==="number"&&Number.isFinite(sonic.sampleRate)?"Sample rate "+sonic.sampleRate+" Hz":null,
+  typeof sonic.channels==="number"&&Number.isFinite(sonic.channels)?"Channels "+sonic.channels:null,
+  typeof sonic.rmsLevelDbfs==="number"&&Number.isFinite(sonic.rmsLevelDbfs)?"RMS signal level "+sonic.rmsLevelDbfs.toFixed(2)+" dBFS":null,
+  typeof sonic.rmsEnergy==="number"&&Number.isFinite(sonic.rmsEnergy)?"RMS energy "+sonic.rmsEnergy.toFixed(3):null,
+  typeof sonic.dynamicRangeDb==="number"&&Number.isFinite(sonic.dynamicRangeDb)?"RMS-envelope spread "+sonic.dynamicRangeDb.toFixed(2)+" dB (internal proxy)":null,
+  typeof sonic.spectralCentroidHz==="number"&&Number.isFinite(sonic.spectralCentroidHz)?"Spectral centroid "+sonic.spectralCentroidHz.toFixed(0)+" Hz":null,
+  typeof sonic.spectralBandwidthHz==="number"&&Number.isFinite(sonic.spectralBandwidthHz)?"Spectral bandwidth "+sonic.spectralBandwidthHz.toFixed(0)+" Hz":null,
+  typeof sonic.spectralRolloffHz==="number"&&Number.isFinite(sonic.spectralRolloffHz)?"Spectral rolloff "+sonic.spectralRolloffHz.toFixed(0)+" Hz":null,
+  typeof sonic.zeroCrossingRate==="number"&&Number.isFinite(sonic.zeroCrossingRate)?"Zero-crossing rate "+sonic.zeroCrossingRate.toFixed(3):null
+ ].filter((value):value is string=>Boolean(value));
  const pages:PageSpec[]=[
   {title:"Cover and verdict",kind:"cover",blocks:metricBlock(data),lines:[
    "Artist: "+str(e.artist)+"   Track: "+str(e.title),
@@ -207,7 +220,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v)).join("; "),
    ...(e.label||e.partner?["Supplied label / partner: "+str(e.label??e.partner)]:[])
   ]},
-  {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>"[ ] "+str(v)).concat(["Editable notes field: use the PDF form field named ar_notes."])},
+  {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>"[ ] "+str(v)).concat([notesContext.verdict,notesContext.summary,...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),"Editable notes field: use the PDF form field named ar_notes."])},
   {title:"Evidence, methodology and limitations",blocks:[],lines:[
    ...data.notYetMeasured.map(v=>"Not yet measured: "+v),
    "Tempo method: "+str(data.tempo.method,"Not supplied")+" · "+data.tempo.evidence,
@@ -215,7 +228,8 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "Energy method: "+str(data.energy.method,"Not supplied")+" · "+data.energy.evidence,
    "Worked example: when evidence is insufficient, display a dash and mark any estimate provisional; do not convert absence into a score.",
    "Limitations: "+arr(a.limitations).map(v=>str(v)).join("; "),
-   "AI-assisted analysis, not a forecast."
+   "AI-assisted analysis, not a forecast.",
+   ...(technicalProfile.length?["Technical descriptors: "+technicalProfile.join(" · ")+". RMS signal level is dBFS; RMS-envelope spread is an internal proxy, not mastering dynamic range."]:[])
   ]}
  ];
  return pages;
@@ -230,7 +244,7 @@ function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Bloc
  page.drawText(tag+" confidence",{x:x+17,y:top-61,size:6.5,font:fonts.bold,color:tagColor});
  drawWrapped(page,block.provenance??"Provenance not supplied",x+12,top-78,width-24,fonts.regular,6.5,C.muted,8);
 }
-function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts){
+function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
  const blocks=metricBlock(data),gap=10,width=(W-2*M-gap*2)/3,top=H-92;
  blocks.forEach((b,i)=>drawMetricCard(page,M+i*(width+gap),top,width,b,fonts));
  let y=top-112;
@@ -278,6 +292,34 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts){
    page.drawText(String(axis.value),{x:M+270,y:yy-1,size:7,font:fonts.bold,color:C.ink});
    drawWrapped(page,axis.note??"Axis note not supplied.",M+300,yy,W-2*M-312,fonts.regular,6.2,C.muted,7);
   });
+  y=bottom-12;
+ }
+ const sonic=rec(input.sonicDna);
+ const rows:Array<[string,string]>=[
+  ["Duration",typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?sonic.durationSeconds.toFixed(1)+" s":""],
+  ["Sample rate",typeof sonic.sampleRate==="number"&&Number.isFinite(sonic.sampleRate)?sonic.sampleRate+" Hz":""],
+  ["Channels",typeof sonic.channels==="number"&&Number.isFinite(sonic.channels)?String(sonic.channels):""],
+  ["RMS signal level",typeof sonic.rmsLevelDbfs==="number"&&Number.isFinite(sonic.rmsLevelDbfs)?sonic.rmsLevelDbfs.toFixed(2)+" dBFS":""],
+  ["RMS energy",typeof sonic.rmsEnergy==="number"&&Number.isFinite(sonic.rmsEnergy)?sonic.rmsEnergy.toFixed(3):""],
+  ["RMS-envelope spread",typeof sonic.dynamicRangeDb==="number"&&Number.isFinite(sonic.dynamicRangeDb)?sonic.dynamicRangeDb.toFixed(2)+" dB · internal proxy":""],
+  ["Spectral centroid",typeof sonic.spectralCentroidHz==="number"&&Number.isFinite(sonic.spectralCentroidHz)?sonic.spectralCentroidHz.toFixed(0)+" Hz":""],
+  ["Spectral bandwidth",typeof sonic.spectralBandwidthHz==="number"&&Number.isFinite(sonic.spectralBandwidthHz)?sonic.spectralBandwidthHz.toFixed(0)+" Hz":""],
+  ["Spectral rolloff",typeof sonic.spectralRolloffHz==="number"&&Number.isFinite(sonic.spectralRolloffHz)?sonic.spectralRolloffHz.toFixed(0)+" Hz":""],
+  ["Zero-crossing rate",typeof sonic.zeroCrossingRate==="number"&&Number.isFinite(sonic.zeroCrossingRate)?sonic.zeroCrossingRate.toFixed(3):""]
+ ].filter((entry):entry is [string,string]=>Boolean(entry[1]));
+ if(rows.length){
+  const panelHeight=38+Math.ceil(rows.length/2)*23+14,top=y-8,bottom=top-panelHeight;
+  if(bottom>=72){
+   page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
+   page.drawText("SUPPLIED AUDIO PROFILE",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
+   rows.forEach(([label,value],index)=>{
+    const col=index%2,row=Math.floor(index/2),x=M+12+col*250,yy=top-34-row*23;
+    page.drawText(label,{x,y:yy,size:6.4,font:fonts.regular,color:C.muted});
+    drawWrapped(page,value,x+112,yy,120,fonts.bold,6.4,C.ink,7);
+   });
+   page.drawText("Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.",{x:M+12,y:bottom+6,size:5.8,font:fonts.italic,color:C.muted});
+   y=bottom-12;
+  }
  }
 }
 function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
@@ -455,7 +497,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   if(spec.kind==="identity"){
    chartCursor=drawIdentityReconciliation(page,input,fonts);
   }else if(spec.kind==="snapshot"){
-   drawSnapshot(page,data,fonts);
+   drawSnapshot(page,data,fonts,input);
   }else if(spec.kind==="axes"){
    drawSonicAxes(page,data,fonts);
   }else if(spec.kind==="comparables"){
