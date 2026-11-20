@@ -320,7 +320,7 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
   {label:"LOUDNESS RANGE LRA",value:hasAudio?metric(s?.loudnessRangeLu,1):null},
   {label:"TRUE PEAK dBFS",value:hasAudio?metric(s?.truePeakDbfs,1):null},
   {label:"RMS LEVEL dBFS",value:hasAudio?metric(s?.rmsLevelDbfs,1):null},
-  {label:"RMS ENVELOPE SPREAD dB",value:hasAudio?metric(s?.dynamicRangeDb,1):null},
+  {label:"RMS ENVELOPE SPREAD (PROXY) dB",value:hasAudio?metric(s?.dynamicRangeDb,1):null},
   {label:"RMS ENERGY",value:hasAudio?metric(s?.rmsEnergy,2):null},
   {label:"SPECTRAL CENTROID HZ",value:hasAudio?metric(s?.spectralCentroidHz,0):null}
  ];
@@ -573,7 +573,7 @@ const curatorCampaignBody=[
  a.aAndRPositioning.rationale]},
  {title:"Strengths and creative leverage",accent:"teal",body:reportableAssessmentItems(a.strengths).length?reportableAssessmentItems(a.strengths):["No audio-measured strengths are asserted without an uploaded master."]},
  {title:"Risks and diligence",accent:"coral",body:reportableAssessmentItems(a.risks)},
- {title:"Evidence-derived scorecard",accent:"blue",body:[score("Tempo and lane fit",a.scorecard.tempoLaneFit),score("Rhythmic consistency",a.scorecard.rhythmicConsistency),score("RMS-envelope spread and RMS signal level",a.scorecard.dynamicRangeLoudness),score("Metadata completeness",a.scorecard.metadataCompleteness),score("Release readiness",a.scorecard.releaseReadiness)]},
+ {title:"Evidence-derived scorecard",accent:"blue",body:[score("Tempo and lane fit",a.scorecard.tempoLaneFit),score("Rhythmic consistency",a.scorecard.rhythmicConsistency),score("RMS-envelope spread (internal proxy) and RMS signal level",a.scorecard.dynamicRangeLoudness),score("Metadata completeness",a.scorecard.metadataCompleteness),score("Release readiness",a.scorecard.releaseReadiness)]},
  {title:"Human listening checklist (unscored)",accent:"violet",body:a.humanListeningChecklist},
  {title:"Production and arrangement guidance",accent:"teal",body:[a.productionArrangementGuidance,industryPractice("General lane craft knowledge, not track-specific evidence."),industryPractice(a.industryPractice),...a.listeningChecks]},
  {title:"Comparable lanes and listening references to verify",accent:"violet",body:["Analytical hypotheses — comparisons not independently verified",a.laneHypothesis,...a.referencesToVerify,a.verificationMethod]},
