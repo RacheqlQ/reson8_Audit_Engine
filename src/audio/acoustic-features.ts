@@ -95,11 +95,12 @@ type WindowResult={rmsDbfs:number;peakDbfs:number;crestFactorDb:number;centroid:
 
 function measureWindow(samples:Float32Array,start:number,sampleRate:number,channels:number,previous:number[]|null):WindowResult {
   const real=new Float64Array(WINDOW_SIZE),imag=new Float64Array(WINDOW_SIZE);
-  let sumSquares=0,peak=0,crossings=0;
+  let sumSquares=0,peak=0,crossings=0,previousSample=0;
   for(let i=0;i<WINDOW_SIZE;i++){
     let channelSum=0;\n    for(let channel=0;channel<channels;channel++){const raw=samples[(start+i)*channels+channel]??0;channelSum+=Number.isFinite(raw)?raw:0;}\n    const value=channelSum/channels;
     sumSquares+=value*value;peak=Math.max(peak,Math.abs(value));
-    if(i>0&&((samples[start+i-1]!<0&&value>=0)||(samples[start+i-1]!>=0&&value<0)))crossings++;
+    if(i>0&&((previousSample<0&&value>=0)||(previousSample>=0&&value<0)))crossings++;
+    previousSample=value;
     const hann=0.5-0.5*Math.cos(2*Math.PI*i/(WINDOW_SIZE-1));
     real[i]=value*hann;
   }
