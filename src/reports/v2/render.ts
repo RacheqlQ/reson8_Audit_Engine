@@ -18,7 +18,8 @@ const str=(v:unknown,fallback="Not supplied")=>typeof v==="string"&&v.trim()?v.t
 const arr=(v:unknown):unknown[]=>Array.isArray(v)?v:[];
 const dateText=(v:unknown)=>{const s=str(v,"");return s?s.slice(0,10):"Date not supplied";};
 function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
- const words=value.replace(/[\r\n]+/g," ").split(/\s+/).filter(Boolean),out:string[]=[];let line="";
+ const words=value.replace(/[\r
+]+/g," ").split(/\s+/).filter(Boolean),out:string[]=[];let line="";
  for(const word of words){
   let token=word;
   if(font.widthOfTextAtSize(token,size)>width){
@@ -213,7 +214,15 @@ export async function generateAuditReportV2(input:AuditReportInput):Promise<Uint
  const pages=buildPages(input,data),total=pages.length;
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,spec.title,fonts);
-  if(spec.kind==="snapshot"){\n   drawSnapshot(page,data,fonts);\n  }else if(spec.kind==="axes"){\n   drawSonicAxes(page,data,fonts);\n  }else if(spec.kind==="comparables"){\n   drawComparables(page,input,data,fonts);\n  }else if(spec.kind==="moments"){\n   drawMoments(page,data,fonts);\n  }else if(spec.kind==="cover"){
+  if(spec.kind==="snapshot"){
+   drawSnapshot(page,data,fonts);
+  }else if(spec.kind==="axes"){
+   drawSonicAxes(page,data,fonts);
+  }else if(spec.kind==="comparables"){
+   drawComparables(page,input,data,fonts);
+  }else if(spec.kind==="moments"){
+   drawMoments(page,data,fonts);
+  }else if(spec.kind==="cover"){
    const e=rec(input.evidence),a=rec(input.assessment);
    page.drawText("TRACK AUDIT",{x:M,y:H-112,size:8,font:fonts.bold,color:C.gold});
    drawWrapped(page,str(e.artist,"Artist not supplied"),M,H-155,W-2*M,fonts.bold,22,C.ink,27);
