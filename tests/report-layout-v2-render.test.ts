@@ -52,6 +52,7 @@ describe("v2 report limitation disclosure", () => {
     const lines = reportV2Render.publicReportLimitations([
       "Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
       "Vocal presence/absence is unknown and is not inferred.",
+      "No vocal conclusion is available because the separation model did not complete.",
       "Learned audio model: disabled.",
       "Rights clearance has not been verified.",
       "The supplied master has an unresolved identity conflict."
