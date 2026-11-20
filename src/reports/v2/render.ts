@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
-import type { AuditReportInput } from "../generate-audit-report.js";
+import { generateAuditReport, planAuditReportPages, buildArNotesDecisionContext, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
 import { loadReportFonts } from "../fonts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
 
@@ -215,8 +215,107 @@ function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  card(page,M,y,W-2*M,"How moments are chosen",["Moments are rendered from supplied timestamped detector output or device flags. This report does not create or infer additional flags."],fonts,{accent:C.gold});
 }
 
-export async function generateAuditReportV2(input:AuditReportInput):Promise<Uint8Array>{
+type FullFlowUnit = { kind: "heading"; title: string; accent: string } | { kind: "paragraph"; lines: string[]; accent: string };
+
+async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, pdf: PDFDocument, fonts: Fonts): Promise<Uint8Array> {
+ const original = await generateAuditReport(input, "full");
+ const targetPageCount = (await PDFDocument.load(original)).getPageCount();
+ if (targetPageCount < 3) throw new Error("The existing full report page count is too small for the v2 full-report layout.");
+ const sectionPlans = planAuditReportPages(input, "full");
+ const units: FullFlowUnit[] = [];
+ for (const section of sectionPlans) {
+  units.push({ kind: "heading", title: section.title, accent: "gold" });
+  for (const paragraph of section.text) {
+   const lines = wrap(paragraph, fonts.regular, 8.1, W - 2 * M - 30);
+   for (let offset = 0; offset < lines.length; offset += 34) {
+    units.push({ kind: "paragraph", lines: lines.slice(offset, offset + 34), accent: "gold" });
+   }
+  }
+ }
+ const bodyPageCount = targetPageCount - 2;
+ const buckets: FullFlowUnit[][] = Array.from({ length: bodyPageCount }, () => []);
+ const weights = units.map(unit => unit.kind === "heading" ? 28 : unit.lines.length * 10 + 18);
+ const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+ let pageIndex = 0, accumulated = 0;
+ for (let index = 0; index < units.length; index++) {
+  const remainingUnits = units.length - index;
+  const remainingPages = bodyPageCount - pageIndex;
+  const target = totalWeight / bodyPageCount;
+  if (pageIndex < bodyPageCount - 1 && buckets[pageIndex].length > 0
+      && accumulated >= target * (pageIndex + 1) && remainingUnits >= remainingPages) {
+   pageIndex++;
+  }
+  buckets[pageIndex].push(units[index]);
+  accumulated += weights[index];
+ }
+ if (buckets.some(bucket => bucket.length === 0)) throw new Error("Full report content cannot be distributed across the existing page allocation.");
+
+ const cover = pageBase(pdf, "Full A&R report", fonts);
+ const evidence = rec(input.evidence), assessment = rec(input.assessment);
+ drawWrapped(cover, "FULL A&R REPORT", M, H - 112, W - 2 * M, fonts.bold, 8, C.gold, 11);
+ drawWrapped(cover, str(evidence.artist, "Artist not supplied"), M, H - 155, W - 2 * M, fonts.bold, 22, C.ink, 27);
+ drawWrapped(cover, str(evidence.title, "Track not supplied"), M, H - 187, W - 2 * M, fonts.regular, 14, C.muted, 18);
+ drawWrapped(cover, "Audit " + input.auditId + " · Generated " + dateText(input.generatedAt) + " · Release " + dateText(evidence.releaseDate), M, H - 211, W - 2 * M, fonts.regular, 7, C.muted, 9);
+ const reconciliation = rec(evidence.reconciliation);
+ const identityStatus = arr(reconciliation.conflicts).length ? "Conflict" : arr(reconciliation.reconciledFields).length ? "Recognized" : "Insufficient";
+ scoreChip(cover, M, H - 285, "Audio evidence", data.tempo.value !== null || data.key.value !== null ? "Partial" : "Insufficient", C.amber, fonts);
+ scoreChip(cover, M + 166, H - 285, "Identity", identityStatus, identityStatus === "Recognized" ? C.teal : C.amber, fonts);
+ scoreChip(cover, M + 332, H - 285, "Market evidence", data.hasVerifiedCommercialEvidence ? "Source-attributed" : "Insufficient", data.hasVerifiedCommercialEvidence ? C.teal : C.muted, fonts);
+ const metricWidth = (W - 2 * M - 16) / 3;
+ metricBlock(data).forEach((block, index) => drawMetricCard(cover, M + index * (metricWidth + 8), H - 325, metricWidth, block, fonts));
+ const summary = str(assessment.executiveSummary, "");
+ if (summary) card(cover, M, H - 450, W - 2 * M, "Executive assessment", [summary], fonts, { accent: C.gold });
+ const recommendation = str(rec(assessment.releaseStrategy).recommendation, "");
+ const evidenceGap = arr(assessment.evidenceGaps).map(value => str(value, "")).find(Boolean) ?? "";
+ const nextAction = recommendation || evidenceGap;
+ if (nextAction) card(cover, M, H - 585, W - 2 * M, "Next action", [nextAction], fonts, { accent: C.gold });
+ drawFooter(cover, "Reson8 A&R Audit", input.auditId, 1, targetPageCount, fonts);
+
+ for (let index = 0; index < buckets.length; index++) {
+  const page = pageBase(pdf, "A&R findings · " + (index + 1), fonts);
+  let y = H - 94;
+  for (const unit of buckets[index]) {
+   if (unit.kind === "heading") {
+    const lines = wrap(unit.title, fonts.bold, 11, W - 2 * M - 24);
+    const h = lines.length * 14 + 13;
+    if (y - h < 64) throw new Error("Full report section heading exceeds its allocated v2 page: " + unit.title);
+    page.drawRectangle({ x: M, y: y - h + 2, width: W - 2 * M, height: h, color: C.white, borderColor: C.line, borderWidth: .6 });
+    page.drawRectangle({ x: M, y: y - 1, width: 3, height: h - 2, color: C.gold });
+    lines.forEach((line, lineIndex) => page.drawText(line, { x: M + 13, y: y - 13 - lineIndex * 14, size: 11, font: fonts.bold, color: C.ink }));
+    y -= h + 7;
+   } else {
+    const h = unit.lines.length * 10.2 + 17;
+    if (y - h < 64) throw new Error("Full report content exceeds its existing page allocation.");
+    page.drawRectangle({ x: M, y: y - h + 1, width: W - 2 * M, height: h, color: C.white, borderColor: C.line, borderWidth: .5 });
+    unit.lines.forEach((line, lineIndex) => page.drawText(line, { x: M + 12, y: y - 12 - lineIndex * 10.2, size: 8.1, font: fonts.regular, color: C.ink }));
+    y -= h + 6;
+   }
+  }
+  drawFooter(page, "Reson8 A&R Audit", input.auditId, index + 2, targetPageCount, fonts);
+ }
+ const notesPage = pageBase(pdf, "A&R notes and decision context", fonts);
+ const context = buildArNotesDecisionContext(input);
+ let notesY = H - 105;
+ const contextHeight = 52 + wrap(context.summary, fonts.regular, 8, W - 2 * M - 28).length * 10;
+ card(notesPage, M, notesY, W - 2 * M, context.heading, [context.verdict, context.summary], fonts, { accent: C.gold, height: contextHeight });
+ notesY -= contextHeight + 12;
+ if (context.prompts.length) {
+  const promptHeight = context.prompts.reduce((sum, prompt) => sum + wrap(prompt, fonts.regular, 7.4, W - 2 * M - 28).length * 9 + 4, 0) + 18;
+  card(notesPage, M, notesY, W - 2 * M, "Review prompts", context.prompts, fonts, { accent: C.gold, height: promptHeight });
+ }
+ notesPage.drawText("PRIVATE WORKING NOTES", { x: M, y: 195, size: 7, font: fonts.bold, color: C.gold });
+ const form = pdf.getForm(), notes = form.createTextField("ar_notes");
+ notes.enableMultiline();
+ notes.addToPage(notesPage, { x: M, y: 66, width: W - 2 * M, height: 112, borderWidth: .7, borderColor: C.gold, backgroundColor: C.white });
+ notes.setFontSize(8); notes.updateAppearances(fonts.regular);
+ drawFooter(notesPage, "Reson8 A&R Audit", input.auditId, targetPageCount, targetPageCount, fonts);
+ if (pdf.getPageCount() !== targetPageCount) throw new Error("Full report v2 page count differs from the existing full report.");
+ return pdf.save();
+}
+
+export async function generateAuditReportV2(input:AuditReportInput,tier:AuditReportTier="sample"):Promise<Uint8Array>{
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
+ if(tier==="full") return renderFullReportV2(input,data,pdf,fonts);
  const pages=buildPages(input,data),total=pages.length;
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,spec.title,fonts);
