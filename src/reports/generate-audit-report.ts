@@ -319,6 +319,10 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  const directTempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
  const tempoCandidate=directTempoCandidate??independentTempoCandidate;
  const tempoCandidateSource=directTempoCandidate!==null?"primary tempo estimator":"independent low-frequency estimator";
+ const plausibleTempoRelationships=tempoCandidate===null?[]:[
+  {label:"half-time",bpm:tempoCandidate/2},
+  {label:"double-time",bpm:tempoCandidate*2},
+ ].filter(candidate=>candidate.bpm>=40&&candidate.bpm<=220);
  const tempoConfidence=typeof s?.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)?s.tempoConfidence:null;
  const alternateTempo=typeof s?.alternateTempo==="number"&&Number.isFinite(s.alternateTempo)&&s.alternateTempo>=40&&s.alternateTempo<=240?s.alternateTempo:null;
  const primaryTempo=typeof s?.bpm==="number"&&Number.isFinite(s.bpm)?s.bpm:null;
@@ -334,7 +338,7 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
   {label:"TEMPO ALTERNATE INTERPRETATION",value:tempoReliable&&alternateTempo!==null&&primaryTempo!==null&&alternateTempo!==primaryTempo?String(alternateTempo)+" BPM ("+alternateTempoRelation+" interpretation; alternate metrical level)":null},
   {label:"TEMPO CANDIDATE BPM",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" (provisional; "+tempoCandidateSource+"; prominence diagnostic "+(tempoConfidence===null?"not available":tempoConfidence.toFixed(2))+(leadingTempoScore&&typeof leadingTempoScore.score==="number"?"; candidate score "+leadingTempoScore.score.toFixed(3):"")+")":null},
-  {label:"PROVISIONAL HALF / DOUBLE-TIME RELATIONS",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" BPM candidate; half-time "+(tempoCandidate/2).toFixed(1)+" BPM; double-time "+(tempoCandidate*2).toFixed(1)+" BPM (derived arithmetic relationships only; not independently validated beat interpretations)":null},
+  {label:"PROVISIONAL HALF / DOUBLE-TIME RELATIONS",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" BPM candidate"+(plausibleTempoRelationships.length?"; "+plausibleTempoRelationships.map(candidate=>candidate.label+" "+candidate.bpm.toFixed(1)+" BPM").join("; "):"")+" (derived arithmetic relationships only; not independently validated beat interpretations)":null},
   {label:"TEMPO DETECTION REASON",value:hasAudio&&!tempoReliable?(tempoReason||"No tempo candidate passed the reliability gate."):null},
   {label:"TEMPO WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(rhythm.windowConsensus,rhythm.independentEstimator):null},
   {label:"BEAT GRID STATUS",value:!hasAudio?null:beatTimes.length?String(rhythm.beatGridStatus||"provisional")+" (candidate; not independently validated)":"Not established"},
