@@ -527,6 +527,7 @@ const curatorCampaignBody=[
  {title:"Executive market placement and DSP targeting",accent:"blue" as const,body:[
   ...(i.marketPlacement.playlistTargets.length?i.marketPlacement.playlistTargets.map((target)=>"TARGET "+target.rank+" — "+target.provider+" — "+target.name+" — priority "+target.priorityScore+"/100 — "+target.matchStatus+" — "+target.matchBasis.join("; ")+" — retrieved "+val(target.retrievedAt)):["No provider-returned playlist candidates are available for this audit."]),
   "Targeting rule: exact ISRC presence ranks ahead of genre/mood similarity; priority scores are ordering aids, not placement probabilities.",
+  "Acoustic similarity: "+i.marketPlacement.acousticSimilarity.reason,
   "Playlist limitations: candidates do not establish curator interest, editorial acceptance, placement, audience size or commercial performance."
  ]},
  {title:"Territory prioritization",accent:"teal" as const,body:[
