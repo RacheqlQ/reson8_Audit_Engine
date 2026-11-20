@@ -208,8 +208,9 @@ function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  const pts=names.map((name,i)=>{const a=-Math.PI/2+i*2*Math.PI/5,v=axes[name].value/100;return {x:cx+Math.cos(a)*r*v,y:cy+Math.sin(a)*r*v};});
  pts.forEach((p,i)=>{const q=pts[(i+1)%pts.length];page.drawLine({start:p,end:q,color:C.teal,thickness:2.2});page.drawCircle({x:p.x,y:p.y,size:4,color:C.teal});});
  names.forEach((name,i)=>{const a=-Math.PI/2+i*2*Math.PI/5;const x=cx+Math.cos(a)*(r+22),y=cy+Math.sin(a)*(r+22);page.drawText(name+" "+axes[name].value,{x:x-28,y,size:7,font:fonts.bold,color:C.ink});});
- const note="Five-axis Sonic DNA scores are supplied evidence. No reference-average overlay is shown because no reference set was supplied.";
+ const note="Supplied axis scores only. Scale: 0–100; higher values indicate a higher score on that named axis. No reference average or audience-overlap claim is implied.";
  drawWrapped(page,note,330,cy+60,180,fonts.regular,8,C.muted,11);
+ page.drawText("SCALE 0–100",{x:330,y:cy+28,size:6.5,font:fonts.bold,color:C.gold});
  let y=cy-155;
  names.forEach(name=>{const item=axes[name];page.drawRectangle({x:M,y:y-15,width:W-2*M,height:38,color:C.white,borderColor:C.line,borderWidth:.6});page.drawText(name,{x:M+12,y:y+8,size:8,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+112,y:y+5,width:150,height:6,color:C.line});page.drawRectangle({x:M+112,y:y+5,width:150*item.value/100,height:6,color:item.value<60?C.amber:C.teal});page.drawText(String(item.value),{x:M+270,y:y+5,size:8,font:fonts.bold,color:C.ink});drawWrapped(page,item.note??"Axis note not supplied.",M+310,y+8,190,fonts.regular,7,C.muted,9);y-=45;});
 }
@@ -225,15 +226,21 @@ function drawComparables(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
   const barX=M+14,barY=y-52,barW=W-2*M-28;page.drawRectangle({x:barX,y:barY,width:barW,height:12,color:C.line});page.drawRectangle({x:barX,y:barY,width:barW*score/100,height:12,color:C.teal});page.drawCircle({x:barX+barW*score/100,y:barY+6,size:7,color:C.white,borderColor:C.ink,borderWidth:1});y-=105;
  }
  card(page,M,y,W-2*M,"Closest comparables",[],fonts,{height:28+data.comparables!.length*43,accent:C.gold});
- const top=y-32;data.comparables!.forEach((c,i)=>{const yy=top-i*43;page.drawText(c.title,{x:M+14,y:yy,size:8,font:fonts.bold,color:C.ink});page.drawText(String(c.year)+" · "+c.lane,{x:M+170,y:yy,size:7,font:fonts.regular,color:C.muted});page.drawText(c.similarity+"%",{x:W-M-45,y:yy,size:8,font:fonts.bold,color:C.teal});drawWrapped(page,c.basis+" · "+c.source,M+14,yy-12,W-2*M-28,fonts.regular,6.5,C.muted,8);page.drawLine({start:{x:M+12,y:yy-20},end:{x:W-M-12,y:yy-20},color:C.line,thickness:.5});});
+ drawWrapped(page,"Source-reported similarity is not a measure of audience overlap, playlist reach or predicted commercial performance. Compare only within each source's stated methodology.",M+14,y-24,W-2*M-28,fonts.italic,6.5,C.muted,8);
+ const top=y-48;data.comparables!.forEach((c,i)=>{const yy=top-i*43;page.drawText(c.title,{x:M+14,y:yy,size:8,font:fonts.bold,color:C.ink});page.drawText(String(c.year)+" · "+c.lane,{x:M+170,y:yy,size:7,font:fonts.regular,color:C.muted});page.drawText(c.similarity+"%",{x:W-M-45,y:yy,size:8,font:fonts.bold,color:C.teal});drawWrapped(page,c.basis+" · "+c.source,M+14,yy-12,W-2*M-28,fonts.regular,6.5,C.muted,8);page.drawLine({start:{x:M+12,y:yy-20},end:{x:W-M-12,y:yy-20},color:C.line,thickness:.5});});
 }
 function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  const moments=data.moments!,top=H-104,left=M+22,right=W-M-22,mid=top-45;
  page.drawRectangle({x:M,y:mid-30,width:W-2*M,height:90,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawLine({start:{x:left,y:mid},end:{x:right,y:mid},color:C.gold,thickness:1.4});
  const max=Math.max(...moments.map(m=>m.timestampSeconds),1);
- moments.forEach((m,i)=>{const x=left+(m.timestampSeconds/max)*(right-left);const color=m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal;page.drawLine({start:{x,y:mid-23},end:{x,y:mid+24},color,thickness:1.6});page.drawCircle({x,y:mid+26,size:8,color});page.drawText(String(i+1),{x:x-2.5,y:mid+23,size:6,font:fonts.bold,color:C.white});page.drawText(m.timestampSeconds.toFixed(1)+"s",{x:x-14,y:mid-34,size:6,font:fonts.bold,color:C.ink});});
- if(!data.energySeries)page.drawText("Moment timeline only — waveform samples were not supplied.",{x:M+14,y:mid-12,size:7,font:fonts.italic,color:C.muted});
+ page.drawText("TRACK POSITION · SECONDS",{x:left,y:top-14,size:6.5,font:fonts.bold,color:C.muted});
+ page.drawText("0s",{x:left,y:mid-42,size:6,font:fonts.regular,color:C.muted});
+ page.drawText(max.toFixed(1)+"s",{x:right-24,y:mid-42,size:6,font:fonts.regular,color:C.muted});
+ moments.forEach((m,i)=>{const x=left+(m.timestampSeconds/max)*(right-left);const color=m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal;page.drawLine({start:{x,y:mid-23},end:{x,y:mid+24},color,thickness:1.6});page.drawCircle({x,y:mid+26,size:8,color});page.drawText(String(i+1),{x:x-2.5,y:mid+23,size:6,font:fonts.bold,color:C.white});page.drawText(m.timestampSeconds.toFixed(1)+"s",{x:x-14,y:mid-34-(i%2)*9,size:6,font:fonts.bold,color});});
+ page.drawText("● Strength",{x:M+14,y:mid-12,size:6.5,font:fonts.bold,color:C.teal});
+ page.drawText("● Check",{x:M+94,y:mid-12,size:6.5,font:fonts.bold,color:C.amber});
+ page.drawText("● Risk",{x:M+160,y:mid-12,size:6.5,font:fonts.bold,color:C.coral});
  let y=mid-48;
  moments.forEach((m,i)=>{const h=card(page,M,y,W-2*M,m.timestampSeconds.toFixed(2)+"s · "+m.title,[m.note],fonts,{accent:m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal});y-=h+8;});
  card(page,M,y,W-2*M,"How moments are chosen",["Moments are rendered from supplied timestamped detector output or device flags. This report does not create or infer additional flags."],fonts,{accent:C.gold});
