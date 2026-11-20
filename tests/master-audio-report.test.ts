@@ -3,10 +3,11 @@ import {
   planAuditReportPages,
   signalDashboardRowsForReport,
   sonicDashboardRowsForReport,
+  reportableAssessmentItems,
   type AuditReportInput,
 } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
-import { chartPanelHeight, chartPanelLayoutRects } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows, chartPanelHeight, chartPanelLayoutRects, strengthRiskItemsForColumn } from "../src/reports/charts.js";
 
 const rows = (input: AuditReportInput) => ({
   musical: sonicDashboardRowsForReport(input.sonicDna as unknown as Record<string, unknown> | null, Boolean(input.sonicDna)),
@@ -14,6 +15,63 @@ const rows = (input: AuditReportInput) => ({
 });
 const reportText = (input: AuditReportInput, tier: "sample" | "full" = "full") =>
   planAuditReportPages(input, tier).flatMap((section) => [section.title, ...section.text]).join(" ");
+
+describe("analysis-to-report integration contracts", () => {
+  it("renders provisional predictions and human-readable abstention reasons without internal paths or reason codes", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence = { ...input.evidence, fixture: false, masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } };
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      tempoCandidateBpm: 95,
+      tempoConfidence: 0.28,
+      rhythmFeatures: { independentEstimator: { bpm: 93.8, score: 0.21 }, windowConsensus: { windowCount: 8, winner: "95", observedAgreement: 0.25 } },
+    };
+    input.realMasterContract = {
+      schemaVersion: "1.0.0", auditId: "audit-real-master",
+      source: { sourceKind: "uploaded_master", sourceAudioPath: "uploads/Bend Et.mp3", sha256: "a".repeat(64), mimeType: "audio/mpeg", byteLength: 1024 },
+      directSignalMeasurements: [{
+        name: "tempo_bpm", status: "unavailable", value: null, unit: "BPM",
+        method: "high_frequency_transient_autocorrelation",
+        diagnostics: [{ code: "TEMPO_BELOW_REPORTING_THRESHOLD", message: "A provisional candidate was returned." }],
+      }],
+      calibratedPredictions: [{
+        name: "calibrated_audio_mood", status: "unavailable", label: null, probability: null,
+        reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"],
+        diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "A calibrated model is unavailable; provisional data is in acousticFeatureProfile.predictions.mood." }],
+      }],
+      provisionalPredictions: [{
+        name: "audio_mood", status: "provisional", label: "driving, tense", score: 74, scoreScale: "0-100",
+        method: "audio_feature_heuristics_v1", probability: null, featureDrivers: ["spectral_flux"], diagnostics: [],
+      }],
+      externalRecords: [], strategicSynthesis: [], pipelineDiagnostics: [],
+    };
+    const report = reportText(input);
+    expect(report).toContain("Confirmed tempo: Not reported as a confirmed measurement");
+    expect(report).toContain("A tempo candidate was returned but did not meet the reporting threshold");
+    expect(report).toContain("PROVISIONAL AUDIO MOOD: driving, tense");
+    expect(report).toContain("A validated mood model is not configured");
+    expect(report).not.toMatch(/acousticFeatureProfile\\.predictions|VALIDATED_MODEL_NOT_CONFIGURED|TEMPO_BELOW_REPORTING_THRESHOLD/);
+  });
+
+  it("uses the same sanitized item set for A&R risk lists and summary counts", () => {
+    const risks = reportableAssessmentItems([
+      "Tempo confidence remains below the reporting threshold.",
+      "Vocal analysis: Not performed because no validated vocal model is configured.",
+    ]);
+    const rows = buildStrengthRiskChartRows([], risks);
+    expect(risks).toEqual(["Tempo confidence remains below the reporting threshold."]);
+    expect(rows.find((row) => row.label === "Risks")?.value).toBe(risks.length);
+    expect(strengthRiskItemsForColumn(rows, "risk")).toHaveLength(risks.length);
+  });
+
+  it("removes duplicated RMS-envelope parentheticals without calling the proxy mastering dynamic range", () => {
+    const value = "RMS-envelope spread (internal proxy; not mastering RMS-envelope spread (internal proxy; not mastering dynamic range)) of 13.1 dB";
+    expect(reportableAssessmentItems([value])).toEqual([
+      "RMS-envelope spread (internal proxy; not a mastering dynamic-range measure) of 13.1 dB",
+    ]);
+  });
+});
 
 describe("uploaded master provenance in reports", () => {
   it("reports a submitted master even when completed Sonic DNA measurements are absent", () => {
