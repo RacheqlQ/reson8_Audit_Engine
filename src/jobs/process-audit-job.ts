@@ -771,11 +771,25 @@ export async function processAuditJob(
       identity: identityEvidence(identity),
       reconciliation: reconciliationEvidence(reconciliation),
       genreClassification,
-      metadataSourcesChecked: [...catalogResults.map((result) => result.link.platform), ...(isrcLookup?.outcomes.map((outcome) => outcome.provider) ?? []), ...(masterTags ? ["id3"] : []), ...(job.filename ? ["filename"] : []), ...attemptedRecognitionProviders],
-      catalogSources: [
-        ...catalogResults.map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
-        ...(isrcLookup?.outcomes.map((outcome) => ({ platform: outcome.provider, catalogId: isrcLookup?.isrc ?? null, canonicalUrl: outcome.provider === "musicbrainz" ? `https://musicbrainz.org/ws/2/isrc/${encodeURIComponent(isrcLookup!.isrc)}` : null, status: outcome.status === "not_configured" ? "unavailable" : outcome.status, reason: outcome.reason })) ?? []),
+      metadataSourcesChecked: [
+        ...catalogResults.map((result) => result.link.platform),
+        // Only successful, non-Spotify ISRC resolutions are named as checked
+        // metadata sources. Failed automatic attempts remain internal diagnostics.
+        ...(isrcLookup?.outcomes.filter((outcome) => outcome.status === "recognized" && outcome.provider !== "spotify").map((outcome) => outcome.provider) ?? []),
+        ...(masterTags ? ["id3"] : []),
+        ...(job.filename ? ["filename"] : []),
+        ...attemptedRecognitionProviders,
       ],
+      // This collection is deliberately restricted to the links supplied by
+      // the user. ISRC discovery contributes reconciled field provenance but
+      // does not masquerade as a submitted DSP link in reports or coverage charts.
+      catalogSources: catalogResults.map((result) => ({
+        platform: result.link.platform,
+        catalogId: result.link.catalogId,
+        canonicalUrl: result.link.canonicalUrl,
+        status: result.status,
+        reason: catalogLookupReason(result.status),
+      })),
       sourceCombination: hasMaster && hasCatalog ? "master_and_dsp" : hasMaster ? "master_only" : "dsp_only",
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
@@ -840,11 +854,11 @@ export async function processAuditJob(
         ...(job.filename ? ["filename"] : []),
         ...attemptedRecognitionProviders,
       ],
-      catalogSources: [
-        ...catalogResults.filter((result) => result.link.platform !== "spotify")
-          .map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
-        ...(isrcLookup?.outcomes.filter((outcome) => outcome.provider !== "spotify").map((outcome) => ({ platform: outcome.provider, catalogId: isrcLookup?.isrc ?? null, canonicalUrl: `https://musicbrainz.org/ws/2/isrc/${encodeURIComponent(isrcLookup!.isrc)}`, status: outcome.status === "not_configured" ? "unavailable" : outcome.status, reason: outcome.reason })) ?? []),
-      ],
+      // The assessment input also distinguishes submitted DSP links from
+      // automatically resolved ISRC metadata; MusicBrainz remains available
+      // through the reconciled identity and field-level provenance.
+      catalogSources: catalogResults.filter((result) => result.link.platform !== "spotify")
+        .map((result) => ({ platform: result.link.platform, catalogId: result.link.catalogId, canonicalUrl: result.link.canonicalUrl, status: result.status, reason: catalogLookupReason(result.status) })),
       sourceCombination: evidence.sourceCombination,
       ...(hasMaster ? { masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } } : {}),
     };
