@@ -1,3 +1,5 @@
+import { bootstrapCategoricalConsensus, type BootstrapConsensusDiagnostics } from "./ensemble-consensus.js";
+
 export interface KeySegmentDiagnostic {
   startSeconds: number;
   endSeconds: number;
@@ -20,6 +22,7 @@ export interface KeyEstimate {
   topCandidates: Array<{ key: string; mode: Mode; score: number }>;
   tuningEvidenceWindows: number;
   limitation: string | null;
+  windowConsensus: BootstrapConsensusDiagnostics;
 }
 
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
@@ -288,6 +291,7 @@ function emptyEstimate(limitation: string): KeyEstimate {
     key: null, mode: null, confidence: null, tuningCents: null,
     segmentAgreement: null, method: "fft_harmonic_chroma_ensemble",
     analysisWindows: 0, fftButterflyCount: 0, segmentChroma: [], topCandidates: [], tuningEvidenceWindows: 0, limitation,
+    windowConsensus: bootstrapCategoricalConsensus([]),
   };
 }
 
@@ -347,6 +351,7 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   const topCandidates = ranked.slice(0, 5).map((candidate) => ({
     key: NOTES[candidate.key], mode: candidate.mode, score: Number(candidate.score.toFixed(6)),
   }));
+  const windowConsensus = bootstrapCategoricalConsensus(segmentWinners.map((winner) => `${NOTES[winner.key]}:${winner.mode}`));
   const agreement = segmentWinners.filter((winner) => winner.key === best.key && winner.mode === best.mode).length / segmentWinners.length;
   const margin = best.score - second.score;
   const confidence = clamp((margin * 2.5 + 0.08) * (0.35 + 0.65 * agreement));
@@ -356,7 +361,7 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, limitation: "Key estimates varied across audio segments; no single key is asserted.",
+      fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, windowConsensus, limitation: "Key estimates varied across audio segments; no single key is asserted.",
     };
   }
   if (confidence < MIN_KEY_CANDIDATE_CONFIDENCE || margin < 0.015) {
@@ -369,6 +374,6 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   return {
     key: NOTES[best.key], mode: best.mode, confidence, tuningCents,
     segmentAgreement: agreement, method: "fft_harmonic_chroma_ensemble",
-    analysisWindows: segmentProfiles.length, fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, limitation: null,
+    analysisWindows: segmentProfiles.length, fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, windowConsensus, limitation: null,
   };
 }
