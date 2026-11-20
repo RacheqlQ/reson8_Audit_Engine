@@ -75,6 +75,43 @@ describe("v2 report limitation disclosure", () => {
   });
 });
 
+describe("v2 DSP playlist provider diagnostics", () => {
+  it("surfaces Spotify HTTP failures and exact credential variable names", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.playlistDiscovery = {
+      status: "unavailable",
+      outcomes: [
+        { provider: "spotify", status: "unavailable", reason: "Spotify catalog request failed with HTTP 403" },
+        { provider: "apple_music", status: "not_configured", reason: "Apple Music developer token is not configured." }
+      ]
+    };
+    const lines = reportV2Render.buildPlaylistProviderStatusLines(input).join(" ");
+    expect(lines).toContain("Spotify provider unavailable:");
+    expect(lines).toContain("HTTP 403");
+    expect(lines).toContain("SPOTIFY_CLIENT_ID");
+    expect(lines).toContain("SPOTIFY_CLIENT_SECRET");
+    expect(lines).toContain("Apple Music provider unavailable:");
+    expect(lines).toContain("APPLE_MUSIC_DEVELOPER_TOKEN");
+  });
+
+  it("does not claim playlist discovery ran when no provider outcome was persisted", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.playlistDiscovery = null;
+    const lines = reportV2Render.buildPlaylistProviderStatusLines(input);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("Playlist discovery not run");
+    expect(lines[0]).toContain("no playlist target is asserted");
+  });
+
+  it("does not label a successful no-match response as provider failure", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.playlistDiscovery = {
+      outcomes: [{ provider: "spotify", status: "no_matches", reason: "No matching public playlist metadata was returned." }]
+    };
+    expect(reportV2Render.buildPlaylistProviderStatusLines(input)).toEqual([]);
+  });
+});
+
 describe("v2 detector diagnostics", () => {
   it("renders persisted tempo candidates, raw scores, independent estimate, window agreement and abstention", () => {
     const input = structuredClone(fullAudioFixture) as any;
