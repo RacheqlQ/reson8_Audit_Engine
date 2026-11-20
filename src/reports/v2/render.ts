@@ -101,13 +101,17 @@ function detectorNumber(value: unknown, digits = 3): string | null {
 export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
  const sonic=rec(input.sonicDna), rhythm=rec(sonic.rhythmFeatures), independent=rec(rhythm.independentEstimator);
  const lines:string[]=[];
- const candidates=arr(rhythm.candidateScores).map(value=>rec(value)).filter(item=>finite(item.bpm)&&finite(item.score))
+ const reportableBpm=(value:unknown):value is number=>finite(value)&&value>=40&&value<=220;
+ const candidates=arr(rhythm.candidateScores).map(value=>rec(value)).filter(item=>reportableBpm(item.bpm)&&finite(item.score))
   .slice(0,5).map(item=>String(item.bpm)+" BPM (score "+Number(item.score).toFixed(3)+")");
  if(candidates.length)lines.push("Primary detector candidates: "+candidates.join("; "));
- else if(Array.isArray(rhythm.candidateBpms)&&rhythm.candidateBpms.length)lines.push("Primary detector candidates: "+rhythm.candidateBpms.slice(0,5).map(value=>str(value,"")).join(", ")+" BPM");
+ else if(Array.isArray(rhythm.candidateBpms)) {
+  const fallbackCandidates=rhythm.candidateBpms.filter(reportableBpm).slice(0,5);
+  if(fallbackCandidates.length)lines.push("Primary detector candidates: "+fallbackCandidates.map(value=>String(value)).join(", ")+" BPM");
+ }
  if(finite(rhythm.confidence))lines.push("Primary detector raw confidence score: "+Number(rhythm.confidence).toFixed(3)+" (not a calibrated probability).");
- if(finite(rhythm.alternateTempo))lines.push("Alternate half/double-time candidate: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
- if(finite(independent.bpm))lines.push("Independent low-frequency envelope estimate: "+Number(independent.bpm).toFixed(1)+" BPM; raw score "+(detectorNumber(independent.score)??"not supplied")+".");
+ if(reportableBpm(rhythm.alternateTempo))lines.push("Alternate half/double-time candidate: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
+ if(reportableBpm(independent.bpm))lines.push("Independent low-frequency envelope estimate: "+Number(independent.bpm).toFixed(1)+" BPM; raw score "+(detectorNumber(independent.score)??"not supplied")+".");
  const consensus=rec(rhythm.windowConsensus);
  if(finite(consensus.windowCount)&&consensus.windowCount>0)lines.push("Window stability: "+str(consensus.winner,"no consensus")+" across "+consensus.windowCount+" valid windows; observed agreement "+(detectorNumber(consensus.observedAgreement)??"not supplied")+".");
  lines.push("Beat grid: "+str(rhythm.beatGridStatus,"not determined")+"; "+arr(rhythm.beatTimesSeconds).length+" candidate beat timestamps; downbeat grouping is diagnostic only.");
