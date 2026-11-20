@@ -116,14 +116,13 @@ export function estimateLowFrequencyEnvelopeTempo(
   };
 }
 
-function goertzelPower(samples: Float32Array, sampleRate: number, frequency: number): number {
+function goertzelPower(windowedSamples: Float64Array, sampleRate: number, frequency: number): number {
   const omega = 2 * Math.PI * frequency / sampleRate;
   const coefficient = 2 * Math.cos(omega);
   let previous = 0;
   let previous2 = 0;
-  for (let index = 0; index < samples.length; index++) {
-    const window = 0.5 - 0.5 * Math.cos(2 * Math.PI * index / (samples.length - 1));
-    const current = samples[index]! * window + coefficient * previous - previous2;
+  for (let index = 0; index < windowedSamples.length; index++) {
+    const current = windowedSamples[index]! + coefficient * previous - previous2;
     previous2 = previous;
     previous = current;
   }
@@ -170,10 +169,18 @@ export function estimateGoertzelKey(samples: Float32Array, sampleRate: number): 
   // middle, and end rather than silently truncating to the intro.
   const windowLength = Math.min(samples.length, Math.max(2, Math.floor(sampleRate * 2)));
   const windowCount = Math.min(3, Math.max(1, Math.floor(samples.length / windowLength)));
-  const windows: Float32Array[] = [];
+  // Apply the Hann window once per excerpt. The frequency bank evaluates
+  // hundreds of Goertzel bins against each same excerpt; recomputing the
+  // per-sample cosine inside every bin dominated high-sample-rate runtimes.
+  const windows: Float64Array[] = [];
   for (let windowIndex = 0; windowIndex < windowCount; windowIndex++) {
     const start = windowCount === 1 ? 0 : Math.round(windowIndex * (samples.length - windowLength) / (windowCount - 1));
-    windows.push(samples.subarray(start, start + windowLength));
+    const windowed = new Float64Array(windowLength);
+    for (let index = 0; index < windowLength; index++) {
+      const hann = 0.5 - 0.5 * Math.cos(2 * Math.PI * index / (windowLength - 1));
+      windowed[index] = samples[start + index]! * hann;
+    }
+    windows.push(windowed);
   }
   const profile = Array(12).fill(0) as number[];
   let analyzedPitchCount = 0;
