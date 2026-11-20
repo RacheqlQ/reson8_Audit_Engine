@@ -220,7 +220,12 @@ function shortFormHooks(sonicDna: Record<string, unknown> | null, executionMode:
 
 function positioning(sonicDna: Record<string, unknown> | null, evidence: Record<string, unknown>): MarketPlacementPlan["positioning"] {
   const bpm = finite(sonicDna?.bpm);
+  const alternateTempo = finite(sonicDna?.alternateTempo);
   const confidence = finite(sonicDna?.tempoConfidence);
+  const key = clean(sonicDna?.key);
+  const mode = clean(sonicDna?.mode);
+  const keyConfidence = finite(sonicDna?.keyConfidence);
+  const keyAgreement = finite(sonicDna?.keySegmentAgreement);
   const rhythm = record(sonicDna?.rhythmFeatures);
   const energy = record(record(sonicDna?.acousticFeatureProfile).predictions);
   const energyPrediction = record(energy.energy);
@@ -228,8 +233,12 @@ function positioning(sonicDna: Record<string, unknown> | null, evidence: Record<
   const reliableTempo = masterProvenance && bpm !== null && bpm >= 40 && bpm <= 240 && confidence !== null && confidence >= 0.5;
   const beatGrid = clean(rhythm.beatGridStatus) === "tentative";
   const energyAvailable = energyPrediction.status === "provisional" && ["low", "moderate", "high"].includes(clean(energyPrediction.label));
+  const reliableKey = masterProvenance && Boolean(key) && ["major", "minor"].includes(mode) && keyConfidence !== null && keyConfidence >= 0.8 && keyAgreement !== null && keyAgreement >= 0.8;
+  const djBasis = [ "Measured tempo: " + bpm + " BPM", "Tentative beat-grid evidence is present" ];
+  if (alternateTempo !== null && bpm !== null && alternateTempo !== bpm) djBasis.push("Alternate metrical interpretation: " + alternateTempo + " BPM; this is an alternate half/double-time reading, not a second independent tempo.");
+  if (reliableKey) djBasis.push("Confidence-qualified harmonic estimate: " + key + " " + mode + " (key confidence and segment agreement both at least 0.80).");
   const dj: PositioningRecommendation = reliableTempo && beatGrid
-    ? { status: "review_required", reason: "The uploaded master has confidence-qualified tempo and a tentative beat grid; audition and DJ transition testing are still required.", basis: ["Measured tempo: " + bpm + " BPM", "Tentative beat-grid evidence is present"], limitations: ["Tempo and beat-grid evidence do not establish DJ demand, mix compatibility or venue support."] }
+    ? { status: "review_required", reason: "The uploaded master has confidence-qualified tempo and a tentative beat grid; audition and DJ transition testing are still required.", basis: djBasis, limitations: ["Tempo and beat-grid evidence do not establish DJ demand, mix compatibility or venue support.", ...(reliableKey ? ["The key estimate is a harmonic-mixing cue only; human confirmation is still required."] : [])] }
     : { status: "blocked", reason: "DJ positioning requires a confidence-qualified master tempo and tentative beat-grid evidence.", basis: [], limitations: ["No DJ suitability claim is made from metadata-only or low-confidence tempo candidates."] };
   const club: PositioningRecommendation = reliableTempo && beatGrid && energyAvailable
     ? { status: "review_required", reason: "Tempo, tentative beat-grid and provisional energy evidence justify a human club-play test, not a venue or audience claim.", basis: ["Measured tempo: " + bpm + " BPM", "Provisional audio energy: " + clean(energyPrediction.label), "Tentative beat-grid evidence is present"], limitations: ["Provisional energy is heuristic, not a calibrated perceptual score; these signals are not evidence of venue demand or dancefloor response."] }
