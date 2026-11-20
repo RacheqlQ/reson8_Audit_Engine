@@ -207,7 +207,8 @@ describe("uploaded master provenance in reports", () => {
       .find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS");
     expect(tuning?.value).toBe("14 (multiple tonal windows; provisional)");
     const chartRects = chartPanelLayoutRects("sonic", sonicDashboardRowsForReport(input.sonicDna as unknown as Record<string, unknown>, true));
-    expect(chartPanelHeight("sonic")).toBe(300);
+    expect(chartPanelHeight("sonic")).toBe(340);
     expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-11")).toBe(true);
+    expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-12")).toBe(true);
   });
 });
