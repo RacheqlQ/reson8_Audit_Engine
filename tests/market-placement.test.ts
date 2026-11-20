@@ -52,12 +52,12 @@ describe("Phase 5 market placement strategy", () => {
       sonicDna: master,
       playlistDiscovery: playlists,
     });
-    expect(plan.playlistTargets[0]).toMatchObject({
+    expect(plan.playlistPresence[0]).toMatchObject({
       provider: "apple_music",
       name: "Track already included",
       matchStatus: "isrc_present",
     });
-    expect(plan.playlistTargets[1]).toMatchObject({
+    expect(plan.playlistTargets[0]).toMatchObject({
       provider: "spotify",
       name: "Afrobeats Select",
       matchStatus: "membership_unverified",
