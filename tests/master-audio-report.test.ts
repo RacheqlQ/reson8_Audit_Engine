@@ -51,7 +51,9 @@ describe("analysis-to-report integration contracts", () => {
     expect(report).toContain("A tempo candidate was returned but did not meet the reporting threshold");
     expect(report).toContain("PROVISIONAL AUDIO MOOD: driving, tense");
     expect(report).toContain("A validated mood model is not configured");
-    expect(report).not.toMatch(/acousticFeatureProfile\\.predictions|VALIDATED_MODEL_NOT_CONFIGURED|TEMPO_BELOW_REPORTING_THRESHOLD/);
+    expect(report).not.toContain("acousticFeatureProfile.predictions");
+    expect(report).not.toContain("VALIDATED_MODEL_NOT_CONFIGURED");
+    expect(report).not.toContain("TEMPO_BELOW_REPORTING_THRESHOLD");
   });
 
   it("uses the same sanitized item set for A&R risk lists and summary counts", () => {
