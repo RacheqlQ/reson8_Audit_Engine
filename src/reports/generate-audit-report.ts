@@ -397,7 +397,7 @@ function sections(i:AuditReportInput):Section[]{
  ];
  const playlistMoodSummary=playlistMoodTags.length
   ? "Mood search tags: "+playlistMoodTags.join(", ")+" [Source: "+playlistMoodSource+"]. "+(playlistMoodNotes.join(" ")||"Source attribution is incomplete; no calibrated mood claim is made.")
-  : "Mood alignment was not asserted because no source-attributed DSP or uploaded-master provisional mood tags were available; playlist matching is limited to the confirmed genre and adjacent lanes.";
+  : "Mood alignment was not asserted because no source-attributed DSP mood tags were available, and no uploaded-master provisional mood tags were available; playlist matching is limited to the confirmed genre and adjacent lanes.";
  const vocalFeatures=s?.vocalFeatures&&typeof s.vocalFeatures==="object"&&!Array.isArray(s.vocalFeatures)?s.vocalFeatures as Record<string,unknown>:null;
  const vocalStatus=String(vocalFeatures?.status??"not_recorded");
  const vocalAnalysisPerformed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
