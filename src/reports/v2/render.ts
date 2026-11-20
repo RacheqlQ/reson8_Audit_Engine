@@ -376,6 +376,69 @@ function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
 
 type FullFlowUnit = { kind: "heading"; title: string; accent: string } | { kind: "paragraph"; lines: string[]; accent: string };
 
+export function partitionFullReportUnits<T>(
+ units: T[],
+ heights: number[],
+ pageCount: number,
+ capacity: number,
+): T[][] | null {
+ if (!Number.isInteger(pageCount) || pageCount < 1 || units.length < pageCount
+     || heights.length !== units.length || !Number.isFinite(capacity) || capacity <= 0) return null;
+ if (heights.some(height => !Number.isFinite(height) || height <= 0 || height > capacity)) return null;
+
+ const canFit = (limit: number): boolean => {
+  let pages = 1, used = 0;
+  for (const height of heights) {
+   if (used + height > limit + 1e-7) { pages++; used = height; }
+   else used += height;
+  }
+  return pages <= pageCount;
+ };
+ if (!canFit(capacity)) return null;
+
+ let low = Math.max(...heights), high = capacity;
+ for (let iteration = 0; iteration < 52; iteration++) {
+  const middle = (low + high) / 2;
+  if (canFit(middle)) high = middle;
+  else low = middle;
+ }
+
+ const pages: T[][] = [];
+ let page: T[] = [], used = 0;
+ for (let index = 0; index < units.length; index++) {
+  if (page.length > 0 && used + heights[index] > high + 1e-6) {
+   pages.push(page);
+   page = [];
+   used = 0;
+  }
+  page.push(units[index]);
+  used += heights[index];
+ }
+ if (page.length) pages.push(page);
+
+ while (pages.length < pageCount) {
+  let splitIndex = -1, largestPage = 1;
+  for (let index = 0; index < pages.length; index++) {
+   if (pages[index].length > largestPage) {
+    largestPage = pages[index].length;
+    splitIndex = index;
+   }
+  }
+  if (splitIndex < 0) return null;
+  const current = pages[splitIndex];
+  const midpoint = Math.floor(current.length / 2);
+  pages.splice(splitIndex, 1, current.slice(0, midpoint), current.slice(midpoint));
+ }
+ return pages.length === pageCount ? pages : null;
+}
+
+function fullFlowUnitHeight(unit: FullFlowUnit, fonts: Fonts): number {
+ const contentHeight = unit.kind === "heading"
+  ? wrap(unit.title, fonts.bold, 11, W - 2 * M - 24).length * 14 + 13
+  : unit.lines.length * 10.2 + 17;
+ return contentHeight + (unit.kind === "heading" ? 7 : 6);
+}
+
 async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, pdf: PDFDocument, fonts: Fonts): Promise<Uint8Array> {
  const sectionPlans = planAuditReportPages(input, "full");
  const units: FullFlowUnit[] = [];
@@ -397,39 +460,11 @@ async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, p
    units.push({ kind: "paragraph", lines: wrap(detail, fonts.regular, 8.1, W - 2 * M - 30), accent: "gold" });
   }
  }
- const weights = units.map(unit => unit.kind === "heading" ? 28 : unit.lines.length * 10 + 18);
- const totalWeight = weights.reduce((sum, value) => sum + value, 0);
- const allocate = (bodyPageCount: number): FullFlowUnit[][] => {
-  const buckets: FullFlowUnit[][] = Array.from({ length: bodyPageCount }, () => []);
-  const target = totalWeight / bodyPageCount;
-  let pageIndex = 0, accumulated = 0;
-  for (let index = 0; index < units.length; index++) {
-   if (pageIndex < bodyPageCount - 1 && buckets[pageIndex].length > 0
-       && accumulated >= target * (pageIndex + 1)) pageIndex++;
-   buckets[pageIndex].push(units[index]);
-   accumulated += weights[index];
-  }
-  return buckets;
- };
- const fits = (buckets: FullFlowUnit[][]): boolean => buckets.every(bucket => {
-  let y = H - 94;
-  for (const unit of bucket) {
-   const height = unit.kind === "heading"
-    ? wrap(unit.title, fonts.bold, 11, W - 2 * M - 24).length * 14 + 20
-    : unit.lines.length * 10.2 + 23;
-   if (y - height < 64) return false;
-   y -= height + 6;
-  }
-  return bucket.length > 0;
- });
- let bodyPageCount = 10;
- let buckets = allocate(bodyPageCount);
- if (!fits(buckets)) {
-  bodyPageCount = 11;
-  buckets = allocate(bodyPageCount);
- }
- if (!fits(buckets)) throw new Error("Full report content cannot fit within the approved 13-page V2 allocation without clipping or omission.");
- const targetPageCount = bodyPageCount + 2;
+ const pageCapacity = H - 94 - 64;
+ const measuredHeights = units.map(unit => fullFlowUnitHeight(unit, fonts));
+ const buckets = partitionFullReportUnits(units, measuredHeights, 10, pageCapacity);
+ if (!buckets) throw new Error("Full report content cannot fit the approved 12-page V2 allocation without clipping or omission.");
+ const targetPageCount = 12;
 
  const cover = pageBase(pdf, "Full A&R report", fonts);
  const evidence = rec(input.evidence), assessment = rec(input.assessment);
