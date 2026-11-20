@@ -437,7 +437,7 @@ async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, p
 }
 
 export async function generateAuditReportV2(source:AuditReportInput,tier:AuditReportTier="sample"):Promise<Uint8Array>{
- const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence))};
+ const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
  if(tier==="full") return renderFullReportV2(input,data,pdf,fonts);
  const pages=buildPages(input,data),total=pages.length;
