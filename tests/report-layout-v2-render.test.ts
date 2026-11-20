@@ -46,6 +46,48 @@ describe("v2 identity reconciliation table data", () => {
   });
 });
 
+describe("v2 detector diagnostics", () => {
+  it("renders persisted tempo candidates, raw scores, independent estimate, window agreement and abstention", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = { ...input.sonicDna, rhythmFeatures: {
+      method: "high_frequency_transient_autocorrelation",
+      candidateScores: [{ bpm: 96, score: 0.8123 }, { bpm: 192, score: 0.4012 }],
+      confidence: 0.7134, alternateTempo: 192, beatGridStatus: "tentative",
+      beatTimesSeconds: [0.1, 0.72, 1.35], windowConsensus: { winner: "96", windowCount: 4, observedAgreement: 0.75 },
+      independentEstimator: { bpm: 95.8, score: 0.6234 },
+      abstentionReason: "Window stability did not meet the reporting gate."
+    }};
+    const lines = buildTempoDiagnosticLines(input).join(" ");
+    expect(lines).toContain("96 BPM (score 0.812)");
+    expect(lines).toContain("raw confidence score: 0.713");
+    expect(lines).toContain("Independent low-frequency envelope estimate: 95.8 BPM");
+    expect(lines).toContain("observed agreement 0.750");
+    expect(lines).toContain("Window stability");
+    expect(lines).toContain("Window stability did not meet the reporting gate");
+    expect(lines).toContain("not a calibrated probability");
+  });
+
+  it("renders tonal candidates, tuning, segment agreement, independent disagreement and abstention", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = { ...input.sonicDna, harmonicFeatures: {
+      method: "fft_harmonic_chroma_ensemble", confidence: 0.8123, segmentAgreement: 0.7,
+      analysisWindows: 5, tuningCents: -12.4, tuningEvidenceWindows: 4,
+      topCandidates: [{ key: "A", mode: "minor", score: 0.71 }, { key: "C", mode: "major", score: 0.43 }],
+      independentEstimator: { key: "C", mode: "major", score: 0.51, margin: 0.08 },
+      independentEstimatorDisagrees: true, relativeMajorMinorAmbiguity: true,
+      limitation: "Independent estimators disagree; no single key is asserted."
+    }};
+    const lines = buildKeyDiagnosticLines(input).join(" ");
+    expect(lines).toContain("A minor (score 0.710)");
+    expect(lines).toContain("Segment agreement: 0.700 across 5");
+    expect(lines).toContain("Tuning offset: -12.4 cents");
+    expect(lines).toContain("Independent Goertzel estimate: C major");
+    expect(lines).toContain("Independent estimator disagreement: yes");
+    expect(lines).toContain("Relative major/minor ambiguity detected");
+    expect(lines).toContain("no single key is asserted");
+  });
+});
+
 describe("v2 gated report pages", () => {
   it("provides a useful positioning decision panel when no lane evidence exists", () => {
     const input = structuredClone(fullAudioFixture) as any;

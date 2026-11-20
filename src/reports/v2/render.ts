@@ -91,6 +91,43 @@ function header(page:PDFPage,title:string,fonts:Fonts){
 function pageBase(pdf:PDFDocument,title:string,fonts:Fonts):PDFPage{
  const p=pdf.addPage([W,H]);p.drawRectangle({x:0,y:0,width:W,height:H,color:C.paper});header(p,title,fonts);return p;
 }
+function detectorNumber(value: unknown, digits = 3): string | null {
+ return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : null;
+}
+export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
+ const sonic=rec(input.sonicDna), rhythm=rec(sonic.rhythmFeatures), independent=rec(rhythm.independentEstimator);
+ const lines:string[]=[];
+ const candidates=arr(rhythm.candidateScores).map(value=>rec(value)).filter(item=>finite(item.bpm)&&finite(item.score))
+  .slice(0,5).map(item=>String(item.bpm)+" BPM (score "+Number(item.score).toFixed(3)+")");
+ if(candidates.length)lines.push("Primary detector candidates: "+candidates.join("; "));
+ else if(Array.isArray(rhythm.candidateBpms)&&rhythm.candidateBpms.length)lines.push("Primary detector candidates: "+rhythm.candidateBpms.slice(0,5).map(value=>str(value,"")).join(", ")+" BPM");
+ if(finite(rhythm.confidence))lines.push("Primary detector raw confidence score: "+Number(rhythm.confidence).toFixed(3)+" (not a calibrated probability).");
+ if(finite(rhythm.alternateTempo))lines.push("Alternate half/double-time candidate: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
+ if(finite(independent.bpm))lines.push("Independent low-frequency envelope estimate: "+Number(independent.bpm).toFixed(1)+" BPM; raw score "+(detectorNumber(independent.score)??"not supplied")+".");
+ const consensus=rec(rhythm.windowConsensus);
+ if(finite(consensus.windowCount)&&consensus.windowCount>0)lines.push("Window stability: "+str(consensus.winner,"no consensus")+" across "+consensus.windowCount+" valid windows; observed agreement "+(detectorNumber(consensus.observedAgreement)??"not supplied")+".");
+ lines.push("Beat grid: "+str(rhythm.beatGridStatus,"not determined")+"; "+arr(rhythm.beatTimesSeconds).length+" candidate beat timestamps; downbeat grouping is diagnostic only.");
+ const abstention=str(rhythm.abstentionReason,"");
+ if(abstention&&abstention!=="Not supplied")lines.push("Tempo abstention: "+abstention);
+ return lines.length?lines:["No persisted tempo-detector diagnostics were supplied."];
+}
+export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
+ const sonic=rec(input.sonicDna), harmonic=rec(sonic.harmonicFeatures), independent=rec(harmonic.independentEstimator);
+ const lines:string[]=[];
+ const candidates=arr(harmonic.topCandidates).map(value=>rec(value)).filter(item=>typeof item.key==="string")
+  .slice(0,5).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" ")+" (score "+(detectorNumber(item.score)??"not supplied")+")");
+ if(candidates.length)lines.push("Primary tonal candidates: "+candidates.join("; "));
+ if(finite(harmonic.confidence))lines.push("Primary key raw confidence score: "+Number(harmonic.confidence).toFixed(3)+" (not a calibrated probability).");
+ if(finite(harmonic.segmentAgreement))lines.push("Segment agreement: "+Number(harmonic.segmentAgreement).toFixed(3)+" across "+(finite(harmonic.analysisWindows)?harmonic.analysisWindows:"unknown")+" analysis windows.");
+ if(finite(harmonic.tuningCents))lines.push("Tuning offset: "+Number(harmonic.tuningCents).toFixed(1)+" cents; evidence windows: "+(finite(harmonic.tuningEvidenceWindows)?harmonic.tuningEvidenceWindows:"not supplied")+".");
+ if(typeof independent.key==="string")lines.push("Independent Goertzel estimate: "+independent.key+(typeof independent.mode==="string"?" "+independent.mode:"")+"; raw score "+(detectorNumber(independent.score)??"not supplied")+"; margin "+(detectorNumber(independent.margin)??"not supplied")+".");
+ if(harmonic.independentEstimatorDisagrees===true)lines.push("Independent estimator disagreement: yes; no forced consensus is applied.");
+ if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("Relative major/minor ambiguity detected; single-key assertion withheld.");
+ const limitation=str(harmonic.limitation,"");
+ if(limitation&&limitation!=="Not supplied")lines.push("Key abstention / limitation: "+limitation);
+ return lines.length?lines:["No persisted key-detector diagnostics were supplied."];
+}
+
 export function buildEvidenceLedgerSummary(labels: Array<{ label: string }>): string {
  const counts = countEvidenceLayers(labels);
  return "Measured: " + counts.OBSERVED
@@ -460,10 +497,12 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   }else if(spec.kind==="tempo-energy"){
    const tempo=data.tempo.value===null?data.notYetMeasured.find(value=>/tempo/i.test(value))??"NOT MEASURED: no confidence-qualified tempo result was supplied.":"MEASURED: "+data.tempo.value+" BPM · "+(data.tempo.confidence??"confidence unavailable")+" confidence";
    const energy=data.energy.value===null?"NOT MEASURED: no supported energy or loudness values were supplied.":String(data.energy.value);
-   card(page,M,H-105,W-2*M,"Tempo evidence",[tempo,"Method: "+(data.tempo.method??"Not supplied"),"Evidence: "+data.tempo.evidence],fonts,{accent:data.tempo.value===null?C.amber:C.teal});
-   card(page,M,H-230,W-2*M,"Energy and loudness evidence",[energy,"Method: "+(data.energy.method??"Not supplied"),"Evidence: "+data.energy.evidence],fonts,{accent:data.energy.value===null?C.amber:C.teal});
+   card(page,M,H-105,W-2*M,"Tempo evidence",[tempo,"Method: "+(data.tempo.method??"Not supplied"),"Evidence: "+data.tempo.evidence,...buildTempoDiagnosticLines(input)],fonts,{accent:data.tempo.value===null?C.amber:C.teal});
+   const keyValue=data.key.value===null?"NOT MEASURED: no confidence-qualified key/mode result was supplied.":"MEASURED: "+String(data.key.value)+" · "+(data.key.confidence??"confidence unavailable")+" confidence";
+   card(page,M,H-245,W-2*M,"Key and mode evidence",[keyValue,"Method: "+(data.key.method??"Not supplied"),"Evidence: "+data.key.evidence,...buildKeyDiagnosticLines(input)],fonts,{accent:data.key.value===null?C.amber:C.teal});
+   card(page,M,H-410,W-2*M,"Energy and loudness evidence",[energy,"Method: "+(data.energy.method??"Not supplied"),"Evidence: "+data.energy.evidence],fonts,{accent:data.energy.value===null?C.amber:C.teal});
    if(data.energySeries){
-    const top=H-380,height=245,left=M+28,right=W-M-18,bottom=top-height+32;
+    const top=H-540,height=220,left=M+28,right=W-M-18,bottom=top-height+32;
     page.drawRectangle({x:M,y:top-height,width:W-2*M,height,color:C.white,borderColor:C.line,borderWidth:.7});
     page.drawText("ENERGY SPECTRUM · SOURCE VALUES",{x:M+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
     const values=data.energySeries.map(point=>point.value),min=Math.min(...values),max=Math.max(...values),span=max-min||1;
@@ -473,7 +512,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
      page.drawLine({start:{x:left+(a.timeSeconds-t0)/dt*(right-left),y:bottom+(a.value-min)/span*(top-48-bottom)},end:{x:left+(b.timeSeconds-t0)/dt*(right-left),y:bottom+(b.value-min)/span*(top-48-bottom)},color:C.teal,thickness:2});
     }
     page.drawText("Elapsed "+t0.toFixed(1)+"–"+t1.toFixed(1)+" s",{x:left,y:bottom-15,size:6,font:fonts.regular,color:C.muted});
-   }else card(page,M,H-380,W-2*M,"Energy spectrum · Not measured",["NOT MEASURED: no valid timestamped energy series was supplied."],fonts,{accent:C.amber});
+   }else card(page,M,H-540,W-2*M,"Energy spectrum · Not measured",["NOT MEASURED: no valid timestamped energy series was supplied."],fonts,{accent:C.amber});
   }else if(spec.kind==="full-depth"){
    const assessment=rec(input.assessment),release=rec(assessment.releaseStrategy);
    const scoreLines=data.headlineScore===null?["NOT MEASURED: no validated headline score was supplied.",...(data.scoreDrivers??[]).map(driver=>driver.label+": "+driver.score+"/100 · "+(driver.evidence||"Evidence note not supplied"))]:["Supplied assessment score: "+data.headlineScore+"/100",...(data.scoreDrivers??[]).map(driver=>driver.label+": "+driver.score+"/100 · "+(driver.evidence||"Evidence note not supplied"))];
