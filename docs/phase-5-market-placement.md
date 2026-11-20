@@ -12,7 +12,7 @@ The implementation remains in the existing Node.js/TypeScript worker and report 
 
 Only playlist candidates returned by configured Spotify or Apple Music catalogue discovery are eligible. Exact ISRC presence is ranked above genre/mood similarity. The numeric priority is a deterministic shortlist-ordering aid, not a probability or a claim of editorial fit. Provider, URL, retrieval timestamp, match basis and membership uncertainty are retained. A Spotify search result is not treated as an inspected playlist membership record.
 
-A candidate never proves curator interest, acceptance, placement, reach, streams or commercial performance.
+A candidate never proves curator interest, acceptance, placement, reach, streams or commercial performance. The current playlist endpoints do not expose candidate-track BPM, key, energy and acoustic feature vectors, so a true track-to-playlist acoustic similarity score is unavailable. Genre/mood alignment is not relabelled as acoustic similarity.
 
 ### Geographic territory priorities
 
@@ -24,7 +24,7 @@ Territories are ranked only when evidence.audienceTelemetry contains all of:
 - a valid ISO-8601 retrievedAt
 - one or more territories entries with ISO 3166-1 alpha-2 countryCode and a finite, non-negative value
 
-Values are sorted only within that single provider, metric and reporting period. The implementation does not combine different metrics, providers or time windows. If the contract is absent or incomplete, territory priorities are explicitly unavailable. Artist location, genre popularity, ISRC presence and playlist search are not substitutes for listener geography.
+The uploaded-master mood search may use the existing audio_feature_heuristics_v1 labels when their status is provisional; these are heuristic tags, not a calibrated random-forest mood classifier or probability. Values are sorted only within that single provider, metric and reporting period. The implementation does not combine different metrics, providers or time windows. If the contract is absent or incomplete, territory priorities are explicitly unavailable. Artist location, genre popularity, ISRC presence and playlist search are not substitutes for listener geography.
 
 No audience-geography provider is currently wired into the audit worker, so an ordinary audit is expected to show the withheld state until verified telemetry is supplied.
 
