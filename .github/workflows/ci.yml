@@ -83,6 +83,10 @@ jobs:
         if: always()
         run: npm run build
 
+      - name: Run zero-cost synthetic audio detector evaluation
+        if: always()
+        run: node scripts/audio-detector-evaluation.mjs
+
       - name: Install PDF text-inspection tools
         if: always()
         run: |
@@ -97,10 +101,12 @@ jobs:
         if: always()
         run: npm run sample-report:v2
 
-      - name: Upload report PDFs
+      - name: Upload report and detector evaluation artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: audit-report-pdfs
-          path: artifacts/*.pdf
+          name: audit-report-and-evaluation
+          path: |
+            artifacts/*.pdf
+            artifacts/*.json
           if-no-files-found: warn
