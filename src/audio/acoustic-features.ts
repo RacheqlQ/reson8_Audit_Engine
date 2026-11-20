@@ -53,7 +53,6 @@ const WINDOW_SIZE=2048;
 const HOP_SIZE=1024;
 const MAX_WINDOWS=128;
 const EPSILON=1e-12;
-const clamp=(value:number,min=0,max=1)=>Math.max(min,Math.min(max,value));
 
 function percentile(values:number[],p:number):number {
   if(!values.length)return 0;
@@ -97,7 +96,9 @@ function measureWindow(samples:Float32Array,start:number,sampleRate:number,chann
   const real=new Float64Array(WINDOW_SIZE),imag=new Float64Array(WINDOW_SIZE);
   let sumSquares=0,peak=0,crossings=0,previousSample=0;
   for(let i=0;i<WINDOW_SIZE;i++){
-    let channelSum=0;\n    for(let channel=0;channel<channels;channel++){const raw=samples[(start+i)*channels+channel]??0;channelSum+=Number.isFinite(raw)?raw:0;}\n    const value=channelSum/channels;
+    let channelSum=0;
+    for(let channel=0;channel<channels;channel++){const raw=samples[(start+i)*channels+channel]??0;channelSum+=Number.isFinite(raw)?raw:0;}
+    const value=channelSum/channels;
     sumSquares+=value*value;peak=Math.max(peak,Math.abs(value));
     if(i>0&&((previousSample<0&&value>=0)||(previousSample>=0&&value<0)))crossings++;
     previousSample=value;
