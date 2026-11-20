@@ -1,4 +1,5 @@
 import { estimateKey } from "./key-estimation.js";
+import { bootstrapCategoricalConsensus, type BootstrapConsensusDiagnostics } from "./ensemble-consensus.js";
 
 export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.5;
 import { analyzeVocalSignalDiagnostics } from "./vocal-signal-diagnostics.js";
@@ -17,6 +18,7 @@ export interface TempoEstimate {
  beatGridStatus:"tentative"|"not_determined";
  downbeatGridAssumption:"four-beat grouping for diagnostics only"|null;
  abstentionReason:string|null;
+ windowConsensus:BootstrapConsensusDiagnostics;
 }
 export interface SonicDnaFeatures {
  sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; tempoCandidateBpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
@@ -80,7 +82,7 @@ function emptyTempoEstimate(reason:string):TempoEstimate {
   bpm:null,topCandidateBpm:null,alternateTempo:null,confidence:null,method:"high_frequency_transient_autocorrelation",
   candidateBpms:[],candidateScores:[],onsetEnvelope:[],beatTimesSeconds:[],
   downbeatCandidateTimesSeconds:[],beatGridStatus:"not_determined",
-  downbeatGridAssumption:null,abstentionReason:reason,
+  downbeatGridAssumption:null,abstentionReason:reason,windowConsensus:bootstrapCategoricalConsensus([]),
  };
 }
 
@@ -131,7 +133,7 @@ function deriveBeatGrid(novelty:number[],bpm:number,framesPerSecond:number):{
  * de-emphasizes sustained tones. Confidence is a signal-prominence diagnostic,
  * not a calibrated probability of BPM accuracy.
  */
-export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstimate {
+function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate {
  const method="high_frequency_transient_autocorrelation" as const;
  if(sampleRate<=0||samples.length<sampleRate*4||rms(samples)<1e-5)
   return emptyTempoEstimate("Insufficient duration or signal energy for tempo analysis.");
@@ -197,8 +199,28 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
   downbeatCandidateTimesSeconds:beatGrid.downbeatCandidateTimesSeconds,
   beatGridStatus:beatGrid.beatTimesSeconds.length?"tentative":"not_determined",
   downbeatGridAssumption:beatGrid.downbeatCandidateTimesSeconds.length?"four-beat grouping for diagnostics only":null,
-  abstentionReason:null,
+  abstentionReason:null,windowConsensus:bootstrapCategoricalConsensus([]),
  };
+}
+
+
+/**
+ * Analyse the complete clip, then independently re-run the same tempo detector
+ * on up to six non-overlapping 8-second windows. This is window stability
+ * evidence, not a multi-model ensemble or a calibrated probability.
+ */
+export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstimate {
+ const overall=estimateTempoCore(samples,sampleRate);
+ if(sampleRate<=0||samples.length<sampleRate*8)return overall;
+ const windowSamples=Math.floor(sampleRate*8),windowCount=Math.min(6,Math.floor(samples.length/windowSamples));
+ const labels:string[]=[];
+ for(let window=0;window<windowCount;window++){
+  const start=window*windowSamples;
+  const estimate=estimateTempoCore(samples.subarray(start,start+windowSamples),sampleRate);
+  if(estimate.bpm!==null)labels.push(String(Math.round(estimate.bpm)));
+ }
+ const windowConsensus=bootstrapCategoricalConsensus(labels,{iterations:1000,seed:17});
+ return {...overall,windowConsensus};
 }
 
 export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):SonicDnaFeatures {
@@ -242,8 +264,8 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  if(tempo.bpm===null)limitations.push("Tempo could not be determined reliably from the supplied audio.");
  return {
   sampleRate,channels:Number.isInteger(channels)&&channels>0?channels:1,durationSeconds:prepared.durationSeconds,
-  rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:tempo.method,candidateBpms:tempo.candidateBpms,candidateScores:tempo.candidateScores,onsetEnvelope:tempo.onsetEnvelope,beatTimesSeconds:tempo.beatTimesSeconds,downbeatCandidateTimesSeconds:tempo.downbeatCandidateTimesSeconds,beatGridStatus:tempo.beatGridStatus,downbeatGridAssumption:tempo.downbeatGridAssumption,abstentionReason:tempo.abstentionReason},
-  harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:key.method,tuningCents:key.tuningCents,segmentAgreement:key.segmentAgreement,analysisWindows:key.analysisWindows,fftButterflyCount:key.fftButterflyCount,segmentChroma:key.segmentChroma,topCandidates:key.topCandidates,tuningEvidenceWindows:key.tuningEvidenceWindows,limitation:key.limitation},
+  rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:tempo.method,candidateBpms:tempo.candidateBpms,candidateScores:tempo.candidateScores,onsetEnvelope:tempo.onsetEnvelope,beatTimesSeconds:tempo.beatTimesSeconds,downbeatCandidateTimesSeconds:tempo.downbeatCandidateTimesSeconds,beatGridStatus:tempo.beatGridStatus,downbeatGridAssumption:tempo.downbeatGridAssumption,abstentionReason:tempo.abstentionReason,windowConsensus:tempo.windowConsensus},
+  harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:key.method,tuningCents:key.tuningCents,segmentAgreement:key.segmentAgreement,analysisWindows:key.analysisWindows,fftButterflyCount:key.fftButterflyCount,segmentChroma:key.segmentChroma,topCandidates:key.topCandidates,tuningEvidenceWindows:key.tuningEvidenceWindows,limitation:key.limitation,windowConsensus:key.windowConsensus},
   vocalFeatures:{...vocalDiagnostics},
   bpm:tempo.bpm,tempoCandidateBpm:tempo.topCandidateBpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
   key:key.key,mode:key.mode,keyConfidence:key.confidence,keyTuningCents:key.tuningCents,keySegmentAgreement:key.segmentAgreement,keyCandidates:key.topCandidates,tuningEvidenceWindows:key.tuningEvidenceWindows,keyAnalysisFftButterflyCount:key.fftButterflyCount,limitations,
