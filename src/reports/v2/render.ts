@@ -392,7 +392,6 @@ function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  card(page,M,y,W-2*M,"How moments are chosen",["Moments are rendered from supplied timestamped detector output or device flags. This report does not create or infer additional flags."],fonts,{accent:C.gold});
 }
 
-type FullFlowUnit = { kind: "heading"; title: string; accent: string } | { kind: "paragraph"; lines: string[]; accent: string };
 export function partitionFullReportUnits<T>(
  units:T[],
  heights:number[],
@@ -440,15 +439,50 @@ export function partitionFullReportUnits<T>(
 export async function generateAuditReportV2(source:AuditReportInput,tier:AuditReportTier="sample"):Promise<Uint8Array>{
  const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
- if(tier==="full") return renderFullReportV2(input,data,pdf,fonts);
- const pages=buildPages(input,data),total=pages.length;
+ const pages=buildReportSections(input,data,tier),total=tier==="full"?12:9;
+ if(pages.length!==total)throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
-  const spec=pages[index],page=pageBase(pdf,spec.title,fonts);
+  const spec=pages[index],page=pageBase(pdf,tier==="full"&&index===0?"Full A&R report":spec.title,fonts);
   let chartCursor=H-380;
   if(spec.kind==="identity"){
    chartCursor=drawIdentityReconciliation(page,input,fonts);
   }else if(spec.kind==="snapshot"){
    drawSnapshot(page,data,fonts,input);
+  }else if(spec.kind==="full-axes"){
+   if(data.sonicAxes)drawSonicAxes(page,data,fonts);
+   else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
+  }else if(spec.kind==="tempo-energy"){
+   const tempo=data.tempo.value===null?data.notYetMeasured.find(value=>/tempo/i.test(value))??"NOT MEASURED: no confidence-qualified tempo result was supplied.":"MEASURED: "+data.tempo.value+" BPM · "+(data.tempo.confidence??"confidence unavailable")+" confidence";
+   const energy=data.energy.value===null?"NOT MEASURED: no supported energy or loudness values were supplied.":String(data.energy.value);
+   card(page,M,H-105,W-2*M,"Tempo evidence",[tempo,"Method: "+(data.tempo.method??"Not supplied"),"Evidence: "+data.tempo.evidence],fonts,{accent:data.tempo.value===null?C.amber:C.teal});
+   card(page,M,H-230,W-2*M,"Energy and loudness evidence",[energy,"Method: "+(data.energy.method??"Not supplied"),"Evidence: "+data.energy.evidence],fonts,{accent:data.energy.value===null?C.amber:C.teal});
+   if(data.energySeries){
+    const top=H-380,height=245,left=M+28,right=W-M-18,bottom=top-height+32;
+    page.drawRectangle({x:M,y:top-height,width:W-2*M,height,color:C.white,borderColor:C.line,borderWidth:.7});
+    page.drawText("ENERGY SPECTRUM · SOURCE VALUES",{x:M+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
+    const values=data.energySeries.map(point=>point.value),min=Math.min(...values),max=Math.max(...values),span=max-min||1;
+    const t0=data.energySeries[0].timeSeconds,t1=data.energySeries[data.energySeries.length-1].timeSeconds,dt=t1-t0||1;
+    for(let i=1;i<data.energySeries.length;i++){
+     const a=data.energySeries[i-1],b=data.energySeries[i];
+     page.drawLine({start:{x:left+(a.timeSeconds-t0)/dt*(right-left),y:bottom+(a.value-min)/span*(top-48-bottom)},end:{x:left+(b.timeSeconds-t0)/dt*(right-left),y:bottom+(b.value-min)/span*(top-48-bottom)},color:C.teal,thickness:2});
+    }
+    page.drawText("Elapsed "+t0.toFixed(1)+"–"+t1.toFixed(1)+" s",{x:left,y:bottom-15,size:6,font:fonts.regular,color:C.muted});
+   }else card(page,M,H-380,W-2*M,"Energy spectrum · Not measured",["NOT MEASURED: no valid timestamped energy series was supplied."],fonts,{accent:C.amber});
+  }else if(spec.kind==="full-depth"){
+   const assessment=rec(input.assessment),release=rec(assessment.releaseStrategy);
+   const scoreLines=data.headlineScore===null?["NOT MEASURED: no validated headline score was supplied.",...(data.scoreDrivers??[]).map(driver=>driver.label+": "+driver.score+"/100 · "+(driver.evidence||"Evidence note not supplied"))]:["Supplied assessment score: "+data.headlineScore+"/100",...(data.scoreDrivers??[]).map(driver=>driver.label+": "+driver.score+"/100 · "+(driver.evidence||"Evidence note not supplied"))];
+   card(page,M,H-105,W-2*M,"Evidence scorecard",scoreLines,fonts,{accent:C.gold});
+   const rawTimeline=Array.isArray(release.executionTimeline)?release.executionTimeline:Array.isArray(assessment.executionTimeline)?assessment.executionTimeline:[];
+   const timelineLines=rawTimeline.map(value=>{const row=rec(value);return [str(row.label??row.phase??row.title,""),str(row.timing??row.when??row.window,""),str(row.action??row.description??row.task,"")].filter(value=>value&&value!=="Not supplied").join(" · ");}).filter(Boolean);
+   card(page,M,H-245,W-2*M,"Execution timeline · PLAN",timelineLines.length?["ILLUSTRATIVE PLAN — proposed guidance, not a verified campaign outcome.",...timelineLines]:["NOT SUPPLIED: no execution timeline was included in the persisted assessment."],fonts,{accent:C.amber});
+   const sonic=rec(input.sonicDna);
+   const loudness=[
+    finite(sonic.loudnessLufs)?"Integrated loudness: "+Number(sonic.loudnessLufs).toFixed(1)+" LUFS":"Integrated loudness: NOT MEASURED",
+    finite(sonic.loudnessRangeLu)?"Loudness range: "+Number(sonic.loudnessRangeLu).toFixed(1)+" LU":"Loudness range: NOT MEASURED",
+    finite(sonic.truePeakDbfs)?"True peak: "+Number(sonic.truePeakDbfs).toFixed(1)+" dBFS":"True peak: NOT MEASURED",
+    finite(sonic.rmsLevelDbfs)?"RMS level: "+Number(sonic.rmsLevelDbfs).toFixed(1)+" dBFS":"RMS level: NOT MEASURED"
+   ];
+   card(page,M,H-430,W-2*M,"Loudness, true peak and LRA panel",[...loudness,"Descriptive measurements only; no mastering-readiness verdict is inferred."],fonts,{accent:C.gold});
   }else if(spec.kind==="axes"){
    drawSonicAxes(page,data,fonts);
   }else if(spec.kind==="comparables"){
@@ -457,7 +491,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    drawMoments(page,data,fonts);
   }else if(spec.kind==="cover"){
    const e=rec(input.evidence),a=rec(input.assessment);
-   page.drawText("TRACK AUDIT",{x:M,y:H-112,size:8,font:fonts.bold,color:C.gold});
+   if(tier==="sample")page.drawText("TRACK AUDIT",{x:M,y:H-112,size:8,font:fonts.bold,color:C.gold});
    drawWrapped(page,str(e.artist,"Artist not supplied"),M,H-155,W-2*M,fonts.bold,22,C.ink,27);
    drawWrapped(page,str(e.title,"Track not supplied"),M,H-186,W-2*M,fonts.regular,14,C.muted,18);
    page.drawText("AUDIT "+input.auditId+"  ·  "+dateText(input.generatedAt)+"  ·  "+dateText(e.releaseDate),{x:M,y:H-210,size:7,font:fonts.regular,color:C.muted});
@@ -521,8 +555,8 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
  }
  const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
- const last=pdf.getPages()[pages.length-2]??pdf.getPages()[0];
- notes.addToPage(last,{x:M,y:78,width:W-2*M,height:38,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
+ const notesPage=pdf.getPages()[tier==="full"?7:Math.max(0,pages.length-2)]??pdf.getPages()[0];
+ notes.addToPage(notesPage,{x:M,y:78,width:W-2*M,height:38,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
  notes.setFontSize(8);notes.updateAppearances(fonts.regular);
  return pdf.save();
 }
