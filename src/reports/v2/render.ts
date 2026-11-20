@@ -339,6 +339,14 @@ async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, p
    }
   }
  }
+ const provisionalEvidence = data.notYetMeasured.filter(value =>
+  /provisional harmonic candidate|multiple tonal windows; provisional/i.test(value));
+ if (provisionalEvidence.length) {
+  units.push({ kind: "heading", title: "Provisional harmonic and tuning evidence", accent: "gold" });
+  for (const detail of provisionalEvidence) {
+   units.push({ kind: "paragraph", lines: wrap(detail, fonts.regular, 8.1, W - 2 * M - 30), accent: "gold" });
+  }
+ }
  const weights = units.map(unit => unit.kind === "heading" ? 28 : unit.lines.length * 10 + 18);
  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
  const allocate = (bodyPageCount: number): FullFlowUnit[][] => {
