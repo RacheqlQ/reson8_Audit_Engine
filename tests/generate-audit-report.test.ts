@@ -142,12 +142,12 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Assessment confidence: a model-generated evidence-quality indicator");
   expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
- it("labels mood and energy as provisional audio-feature estimates, not calibrated model outputs",()=>{
+ it("abstains when no provisional mood or energy outputs were produced",()=>{
   const input=structuredClone(fullAudioFixture) as AuditReportInput;
   input.evidence={...input.evidence,fixture:false,masterAudio:{evidenceClass:"OBSERVED",provenance:"uploaded_audio_master"}};
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs.");
-  expect(report).toContain("These estimates are derived from the uploaded signal, are not probabilities");
+  expect(report).toContain("No provisional master-derived mood or energy labels were produced by this run");
+  expect(report).not.toContain("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs.");
   expect(report).not.toMatch(/Mood classification: Not performed — no validated audio mood model is configured/i);
  });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
