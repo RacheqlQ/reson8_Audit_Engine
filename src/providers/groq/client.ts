@@ -78,9 +78,17 @@ const TimelineSchema = z.object({
   }),
 });
 
+const GenerationProvenanceSchema = z.object({
+  provider: z.enum(["groq", "gemini", "ollama"]),
+  model: z.string().min(1),
+  promptVersion: z.string().min(1),
+  generatedAt: z.string().datetime(),
+  fieldGroups: z.record(z.string(), z.enum(["narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline"])),
+}).strict();
 const AssessmentSchema = NarrativeSchema.extend(PositioningSchema.shape).extend(ReleaseSchema.shape)
   .extend(EvidenceScoreSchema.shape).extend(ProductionSchema.shape).extend(ComparableSchema.shape)
-  .extend(PromotionSchema.shape).extend(LabelFitSchema.shape).extend(TimelineSchema.shape);
+  .extend(PromotionSchema.shape).extend(LabelFitSchema.shape).extend(TimelineSchema.shape)
+  .extend({ generationProvenance: GenerationProvenanceSchema });
 export type ArAssessment = z.infer<typeof AssessmentSchema>;
 
 export interface ProviderAttemptDiagnostic {
@@ -642,6 +650,20 @@ export class GroqClient implements GroqAssessmentClient {
     const failed=settled.find(result=>result.status==="rejected");
     if(failed&&failed.status==="rejected")throw failed.reason;
     const assembled=Object.assign({},...groups) as z.infer<typeof AssessmentSchema>;
+    assembled.generationProvenance = {
+      provider: this.providerName as "groq" | "gemini" | "ollama",
+      model: this.model,
+      promptVersion: GROQ_PROMPT_VERSION,
+      generatedAt: new Date().toISOString(),
+      fieldGroups: {
+        assessmentVersion: "narrative", executiveSummary: "narrative", creativeIdentity: "narrative", strengths: "narrative", risks: "narrative",
+        aAndRPositioning: "positioning", commercialRead: "positioning", releaseStrategy: "release",
+        evidenceGaps: "evidence-score", confidence: "evidence-score", limitations: "evidence-score", scorecard: "evidence-score", humanListeningChecklist: "evidence-score", evidenceLabels: "evidence-score",
+        productionArrangementGuidance: "production", industryPractice: "production", listeningChecks: "production",
+        laneHypothesis: "comparables", referencesToVerify: "comparables", verificationMethod: "comparables",
+        promotionPlan: "promotion", labelPartnerFit: "label-fit", executionPlan: "timeline",
+      },
+    };
     const dna=input.sonicDna;
     const audioMaster=Boolean(dna && dna.provenance==="uploaded_audio_master");
     const commercial=input.evidence.commercialEvidence;
