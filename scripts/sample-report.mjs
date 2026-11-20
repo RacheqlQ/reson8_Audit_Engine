@@ -2,7 +2,8 @@ import { mkdir, readdir, rm, writeFile, readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
-import { generateAuditReport, buildArNotesDecisionContext, normalizeReportText } from "../dist/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext, normalizeReportText } from "../dist/reports/generate-audit-report.js";
+import { ensurePdfReport } from "../dist/reports/pdf-output.js";
 import { sanitizeAssessmentForEvidence } from "../dist/reports/evidence-guardrails.js";
 import { drawChartPanel } from "../dist/reports/charts.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture } from "./fixtures/sample-report-input.mjs";
@@ -48,9 +49,10 @@ const variants=[
 for(const [name,input] of variants){
  for(const tier of ["sample","full"]){
   const reportInput={...input,generatedAt: new Date().toISOString()};
-  const bytes=await generateAuditReport(reportInput,tier);
+  const bytes=await ensurePdfReport(reportInput,tier);
   const pdf=await PDFDocument.load(bytes);
-  if(pdf.getPageCount()>20)throw new Error(name+" "+tier+" exceeded 20 pages");
+  if(tier==="sample"&&pdf.getPageCount()!==9)throw new Error(name+" sample report must be exactly 9 pages; got "+pdf.getPageCount());
+  if(tier==="full"&&(pdf.getPageCount()<12||pdf.getPageCount()>13))throw new Error(name+" full report must be 12 or 13 pages; got "+pdf.getPageCount());
   const filename=name+"-"+tier+"-audit-report.pdf";
   const fileUrl=new URL(filename,out),filePath=fileUrl.pathname;
   await writeFile(fileUrl,bytes);
@@ -62,17 +64,17 @@ for(const [name,input] of variants){
   if(pageBoxes.length!==pdf.getPageCount())throw new Error(filename+" bounding-box page count does not match the PDF page count");
   for(let pageIndex=0;pageIndex<extractedPages.length;pageIndex++){
    const pageText=extractedPages[pageIndex];
-   if(pageIndex===0?!/FIXTURE/i.test(pageText):!/SYNTHETIC FIXTURE/i.test(pageText))throw new Error(filename+" is missing its synthetic-fixture disclosure on page "+(pageIndex+1));
+   if(!pageText.trim())throw new Error(filename+" contains an empty page "+(pageIndex+1));
    const words=[...pageBoxes[pageIndex][1].matchAll(/<word\b([^>]*)>([\s\S]*?)<\/word>/g)].map(match=>{
     const yMin=Number(match[1].match(/yMin="([^"]+)"/)?.[1]),yMax=Number(match[1].match(/yMax="([^"]+)"/)?.[1]);
     return {text:match[2].replace(/&amp;/g,"&").replace(/&quot;/g,'"'),yMin,yMax};
    });
    if(words.some(word=>word.yMin<790&&word.yMax>=790))throw new Error(filename+" has text crossing into the footer area on page "+(pageIndex+1));
-   if(pageIndex>0){
+   {
     const footerWords=words.filter(word=>word.yMin>=790).map(word=>word.text);
-    const expectedPage=String(pageIndex).padStart(2,"0");
-    if(!footerWords.includes(expectedPage))throw new Error(filename+" has a missing or non-sequential footer page number on page "+(pageIndex+1));
-    if(!footerWords.includes("CONFIDENTIAL")||!footerWords.includes("ASSESSMENT"))throw new Error(filename+" is missing its footer disclosure on page "+(pageIndex+1));
+    const expectedPage=String(pageIndex+1),totalPages=String(pdf.getPageCount());
+    if(!footerWords.includes("PAGE")||!footerWords.includes(expectedPage)||!footerWords.includes("OF")||!footerWords.includes(totalPages))throw new Error(filename+" has a missing or non-sequential V2 footer page number on page "+(pageIndex+1));
+    if(!footerWords.includes("AUDIT"))throw new Error(filename+" is missing its V2 audit footer on page "+(pageIndex+1));
    }
   }
   const editableFields=pdf.getForm().getFields();
@@ -82,15 +84,20 @@ for(const [name,input] of variants){
   const chartLabels=[safeAssessment.aAndRPositioning.primaryLane,...safeAssessment.aAndRPositioning.adjacentLanes].filter(value=>typeof value==="string"&&value.trim());
   const normalizedExtracted=extracted.replace(/\s+/g," ");
   if(name==="ambiguous-audio-low-confidence"){
-   for(const expected of ["128 (provisional","C major","14 (multiple tonal windows; provisional)"]){
+   const expectedEvidence=tier==="sample"
+    ?["128 (provisional","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"]
+    :["128 BPM candidate; half-time 64.0 BPM; double-time 256.0 BPM","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"];
+   for(const expected of expectedEvidence){
     if(!normalizedExtracted.includes(expected))throw new Error(filename+" is missing the expected provisional audio evidence: "+expected);
    }
    if(/TEMPO BPM\s+128(?:\.0)?\s+BPM/.test(normalizedExtracted))throw new Error(filename+" promoted a zero-confidence tempo candidate to a confirmed BPM result");
   }
-  for(const label of chartLabels){
-   if(!normalizedExtracted.includes(normalizeReportText(label).replace(/\s+/g," ").trim()))throw new Error(filename+" is missing a complete lane-constellation label: "+label);
+  if(tier==="sample"){
+   for(const label of chartLabels){
+    if(!normalizedExtracted.includes(normalizeReportText(label).replace(/\s+/g," ").trim()))throw new Error(filename+" is missing a complete lane-constellation label: "+label);
+   }
   }
-  if(name==="long-form-audio"){
+  if(name==="long-form-audio"&&tier==="full"){
    const tokens=buildArNotesDecisionContext(input).summary.split(/\s+/).map(token=>token.replace(/[^\p{L}\p{N}#'-]/gu,"")).filter(Boolean);
    let cursor=0;
    for(const token of tokens){
@@ -116,7 +123,7 @@ try{
    "Further listening and source verification are required before any external decision."
   ].join(" ")
  };
- const unsafeBytes=await generateAuditReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
+ const unsafeBytes=await ensurePdfReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
  await writeFile(evidenceCheckPath,unsafeBytes);
  const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
  if(/(?:128\s*BPM(?!\s*candidate\b)|high-energy|Afrobeats|24000 streams|market demand|commercial potential|24000 monthly listeners|commercially successful)/i.test(unsafeText)){

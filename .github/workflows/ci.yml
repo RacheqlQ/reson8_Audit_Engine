@@ -93,6 +93,10 @@ jobs:
         if: always()
         run: npm run sample-report
 
+      - name: Generate and inspect v2 report fixtures
+        if: always()
+        run: npm run sample-report:v2
+
       - name: Upload report PDFs
         if: always()
         uses: actions/upload-artifact@v4

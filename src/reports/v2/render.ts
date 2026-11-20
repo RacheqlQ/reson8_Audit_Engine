@@ -1,0 +1,577 @@
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
+import { planAuditReportPages, buildArNotesDecisionContext, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
+import { loadReportFonts } from "../fonts.js";
+import { chartPanelHeight, drawChartPanel } from "../charts.js";
+import { adaptReportV2, type ReportV2Data } from "./adapters.js";
+import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
+
+const W=595.28,H=841.89,M=42;
+const C={
+ paper:rgb(247/255,243/255,236/255),white:rgb(1,1,1),ink:rgb(43/255,40/255,37/255),
+ muted:rgb(108/255,101/255,92/255),line:rgb(226/255,219/255,207/255),
+ charcoal:rgb(43/255,40/255,37/255),gold:rgb(176/255,141/255,87/255),
+ teal:rgb(29/255,158/255,117/255),amber:rgb(239/255,159/255,39/255),coral:rgb(216/255,90/255,48/255)
+};
+type Fonts={regular:PDFFont;bold:PDFFont;italic:PDFFont;boldItalic:PDFFont};
+type Block={label:string;value:string;provenance?:string;confidence?:string;color?:keyof typeof C};
+type PageSpec={title:string;blocks:Block[];lines?:string[];kind?:string};
+const rec=(v:unknown):Record<string,unknown>=>v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:{};
+const str=(v:unknown,fallback="Not supplied")=>typeof v==="string"&&v.trim()?v.trim():typeof v==="number"&&Number.isFinite(v)?String(v):fallback;
+const arr=(v:unknown):unknown[]=>Array.isArray(v)?v:[];
+const dateText=(v:unknown)=>{const s=str(v,"");return s?s.slice(0,10):"Date not supplied";};
+function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
+ const words=value.replace(/\s+/g," ").split(" ").filter(Boolean),out:string[]=[];let line="";
+ for(const word of words){
+  let token=word;
+  if(font.widthOfTextAtSize(token,size)>width){
+   if(line){out.push(line);line="";}
+   let part="";for(const ch of token){if(font.widthOfTextAtSize(part+ch,size)>width&&part){out.push(part);part=ch;}else part+=ch;}token=part;
+  }
+  const next=line?line+" "+token:token;
+  if(font.widthOfTextAtSize(next,size)>width&&line){out.push(line);line=token;}else line=next;
+ }
+ if(line)out.push(line);return out;
+}
+function drawWrapped(page:PDFPage,value:string,x:number,y:number,width:number,font:PDFFont,size=9,color=C.ink,lineHeight=size*1.35):number{
+ const lines=wrap(value,font,size,width);lines.forEach((line,i)=>page.drawText(line,{x,y:y-i*lineHeight,size,font,color}));return lines.length*lineHeight;
+}
+function metricBlock(data:ReportV2Data):Block[]{
+ const prov=(v:unknown)=>str(v,"Uploaded-master evidence");
+ return [
+  {label:"TEMPO",value:data.tempo.value===null?"N/D":data.tempo.value+" BPM",confidence:data.tempo.confidence??"Low",provenance:prov(data.tempo.evidence)},
+  {label:"KEY",value:data.key.value===null?"N/D":String(data.key.value),confidence:data.key.confidence??"Low",provenance:prov(data.key.evidence)},
+  {label:"ENERGY / LOUDNESS",value:data.energy.value===null?"N/D":String(data.energy.value),confidence:data.energy.confidence??"Low",provenance:prov(data.energy.evidence)}
+ ];
+}
+function scoreChip(page:PDFPage,x:number,y:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
+ page.drawRectangle({x,y,width:158,height:48,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawCircle({x:x+13,y:y+31,size:3.5,color});
+ page.drawText(label.toUpperCase(),{x:x+24,y:y+28,size:6.5,font:fonts.bold,color:C.muted});
+ drawWrapped(page,value,x+12,y+15,134,fonts.bold,9,color,11);
+}
+function card(page:PDFPage,x:number,top:number,width:number,title:string,body:string[],fonts:Fonts,opts:{accent?:typeof C.teal;height?:number;provenance?:string}={}):number{
+ const pad=12,titleH=14,bodyW=width-pad*2;let bodyHeight=0;
+ const chunks=body.map(t=>wrap(t,fonts.regular,8.4,bodyW));
+ bodyHeight=chunks.reduce((n,lines)=>n+lines.length*11+5,0);
+ const provenance=opts.provenance?wrap(opts.provenance,fonts.italic,7,bodyW):[];
+ const height=Math.max(opts.height??0,pad+titleH+bodyHeight+(provenance.length?provenance.length*9+6:0)+pad);
+ const y=top-height;
+ page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:.65});
+ page.drawRectangle({x,y:y+height-3,width,height:3,color:opts.accent??C.gold});
+ page.drawText(title.toUpperCase(),{x:x+pad,y:top-pad-8,size:7,font:fonts.bold,color:opts.accent??C.gold});
+ let cy=top-pad-titleH-4;
+ for(const lines of chunks){for(const line of lines){page.drawText(line,{x:x+pad,y:cy,size:8.4,font:fonts.regular,color:C.ink});cy-=11;}cy-=5;}
+ for(const line of provenance){page.drawText(line,{x:x+pad,y:cy,size:7,font:fonts.italic,color:C.muted});cy-=9;}
+ return height;
+}
+function drawFooter(page:PDFPage,title:string,auditId:string,n:number,total:number,fonts:Fonts){
+ page.drawLine({start:{x:M,y:42},end:{x:W-M,y:42},color:C.line,thickness:.7});
+ page.drawText(title.slice(0,42),{x:M,y:27,size:6.5,font:fonts.regular,color:C.muted});
+ page.drawText("AUDIT "+auditId.slice(0,22),{x:W-M-170,y:27,size:6.5,font:fonts.regular,color:C.muted});
+ page.drawText("PAGE "+n+" OF "+total,{x:W-M-52,y:27,size:6.5,font:fonts.bold,color:C.ink});
+}
+function header(page:PDFPage,title:string,fonts:Fonts){
+ page.drawRectangle({x:0,y:H-66,width:W,height:66,color:C.charcoal});
+ page.drawText("RESON8  /  A&R INTELLIGENCE",{x:M,y:H-26,size:7,font:fonts.bold,color:C.white});
+ page.drawText(title.toUpperCase(),{x:M,y:H-48,size:13,font:fonts.bold,color:C.white});
+ page.drawRectangle({x:M,y:H-70,width:W-2*M,height:3,color:C.gold});
+}
+function pageBase(pdf:PDFDocument,title:string,fonts:Fonts):PDFPage{
+ const p=pdf.addPage([W,H]);p.drawRectangle({x:0,y:0,width:W,height:H,color:C.paper});header(p,title,fonts);return p;
+}
+export function buildNextActionLine(input: AuditReportInput): string {
+ const assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)), recommendation=str(rec(assessment.releaseStrategy).recommendation,"");
+ const firstGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(Boolean)??"";
+ return "Recommended next step: "+(recommendation||firstGap||"Not supplied");
+}
+
+export function buildReleaseFramingLine(input: AuditReportInput): string {
+ const release=Date.parse(String(rec(input.evidence).releaseDate??""));
+ const generated=Date.parse(String(input.generatedAt??""));
+ return Number.isFinite(release)&&Number.isFinite(generated)&&release<generated
+  ? "Post-release framing: release date is in the past."
+  : "Release framing: date does not establish a past release.";
+}
+
+export function buildPositioningLines(input: AuditReportInput): string[] {
+ const evidence = rec(input.evidence), assessment = sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence));
+ const lines: string[] = [];
+ const genre = str(evidence.genre, "");
+ const genreSource = str(evidence.genreSource ?? evidence.genreProvider ?? evidence.genreProvenance, "");
+ if (genre) {
+  lines.push(genreSource
+   ? "Primary lane: " + genre + " [Provider-backed · " + genreSource + "]"
+   : "Genre candidate: " + genre + " [Hypothesis · provider provenance not supplied]");
+ }
+ const hypotheses = arr(assessment.laneHypotheses).map(value => str(value, "")).filter(Boolean);
+ const adjacent = arr(assessment.adjacentLanes).map(value => str(value, "")).filter(Boolean);
+ if (hypotheses.length) lines.push("Lane hypotheses: " + hypotheses.join("; ") + " [Hypothesis]");
+ if (adjacent.length) lines.push("Adjacent lanes to verify: " + adjacent.join("; ") + " [Hypothesis]");
+ if (!lines.length) {
+  lines.push("Positioning not established — no provider-attributed genre or evidenced lane hypothesis was supplied.");
+  lines.push("Required evidence: provider-returned genre with source attribution and verified comparable artists or recordings.");
+  lines.push("Decision boundary: sonic descriptors alone do not establish audience overlap, DSP fit, commercial reach or market demand.");
+ }
+ const basis = str(assessment.positioningBasis ?? assessment.positioningRationale, "");
+ if (basis) lines.push("Positioning basis: " + basis);
+ return lines;
+}
+
+function identityStatusLabel(status:string):string{
+ if(status.startsWith("Unavailable"))return "Unavailable";
+ if(status.startsWith("Conflicting"))return "Conflict";
+ if(status.startsWith("Cross-checked"))return "Cross-checked";
+ if(status.startsWith("Read from embedded")||status.startsWith("Returned by"))return "Source-returned";
+ if(status.startsWith("Analytical hypothesis"))return "Hypothesis";
+ if(status.startsWith("Synthetic test"))return "Synthetic";
+ if(status.startsWith("Parsed from uploaded filename"))return "Provisional";
+ if(status.startsWith("Available"))return "Unconfirmed";
+ return status;
+}
+export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{field:string;value:string;status:string;source:string}>{
+ const e=rec(input.evidence),reconciliation=rec(e.reconciliation),conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
+ const fields:[string,string][]=[["artist","Artist"],["title","Track"],["album","Album"],["genre","Genre"],["releaseDate","Release date"],["isrc","ISRC"],["upc","UPC"],["label","Label"]];
+ return fields.map(([key,label])=>{
+  const conflict=conflicts.find(item=>item.field===key);
+  const raw=key==="genre"?(e.genre??e.genres):e[key];
+  const value=conflict?arr(conflict.values).map(v=>str(v,"")).filter(Boolean).join(" vs "):Array.isArray(raw)?raw.map(v=>str(v,"")).filter(Boolean).join(", "):str(raw,"Unavailable");
+  const sourceLabel=metadataFieldSource(e,key),source=sourceLabel.replace("Field source: ","");
+  const fieldStatus=metadataFieldStatus(e,key);
+  const status=conflict?"Conflict":fieldStatus.startsWith("Available")&&source!=="unavailable"?"Source-returned":identityStatusLabel(fieldStatus);
+  return {field:label,value,status,source};
+ });
+}
+function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fonts):number{
+ const e=rec(input.evidence),rows=buildIdentityReconciliationRows(input),x=M,width=W-2*M,top=H-100,headerH=22,rowH=36;
+ const columns=[78,164,128,141],labels=["FIELD","VALUE","STATUS","SOURCE"];
+ page.drawRectangle({x,y:top-headerH,width,height:headerH,color:C.charcoal});
+ let cx=x;
+ labels.forEach((label,index)=>{page.drawText(label,{x:cx+8,y:top-15,size:6.6,font:fonts.bold,color:C.white});cx+=columns[index];});
+ rows.forEach((row,index)=>{
+  const rowTop=top-headerH-index*rowH,rowBottom=rowTop-rowH;
+  page.drawRectangle({x,y:rowBottom,width,height:rowH,color:index%2===0?C.white:C.paper,borderColor:C.line,borderWidth:.45});
+  const values=[row.field,row.value,row.status,row.source],colors=[C.ink,C.ink,row.status==="Conflict"?C.coral:row.status==="Cross-checked"?C.teal:row.status==="Unavailable"?C.muted:row.status==="Hypothesis"?C.amber:C.ink,C.muted];
+  let cellX=x;
+  values.forEach((value,col)=>{
+   const font=col===0||col===2?fonts.bold:fonts.regular,size=col===0?7.1:col===1?7:6.7,maxLines=3,lines=wrap(value||"Not supplied",font,size,columns[col]-14);
+   if(lines.length>maxLines)throw new Error("Identity reconciliation cell exceeds its row: "+row.field+" / "+labels[col]);
+   lines.forEach((line,lineIndex)=>page.drawText(line,{x:cellX+8,y:rowTop-11-lineIndex*8,size,font,color:colors[col]}));
+   cellX+=columns[col];
+  });
+ });
+ const tableBottom=top-headerH-rows.length*rowH,summaryTop=tableBottom-10;
+ const checked=arr(e.metadataSourcesChecked).map(v=>str(v,"")).filter(Boolean).join(", ")||"Not supplied";
+ const providers=arr(e.sourceProviders).map(v=>str(v,"")).filter(Boolean).join(", ")||"Not supplied";
+ const summaryHeight=card(page,M,summaryTop,width,"Provider lookup and reconciliation context",[
+  "Sources checked: "+checked,
+  "Provider responses: "+providers,
+  "Platform coverage: "+str(e.platformCoverage,"Not supplied"),
+  "Conflict policy: conflicting values remain visible; no source is silently preferred."
+ ],fonts,{accent:C.gold});
+ return summaryTop-summaryHeight-14;
+}
+function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
+ const e=rec(input.evidence),a=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)),sonic=rec(input.sonicDna);
+ const notesContext=buildArNotesDecisionContext(input);
+ const technicalProfile=[
+  typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?"Duration "+sonic.durationSeconds.toFixed(1)+"s":null,
+  typeof sonic.sampleRate==="number"&&Number.isFinite(sonic.sampleRate)?"Sample rate "+sonic.sampleRate+" Hz":null,
+  typeof sonic.channels==="number"&&Number.isFinite(sonic.channels)?"Channels "+sonic.channels:null,
+  typeof sonic.rmsLevelDbfs==="number"&&Number.isFinite(sonic.rmsLevelDbfs)?"RMS signal level "+sonic.rmsLevelDbfs.toFixed(2)+" dBFS":null,
+  typeof sonic.rmsEnergy==="number"&&Number.isFinite(sonic.rmsEnergy)?"RMS energy "+sonic.rmsEnergy.toFixed(3):null,
+  typeof sonic.dynamicRangeDb==="number"&&Number.isFinite(sonic.dynamicRangeDb)?"RMS-envelope spread "+sonic.dynamicRangeDb.toFixed(2)+" dB (internal proxy)":null,
+  typeof sonic.spectralCentroidHz==="number"&&Number.isFinite(sonic.spectralCentroidHz)?"Spectral centroid "+sonic.spectralCentroidHz.toFixed(0)+" Hz":null,
+  typeof sonic.spectralBandwidthHz==="number"&&Number.isFinite(sonic.spectralBandwidthHz)?"Spectral bandwidth "+sonic.spectralBandwidthHz.toFixed(0)+" Hz":null,
+  typeof sonic.spectralRolloffHz==="number"&&Number.isFinite(sonic.spectralRolloffHz)?"Spectral rolloff "+sonic.spectralRolloffHz.toFixed(0)+" Hz":null,
+  typeof sonic.zeroCrossingRate==="number"&&Number.isFinite(sonic.zeroCrossingRate)?"Zero-crossing rate "+sonic.zeroCrossingRate.toFixed(3):null
+ ].filter((value):value is string=>Boolean(value));
+ const pages:PageSpec[]=[
+  {title:"Cover and verdict",kind:"cover",blocks:metricBlock(data),lines:[
+   "Artist: "+str(e.artist)+"   Track: "+str(e.title),
+   "Audit date: "+dateText(input.generatedAt)+"   Release date: "+dateText(e.releaseDate),
+   "Executive summary: "+str(a.executiveSummary,"No executive summary supplied."),
+   buildNextActionLine(input)
+  ]},
+  {title:"Identity and source reconciliation",kind:"identity",blocks:[]},
+  {title:"Track snapshot",kind:"snapshot",blocks:metricBlock(data),lines:[
+   ...(data.structure?["STRUCTURE — "+data.structure.map(s=>s.index+". "+s.label+" ("+s.startSeconds+"–"+s.endSeconds+"s)").join(" | ")]:[]),
+   ...(data.energySeries?["ENERGY SERIES — "+data.energySeries.length+" timestamped points; peak/dip derived from supplied series."]:[]),
+   ...(data.sonicAxes?["SONIC DNA AXES — "+Object.entries(data.sonicAxes).map(([name,axis])=>name+" "+axis.value+"/100"+(axis.note?" ("+axis.note+")":"")).join("; ")]:[])
+  ]},
+  {title:"Evidence ledger and scorecard",blocks:[],lines:[
+   "Measured: "+(sonic?Object.keys(sonic).length:"0")+" · Source matches: "+arr(e.sources).length+" · Cross-checked: "+arr(rec(e.reconciliation).reconciledFields).length+" · Hypotheses: "+arr(a.laneHypotheses).length,
+   "Headline score: "+(data.headlineScore===null?"N/D — no scored headline value supplied":data.headlineScore+"/100"),
+   ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
+   "Market evidence: "+(data.hasVerifiedCommercialEvidence?"Source-attributed commercial data supplied":"Insufficient — no verified commercial source data supplied."),
+   ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
+  ]},
+  {title:"A&R positioning",blocks:[],lines:buildPositioningLines(input)},
+  {title:"Strengths, risks and actions",blocks:[],lines:[
+   "Strengths: "+arr(a.strengths).map(v=>str(v)).join("; ")||"No measured strengths supplied.",
+   "Risks: "+arr(a.risks).map(v=>str(v)).join("; ")||"No evidenced risks supplied.",
+   "Priorities: "+arr(rec(a.releaseStrategy).priorities).map(v=>str(v)).join("; ")||"No priorities supplied.",
+   "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence."),
+   ...(data.moments??[]).map(m=>"Flagged moment "+m.timestampSeconds.toFixed(2)+"s · "+m.tag+" · "+m.title+" — "+m.note)
+  ]},
+  {title:"Release and promotion plan",blocks:[],lines:[
+   buildReleaseFramingLine(input),
+   "General guidance: "+str(a.industryPractice,"No industry guidance supplied."),
+   "Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v)).join("; "),
+   "Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v)).join("; "),
+   ...(e.label||e.partner?["Supplied label / partner: "+str(e.label??e.partner)]:[])
+  ]},
+  {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>"[ ] "+str(v)).concat([notesContext.verdict,notesContext.summary,...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),"Editable notes field: use the PDF form field named ar_notes."])},
+  {title:"Evidence, methodology and limitations",blocks:[],lines:[
+   ...data.notYetMeasured.map(v=>"Not yet measured: "+v),
+   "Tempo method: "+str(data.tempo.method,"Not supplied")+" · "+data.tempo.evidence,
+   "Key method: "+str(data.key.method,"Not supplied")+" · "+data.key.evidence,
+   "Energy method: "+str(data.energy.method,"Not supplied")+" · "+data.energy.evidence,
+   "Worked example: when evidence is insufficient, display a dash and mark any estimate provisional; do not convert absence into a score.",
+   "Limitations: "+arr(a.limitations).map(v=>str(v)).join("; "),
+   "AI-assisted analysis, not a forecast.",
+   ...(technicalProfile.length?["Technical descriptors: "+technicalProfile.join(" · ")+". RMS signal level is dBFS; RMS-envelope spread is an internal proxy, not mastering dynamic range."]:[])
+  ]}
+ ];
+ return pages;
+}
+
+function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Block,fonts:Fonts){
+ const y=top-94;page.drawRectangle({x,y,width,height:94,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawText(block.label,{x:x+12,y:top-17,size:7,font:fonts.bold,color:C.muted});
+ drawWrapped(page,block.value,x+12,top-43,width-24,fonts.bold,15,C.ink,18);
+ const tag=block.confidence??"Low",tagColor=tag==="High"?C.teal:tag==="Medium"?C.amber:C.coral;
+ page.drawRectangle({x:x+12,y:top-65,width:tag.length*5+34,height:14,color:C.paper});
+ page.drawText(tag+" confidence",{x:x+17,y:top-61,size:6.5,font:fonts.bold,color:tagColor});
+ drawWrapped(page,block.provenance??"Provenance not supplied",x+12,top-78,width-24,fonts.regular,6.5,C.muted,8);
+}
+function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
+ const blocks=metricBlock(data),gap=10,width=(W-2*M-gap*2)/3,top=H-92;
+ blocks.forEach((b,i)=>drawMetricCard(page,M+i*(width+gap),top,width,b,fonts));
+ let y=top-112;
+ if(data.structure){
+  const height=116;card(page,M,y,W-2*M,"Structure",[],fonts,{height,accent:C.gold});
+  const left=M+14,barY=y-63,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));
+  const palette=[C.teal,C.gold,C.amber,C.coral];
+  page.drawText("TRACK TIMELINE · ELAPSED SECONDS",{x:left,y:barY+25,size:6,font:fonts.bold,color:C.muted});
+  data.structure.forEach((s,i)=>{const x=left+(s.startSeconds/total)*barW,w=barW*(s.endSeconds-s.startSeconds)/total;page.drawRectangle({x,y:barY,width:w,height:18,color:palette[i%palette.length]});page.drawText(String(s.index),{x:x+w/2-2,y:barY+5,size:6,font:fonts.bold,color:C.white});});
+  page.drawText("0s",{x:left,y:barY-12,size:6,font:fonts.regular,color:C.muted});
+  page.drawText(total.toFixed(0)+"s",{x:left+barW-18,y:barY-12,size:6,font:fonts.regular,color:C.muted});
+  let lineY=barY-28;data.structure.forEach((s,i)=>{const label=s.index+" · "+s.label+"  "+s.startSeconds.toFixed(1)+"–"+s.endSeconds.toFixed(1)+"s";const col=i%2;drawWrapped(page,label,M+14+col*250,lineY-Math.floor(i/2)*12,238,fonts.regular,6.7,C.muted,8);});
+  y-=height+14;
+ }
+ if(data.energySeries){
+  const h=178,topY=y;page.drawRectangle({x:M,y:topY-h,width:W-2*M,height:h,color:C.white,borderColor:C.line,borderWidth:.7});
+  page.drawText("ENERGY OVER TIME",{x:M+12,y:topY-16,size:7,font:fonts.bold,color:C.gold});
+  page.drawText("Y: source energy units",{x:M+12,y:topY-29,size:6,font:fonts.italic,color:C.muted});
+  page.drawText("X: elapsed time (seconds)",{x:W-M-126,y:topY-h+8,size:6,font:fonts.italic,color:C.muted});
+  const left=M+28,right=W-M-16,plotTop=topY-42,plotBottom=topY-h+32;
+  const vals=data.energySeries.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),span=max-min||1;
+  for(let g=0;g<=4;g++){const gy=plotBottom+(plotTop-plotBottom)*g/4;page.drawLine({start:{x:left,y:gy},end:{x:right,y:gy},color:C.line,thickness:.5});}
+  const t0=data.energySeries[0].timeSeconds,t1=data.energySeries[data.energySeries.length-1].timeSeconds,dt=t1-t0||1;
+  for(let i=1;i<data.energySeries.length;i++){const a=data.energySeries[i-1],b=data.energySeries[i];page.drawLine({start:{x:left+(a.timeSeconds-t0)/dt*(right-left),y:plotBottom+(a.value-min)/span*(plotTop-plotBottom)},end:{x:left+(b.timeSeconds-t0)/dt*(right-left),y:plotBottom+(b.value-min)/span*(plotTop-plotBottom)},color:C.teal,thickness:2.2});}
+  const peak=data.energySeries.reduce((a,b)=>b.value>a.value?b:a),dip=data.energySeries.reduce((a,b)=>b.value<a.value?b:a);
+  page.drawCircle({x:left+(peak.timeSeconds-t0)/dt*(right-left),y:plotBottom+(peak.value-min)/span*(plotTop-plotBottom),size:4,color:C.teal});
+  page.drawCircle({x:left+(dip.timeSeconds-t0)/dt*(right-left),y:plotBottom+(dip.value-min)/span*(plotTop-plotBottom),size:4,color:C.coral});
+  const peakX=left+(peak.timeSeconds-t0)/dt*(right-left),dipX=left+(dip.timeSeconds-t0)/dt*(right-left);
+  const peakLabelX=Math.max(left,Math.min(right-42,peakX-21)),dipLabelX=Math.max(left,Math.min(right-38,dipX-19));
+  const sameRegion=Math.abs(peakLabelX-dipLabelX)<46;
+  page.drawText("Peak "+peak.timeSeconds.toFixed(1)+"s",{x:peakLabelX,y:plotBottom-13,size:6,font:fonts.bold,color:C.teal});
+  page.drawText("Dip "+dip.timeSeconds.toFixed(1)+"s",{x:dipLabelX,y:plotBottom-(sameRegion?24:13),size:6,font:fonts.bold,color:C.coral});
+  y-=h+12;
+ }
+ if(data.sonicAxes){
+  const axes=Object.entries(data.sonicAxes),panelHeight=30+axes.length*22,top=y-8,bottom=top-panelHeight;
+  if(bottom<72)throw new Error("Sonic DNA axis evidence cannot fit safely on the nine-page sample snapshot.");
+  page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
+  page.drawText("SONIC DNA AXES · SUPPLIED SCORES / 100",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
+  axes.forEach(([name,axis],index)=>{
+   const yy=top-35-index*22;
+   page.drawText(name,{x:M+12,y:yy,size:7,font:fonts.bold,color:C.ink});
+   page.drawRectangle({x:M+100,y:yy-2,width:160,height:6,color:C.line});
+   page.drawRectangle({x:M+100,y:yy-2,width:160*axis.value/100,height:6,color:axis.value<60?C.amber:C.teal});
+   page.drawText(String(axis.value),{x:M+270,y:yy-1,size:7,font:fonts.bold,color:C.ink});
+   drawWrapped(page,axis.note??"Axis note not supplied.",M+300,yy,W-2*M-312,fonts.regular,6.2,C.muted,7);
+  });
+  y=bottom-12;
+ }
+ const sonic=rec(input.sonicDna);
+ const rows:Array<[string,string]>=[
+  ["Duration",typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?sonic.durationSeconds.toFixed(1)+" s":""],
+  ["Sample rate",typeof sonic.sampleRate==="number"&&Number.isFinite(sonic.sampleRate)?sonic.sampleRate+" Hz":""],
+  ["Channels",typeof sonic.channels==="number"&&Number.isFinite(sonic.channels)?String(sonic.channels):""],
+  ["RMS signal level",typeof sonic.rmsLevelDbfs==="number"&&Number.isFinite(sonic.rmsLevelDbfs)?sonic.rmsLevelDbfs.toFixed(2)+" dBFS":""],
+  ["RMS energy",typeof sonic.rmsEnergy==="number"&&Number.isFinite(sonic.rmsEnergy)?sonic.rmsEnergy.toFixed(3):""],
+  ["RMS-envelope spread",typeof sonic.dynamicRangeDb==="number"&&Number.isFinite(sonic.dynamicRangeDb)?sonic.dynamicRangeDb.toFixed(2)+" dB · internal proxy":""],
+  ["Spectral centroid",typeof sonic.spectralCentroidHz==="number"&&Number.isFinite(sonic.spectralCentroidHz)?sonic.spectralCentroidHz.toFixed(0)+" Hz":""],
+  ["Spectral bandwidth",typeof sonic.spectralBandwidthHz==="number"&&Number.isFinite(sonic.spectralBandwidthHz)?sonic.spectralBandwidthHz.toFixed(0)+" Hz":""],
+  ["Spectral rolloff",typeof sonic.spectralRolloffHz==="number"&&Number.isFinite(sonic.spectralRolloffHz)?sonic.spectralRolloffHz.toFixed(0)+" Hz":""],
+  ["Zero-crossing rate",typeof sonic.zeroCrossingRate==="number"&&Number.isFinite(sonic.zeroCrossingRate)?sonic.zeroCrossingRate.toFixed(3):""]
+ ].filter((entry):entry is [string,string]=>Boolean(entry[1]));
+ if(rows.length){
+  const panelHeight=38+Math.ceil(rows.length/2)*23+14,top=y-8,bottom=top-panelHeight;
+  if(bottom>=72){
+   page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
+   page.drawText("SUPPLIED AUDIO PROFILE",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
+   rows.forEach(([label,value],index)=>{
+    const col=index%2,row=Math.floor(index/2),x=M+12+col*250,yy=top-34-row*23;
+    page.drawText(label,{x,y:yy,size:6.4,font:fonts.regular,color:C.muted});
+    drawWrapped(page,value,x+112,yy,120,fonts.bold,6.4,C.ink,7);
+   });
+   page.drawText("Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.",{x:M+12,y:bottom+6,size:5.8,font:fonts.italic,color:C.muted});
+   y=bottom-12;
+  }
+ }
+}
+function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
+ const axes=data.sonicAxes!;const names=Object.keys(axes) as Array<keyof typeof axes>,cx=170,cy=555,r=118;
+ for(let ring=1;ring<=4;ring++){const rr=r*ring/4;for(let i=0;i<5;i++){const a=-Math.PI/2+i*2*Math.PI/5,b=-Math.PI/2+(i+1)*2*Math.PI/5;page.drawLine({start:{x:cx+Math.cos(a)*rr,y:cy+Math.sin(a)*rr},end:{x:cx+Math.cos(b)*rr,y:cy+Math.sin(b)*rr},color:C.line,thickness:.6});}}
+ const pts=names.map((name,i)=>{const a=-Math.PI/2+i*2*Math.PI/5,v=axes[name].value/100;return {x:cx+Math.cos(a)*r*v,y:cy+Math.sin(a)*r*v};});
+ pts.forEach((p,i)=>{const q=pts[(i+1)%pts.length];page.drawLine({start:p,end:q,color:C.teal,thickness:2.2});page.drawCircle({x:p.x,y:p.y,size:4,color:C.teal});});
+ names.forEach((name,i)=>{const a=-Math.PI/2+i*2*Math.PI/5;const x=cx+Math.cos(a)*(r+22),y=cy+Math.sin(a)*(r+22);page.drawText(name+" "+axes[name].value,{x:x-28,y,size:7,font:fonts.bold,color:C.ink});});
+ const note="Supplied axis scores only. Scale: 0–100; higher values indicate a higher score on that named axis. No reference average or audience-overlap claim is implied.";
+ drawWrapped(page,note,330,cy+60,180,fonts.regular,8,C.muted,11);
+
+ let y=cy-155;
+ names.forEach(name=>{const item=axes[name];page.drawRectangle({x:M,y:y-15,width:W-2*M,height:38,color:C.white,borderColor:C.line,borderWidth:.6});page.drawText(name,{x:M+12,y:y+8,size:8,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+112,y:y+5,width:150,height:6,color:C.line});page.drawRectangle({x:M+112,y:y+5,width:150*item.value/100,height:6,color:item.value<60?C.amber:C.teal});page.drawText(String(item.value),{x:M+270,y:y+5,size:8,font:fonts.bold,color:C.ink});drawWrapped(page,item.note??"Axis note not supplied.",M+310,y+8,190,fonts.regular,7,C.muted,9);y-=45;});
+}
+function drawComparables(page:PDFPage,input:AuditReportInput,data:ReportV2Data,fonts:Fonts){
+ const e=rec(input.evidence),position=rec(e.marketPosition),score=typeof position.score==="number"&&Number.isFinite(position.score)?position.score:null;
+ let y=H-104;
+ if(score===null){
+  card(page,M,y,W-2*M,"Market position not scored",["No supported market-position score or audience benchmark was supplied. The source-attributed comparables below are context only; they do not establish audience reach, playlist placement or campaign performance."],fonts,{accent:C.amber});
+  y-=76;
+ }
+ if(score!==null){
+  card(page,M,y,W-2*M,"Market position",[score+" / 100 · "+str(position.label,"Position label not supplied"),"Confidence: "+str(position.confidence,"Not supplied"),"Basis: "+str(position.basis,"Source-attributed comparables")],fonts,{accent:C.gold});
+  const barX=M+14,barY=y-52,barW=W-2*M-28;page.drawRectangle({x:barX,y:barY,width:barW,height:12,color:C.line});page.drawRectangle({x:barX,y:barY,width:barW*score/100,height:12,color:C.teal});page.drawCircle({x:barX+barW*score/100,y:barY+6,size:7,color:C.white,borderColor:C.ink,borderWidth:1});y-=105;
+ }
+ card(page,M,y,W-2*M,"Closest comparables",[],fonts,{height:28+data.comparables!.length*43,accent:C.gold});
+ drawWrapped(page,"Source-reported similarity is not a measure of audience overlap, playlist reach or predicted commercial performance. Compare only within each source's stated methodology.",M+14,y-24,W-2*M-28,fonts.italic,6.5,C.muted,8);
+ const top=y-48;data.comparables!.forEach((c,i)=>{const yy=top-i*43;page.drawText(c.title,{x:M+14,y:yy,size:8,font:fonts.bold,color:C.ink});page.drawText(String(c.year)+" · "+c.lane,{x:M+170,y:yy,size:7,font:fonts.regular,color:C.muted});page.drawText(c.similarity+"%",{x:W-M-45,y:yy,size:8,font:fonts.bold,color:C.teal});drawWrapped(page,c.basis+" · "+c.source,M+14,yy-12,W-2*M-28,fonts.regular,6.5,C.muted,8);page.drawLine({start:{x:M+12,y:yy-20},end:{x:W-M-12,y:yy-20},color:C.line,thickness:.5});});
+}
+function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
+ const moments=data.moments!,top=H-104,left=M+22,right=W-M-22,mid=top-45;
+ page.drawRectangle({x:M,y:mid-30,width:W-2*M,height:90,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawLine({start:{x:left,y:mid},end:{x:right,y:mid},color:C.gold,thickness:1.4});
+ const max=Math.max(...moments.map(m=>m.timestampSeconds),1);
+ page.drawText("TRACK POSITION · SECONDS",{x:left,y:top-14,size:6.5,font:fonts.bold,color:C.muted});
+ page.drawText("0s",{x:left,y:mid-42,size:6,font:fonts.regular,color:C.muted});
+ page.drawText(max.toFixed(1)+"s",{x:right-24,y:mid-42,size:6,font:fonts.regular,color:C.muted});
+ moments.forEach((m,i)=>{const x=left+(m.timestampSeconds/max)*(right-left);const color=m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal;page.drawLine({start:{x,y:mid-23},end:{x,y:mid+24},color,thickness:1.6});page.drawCircle({x,y:mid+26,size:8,color});page.drawText(String(i+1),{x:x-2.5,y:mid+23,size:6,font:fonts.bold,color:C.white});page.drawText(m.timestampSeconds.toFixed(1)+"s",{x:x-14,y:mid-34-(i%2)*9,size:6,font:fonts.bold,color});});
+ page.drawCircle({x:M+17,y:mid-9,size:2.5,color:C.teal});page.drawText("Strength",{x:M+24,y:mid-12,size:6.5,font:fonts.bold,color:C.teal});
+ page.drawCircle({x:M+98,y:mid-9,size:2.5,color:C.amber});page.drawText("Check",{x:M+105,y:mid-12,size:6.5,font:fonts.bold,color:C.amber});
+ page.drawCircle({x:M+164,y:mid-9,size:2.5,color:C.coral});page.drawText("Risk",{x:M+171,y:mid-12,size:6.5,font:fonts.bold,color:C.coral});
+ let y=mid-48;
+ moments.forEach((m,i)=>{const h=card(page,M,y,W-2*M,m.timestampSeconds.toFixed(2)+"s · "+m.title,[m.note],fonts,{accent:m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal});y-=h+8;});
+ card(page,M,y,W-2*M,"How moments are chosen",["Moments are rendered from supplied timestamped detector output or device flags. This report does not create or infer additional flags."],fonts,{accent:C.gold});
+}
+
+type FullFlowUnit = { kind: "heading"; title: string; accent: string } | { kind: "paragraph"; lines: string[]; accent: string };
+
+async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, pdf: PDFDocument, fonts: Fonts): Promise<Uint8Array> {
+ const sectionPlans = planAuditReportPages(input, "full");
+ const units: FullFlowUnit[] = [];
+ for (const section of sectionPlans) {
+  units.push({ kind: "heading", title: section.title, accent: "gold" });
+  for (const paragraph of section.text) {
+   const lines = wrap(paragraph, fonts.regular, 8.1, W - 2 * M - 30);
+   // Smaller blocks prevent dense sections from overflowing a V2 body page.
+   for (let offset = 0; offset < lines.length; offset += 20) {
+    units.push({ kind: "paragraph", lines: lines.slice(offset, offset + 20), accent: "gold" });
+   }
+  }
+ }
+ const provisionalEvidence = data.notYetMeasured.filter(value =>
+  /provisional harmonic candidate|multiple tonal windows; provisional/i.test(value));
+ if (provisionalEvidence.length) {
+  units.push({ kind: "heading", title: "Provisional harmonic and tuning evidence", accent: "gold" });
+  for (const detail of provisionalEvidence) {
+   units.push({ kind: "paragraph", lines: wrap(detail, fonts.regular, 8.1, W - 2 * M - 30), accent: "gold" });
+  }
+ }
+ const weights = units.map(unit => unit.kind === "heading" ? 28 : unit.lines.length * 10 + 18);
+ const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+ const allocate = (bodyPageCount: number): FullFlowUnit[][] => {
+  const buckets: FullFlowUnit[][] = Array.from({ length: bodyPageCount }, () => []);
+  const target = totalWeight / bodyPageCount;
+  let pageIndex = 0, accumulated = 0;
+  for (let index = 0; index < units.length; index++) {
+   if (pageIndex < bodyPageCount - 1 && buckets[pageIndex].length > 0
+       && accumulated >= target * (pageIndex + 1)) pageIndex++;
+   buckets[pageIndex].push(units[index]);
+   accumulated += weights[index];
+  }
+  return buckets;
+ };
+ const fits = (buckets: FullFlowUnit[][]): boolean => buckets.every(bucket => {
+  let y = H - 94;
+  for (const unit of bucket) {
+   const height = unit.kind === "heading"
+    ? wrap(unit.title, fonts.bold, 11, W - 2 * M - 24).length * 14 + 20
+    : unit.lines.length * 10.2 + 23;
+   if (y - height < 64) return false;
+   y -= height + 6;
+  }
+  return bucket.length > 0;
+ });
+ let bodyPageCount = 10;
+ let buckets = allocate(bodyPageCount);
+ if (!fits(buckets)) {
+  bodyPageCount = 11;
+  buckets = allocate(bodyPageCount);
+ }
+ if (!fits(buckets)) throw new Error("Full report content cannot fit within the approved 13-page V2 allocation without clipping or omission.");
+ const targetPageCount = bodyPageCount + 2;
+
+ const cover = pageBase(pdf, "Full A&R report", fonts);
+ const evidence = rec(input.evidence), assessment = rec(input.assessment);
+ drawWrapped(cover, "FULL A&R REPORT", M, H - 112, W - 2 * M, fonts.bold, 8, C.gold, 11);
+ drawWrapped(cover, str(evidence.artist, "Artist not supplied"), M, H - 155, W - 2 * M, fonts.bold, 22, C.ink, 27);
+ drawWrapped(cover, str(evidence.title, "Track not supplied"), M, H - 187, W - 2 * M, fonts.regular, 14, C.muted, 18);
+ drawWrapped(cover, "Audit " + input.auditId + " · Generated " + dateText(input.generatedAt) + " · Release " + dateText(evidence.releaseDate), M, H - 211, W - 2 * M, fonts.regular, 7, C.muted, 9);
+ const reconciliation = rec(evidence.reconciliation);
+ const identityStatus = arr(reconciliation.conflicts).length ? "Conflict" : arr(reconciliation.reconciledFields).length ? "Recognized" : "Insufficient";
+ scoreChip(cover, M, H - 285, "Audio evidence", data.tempo.value !== null || data.key.value !== null ? "Partial" : "Insufficient", C.amber, fonts);
+ scoreChip(cover, M + 166, H - 285, "Identity", identityStatus, identityStatus === "Recognized" ? C.teal : C.amber, fonts);
+ scoreChip(cover, M + 332, H - 285, "Market evidence", data.hasVerifiedCommercialEvidence ? "Source-attributed" : "Insufficient", data.hasVerifiedCommercialEvidence ? C.teal : C.muted, fonts);
+ const metricWidth = (W - 2 * M - 16) / 3;
+ metricBlock(data).forEach((block, index) => drawMetricCard(cover, M + index * (metricWidth + 8), H - 325, metricWidth, block, fonts));
+ const summary = str(assessment.executiveSummary, "");
+ if (summary) card(cover, M, H - 450, W - 2 * M, "Executive assessment", [summary], fonts, { accent: C.gold });
+ const recommendation = str(rec(assessment.releaseStrategy).recommendation, "");
+ const evidenceGap = arr(assessment.evidenceGaps).map(value => str(value, "")).find(Boolean) ?? "";
+ const nextAction = recommendation || evidenceGap;
+ if (nextAction) card(cover, M, H - 585, W - 2 * M, "Next action", [nextAction], fonts, { accent: C.gold });
+ drawFooter(cover, "Reson8 A&R Audit", input.auditId, 1, targetPageCount, fonts);
+
+ for (let index = 0; index < buckets.length; index++) {
+  const page = pageBase(pdf, "A&R findings · " + (index + 1), fonts);
+  let y = H - 94;
+  for (const unit of buckets[index]) {
+   if (unit.kind === "heading") {
+    const lines = wrap(unit.title, fonts.bold, 11, W - 2 * M - 24);
+    const h = lines.length * 14 + 13;
+    if (y - h < 64) throw new Error("Full report section heading exceeds its allocated v2 page: " + unit.title);
+    page.drawRectangle({ x: M, y: y - h + 2, width: W - 2 * M, height: h, color: C.white, borderColor: C.line, borderWidth: .6 });
+    page.drawRectangle({ x: M, y: y - 1, width: 3, height: h - 2, color: C.gold });
+    lines.forEach((line, lineIndex) => page.drawText(line, { x: M + 13, y: y - 13 - lineIndex * 14, size: 11, font: fonts.bold, color: C.ink }));
+    y -= h + 7;
+   } else {
+    const h = unit.lines.length * 10.2 + 17;
+    if (y - h < 64) throw new Error("Full report content exceeds its existing page allocation.");
+    page.drawRectangle({ x: M, y: y - h + 1, width: W - 2 * M, height: h, color: C.white, borderColor: C.line, borderWidth: .5 });
+    unit.lines.forEach((line, lineIndex) => page.drawText(line, { x: M + 12, y: y - 12 - lineIndex * 10.2, size: 8.1, font: fonts.regular, color: C.ink }));
+    y -= h + 6;
+   }
+  }
+  drawFooter(page, "Reson8 A&R Audit", input.auditId, index + 2, targetPageCount, fonts);
+ }
+ const notesPage = pageBase(pdf, "A&R notes and decision context", fonts);
+ const context = buildArNotesDecisionContext(input);
+ let notesY = H - 105;
+ const contextHeight = 52 + wrap(context.summary, fonts.regular, 8, W - 2 * M - 28).length * 10;
+ card(notesPage, M, notesY, W - 2 * M, context.heading, [context.verdict, context.summary], fonts, { accent: C.gold, height: contextHeight });
+ notesY -= contextHeight + 12;
+ if (context.prompts.length) {
+  const promptHeight = context.prompts.reduce((sum, prompt) => sum + wrap(prompt, fonts.regular, 7.4, W - 2 * M - 28).length * 9 + 4, 0) + 18;
+  card(notesPage, M, notesY, W - 2 * M, "Review prompts", context.prompts, fonts, { accent: C.gold, height: promptHeight });
+ }
+ notesPage.drawText("PRIVATE WORKING NOTES", { x: M, y: 195, size: 7, font: fonts.bold, color: C.gold });
+ const form = pdf.getForm(), notes = form.createTextField("ar_notes");
+ notes.enableMultiline();
+ notes.addToPage(notesPage, { x: M, y: 66, width: W - 2 * M, height: 112, borderWidth: .7, borderColor: C.gold, backgroundColor: C.white });
+ notes.setFontSize(8); notes.updateAppearances(fonts.regular);
+ drawFooter(notesPage, "Reson8 A&R Audit", input.auditId, targetPageCount, targetPageCount, fonts);
+ if (pdf.getPageCount() !== targetPageCount) throw new Error("Full report v2 page count differs from the existing full report.");
+ return pdf.save();
+}
+
+export async function generateAuditReportV2(source:AuditReportInput,tier:AuditReportTier="sample"):Promise<Uint8Array>{
+ const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
+ const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
+ if(tier==="full") return renderFullReportV2(input,data,pdf,fonts);
+ const pages=buildPages(input,data),total=pages.length;
+ for(let index=0;index<pages.length;index++){
+  const spec=pages[index],page=pageBase(pdf,spec.title,fonts);
+  let chartCursor=H-380;
+  if(spec.kind==="identity"){
+   chartCursor=drawIdentityReconciliation(page,input,fonts);
+  }else if(spec.kind==="snapshot"){
+   drawSnapshot(page,data,fonts,input);
+  }else if(spec.kind==="axes"){
+   drawSonicAxes(page,data,fonts);
+  }else if(spec.kind==="comparables"){
+   drawComparables(page,input,data,fonts);
+  }else if(spec.kind==="moments"){
+   drawMoments(page,data,fonts);
+  }else if(spec.kind==="cover"){
+   const e=rec(input.evidence),a=rec(input.assessment);
+   page.drawText("TRACK AUDIT",{x:M,y:H-112,size:8,font:fonts.bold,color:C.gold});
+   drawWrapped(page,str(e.artist,"Artist not supplied"),M,H-155,W-2*M,fonts.bold,22,C.ink,27);
+   drawWrapped(page,str(e.title,"Track not supplied"),M,H-186,W-2*M,fonts.regular,14,C.muted,18);
+   page.drawText("AUDIT "+input.auditId+"  ·  "+dateText(input.generatedAt)+"  ·  "+dateText(e.releaseDate),{x:M,y:H-210,size:7,font:fonts.regular,color:C.muted});
+   const chipY=H-260;
+   scoreChip(page,M,chipY,"Audio quality","N/D — no scored quality metric",C.teal,fonts);
+   const reconciliation=rec(e.reconciliation);
+   const identityStatus=arr(reconciliation.conflicts).length?"Conflict":arr(reconciliation.reconciledFields).length?"Cross-checked":"Unavailable";
+   scoreChip(page,M+166,chipY,"Identity confidence",identityStatus,C.amber,fonts);
+   scoreChip(page,M+332,chipY,"Market evidence",data.hasVerifiedCommercialEvidence?"Source-attributed":"Insufficient",C.coral,fonts);
+   if(data.headlineScore!==null){
+    const ringX=M+65,ringY=H-355;
+    page.drawCircle({x:ringX,y:ringY,size:43,color:C.paper,borderColor:C.line,borderWidth:9});
+    page.drawCircle({x:ringX,y:ringY,size:43,color:C.white,borderColor:C.teal,borderWidth:7});
+    page.drawText(String(data.headlineScore),{x:ringX-18,y:ringY-7,size:19,font:fonts.bold,color:C.ink});
+    page.drawText("SCORE",{x:ringX-13,y:ringY-21,size:6,font:fonts.bold,color:C.teal});
+    page.drawText("SCORE DRIVERS",{x:M+145,y:H-315,size:7,font:fonts.bold,color:C.muted});
+    const drivers=data.scoreDrivers??[];
+    drivers.forEach((d,i)=>{const yy=H-340-i*23;page.drawText(d.label,{x:M+145,y:yy,size:7,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+245,y:yy-2,width:205,height:7,color:C.line});page.drawRectangle({x:M+245,y:yy-2,width:205*d.score/100,height:7,color:d.score<60?C.amber:C.teal});page.drawText(String(d.score),{x:M+460,y:yy-2,size:7,font:fonts.bold,color:C.ink});});
+    const weights=drivers.length&&drivers.every(d=>d.weight!==null)?drivers.map(d=>d.label+" "+Math.round((d.weight??0)*100)+"%").join(", "):"Weighting not supplied.";
+    page.drawText("Weighting: "+weights,{x:M+145,y:H-340-drivers.length*23-6,size:6.5,font:fonts.italic,color:C.muted});
+   }
+   const metricTop=H-(data.headlineScore!==null?420:320),width=(W-2*M-16)/3;
+   spec.blocks.forEach((block,i)=>drawMetricCard(page,M+i*(width+8),metricTop,width,block,fonts));
+   const summary=spec.lines?.[2]??"Executive summary not supplied.";
+   const summaryTop=metricTop-115;
+   card(page,M,summaryTop,W-2*M,"Executive summary",[summary.replace(/^Executive summary:\s*/,"")],fonts,{accent:C.gold});
+   const next=spec.lines?.[3]??"Recommended next step not supplied.";
+   card(page,M,summaryTop-115,W-2*M,"Recommended next step",[next.replace(/^Recommended next step:\s*/,"")],fonts,{accent:C.gold});
+   page.drawText("IN THIS REPORT",{x:M,y:190,size:7,font:fonts.bold,color:C.gold});
+   const toc=pages.slice(1);
+   toc.forEach((p,i)=>{const col=i<5?0:1,row=i<5?i:i-5,x=M+col*250,y=174-row*14;page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});drawWrapped(page,p.title,x+28,y,205,fonts.regular,7,C.ink,8);});
+  }else if(spec.kind==="axes"||spec.kind==="comparables"||spec.kind==="moments"){
+   let y=H-92;for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:spec.kind==="moments"?(b.label.includes("Risk")?C.coral:C.teal):C.gold,provenance:b.provenance+" · "+b.confidence});y-=h+8;}
+  }else{
+   let y=H-92;
+   if(spec.blocks.length){for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:b.confidence==="Low"?C.coral:C.teal,provenance:b.provenance+" · Confidence: "+b.confidence});y-=h+8;}}
+   if(spec.lines?.length){
+    const body=spec.lines.filter(Boolean),h=card(page,M,y,W-2*M,spec.title,body,fonts,{accent:C.gold});
+    if(h>y-95)throw new Error("Report v2 page content exceeds available A4 space: "+spec.title);
+    chartCursor=y-h-14;
+   }
+  }
+  const legacyChartSection: Record<string,string> = {
+   "Identity and source reconciliation":"Identity and source reconciliation",
+   "Evidence ledger and scorecard":"Evidence ledger and provenance",
+   "A&R positioning":"Creative identity and A&R positioning",
+   "Strengths, risks and actions":"Strengths and creative leverage",
+   "Release and promotion plan":"Promotion plan"
+  };
+  const chartSection=legacyChartSection[spec.title];
+  if(chartSection){
+   // Anchor evidence panels to the actual end of the page's content card.
+   // The fit guard below still fails closed when the complete chart cannot fit.
+   for(const panel of chartsForSection(input,chartSection)){
+    const panelHeight=chartPanelHeight(panel.kind,panel.rows,W-2*M),panelTop=chartCursor;
+    if(panelTop-panelHeight<76)throw new Error("Evidence charts cannot fit safely on "+spec.title);
+    drawChartPanel(page,{...panel,fixture:rec(input.evidence).fixture===true,y:panelTop,width:W-2*M},fonts.regular,fonts.bold);
+    chartCursor=panelTop-panelHeight-12;
+   }
+  }
+  drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
+ }
+ const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
+ const last=pdf.getPages()[pages.length-2]??pdf.getPages()[0];
+ notes.addToPage(last,{x:M,y:78,width:W-2*M,height:38,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
+ notes.setFontSize(8);notes.updateAppearances(fonts.regular);
+ return pdf.save();
+}

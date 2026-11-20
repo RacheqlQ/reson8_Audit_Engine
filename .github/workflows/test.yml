@@ -66,8 +66,11 @@ jobs:
           sudo apt-get install -y poppler-utils
       - name: Generate and inspect sample report PDFs
         run: npm run sample-report
+      - name: Generate v2 report fixture PDFs
+        if: matrix.pass == 1
+        run: npm run sample-report:v2
       - name: Upload report PDFs
-        if: always()
+        if: always() && matrix.pass == 1
         uses: actions/upload-artifact@v4
         with:
           name: audit-report-pdfs-pass-${{ matrix.pass }}
