@@ -4,6 +4,7 @@ import { bootstrapCategoricalConsensus, type BootstrapConsensusDiagnostics } fro
 
 export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.5;
 import { analyzeVocalSignalDiagnostics } from "./vocal-signal-diagnostics.js";
+import { extractAcousticFeatureProfile, type AcousticFeatureProfile } from "./acoustic-features.js";
 import type { GenreFusionResult } from "../genre/fusion.js";
 export interface TempoEstimate {
  bpm:number|null;
@@ -23,6 +24,7 @@ export interface TempoEstimate {
  independentEstimator?:IndependentTempoEstimate;
 }
 export interface SonicDnaFeatures {
+ acousticFeatureProfile:AcousticFeatureProfile;
  sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; tempoCandidateBpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
  key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; keyTuningCents:number|null; keySegmentAgreement:number|null; keyCandidates:Array<{key:string;mode:"major"|"minor";score:number}>; tuningEvidenceWindows:number; keyAnalysisFftButterflyCount:number; limitations:string[];
  loudnessLufs:number|null; loudnessRangeLu?:number|null; truePeakDbfs?:number|null; rmsLevelDbfs:number; rmsEnergy:number; dynamicRangeDb:number; spectralCentroidHz:number; spectralBandwidthHz:number;
@@ -250,6 +252,7 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
 }
 
 export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):SonicDnaFeatures {
+ const acousticFeatureProfile=extractAcousticFeatureProfile(samples,sampleRate,channels);
  const prepared=prepareAnalysisPcm(samples,sampleRate,channels),a=prepared.samples,rate=prepared.sampleRate,energy=rms(a);
  const vocalDiagnostics=analyzeVocalSignalDiagnostics(a,rate);
  let crossings=0;
@@ -303,6 +306,6 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
   dynamicRangeDb:20*Math.log10(p95/p10),spectralCentroidHz:centroid,spectralBandwidthHz:bandwidth,
   spectralRolloffHz:rolloff,zeroCrossingRate:crossings/Math.max(1,a.length-1),
-  moodTags,genreContext:[]
+  acousticFeatureProfile,moodTags,genreContext:[]
  };
 }
