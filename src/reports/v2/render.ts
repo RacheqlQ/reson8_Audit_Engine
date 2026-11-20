@@ -18,20 +18,20 @@ type PageSpec={title:string;blocks:Block[];lines?:string[];kind?:string};
 const rec=(v:unknown):Record<string,unknown>=>v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:{};
 export function normalizePdfText(value:string):string {
  return value
-  .replace(/[\\u2018\\u2019]/g,"'")
-  .replace(/[\\u201c\\u201d]/g,'"')
-  .replace(/[\\u2013\\u2014]/g,"-")
-  .replace(/\\u2026/g,"...")
-  .replace(/\\u2022/g,"-")
-  .replace(/\\u00a0/g," ")
-  .replace(/\\u20a6/g,"NGN ")
-  .replace(/[^\\u0000-\\u00ff]/g,"?");
+  .replace(/[\u2018\u2019]/g,"'")
+  .replace(/[\u201c\u201d]/g,'"')
+  .replace(/[\u2013\u2014]/g,"-")
+  .replace(/\u2026/g,"...")
+  .replace(/\u2022/g,"-")
+  .replace(/\u00a0/g," ")
+  .replace(/\u20a6/g,"NGN ")
+  .replace(/[^\u0000-\u00ff]/g,"?");
 }
 const str=(v:unknown,fallback="Not supplied")=>typeof v==="string"&&v.trim()?normalizePdfText(v.trim()):typeof v==="number"&&Number.isFinite(v)?String(v):fallback;
 const arr=(v:unknown):unknown[]=>Array.isArray(v)?v:[];
 const dateText=(v:unknown)=>{const s=str(v,"");return s?s.slice(0,10):"Date not supplied";};
 function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
- const words=normalizePdfText(value).replace(/\\s+/g," ").split(" ").filter(Boolean),out:string[]=[];let line="";
+ const words=normalizePdfText(value).replace(/\s+/g," ").split(" ").filter(Boolean),out:string[]=[];let line="";
  for(const word of words){
   let token=word;
   if(font.widthOfTextAtSize(token,size)>width){
