@@ -133,7 +133,7 @@ try{
  const unsafeBytes=await ensurePdfReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
  await writeFile(evidenceCheckPath,unsafeBytes);
  const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
- if(/(?:128\s*BPM(?!\s*(?:candidate\b|\(provisional\b))|high-energy|Afrobeats|24000 streams|(?:strong|proven|verified)\s+market demand|commercial potential|24000 monthly listeners|commercially successful)/i.test(unsafeText)){
+ if(/(?:128\s*BPM(?!\s*(?:candidate\b|\(provisional\b|\(score\b))|high-energy|Afrobeats|24000 streams|(?:strong|proven|verified)\s+market demand|commercial potential|24000 monthly listeners|commercially successful)/i.test(unsafeText)){
   throw new Error("Generated PDF reintroduced an unsupported tempo, genre or commercial claim");
  }
  if(!/128\s+BPM \(provisional tempo candidate;\s*plausible half\/double-time alternatives: 64 BPM/i.test(unsafeText)) throw new Error("Generated PDF lost or mislabelled provisional tempo relationships");

@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
+import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, buildTempoDiagnosticLines, buildKeyDiagnosticLines, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
