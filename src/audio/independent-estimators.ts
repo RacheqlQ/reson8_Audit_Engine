@@ -170,8 +170,15 @@ export function estimateGoertzelKey(samples: Float32Array, sampleRate: number): 
     const frequency = 440 * Math.pow(2, (midi - 69) / 12);
     if (frequency >= sampleRate / 2) continue;
     const power = goertzelPower(samples, sampleRate, frequency);
-    if (power > 1e-10) {
-      profile[midi % 12] += Math.sqrt(power);
+    // Require a narrow local spectral peak, not merely energy at a queried
+    // frequency. Broadband noise and window leakage otherwise populate many
+    // pitch classes and can accidentally correlate with a key template.
+    const lowerSide = goertzelPower(samples, sampleRate, frequency * Math.pow(2, -50 / 1200));
+    const upperSide = goertzelPower(samples, sampleRate, frequency * Math.pow(2, 50 / 1200));
+    const targetAmplitude = Math.sqrt(power);
+    const sideFloor = (Math.sqrt(lowerSide) + Math.sqrt(upperSide)) / 2;
+    if (power > 1e-10 && targetAmplitude > sideFloor * 1.8) {
+      profile[midi % 12] += Math.max(0, targetAmplitude - sideFloor);
       analyzedPitchCount++;
     }
   }
