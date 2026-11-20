@@ -186,7 +186,12 @@ function drawSpotifyMark(page:PDFPage,x:number,y:number,size:number):void {
 }
 
 function normalizeRmsEnvelopeWording(value:string):string {
- return value.replace(/RMS-envelope spread \\(internal proxy; not mastering RMS-envelope spread \\(internal proxy; not mastering dynamic range\\)\\)/gi,"RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)");
+ return value
+  .replaceAll("RMS-envelope spread (internal proxy; not mastering RMS-envelope spread (internal proxy; not mastering dynamic range))","RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)")
+  .replaceAll("RMS-envelope spread (internal proxy; not mastering dynamic range)","RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)");
+}
+export function reportableAssessmentItems(items:string[]):string[] {
+ return items.map(professionalEvidenceLanguage).map((item)=>item.trim()).filter(Boolean);
 }
 function professionalEvidenceLanguage(value:string):string {
  value=normalizeRmsEnvelopeWording(value);
