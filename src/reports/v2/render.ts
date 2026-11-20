@@ -214,17 +214,38 @@ export async function generateAuditReportV2(input:AuditReportInput):Promise<Uint
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,spec.title,fonts);
   if(spec.kind==="snapshot"){\n   drawSnapshot(page,data,fonts);\n  }else if(spec.kind==="axes"){\n   drawSonicAxes(page,data,fonts);\n  }else if(spec.kind==="comparables"){\n   drawComparables(page,input,data,fonts);\n  }else if(spec.kind==="moments"){\n   drawMoments(page,data,fonts);\n  }else if(spec.kind==="cover"){
+   const e=rec(input.evidence),a=rec(input.assessment);
    page.drawText("TRACK AUDIT",{x:M,y:H-112,size:8,font:fonts.bold,color:C.gold});
-   drawWrapped(page,str(rec(input.evidence).artist,"Artist not supplied"),M,H-155,W-2*M,fonts.bold,22,C.ink,27);
-   drawWrapped(page,str(rec(input.evidence).title,"Track not supplied"),M,H-186,W-2*M,fonts.regular,14,C.muted,18);
-   const chipY=H-275;
-   scoreChip(page,M,chipY,"Audio quality",data.tempo.value===null?"N/D":data.tempo.confidence??"Low",C.teal,fonts);
-   scoreChip(page,M+166,chipY,"Identity confidence",str(rec(input.evidence).identityConfidence,"N/D"),C.amber,fonts);
-   scoreChip(page,M+332,chipY,"Market evidence",data.hasVerifiedCommercialEvidence?"Source returned":"Insufficient",C.coral,fonts);
-   if(data.headlineScore!==null)card(page,M,H-300,W-2*M,"Headline score",["Score: "+data.headlineScore+"/100",...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight))],fonts,{accent:C.gold});
-   let y=H-365;
-   for(const block of spec.blocks){const h=card(page,M,y,W-2*M,block.label,[block.value],fonts,{accent:block.confidence==="Low"?C.coral:C.teal,provenance:block.provenance+" · Confidence: "+block.confidence});y-=h+8;}
-   card(page,M,y,W-2*M,"Executive summary",spec.lines??[],fonts,{accent:C.gold});
+   drawWrapped(page,str(e.artist,"Artist not supplied"),M,H-155,W-2*M,fonts.bold,22,C.ink,27);
+   drawWrapped(page,str(e.title,"Track not supplied"),M,H-186,W-2*M,fonts.regular,14,C.muted,18);
+   page.drawText("AUDIT "+input.auditId+"  ·  "+dateText(input.generatedAt)+"  ·  "+dateText(e.releaseDate),{x:M,y:H-210,size:7,font:fonts.regular,color:C.muted});
+   const chipY=H-260;
+   scoreChip(page,M,chipY,"Audio quality","N/D — no scored quality metric",C.teal,fonts);
+   const reconciliation=rec(e.reconciliation);
+   const identityStatus=arr(reconciliation.conflicts).length?"Conflict":arr(reconciliation.reconciledFields).length?"Cross-checked":"Unavailable";
+   scoreChip(page,M+166,chipY,"Identity confidence",identityStatus,C.amber,fonts);
+   scoreChip(page,M+332,chipY,"Market evidence",data.hasVerifiedCommercialEvidence?"Source-attributed":"Insufficient",C.coral,fonts);
+   if(data.headlineScore!==null){
+    const ringX=M+65,ringY=H-355;
+    page.drawCircle({x:ringX,y:ringY,size:43,color:C.paper,borderColor:C.line,borderWidth:9});
+    page.drawCircle({x:ringX,y:ringY,size:43,color:C.white,borderColor:C.teal,borderWidth:7});
+    page.drawText(String(data.headlineScore),{x:ringX-18,y:ringY-7,size:19,font:fonts.bold,color:C.ink});
+    page.drawText("SCORE",{x:ringX-13,y:ringY-21,size:6,font:fonts.bold,color:C.teal});
+    page.drawText("SCORE DRIVERS",{x:M+145,y:H-315,size:7,font:fonts.bold,color:C.muted});
+    const drivers=data.scoreDrivers??[];
+    drivers.forEach((d,i)=>{const yy=H-340-i*23;page.drawText(d.label,{x:M+145,y:yy,size:7,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+245,y:yy-2,width:205,height:7,color:C.line});page.drawRectangle({x:M+245,y:yy-2,width:205*d.score/100,height:7,color:d.score<60?C.amber:C.teal});page.drawText(String(d.score),{x:M+460,y:yy-2,size:7,font:fonts.bold,color:C.ink});});
+    const weights=drivers.length&&drivers.every(d=>d.weight!==null)?drivers.map(d=>d.label+" "+Math.round((d.weight??0)*100)+"%").join(", "):"Weighting not supplied.";
+    page.drawText("Weighting: "+weights,{x:M+145,y:H-340-drivers.length*23-6,size:6.5,font:fonts.italic,color:C.muted});
+   }
+   const metricTop=H-420,width=(W-2*M-16)/3;
+   spec.blocks.forEach((b,i)=>drawMetricCard(page,M+i*(width+8),metricTop,width,b,fonts));
+   const summary=spec.lines?.[2]??"Executive summary not supplied.";
+   card(page,M,H-535,W-2*M,"Executive summary",[summary.replace(/^Executive summary:\s*/,"")],fonts,{accent:C.gold});
+   const next=spec.lines?.[3]??"Recommended next step not supplied.";
+   card(page,M,H-635,W-2*M,"Recommended next step",[next.replace(/^Recommended next step:\s*/,"")],fonts,{accent:C.gold});
+   page.drawText("IN THIS REPORT",{x:M,y:154,size:7,font:fonts.bold,color:C.gold});
+   const toc=pages.slice(1);
+   toc.forEach((p,i)=>{const col=i<5?0:1,row=i<5?i:i-5,x=M+col*250,y=132-row*15;page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});drawWrapped(page,p.title,x+28,y,205,fonts.regular,7,C.ink,8);});
   }else if(spec.kind==="axes"||spec.kind==="comparables"||spec.kind==="moments"){
    let y=H-92;for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:spec.kind==="moments"?(b.label.includes("Risk")?C.coral:C.teal):C.gold,provenance:b.provenance+" · "+b.confidence});y-=h+8;}
   }else{
