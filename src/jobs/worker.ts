@@ -5,7 +5,7 @@ import { getAssessmentProviderReadiness, providerDecision } from "../providers/p
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
 import { discoverPlaylistCandidates } from "../providers/dsp/playlist-discovery.js";
 import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
-import { generateAuditReport } from "../reports/generate-audit-report.js";
+import { ensurePdfReport } from "../reports/pdf-output.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
 import { runAssessmentProviderChain } from "./assessment-provider-chain.js";
@@ -139,7 +139,7 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       });
     },
     saveAssessment: async (jobId, _claimToken, assessment, signal) => store.saveAssessment(jobId, _claimToken, assessment, signal),
-    generateReport: generateAuditReport,
+    generateReport: ensurePdfReport,
     saveReport: async (jobId, _claimToken, tier, pdf, reportInput, signal) => store.saveReport(jobId, _claimToken, tier, pdf, reportInput, signal),
     markCompleted: async (jobId, _claimToken, signal) => store.markCompleted(jobId, _claimToken, signal),
     markFailed: async (jobId, _claimToken, message, signal, errorCode) => store.markFailed(jobId, _claimToken, message, signal, errorCode),
