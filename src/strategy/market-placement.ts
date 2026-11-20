@@ -13,7 +13,7 @@ export interface PlaylistTarget {
   name: string;
   url: string;
   retrievedAt: string | null;
-  matchStatus: "isrc_present" | "similarity_candidate";
+  matchStatus: "isrc_present" | "isrc_not_found" | "membership_unverified";
   priorityScore: number;
   matchBasis: string[];
   limitations: string[];
@@ -96,7 +96,7 @@ function playlistTargets(value: unknown): PlaylistTarget[] {
       name,
       url,
       retrievedAt: clean(item.retrievedAt) || null,
-      matchStatus: containsIsrc ? "isrc_present" as const : "similarity_candidate" as const,
+      matchStatus: containsIsrc ? "isrc_present" as const : item.containsIsrc === false ? "isrc_not_found" as const : "membership_unverified" as const,
       priorityScore,
       matchBasis,
       limitations: [
@@ -109,7 +109,7 @@ function playlistTargets(value: unknown): PlaylistTarget[] {
   return targets.slice(0, 8).map((item, index) => ({ ...item, rank: index + 1 }));
 }
 
-function territoryPriorities(evidence: Record<string, unknown>): TerritoryPriorities {
+function isIsoCountryCode(value: string): boolean {\n  if (!/^[A-Z]{2}$/.test(value)) return false;\n  const name = new Intl.DisplayNames(["en"], { type: "region" }).of(value);\n  return Boolean(name && name !== value && name !== "Unknown Region");\n}\n\nfunction territoryPriorities(evidence: Record<string, unknown>): TerritoryPriorities {
   const telemetry = record(evidence.audienceTelemetry);
   const provider = clean(telemetry.provider);
   const metric = clean(telemetry.metric);
@@ -120,11 +120,11 @@ function territoryPriorities(evidence: Record<string, unknown>): TerritoryPriori
     && provider.length > 0
     && metric.length > 0
     && reportingPeriod.length > 0
-    && Number.isFinite(Date.parse(retrievedAt))
+    && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/.test(retrievedAt)\n    && Number.isFinite(Date.parse(retrievedAt))
     && rawTerritories.length > 0
     && rawTerritories.every((raw) => {
       const item = record(raw);
-      return /^[A-Z]{2}$/.test(clean(item.countryCode))
+      return isIsoCountryCode(clean(item.countryCode))
         && finite(item.value) !== null
         && (finite(item.value) as number) >= 0;
     });
@@ -215,7 +215,7 @@ function positioning(sonicDna: Record<string, unknown> | null, evidence: Record<
   const rhythm = record(sonicDna?.rhythmFeatures);
   const energy = record(record(sonicDna?.acousticFeatureProfile).predictions);
   const energyPrediction = record(energy.energy);
-  const reliableTempo = bpm !== null && bpm >= 40 && bpm <= 240 && confidence !== null && confidence >= 0.5;
+  const masterProvenance = clean(sonicDna?.provenance) === "uploaded_audio_master";\n  const reliableTempo = masterProvenance && bpm !== null && bpm >= 40 && bpm <= 240 && confidence !== null && confidence >= 0.5;
   const beatGrid = clean(rhythm.beatGridStatus) === "tentative";
   const energyAvailable = energyPrediction.status === "provisional" && ["low", "moderate", "high"].includes(clean(energyPrediction.label));
   const dj: PositioningRecommendation = reliableTempo && beatGrid
@@ -225,7 +225,7 @@ function positioning(sonicDna: Record<string, unknown> | null, evidence: Record<
     ? { status: "review_required", reason: "Tempo, tentative beat-grid and provisional energy evidence justify a human club-play test, not a venue or audience claim.", basis: ["Measured tempo: " + bpm + " BPM", "Provisional audio energy: " + clean(energyPrediction.label), "Tentative beat-grid evidence is present"], limitations: ["Provisional energy is heuristic, not a calibrated perceptual score; these signals are not evidence of venue demand or dancefloor response."] }
     : { status: "blocked", reason: "Club positioning requires confidence-qualified tempo, tentative beat-grid evidence and a provisional audio-energy estimate.", basis: [], limitations: ["No club-fit conclusion is inferred from genre labels or catalogue popularity alone."] };
   const rights = clean(evidence.rightsStatus).toLowerCase();
-  const rightsCleared = ["cleared", "verified", "rights_cleared"].includes(rights);
+  const rightsCleared = ["cleared", "rights_cleared"].includes(rights);
   const approved = evidence.masterApproved === true;
   const sync: PositioningRecommendation = rightsCleared && approved
     ? { status: "review_required", reason: "Rights and master-approval fields are marked complete; a human sync brief, edit/version review and chain-of-title check are still required.", basis: ["Rights status: " + rights, "Master approval: verified"], limitations: ["This is not a sync match or clearance; no brief, usage, territory, term, media or fee has been verified."] }
