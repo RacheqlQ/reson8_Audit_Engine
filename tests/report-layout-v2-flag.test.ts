@@ -33,12 +33,13 @@ describe("REPORT_LAYOUT v2 opt-in and fallback", () => {
   it("logs a v2 rendering failure and falls back to the unchanged v1 renderer", async () => {
     vi.stubEnv("REPORT_LAYOUT", "v2");
     const input = structuredClone(fullAudioFixture) as any;
-    input.auditId = "\u0000".repeat(24);
     const expected = await generateAuditReport(input, "full");
+    const createPdf = vi.spyOn(PDFDocument, "create").mockRejectedValueOnce(new Error("forced v2 fixture failure"));
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const actual = await ensurePdfReport(input, "full");
     expect(log).toHaveBeenCalledWith("[report-layout-v2] Rendering failed; falling back to v1.", expect.any(Error));
     expect((await PDFDocument.load(actual)).getPageCount()).toBe((await PDFDocument.load(expected)).getPageCount());
+    createPdf.mockRestore();
     log.mockRestore();
   });
 });
