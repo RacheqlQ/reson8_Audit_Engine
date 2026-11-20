@@ -3,7 +3,7 @@ import { describe,expect,it,vi } from "vitest";
 import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,sonicDashboardRowsForReport,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
-import { buildStrengthRiskChartRows,chartPanelDisplayStatus,chartPanelHeight,constellationLabelLineCount } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows,chartPanelDisplayStatus,chartPanelHeight,constellationLabelLineCount,chartsForSection } from "../src/reports/charts.js";
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
 const allFixtures=[...fixtures,ambiguousAudioFixture as unknown as AuditReportInput];
 const reportTiers=["sample","full"] as const;
@@ -31,6 +31,14 @@ describe("A4 report layout and fixture coverage",()=>{
  it("does not attach measured status to unavailable metadata-only charts",()=>{
   expect(chartPanelDisplayStatus({fixture:true,unavailable:true,evidenceClass:"measured"})).toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO");
   expect(chartPanelDisplayStatus({evidenceClass:"illustrative"})).toBe("ILLUSTRATIVE");
+ });
+ it("retains the DSP coverage panel when provider lookup outcomes are unavailable",()=>{
+  const input=structuredClone(metadataOnlyFixture) as any;
+  input.evidence.catalogSources=[];
+  const panels=chartsForSection(input,"Identity and source reconciliation");
+  expect(panels).toHaveLength(1);
+  expect(panels[0]).toMatchObject({title:"DSP platform coverage",unavailable:true,evidenceClass:"provider-recognized"});
+  expect(panels[0].shows).toContain("coverage is unavailable, not zero");
  });
  it("reserves enough wrapped rows for long lane constellation labels",()=>{
   expect(constellationLabelLineCount({label:"Adjacent lane",value:"Alternative R&B (fixture lane hypothesis)"},499)).toBeGreaterThan(1);

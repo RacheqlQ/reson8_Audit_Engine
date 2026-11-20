@@ -394,14 +394,19 @@ export function chartsForSection(i:AuditReportInput,title:string):ChartPanelInpu
  const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),counts=countEvidenceLayers(a.evidenceLabels);
 
  if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",evidenceClass:"assessment-derived",rows:[{label:"Measured",value:counts.OBSERVED},{label:"Source matches",value:counts.RECOGNIZED},{label:"Cross-checked",value:counts.RECONCILED},{label:"Hypotheses",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful."}];
- if(title==="Identity and source reconciliation"&&Array.isArray(e.catalogSources)&&e.catalogSources.length>0){
-  const sources=e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"));
+ if(title==="Identity and source reconciliation"){
+  const sources=Array.isArray(e.catalogSources)
+   ?e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"))
+   :[];
   const count=(status:string)=>sources.filter((item)=>item.status===status).length;
-  return [{title:"DSP platform coverage",kind:"bars",evidenceClass:"provider-recognized",rows:[
+  return [{title:"DSP platform coverage",kind:"bars",evidenceClass:"provider-recognized",unavailable:sources.length===0,rows:[
    {label:"Recognized",value:count("recognized")},
    {label:"Partial",value:count("partial")},
    {label:"Unavailable",value:count("unavailable")},
-  ],shows:"Provider lookup outcomes across the submitted track links.",cantShow:"Audience size, stream counts, playlist placement or listener demand."}];
+  ],shows:sources.length
+   ?"Provider lookup outcomes across the submitted track links."
+   :"No submitted DSP provider lookup outcomes were recorded; coverage is unavailable, not zero.",
+   cantShow:"Audience size, stream counts, playlist placement or listener demand."}];
  }
  if(title==="Sonic DNA and technical profile")return [
   {
