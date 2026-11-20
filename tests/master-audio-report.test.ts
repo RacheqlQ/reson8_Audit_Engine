@@ -66,6 +66,35 @@ describe("uploaded master provenance in reports", () => {
     expect(report).not.toMatch(/Vocal analysis: Not performed|vocal presence\/absence is unknown|temporarily disabled to keep the audit worker|learned audio model: disabled/i);
   });
 
+  it("renders multi-window acoustic feature summaries and extraction provenance", () => {
+    const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      acousticFeatureProfile: {
+        status: "measured",
+        provenance: { featureVersion: "acoustic-profile-v1", windowCount: 24 },
+        descriptors: {
+          rmsDbfs: { median: -18.25 },
+          peakDbfs: { median: -1.4 },
+          crestFactorDb: { median: 16.85 },
+          spectralFlatness: { median: 0.0123 },
+          lowBandEnergyRatio: { median: 0.42 },
+          midBandEnergyRatio: { median: 0.51 },
+          highBandEnergyRatio: { median: 0.07 },
+        },
+      },
+    };
+    const signal = rows(input).signal;
+    expect(signal.find((row) => row.label === "WINDOWED RMS MEDIAN DBFS")?.value).toBe("-18.25");
+    expect(signal.find((row) => row.label === "WINDOWED PEAK MEDIAN DBFS")?.value).toBe("-1.40");
+    expect(signal.find((row) => row.label === "WINDOWED CREST FACTOR DB")?.value).toBe("16.85");
+    expect(signal.find((row) => row.label === "SPECTRAL FLATNESS MEDIAN")?.value).toBe("0.0123");
+    expect(signal.find((row) => row.label === "LOW BAND ENERGY RATIO")?.value).toBe("0.4200");
+    expect(signal.find((row) => row.label === "ACOUSTIC ANALYSIS WINDOWS")?.value).toBe("24");
+    expect(signal.find((row) => row.label === "ACOUSTIC FEATURE VERSION")?.value).toBe("acoustic-profile-v1");
+  });
+
   it("states the combined master-plus-DSP source mode and actual provider lookup outcome", () => {
     const input = structuredClone(fullAudioFixture) as AuditReportInput;
     input.evidence = {
