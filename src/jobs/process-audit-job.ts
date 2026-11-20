@@ -19,6 +19,7 @@ import type { PlaylistDiscoveryInput, PlaylistDiscoveryResult } from "../provide
 import { normalizeIsrc } from "../providers/musicbrainz/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
+import { buildMarketPlacementPlan } from "../strategy/market-placement.js";
 import { sha256 } from "./content-hash.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 
@@ -922,7 +923,8 @@ export async function processAuditJob(
         throw error;
       }
     }
-    const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment, executionMode, ...(realMasterContract ? { realMasterContract } : {}) };
+    const marketPlacement = buildMarketPlacementPlan({ executionMode, evidence: reportEvidence, sonicDna: masterDna ? dnaEvidence(masterDna) : sonicDna, playlistDiscovery });
+    const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment, executionMode, marketPlacement, ...(realMasterContract ? { realMasterContract } : {}) };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
