@@ -102,6 +102,8 @@ describe("Sonic DNA",()=>{
   expect(result.key).toBeNull();
   expect(result.mode).toBeNull();
   expect(result.bpm).toBeNull();
+  expect(result.acousticFeatureProfile.status).toBe("insufficient_evidence");
+  expect(result.limitations.some((item)=>item.includes("NO_MEASURABLE_SIGNAL"))).toBe(true);
   expect(result.limitations.length).toBeGreaterThan(0);
  });
  it.each([
@@ -154,12 +156,23 @@ describe("Sonic DNA",()=>{
   expect(estimateTempo(dc,8000).bpm).toBeNull();
   expect(estimateTempo(tone,8000).bpm).toBeNull();
  });
- it("labels rule-based energy and spectral outputs as signal descriptors, not moods",()=>{
+ it("exposes provisional audio-derived mood and energy while keeping spectral measurements as signal descriptors",()=>{
   const sampleRate=8000;
   const bright=Float32Array.from({length:sampleRate*2},(_,i)=>0.3*Math.sin(2*Math.PI*3500*i/sampleRate));
   const result=analyzePcm(bright,sampleRate);
-  expect(result.moodTags).toEqual([]);
+  const {mood,energy}=result.acousticFeatureProfile.predictions;
+  expect(result.acousticFeatureProfile.status).toBe("measured");
+  expect(mood.status).toBe("provisional");
+  expect(mood.method).toBe("audio_feature_heuristics_v1");
+  expect(mood.probability).toBeNull();
+  expect(result.moodTags).toEqual(mood.labels);
+  expect(energy.status).toBe("provisional");
+  expect(energy.method).toBe("audio_feature_heuristics_v1");
+  expect(energy.probability).toBeNull();
+  expect(energy.score).toBeGreaterThanOrEqual(0);
+  expect(energy.score).toBeLessThanOrEqual(100);
   expect(result.spectralCentroidHz).toBeGreaterThan(3000);
+  expect(result.acousticFeatureProfile.descriptors.spectralCentroidHz.unit).toBe("Hz");
   expect(Number.isFinite(result.rmsLevelDbfs)).toBe(true);
  });
 

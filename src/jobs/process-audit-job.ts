@@ -452,6 +452,7 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
     rhythmFeatures: dna.rhythmFeatures,
     harmonicFeatures: dna.harmonicFeatures,
     vocalFeatures: dna.vocalFeatures,
+    acousticFeatureProfile: dna.acousticFeatureProfile,
     moodTags: dna.moodTags,
     genreContext: dna.genreContext,
     ...(dna.genreClassification ? { genreClassification: dna.genreClassification } : {}),
@@ -557,6 +558,7 @@ export async function processAuditJob(
       decodedMaster = decoded;
       masterDna = {
         ...dna,
+        acousticFeatureProfile: { ...dna.acousticFeatureProfile, provenance: { ...dna.acousticFeatureProfile.provenance, sourceSampleRateHz: decoded.sampleRate, analysisResampling: dna.acousticFeatureProfile.provenance.analysisSampleRateHz < decoded.sampleRate ? "block_average_antialias" : "none", channels: decoded.channels, sourceAudioSha256: masterSha256, measuredAt: masterMeasuredAt } },
         loudnessLufs: decoded.loudnessLufs ?? dna.loudnessLufs,
         loudnessRangeLu: decoded.loudnessRangeLu ?? null,
         truePeakDbfs: decoded.truePeakDbfs ?? null,
@@ -846,11 +848,31 @@ export async function processAuditJob(
             ["spectral_bandwidth_hz", masterDna.spectralBandwidthHz, "Hz", "fft_spectral_bandwidth"],
             ["spectral_rolloff_hz", masterDna.spectralRolloffHz, "Hz", "fft_spectral_rolloff"],
             ["zero_crossing_rate", masterDna.zeroCrossingRate, "ratio", "pcm_zero_crossing_rate"],
+            ...Object.entries(masterDna.acousticFeatureProfile.descriptors).map(([name, descriptor]) => [`acoustic_${name}_median`, masterDna.acousticFeatureProfile.status === "measured" ? descriptor.median : null, descriptor.unit, descriptor.method]),
           ].map(([name, value, unit, method]) => typeof value === "number" && Number.isFinite(value)
             ? { name, status: "measured", value, unit, method, measuredAt: masterMeasuredAt ?? generatedAt, diagnostics: [] }
             : buildUnavailableMetric(String(name), "MEASUREMENT_UNAVAILABLE", "The configured analysis stage did not return a finite measurement for this uploaded master.", String(unit), String(method))),
+          provisionalPredictions: [
+            ...(masterDna.acousticFeatureProfile.predictions.mood.status === "provisional" ? [{
+              name: "audio_mood" as const, status: "provisional" as const,
+              label: masterDna.acousticFeatureProfile.predictions.mood.labels.join(", "),
+              score: Math.max(...Object.values(masterDna.acousticFeatureProfile.predictions.mood.scores)),
+              scoreScale: "0-100" as const, method: "audio_feature_heuristics_v1" as const, probability: null,
+              featureDrivers: ["spectral_centroid_hz", "spectral_flux", "spectral_flatness", "low_band_energy_ratio", "mid_band_energy_ratio"],
+              diagnostics: [],
+            }] : []),
+            ...(masterDna.acousticFeatureProfile.predictions.energy.status === "provisional" ? [{
+              name: "audio_energy" as const, status: "provisional" as const,
+              label: masterDna.acousticFeatureProfile.predictions.energy.label,
+              score: masterDna.acousticFeatureProfile.predictions.energy.score,
+              scoreScale: "0-100" as const, method: "audio_feature_heuristics_v1" as const, probability: null,
+              featureDrivers: ["rms_dbfs", "spectral_flux", "spectral_centroid_hz", "zero_crossing_rate"],
+              diagnostics: [],
+            }] : []),
+          ],
           calibratedPredictions: [
-            { name: "calibrated_audio_mood", status: "unavailable", label: null, probability: null, reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "No validated and calibrated audio mood model is configured; signal descriptors are not substituted for emotional labels.", stage: "audio_classification", retryable: false }] },
+            { name: "calibrated_audio_mood", status: "unavailable", label: null, probability: null, reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "A calibrated mood probability is not asserted; provisional audio-derived mood tags are available in acousticFeatureProfile.predictions.mood.", stage: "audio_classification", retryable: false }] },
+            { name: "calibrated_audio_energy", status: "unavailable", label: null, probability: null, reasonCodes: ["CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED", message: "A calibrated perceptual-energy probability is not asserted; a provisional audio-derived low/moderate/high estimate is available in acousticFeatureProfile.predictions.energy.", stage: "audio_classification", retryable: false }] },
             { name: "calibrated_key_mode_probability", status: "unavailable", label: null, probability: null, reasonCodes: ["CALIBRATED_CLASSIFIER_NOT_CONFIGURED"], diagnostics: [{ code: "CALIBRATED_CLASSIFIER_NOT_CONFIGURED", message: "The tonal estimator returns candidate scores, not a calibrated class probability; candidate confidence is reported separately.", stage: "key_analysis", retryable: false }] },
           ],
           externalRecords: [

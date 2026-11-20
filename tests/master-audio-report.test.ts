@@ -66,6 +66,34 @@ describe("uploaded master provenance in reports", () => {
     expect(report).not.toMatch(/Vocal analysis: Not performed|vocal presence\/absence is unknown|temporarily disabled to keep the audit worker|learned audio model: disabled/i);
   });
 
+  it("renders multi-window acoustic feature summaries and extraction provenance", () => {
+    const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      acousticFeatureProfile: {
+        status: "measured",
+        provenance: { featureVersion: "acoustic-profile-v1", windowCount: 24 },
+        descriptors: {
+          rmsDbfs: { median: -18.25 },
+          peakDbfs: { median: -1.4 },
+          crestFactorDb: { median: 16.85 },
+          spectralFlatness: { median: 0.0123 },
+          lowBandEnergyRatio: { median: 0.42 },
+          midBandEnergyRatio: { median: 0.51 },
+          highBandEnergyRatio: { median: 0.07 },
+        },
+      },
+    };
+    const signal = rows(input).signal;
+    expect(signal.find((row) => row.label === "WINDOWED RMS MEDIAN DBFS")?.value).toBe("-18.25");
+    expect(signal.find((row) => row.label === "WINDOWED PEAK MEDIAN DBFS")?.value).toBe("-1.40");
+    expect(signal.find((row) => row.label === "WINDOWED CREST FACTOR DB")?.value).toBe("16.85");
+    expect(signal.find((row) => row.label === "SPECTRAL FLATNESS MEDIAN")?.value).toBe("0.0123");
+    expect(signal.find((row) => row.label === "LOW BAND ENERGY RATIO")?.value).toBe("0.4200");
+    expect(signal.find((row) => row.label === "ACOUSTIC PROFILE / WINDOWING")?.value).toBe("acoustic-profile-v1; 24 windows");
+  });
+
   it("states the combined master-plus-DSP source mode and actual provider lookup outcome", () => {
     const input = structuredClone(fullAudioFixture) as AuditReportInput;
     input.evidence = {
@@ -164,7 +192,8 @@ describe("uploaded master provenance in reports", () => {
     };
     const report = reportText(input, "sample");
     expect(report).toContain("Mood alignment was not asserted because no source-attributed DSP mood tags were available");
-    expect(report).toContain("Mood classification: Not performed — no validated audio mood model is configured.");
+    expect(report).toContain("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs.");
+    expect(report).toContain("These estimates are derived from the uploaded signal, are not probabilities");
     expect(report).not.toMatch(/model:.*disabled|Learned audio-genre model status/i);
   });
 

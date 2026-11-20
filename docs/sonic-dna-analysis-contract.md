@@ -32,6 +32,11 @@ Run independent tonal estimators with tuning correction and segment-level output
 ### Loudness and dynamics
 Use a standards-conformant EBU R128 / ITU-R BS.1770 measurement implementation for integrated loudness (LUFS), loudness range (LU), and true peak (dBTP/dBFS as defined by the implementation). Keep RMS level and RMS-envelope spread as separately named signal descriptors. Never label RMS-envelope spread as EBU loudness range or imply these quantities are interchangeable.
 
+### Multi-feature acoustic signal profile
+Compute reproducible, overlapping PCM windows from the uploaded master and retain robust median, 10th-percentile and 90th-percentile summaries. The profile includes RMS level (dBFS), peak level (dBFS), crest factor (dB), spectral centroid/bandwidth/85% rolloff (Hz), spectral flatness, positive spectral flux, zero-crossing rate, and low/mid/high frequency-band power ratios. Preserve the exact source SHA-256, source sample rate, channel count, duration, analysis sample rate, downmix rule, window/hop sizes, window coverage, aggregation rule, feature version, algorithm identity and measurement timestamp. Window count must be bounded without losing coverage of the beginning or end of long recordings.
+
+These measurements are signal descriptors only. They are not a perceptual energy score, mood tag, mastering verdict or audience-response prediction. Keep descriptor provenance and units visible in the report. A missing/short/silent/invalid source must produce explicit abstention rather than zero-valued claims.
+
 ### Mood and musical context
 Do not label energy, spectral centroid, zero-crossing rate, or other hand-authored signal thresholds as mood classification. These may remain explicitly labelled signal descriptors. Mood/context requires an identified model and licensed weights, a documented label taxonomy, per-label scores, model/version provenance, and an evaluation set appropriate to the intended music domain. If no compliant validated model is configured, state that mood classification was not performed.
 

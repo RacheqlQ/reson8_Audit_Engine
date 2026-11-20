@@ -62,7 +62,10 @@ describe("processAuditJob", () => {
       }),
       markProcessing: async () => events.push("processing"),
       collectCatalogMetadata: async () => { throw new Error("not used for master audits"); },
-      collectIsrcCatalogMetadata: async () => ({ isrc: "NGABC2600001", metadata: [], outcomes: [{ provider: "musicbrainz", status: "partial", reason: "No fixture match; external lookup intentionally mocked." }] }),
+      collectIsrcCatalogMetadata: async () => {
+        events.push("isrc-catalog-lookup");
+        return { isrc: "NGABC2600001", metadata: [], outcomes: [{ provider: "musicbrainz", status: "partial", reason: "No fixture match; external lookup intentionally mocked." }] };
+      },
       recognizeUrl: async () => ({ matched: false as const }),
       downloadMaster: async () => id3Fixture(),
       createRecognitionSample: async () => new Uint8Array([4, 5]),
@@ -99,6 +102,10 @@ describe("processAuditJob", () => {
         expect(dna.sampleRate).toBe(44100);
         expect(dna.channels).toBe(2);
         expect(dna.durationSeconds).toBe(4 / 44100);
+        expect(dna.acousticFeatureProfile.predictions).toMatchObject({
+          mood: { status: "unavailable", reasonCode: "INSUFFICIENT_ANALYSIS_WINDOWS" },
+          energy: { status: "unavailable", reasonCode: "INSUFFICIENT_ANALYSIS_WINDOWS" },
+        });
       },
       discoverPlaylists: async (input) => { events.push("playlist-discovery"); expect(input.isrc).toBe("NGABC2600001"); return { status: "available" as const, outcomes: [{ provider: "apple_music" as const, status: "available" as const, reason: "Deterministic test provider result." }], candidates: [{ provider: "apple_music" as const, id: "pl-test", name: "Afrobeats Discovery", url: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", sourceUrl: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", curatorName: "Apple Music", playlistType: "editorial", description: "Afrobeats selections", trackCount: 20, genreMatches: ["Afrobeats"], moodMatches: [], matchBasis: ["Primary genre match: Afrobeats"], containsIsrc: false, retrievedAt: "2026-11-19T12:00:00.000Z" }] }; },
       generateAssessment: async (input) => {
@@ -150,6 +157,7 @@ describe("processAuditJob", () => {
       "processing",
       "dna-base",
       "recognition",
+      "isrc-catalog-lookup",
       "vocal-analysis",
       "dna-final",
       "evidence",

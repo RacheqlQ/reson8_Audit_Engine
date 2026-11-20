@@ -290,6 +290,14 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
 
 export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAudio:boolean):Array<{label:string;value:string|null}> {
  const vocal=s?.vocalFeatures&&typeof s.vocalFeatures==="object"?s.vocalFeatures as Record<string,unknown>:{};
+ const profile=s?.acousticFeatureProfile&&typeof s.acousticFeatureProfile==="object"?s.acousticFeatureProfile as Record<string,unknown>:{};
+ const descriptors=profile.descriptors&&typeof profile.descriptors==="object"?profile.descriptors as Record<string,unknown>:{};
+ const provenance=profile.provenance&&typeof profile.provenance==="object"?profile.provenance as Record<string,unknown>:{};
+ const descriptor=(name:string,decimals:number):string|null=>{
+  const value=descriptors[name];
+  const median=value&&typeof value==="object"?(value as Record<string,unknown>).median:null;
+  return hasAudio&&profile.status==="measured"?metric(median,decimals,"Unavailable"):hasAudio?"Unavailable":null;
+ };
  return [
   {label:"SAMPLE RATE HZ",value:hasAudio?metric(s?.sampleRate,0):null},
   {label:"CHANNELS",value:hasAudio?metric(s?.channels,0):null},
@@ -297,6 +305,16 @@ export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAu
   {label:"SPECTRAL BANDWIDTH HZ",value:hasAudio?metric(s?.spectralBandwidthHz,0):null},
   {label:"SPECTRAL ROLLOFF HZ",value:hasAudio?metric(s?.spectralRolloffHz,0):null},
   {label:"ZERO CROSSING RATE",value:hasAudio?metric(s?.zeroCrossingRate,4):null},
+  {label:"WINDOWED RMS MEDIAN DBFS",value:descriptor("rmsDbfs",2)},
+  {label:"WINDOWED PEAK MEDIAN DBFS",value:descriptor("peakDbfs",2)},
+  {label:"WINDOWED CREST FACTOR DB",value:descriptor("crestFactorDb",2)},
+  {label:"SPECTRAL FLATNESS MEDIAN",value:descriptor("spectralFlatness",4)},
+  {label:"LOW BAND ENERGY RATIO",value:descriptor("lowBandEnergyRatio",4)},
+  {label:"MID BAND ENERGY RATIO",value:descriptor("midBandEnergyRatio",4)},
+  {label:"HIGH BAND ENERGY RATIO",value:descriptor("highBandEnergyRatio",4)},
+  {label:"ACOUSTIC PROFILE / WINDOWING",value:hasAudio?val(provenance.featureVersion,"Unavailable")+"; "+metric(provenance.windowCount,0,"0")+" windows":null},
+  {label:"PROVISIONAL MOOD TAGS",value:hasAudio?(()=>{const predictions=profile.predictions&&typeof profile.predictions==="object"?profile.predictions as Record<string,unknown>:{};const mood=predictions.mood&&typeof predictions.mood==="object"?predictions.mood as Record<string,unknown>:{};return mood.status==="provisional"&&Array.isArray(mood.labels)?mood.labels.map(text).filter(Boolean).join(", ")+" (heuristic)": "Unavailable — insufficient audio evidence";})():null},
+  {label:"PROVISIONAL ENERGY",value:hasAudio?(()=>{const predictions=profile.predictions&&typeof profile.predictions==="object"?profile.predictions as Record<string,unknown>:{};const energy=predictions.energy&&typeof predictions.energy==="object"?predictions.energy as Record<string,unknown>:{};return energy.status==="provisional"?val(energy.label)+" / "+metric(energy.score,0)+"/100 (heuristic)": "Unavailable — insufficient audio evidence";})():null},
   {label:"SIGNAL PERIODICITY ACTIVITY RATIO",value:hasAudio?metric(vocal.periodicityActivityRatio,2):null}
  ];
 }
@@ -323,7 +341,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
   {
    title:"Signal characteristics",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
    rows:signalDashboardRowsForReport(s,hasAudio),
-   shows:"File format and signal-derived spectral/periodicity measurements with their original units.",cantShow:"Vocal presence, musical mood, genre or commercial performance."
+   shows:"File format and signal-derived acoustic descriptors with their original units. "+(s?.acousticFeatureProfile&&typeof s.acousticFeatureProfile==="object"?(()=>{const profile=s.acousticFeatureProfile as Record<string,unknown>,p=profile.provenance&&typeof profile.provenance==="object"?profile.provenance as Record<string,unknown>:{};return "Profile "+val(p.featureVersion,"unavailable")+"; analysis "+val(p.analysisSampleRateHz,"unknown")+" Hz; "+val(p.windowCount,"0")+" windows; "+val(p.windowSizeSamples,"unknown")+"-sample windows / "+val(p.hopSizeSamples,"unknown")+"-sample hop; "+val(p.aggregation,"unknown")+"; "+val(p.downmix,"unknown")+"; resampling "+val(p.analysisResampling,"unknown")+"."})():"Acoustic feature profile not available."),cantShow:"Validated perceptual mood/energy accuracy, vocal presence, genre or commercial performance."
   }
  ];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
@@ -380,7 +398,7 @@ function sections(i:AuditReportInput):Section[]{
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
   sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confidence-qualified measurements from provisional candidates and unavailable results. Only measurements that pass their metric-specific reliability gate are presented as confirmed.");
-  if (e.fixture !== true) sonicDnaBody.push("Mood classification: Not performed — no validated audio mood model is configured. RMS level, spectral centroid and zero-crossing rate are signal descriptors, not emotional mood indicators.");
+  if (e.fixture !== true) sonicDnaBody.push("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs. These estimates are derived from the uploaded signal, are not probabilities, and have not been validated against a rights-cleared human-labelled held-out dataset.");
   if (vocalAnalysisPerformed) {
    const vocalSegments=Array.isArray(vocalFeatures?.activitySegments)?vocalFeatures.activitySegments.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))):[];
    const segmentSummary=vocalSegments.slice(0,8).map((segment)=>metric(segment.startSeconds,2)+"–"+metric(segment.endSeconds,2)+" s").join("; ");
