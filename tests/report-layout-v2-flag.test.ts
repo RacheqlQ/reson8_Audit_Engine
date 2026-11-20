@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it, vi } from "vitest";
 import { ensurePdfReport } from "../src/reports/pdf-output.js";
@@ -5,6 +6,12 @@ import { generateAuditReportV2 } from "../src/reports/v2/render.js";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("v2-only report generation", () => {
+  it("keeps the v2 renderer independent of the legacy v1 PDF generator", async () => {
+    const source = await readFile(new URL("../src/reports/v2/render.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/\bgenerateAuditReport\s*\(/);
+    expect(source).not.toContain("PDFDocument.load(original)");
+  });
+
   it("routes every newly generated report through v2 without an environment flag", async () => {
     vi.stubEnv("REPORT_LAYOUT", "");
     const expected = await generateAuditReportV2(fullAudioFixture as any, "full");
