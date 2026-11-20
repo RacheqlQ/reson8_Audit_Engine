@@ -4,7 +4,7 @@ export interface MarketPlacementInput {
   executionMode: "master" | "combined" | "dsp_link";
   evidence: Record<string, unknown>;
   sonicDna: Record<string, unknown> | null;
-  playlistDiscovery?: Record<string, unknown> | null;
+  playlistDiscovery?: unknown;
 }
 
 export interface PlaylistTarget {
