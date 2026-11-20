@@ -16,6 +16,7 @@ export interface AcousticFeatureProfile {
     algorithm:"reson8-windowed-radix2-fft";
     sourceSampleRateHz:number;
     analysisSampleRateHz:number;
+    analysisResampling:"none"|"block_average_antialias";
     channels:number;
     downmix:"arithmetic_mean";
     durationSeconds:number;
@@ -148,7 +149,7 @@ function emptyProfile(sampleRate:number,channels:number,duration:number,reason:s
   const unavailable=(unit:string,method:string):AcousticDescriptor=>({median:0,p10:0,p90:0,unit,method});
   return {
     schemaVersion:"1.0.0",status:"insufficient_evidence",
-    provenance:{featureVersion:"acoustic-profile-v1",algorithm:"reson8-windowed-radix2-fft",sourceSampleRateHz:sampleRate,analysisSampleRateHz:sampleRate,channels,downmix:"arithmetic_mean",durationSeconds:duration,sourceStartSeconds:0,sourceEndSeconds:duration,windowSizeSamples:WINDOW_SIZE,hopSizeSamples:HOP_SIZE,windowCount:0,aggregation:"median_and_percentiles",maxWindowsApplied:false},
+    provenance:{featureVersion:"acoustic-profile-v1",algorithm:"reson8-windowed-radix2-fft",sourceSampleRateHz:sampleRate,analysisSampleRateHz:sampleRate,analysisResampling:"none",channels,downmix:"arithmetic_mean",durationSeconds:duration,sourceStartSeconds:0,sourceEndSeconds:duration,windowSizeSamples:WINDOW_SIZE,hopSizeSamples:HOP_SIZE,windowCount:0,aggregation:"median_and_percentiles",maxWindowsApplied:false},
     descriptors:{
       rmsDbfs:unavailable("dBFS","windowed_pcm_rms"),peakDbfs:unavailable("dBFS","windowed_pcm_peak"),crestFactorDb:unavailable("dB","peak_to_rms"),
       spectralCentroidHz:unavailable("Hz","hann_window_radix2_fft"),spectralBandwidthHz:unavailable("Hz","hann_window_radix2_fft"),
@@ -202,7 +203,7 @@ export function extractAcousticFeatureProfile(samples:Float32Array,sampleRate:nu
   const descriptor=(key:keyof typeof methods,field:keyof Omit<WindowResult,"magnitudes">)=>summarize(values(field),methods[key][0],methods[key][1]);
   return {
     schemaVersion:"1.0.0",status:"measured",
-    provenance:{featureVersion:"acoustic-profile-v1",algorithm:"reson8-windowed-radix2-fft",sourceSampleRateHz:sampleRate,analysisSampleRateHz:sampleRate,channels:validChannels,downmix:"arithmetic_mean",durationSeconds:duration,sourceStartSeconds:0,sourceEndSeconds:duration,windowSizeSamples:WINDOW_SIZE,hopSizeSamples:HOP_SIZE,windowCount:rows.length,aggregation:"median_and_percentiles",maxWindowsApplied:possible>MAX_WINDOWS},
+    provenance:{featureVersion:"acoustic-profile-v1",algorithm:"reson8-windowed-radix2-fft",sourceSampleRateHz:sampleRate,analysisSampleRateHz:sampleRate,analysisResampling:"none",channels:validChannels,downmix:"arithmetic_mean",durationSeconds:duration,sourceStartSeconds:0,sourceEndSeconds:duration,windowSizeSamples:WINDOW_SIZE,hopSizeSamples:HOP_SIZE,windowCount:rows.length,aggregation:"median_and_percentiles",maxWindowsApplied:possible>MAX_WINDOWS},
     descriptors:{
       rmsDbfs:descriptor("rmsDbfs","rmsDbfs"),peakDbfs:descriptor("peakDbfs","peakDbfs"),crestFactorDb:descriptor("crestFactorDb","crestFactorDb"),
       spectralCentroidHz:descriptor("spectralCentroidHz","centroid"),spectralBandwidthHz:descriptor("spectralBandwidthHz","bandwidth"),
