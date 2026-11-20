@@ -253,6 +253,10 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  const keyReliable=hasAudio&&isReliableKey(s);
  const tempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
  const tempoConfidence=typeof s?.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)?s.tempoConfidence:null;
+ const alternateTempo=typeof s?.alternateTempo==="number"&&Number.isFinite(s.alternateTempo)&&s.alternateTempo>=40&&s.alternateTempo<=240?s.alternateTempo:null;
+ const primaryTempo=typeof s?.bpm==="number"&&Number.isFinite(s.bpm)?s.bpm:null;
+ const tempoRatio=primaryTempo!==null&&alternateTempo!==null?alternateTempo/primaryTempo:null;
+ const alternateTempoRelation=tempoRatio!==null&&Math.abs(tempoRatio-0.5)<=0.03?"half-time":tempoRatio!==null&&Math.abs(tempoRatio-2)<=0.06?"double-time":"related pulse";
  const rhythm=s?.rhythmFeatures&&typeof s.rhythmFeatures==="object"?s.rhythmFeatures as Record<string,unknown>:{};
  const tempoScores=Array.isArray(rhythm.candidateScores)?rhythm.candidateScores.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
  const leadingTempoScore=tempoScores.find((item)=>item.bpm===tempoCandidate);
@@ -262,6 +266,7 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  const keyCandidates=Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")).slice(0,3).map((item)=>[text(item.key),text(item.mode),typeof item.score==="number"?"score "+item.score.toFixed(3):""].filter(Boolean).join(" ")).join("; "):"";
  return [
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
+  {label:"TEMPO ALTERNATE INTERPRETATION",value:tempoReliable&&alternateTempo!==null&&primaryTempo!==null&&alternateTempo!==primaryTempo?String(alternateTempo)+" BPM ("+alternateTempoRelation+" interpretation; alternate metrical level)":null},
   {label:"TEMPO CANDIDATE BPM",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" (provisional; prominence diagnostic "+(tempoConfidence===null?"not available":tempoConfidence.toFixed(2))+(leadingTempoScore&&typeof leadingTempoScore.score==="number"?"; candidate score "+leadingTempoScore.score.toFixed(3):"")+")":null},
   {label:"TEMPO DETECTION REASON",value:hasAudio&&!tempoReliable?(tempoReason||"No tempo candidate passed the reliability gate."):null},
   {label:"TEMPO WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(rhythm.windowConsensus,rhythm.independentEstimator):null},
