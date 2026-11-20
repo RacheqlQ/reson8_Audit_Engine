@@ -28,7 +28,7 @@ describe("v2 gated report pages", () => {
   it("keeps the full report at the existing v1 page count while applying the v2 design", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     const baseline = await generateAuditReport(input, "full");
-    const redesigned = await generateAuditReportV2(input);
+    const redesigned = await generateAuditReportV2(input, "full");
     expect((await PDFDocument.load(redesigned)).getPageCount())
       .toBe((await PDFDocument.load(baseline)).getPageCount());
   });
@@ -44,7 +44,7 @@ describe("v2 gated report pages", () => {
     };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const baseline = await generateAuditReport(input, "full");
-    const redesigned = await generateAuditReportV2(input);
+    const redesigned = await generateAuditReportV2(input, "full");
     expect((await PDFDocument.load(redesigned)).getPageCount())
       .toBe((await PDFDocument.load(baseline)).getPageCount());
   });
