@@ -305,6 +305,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
   bpm:tempo.bpm,tempoCandidateBpm:tempo.topCandidateBpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
   key:resolvedKey.key,mode:resolvedKey.mode,keyConfidence:resolvedKey.confidence,keyTuningCents:resolvedKey.tuningCents,keySegmentAgreement:resolvedKey.segmentAgreement,keyCandidates:resolvedKey.topCandidates,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,keyAnalysisFftButterflyCount:resolvedKey.fftButterflyCount,limitations,
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
+  // Legacy field name retained for storage compatibility: p95/p10 RMS envelope spread, not conventional mastering dynamic range or EBU LRA.
   dynamicRangeDb:20*Math.log10(p95/p10),spectralCentroidHz:centroid,spectralBandwidthHz:bandwidth,
   spectralRolloffHz:rolloff,zeroCrossingRate:crossings/Math.max(1,a.length-1),
   acousticFeatureProfile,moodTags,genreContext:[]

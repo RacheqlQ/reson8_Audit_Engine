@@ -70,3 +70,12 @@ Keep provider metadata, audio-model classifications, embedded tags, and analyst 
 ## Current implementation warning
 
 The current Node path uses a first-party transient-autocorrelation tempo estimator and FFT/harmonic-chroma key candidate estimator. Reporting gates are 0.50 for tempo confidence and 0.80 for key confidence plus 0.80 segment agreement; these are conservative product gates, not calibrated accuracy probabilities. Key-estimator candidate-retention floors are intentionally separate and lower so provisional alternatives remain available for review. The current implementation has no validated mood model: it may emit explicitly provisional uploaded-master mood tags and energy estimates from `audio_feature_heuristics_v1`, but they are not calibrated predictions or validated perceptual labels. RMS, spectral centroid and zero-crossing rate remain signal descriptors, not mood labels. Independent beat/key analysers and benchmark calibration remain required before claiming confirmed accuracy.
+
+## Master measurement definitions
+
+- Integrated loudness is reported in LUFS.
+- EBU R128 loudness range is reported in LU.
+- True peak is reported in dBTP/dBFS according to the decoder's documented output convention.
+- RMS signal level is reported in dBFS.
+- The legacy `dynamicRangeDb` field is the p95/p10 RMS-envelope spread proxy, reported in dB. It is not conventional mastering dynamic range and is not interchangeable with EBU loudness range.
+- Tempo and key candidates remain provisional until their metric-specific confidence and consensus gates pass. A candidate may exist even when the confirmed measurement is unavailable.

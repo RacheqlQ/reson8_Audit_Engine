@@ -3,10 +3,11 @@ import {
   planAuditReportPages,
   signalDashboardRowsForReport,
   sonicDashboardRowsForReport,
+  reportableAssessmentItems,
   type AuditReportInput,
 } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
-import { chartPanelHeight, chartPanelLayoutRects } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows, chartPanelHeight, chartPanelLayoutRects, strengthRiskItemsForColumn } from "../src/reports/charts.js";
 
 const rows = (input: AuditReportInput) => ({
   musical: sonicDashboardRowsForReport(input.sonicDna as unknown as Record<string, unknown> | null, Boolean(input.sonicDna)),
@@ -14,6 +15,65 @@ const rows = (input: AuditReportInput) => ({
 });
 const reportText = (input: AuditReportInput, tier: "sample" | "full" = "full") =>
   planAuditReportPages(input, tier).flatMap((section) => [section.title, ...section.text]).join(" ");
+
+describe("analysis-to-report integration contracts", () => {
+  it("renders provisional predictions and human-readable abstention reasons without internal paths or reason codes", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence = { ...input.evidence, fixture: false, masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } };
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      tempoCandidateBpm: 95,
+      tempoConfidence: 0.28,
+      rhythmFeatures: { independentEstimator: { bpm: 93.8, score: 0.21 }, windowConsensus: { windowCount: 8, winner: "95", observedAgreement: 0.25 } },
+    };
+    input.realMasterContract = {
+      schemaVersion: "1.0.0", auditId: "audit-real-master",
+      source: { sourceKind: "uploaded_master", sourceAudioPath: "uploads/Bend Et.mp3", sha256: "a".repeat(64), mimeType: "audio/mpeg", byteLength: 1024 },
+      directSignalMeasurements: [{
+        name: "tempo_bpm", status: "unavailable", value: null, unit: "BPM",
+        method: "high_frequency_transient_autocorrelation",
+        diagnostics: [{ code: "TEMPO_BELOW_REPORTING_THRESHOLD", message: "A provisional candidate was returned." }],
+      }],
+      calibratedPredictions: [{
+        name: "calibrated_audio_mood", status: "unavailable", label: null, probability: null,
+        reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"],
+        diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "A calibrated model is unavailable; provisional data is in acousticFeatureProfile.predictions.mood." }],
+      }],
+      provisionalPredictions: [{
+        name: "audio_mood", status: "provisional", label: "driving, tense", score: 74, scoreScale: "0-100",
+        method: "audio_feature_heuristics_v1", probability: null, featureDrivers: ["spectral_flux"], diagnostics: [],
+      }],
+      externalRecords: [], strategicSynthesis: [], pipelineDiagnostics: [],
+    };
+    const report = reportText(input);
+    expect(report).toContain("Confirmed tempo: Not reported as a confirmed measurement");
+    expect(report).toContain("A tempo candidate was returned but did not meet the reporting threshold");
+    expect(report).toContain("PROVISIONAL AUDIO MOOD: driving, tense");
+    expect(report).toContain("A validated mood model is not configured");
+    expect(report).not.toContain("acousticFeatureProfile.predictions");
+    expect(report).not.toContain("VALIDATED_MODEL_NOT_CONFIGURED");
+    expect(report).not.toContain("TEMPO_BELOW_REPORTING_THRESHOLD");
+  });
+
+  it("uses the same sanitized item set for A&R risk lists and summary counts", () => {
+    const risks = reportableAssessmentItems([
+      "Tempo confidence remains below the reporting threshold.",
+      "Vocal analysis: Not performed because no validated vocal model is configured.",
+    ]);
+    const rows = buildStrengthRiskChartRows([], risks);
+    expect(risks).toEqual(["Tempo confidence remains below the reporting threshold."]);
+    expect(rows.find((row) => row.label === "Risks")?.value).toBe(risks.length);
+    expect(strengthRiskItemsForColumn(rows, "risk")).toHaveLength(risks.length);
+  });
+
+  it("removes duplicated RMS-envelope parentheticals without calling the proxy mastering dynamic range", () => {
+    const value = "RMS-envelope spread (internal proxy; not mastering RMS-envelope spread (internal proxy; not mastering dynamic range)) of 13.1 dB";
+    expect(reportableAssessmentItems([value])).toEqual([
+      "RMS-envelope spread (internal proxy; not a mastering dynamic-range measure) of 13.1 dB",
+    ]);
+  });
+});
 
 describe("uploaded master provenance in reports", () => {
   it("reports a submitted master even when completed Sonic DNA measurements are absent", () => {
@@ -56,7 +116,7 @@ describe("uploaded master provenance in reports", () => {
     expect(musical.find((row) => row.label === "INTEGRATED LOUDNESS LUFS")?.value).toBe("-11.3");
     expect(musical.find((row) => row.label === "LOUDNESS RANGE LRA")?.value).toBe("4.2");
     expect(musical.find((row) => row.label === "TRUE PEAK dBFS")?.value).toBe("-1.1");
-    expect(musical.find((row) => row.label === "RMS ENVELOPE SPREAD dB")?.value).toBe("13.1");
+    expect(musical.find((row) => row.label === "RMS ENVELOPE SPREAD (PROXY) dB")?.value).toBe("13.1");
     expect(signal.find((row) => row.label === "SAMPLE RATE HZ")?.value).toBe("48000");
     expect(signal.find((row) => row.label === "CHANNELS")?.value).toBe("2");
     expect(signal.find((row) => row.label === "SPECTRAL CENTROID HZ")?.value).toBe("1850");
@@ -188,10 +248,19 @@ describe("uploaded master provenance in reports", () => {
       ...input.sonicDna,
       provenance: "uploaded_audio_master",
       moodTags: ["Moderate RMS level", "Elevated zero-crossing rate"],
+      acousticFeatureProfile: {
+        status: "measured",
+        predictions: {
+          mood: { status: "provisional", labels: ["driving", "tense"], scores: { driving: 74, tense: 63 }, method: "audio_feature_heuristics_v1", probability: null },
+          energy: { status: "provisional", label: "high", score: 81, method: "audio_feature_heuristics_v1", probability: null },
+        },
+      },
       genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop", sources: ["apple_music"] }], model: { status: "disabled" } },
     };
     const report = reportText(input, "sample");
-    expect(report).toContain("Mood alignment was not asserted because no source-attributed DSP mood tags were available");
+    expect(report).toContain("No source-attributed DSP mood tags were returned for playlist search.");
+    expect(report).toContain("Uploaded-master provisional mood tags: driving, tense");
+    expect(report).toContain("Provisional uploaded-master energy estimate: high");
     expect(report).toContain("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs.");
     expect(report).toContain("These estimates are derived from the uploaded signal, are not probabilities");
     expect(report).not.toMatch(/model:.*disabled|Learned audio-genre model status/i);
@@ -211,7 +280,7 @@ describe("uploaded master provenance in reports", () => {
     ];
     const report = reportText(input, "sample");
     const musical = rows(input).musical;
-    expect(musical.find((row) => row.label === "RMS ENVELOPE SPREAD dB")?.value).toBe("22.4");
+    expect(musical.find((row) => row.label === "RMS ENVELOPE SPREAD (PROXY) dB")?.value).toBe("22.4");
     expect(musical.find((row) => row.label === "LOUDNESS RANGE LRA")?.value).toBe("10.8");
     expect(report).not.toMatch(/healthy measured dynamic range of 22\.36 dB/i);
   });
@@ -239,5 +308,43 @@ describe("uploaded master provenance in reports", () => {
     expect(chartPanelHeight("sonic")).toBe(340);
     expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-11")).toBe(true);
     expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-12")).toBe(true);
+  });
+
+  it("hides internal master paths, humanizes measurement methods, and preserves independent tempo candidates", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence = { ...input.evidence, fixture: false, masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } };
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      bpm: null,
+      tempoCandidateBpm: null,
+      tempoConfidence: null,
+      rhythmFeatures: { independentEstimator: { bpm: 93.8, score: 0.21 } },
+      harmonicFeatures: { topCandidates: [{ key: "F#", mode: "major", score: 0.694 }] },
+      key: null,
+      mode: null,
+      keyConfidence: null,
+    };
+    input.realMasterContract = {
+      schemaVersion: "1.0.0", auditId: "audit-real-master",
+      source: { sourceKind: "uploaded_master", sourceAudioPath: "private/jobs/job-secret/uploads/Bend Et.mp3", sha256: "b".repeat(64), mimeType: "audio/mpeg", byteLength: 2048 },
+      directSignalMeasurements: [
+        { name: "rms_level_dbfs", status: "measured", value: -12.4, unit: "dBFS", method: "pcm_rms", measuredAt: "2026-11-20T00:00:00.000Z", diagnostics: [] },
+        { name: "spectral_centroid_hz", status: "measured", value: 1800, unit: "Hz", method: "fft_spectral_centroid", measuredAt: "2026-11-20T00:00:00.000Z", diagnostics: [] },
+        { name: "sample_rate_hz", status: "measured", value: 48000, unit: "Hz", method: "unrecognized_internal_method_42", measuredAt: "2026-11-20T00:00:00.000Z", diagnostics: [] },
+      ],
+      calibratedPredictions: [], provisionalPredictions: [], externalRecords: [], strategicSynthesis: [], pipelineDiagnostics: [],
+    };
+    const report = reportText(input);
+    expect(report).toContain("SOURCE FILE: Bend Et.mp3");
+    expect(report).not.toContain("private/jobs/job-secret");
+    expect(report).not.toContain("job-secret");
+    expect(report).toContain("method: PCM RMS signal measurement");
+    expect(report).toContain("method: spectral-centroid analysis");
+    expect(report).toContain("method: signal-analysis method (technical identifier withheld)");
+    const rows = sonicDashboardRowsForReport(input.sonicDna, true);
+    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("93.8 (provisional; independent low-frequency estimator");
+    expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value).toContain("half-time 46.9 BPM; double-time 187.6 BPM");
+    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("raw estimator score 0.694 (not a calibrated probability)");
   });
 });

@@ -105,6 +105,12 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     saveIsrcLookupOutcome: async (jobId, _claimToken, isrc, outcome, signal) =>
       store.saveIsrcLookupOutcome(jobId, _claimToken, isrc, outcome, signal),
     decode: async (bytes, _mimeType, signal) => decoder.decode(bytes, signal),
+    ...(process.env.ENABLE_VOCAL_ANALYSIS === "true" ? {
+      analyzeVocals: async (samples: Float32Array, sampleRate: number, channels: number, signal?: AbortSignal) => {
+        const { analyzeVocalsWithTimeout } = await import("../audio/vocal-analysis-worker-client.js");
+        return analyzeVocalsWithTimeout(samples, sampleRate, channels, 150_000, signal);
+      },
+    } : {}),
     generateAssessment: async (input, signal) => {
       const assessmentInput = {
         ...input,

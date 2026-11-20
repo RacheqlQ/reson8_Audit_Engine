@@ -285,12 +285,26 @@ describe("Sonic DNA diagnostic event persistence", () => {
       limitations: [], loudnessLufs: null, rmsLevelDbfs: -12, rmsEnergy: 0.2,
       dynamicRangeDb: 8, spectralCentroidHz: 1000, spectralBandwidthHz: 200,
       spectralRolloffHz: 3000, zeroCrossingRate: 0.1, moodTags: [], genreContext: [],
+      acousticFeatureProfile: {
+        status: "measured",
+        provenance: { featureVersion: "acoustic-profile-v1", windowCount: 128 },
+        predictions: {
+          mood: { status: "provisional", labels: ["driving", "tense"], method: "audio_feature_heuristics_v1", probability: null },
+          energy: { status: "provisional", label: "high", score: 81, method: "audio_feature_heuristics_v1", probability: null },
+        },
+      },
     } as import("../src/audio/sonic-dna.js").SonicDnaFeatures;
 
     await store.saveSonicDna("job-diagnostics", "claim-token", dna);
 
     const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(requestBody.p_operation).toBe("sonic_dna");
+    expect(requestBody.p_payload.rawFeatures.acousticFeatureProfile).toMatchObject({
+      provenance: { featureVersion: "acoustic-profile-v1", windowCount: 128 },
+      predictions: { mood: { labels: ["driving", "tense"] }, energy: { label: "high", score: 81 } },
+    });
+    expect(requestBody.p_payload.rawFeatures.rhythmFeatures.candidateScores).toEqual([{ bpm: 100, score: 0.91 }]);
+    expect(requestBody.p_payload.rawFeatures.harmonicFeatures.windowConsensus).toMatchObject({ winner: "C:major", windowCount: 8 });
     expect(requestBody.p_payload.eventPayload.diagnostics).toMatchObject({
       version: 1,
       tempo: {
