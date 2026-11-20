@@ -451,7 +451,11 @@ function sections(i:AuditReportInput):Section[]{
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
   sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confidence-qualified measurements from provisional candidates and unavailable results. Only measurements that pass their metric-specific reliability gate are presented as confirmed.");
-  if (e.fixture !== true) sonicDnaBody.push("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs. These estimates are derived from the uploaded signal, are not probabilities, and have not been validated against a rights-cleared human-labelled held-out dataset.");
+  if (e.fixture !== true) sonicDnaBody.push(
+   masterMoodTags.length || masterEnergyLabel
+    ? "Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs. These estimates are derived from the uploaded signal, are not probabilities, and have not been validated against a rights-cleared human-labelled held-out dataset."
+    : "No provisional master-derived mood or energy labels were produced by this run, and no calibrated perceptual-classifier output is asserted."
+  );
   sonicDnaBody.push("Track structure and section boundaries: not calculated in this pipeline version; no section-segmentation result is available to support verse, chorus, bridge or intro/outro claims.");
   if (vocalAnalysisPerformed) {
    const vocalSegments=Array.isArray(vocalFeatures?.activitySegments)?vocalFeatures.activitySegments.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))):[];
