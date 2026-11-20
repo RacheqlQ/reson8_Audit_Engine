@@ -47,6 +47,34 @@ describe("v2 identity reconciliation table data", () => {
   });
 });
 
+describe("v2 report limitation disclosure", () => {
+  it("removes internal disabled/not-performed vocal status notices without adding a vocal-analysis claim", () => {
+    const lines = reportV2Render.publicReportLimitations([
+      "Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
+      "Vocal presence/absence is unknown and is not inferred.",
+      "Learned audio model: disabled.",
+      "Rights clearance has not been verified.",
+      "The supplied master has an unresolved identity conflict."
+    ]);
+    expect(lines).toEqual([
+      "Rights clearance has not been verified.",
+      "The supplied master has an unresolved identity conflict."
+    ]);
+  });
+
+  it("keeps unrelated limitations while suppressing only internal vocal/model state", () => {
+    const lines = reportV2Render.publicReportLimitations([
+      "No valid timestamped energy series was supplied.",
+      "Vocal analysis was not performed.",
+      "No verified commercial metrics were supplied."
+    ]);
+    expect(lines).toEqual([
+      "No valid timestamped energy series was supplied.",
+      "No verified commercial metrics were supplied."
+    ]);
+  });
+});
+
 describe("v2 detector diagnostics", () => {
   it("renders persisted tempo candidates, raw scores, independent estimate, window agreement and abstention", () => {
     const input = structuredClone(fullAudioFixture) as any;
