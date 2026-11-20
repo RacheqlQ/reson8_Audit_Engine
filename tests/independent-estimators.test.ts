@@ -71,3 +71,29 @@ describe("key estimator transposition and tuning robustness", () => {
     expect(result.mode).toBe("minor");
   });
 });
+
+
+describe("key evidence sufficiency and realistic signal limits", () => {
+  it("does not infer a major or minor key from a single sustained pitch", () => {
+    const sampleRate = 8000;
+    const samples = Float32Array.from({ length: sampleRate * 8 }, (_, i) =>
+      0.6 * Math.sin(2 * Math.PI * 220 * i / sampleRate),
+    );
+    const result = estimateGoertzelKey(samples, sampleRate);
+    expect(result.key).toBeNull();
+    expect(result.mode).toBeNull();
+    expect(result.limitation).toMatch(/insufficient|pitch|key/i);
+  });
+
+  it("does not infer a tonal center from broadband noise", () => {
+    let state = 0x12345678;
+    const sampleRate = 8000;
+    const samples = Float32Array.from({ length: sampleRate * 8 }, () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      return ((state / 0x100000000) * 2 - 1) * 0.2;
+    });
+    const result = estimateGoertzelKey(samples, sampleRate);
+    expect(result.key).toBeNull();
+    expect(result.mode).toBeNull();
+  });
+});
