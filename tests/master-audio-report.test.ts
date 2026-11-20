@@ -185,4 +185,26 @@ describe("uploaded master provenance in reports", () => {
     expect(musical.find((row) => row.label === "LOUDNESS RANGE LRA")?.value).toBe("10.8");
     expect(report).not.toMatch(/healthy measured dynamic range of 22\.36 dB/i);
   });
+
+  it("retains a measured tuning-offset candidate across multiple tonal windows when key/mode abstains", () => {
+    const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      key: null,
+      mode: null,
+      keyConfidence: 0.06,
+      keySegmentAgreement: 0.16,
+      keyTuningCents: 14,
+      tuningEvidenceWindows: 3,
+      harmonicFeatures: {
+        limitation: "Harmonic candidates disagree across audio segments; no key or mode is asserted.",
+        topCandidates: [{ key: "C", mode: "major", score: 0.31 }, { key: "A", mode: "minor", score: 0.28 }],
+      },
+    };
+    const tuning = sonicDashboardRowsForReport(input.sonicDna as unknown as Record<string, unknown>, true)
+      .find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS");
+    expect(tuning?.value).toBe("14 (multiple tonal windows; provisional)");
+    expect(reportText(input)).toContain("14 (multiple tonal windows; provisional)");
+  });
 });
