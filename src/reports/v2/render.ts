@@ -1,7 +1,6 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
-import { generateAuditReport, planAuditReportPages, buildArNotesDecisionContext, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
+import { generateAuditReport, planAuditReportPages, buildArNotesDecisionContext, chartsForSection, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
 import { loadReportFonts } from "../fonts.js";
-import { chartsForSection } from "../generate-audit-report.js";
 import { chartPanelHeight, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
 
