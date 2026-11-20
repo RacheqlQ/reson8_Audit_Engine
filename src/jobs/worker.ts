@@ -102,6 +102,8 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     saveCatalogMetadata: async (jobId, _claimToken, metadata, signal) => store.saveCatalogMetadata(jobId, _claimToken, metadata, signal),
     saveCatalogFailure: async (jobId, _claimToken, link, error, signal) =>
       store.saveCatalogFailure(jobId, _claimToken, link, error, signal),
+    saveIsrcLookupOutcome: async (jobId, _claimToken, isrc, outcome, signal) =>
+      store.saveIsrcLookupOutcome(jobId, _claimToken, isrc, outcome, signal),
     decode: async (bytes, _mimeType, signal) => decoder.decode(bytes, signal),
     generateAssessment: async (input, signal) => {
       const assessmentInput = {
