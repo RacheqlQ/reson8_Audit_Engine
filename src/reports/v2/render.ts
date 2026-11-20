@@ -33,7 +33,7 @@ function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
 function drawWrapped(page:PDFPage,value:string,x:number,y:number,width:number,font:PDFFont,size=9,color=C.ink,lineHeight=size*1.35):number{
  const lines=wrap(value,font,size,width);lines.forEach((line,i)=>page.drawText(line,{x,y:y-i*lineHeight,size,font,color}));return lines.length*lineHeight;
 }
-function metricBlock(input:AuditReportInput,data:ReportV2Data):Block[]{
+function metricBlock(data:ReportV2Data):Block[]{
  const prov=(v:unknown)=>str(v,"Uploaded-master evidence");
  return [
   {label:"TEMPO",value:data.tempo.value===null?"N/D":data.tempo.value+" BPM",confidence:data.tempo.confidence??"Low",provenance:prov(data.tempo.evidence)},
@@ -91,7 +91,7 @@ function identityLines(e:Record<string,unknown>):string[]{
 function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
  const e=rec(input.evidence),a=rec(input.assessment),sonic=rec(input.sonicDna);
  const pages:PageSpec[]=[
-  {title:"Cover and verdict",kind:"cover",blocks:metricBlock(input,data),lines:[
+  {title:"Cover and verdict",kind:"cover",blocks:metricBlock(data),lines:[
    "Artist: "+str(e.artist)+"   Track: "+str(e.title),
    "Audit date: "+dateText(input.generatedAt)+"   Release date: "+dateText(e.releaseDate),
    "Executive summary: "+str(a.executiveSummary,"No executive summary supplied."),
@@ -125,7 +125,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v)).join("; "),
    ...(e.label||e.partner?["Supplied label / partner: "+str(e.label??e.partner)]:[])
   ]},
-  {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>"☐ "+str(v)).concat(["Editable notes field: use the PDF form field named ar_notes."])},
+  {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>"[ ] "+str(v)).concat(["Editable notes field: use the PDF form field named ar_notes."])},
   {title:"Evidence, methodology and limitations",blocks:[],lines:[
    ...data.notYetMeasured.map(v=>"Not yet measured: "+v),
    "Tempo method: "+str(data.tempo.method,"Not supplied")+" · "+data.tempo.evidence,
