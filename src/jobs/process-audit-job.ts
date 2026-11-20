@@ -19,7 +19,7 @@ import type { PlaylistDiscoveryInput, PlaylistDiscoveryResult } from "../provide
 import { normalizeIsrc } from "../providers/musicbrainz/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
 import { getAuditSourceReadinessError } from "../audio/master-audio-evidence.js";
-import { buildMarketPlacementPlan } from "../strategy/market-placement.js";
+import { buildMarketPlacementPlan, buildPlaylistMoodContext } from "../strategy/market-placement.js";
 import { sha256 } from "./content-hash.js";
 import { withAbortTimeout } from "./with-abort-timeout.js";
 
@@ -823,14 +823,15 @@ export async function processAuditJob(
     let playlistDiscovery: PlaylistDiscoveryResult | null = null;
     if (normalizedIsrc && deps.discoverPlaylists) {
       const providerMoodTags = metadataSources.flatMap((source) => source.sonicProfile?.moodTags ?? []);
+      const playlistMoodContext = buildPlaylistMoodContext(providerMoodTags, masterDna);
       const playlistInput: PlaylistDiscoveryInput = {
         isrc: normalizedIsrc,
         artist: assessmentIdentity.artist ?? identity.artist,
         title: assessmentIdentity.title ?? identity.title,
         primaryGenre: genreClassification.primaryGenre,
         adjacentLanes: genreClassification.adjacentLanes,
-        moodTags: [...new Set(providerMoodTags)],
-        moodSource: providerMoodTags.length ? "TIDAL catalogue sonic profile" : null,
+        moodTags: playlistMoodContext.moodTags,
+        moodSource: playlistMoodContext.moodSource,
       };
       try {
         playlistDiscovery = await awaitWithStage(deps, "playlist_discovery", 25_000, (signal) =>
