@@ -6,6 +6,7 @@ import {
   type AuditReportInput,
 } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
+import { chartPanelHeight, chartPanelLayoutRects } from "../src/reports/charts.js";
 
 const rows = (input: AuditReportInput) => ({
   musical: sonicDashboardRowsForReport(input.sonicDna as unknown as Record<string, unknown> | null, Boolean(input.sonicDna)),
@@ -205,6 +206,8 @@ describe("uploaded master provenance in reports", () => {
     const tuning = sonicDashboardRowsForReport(input.sonicDna as unknown as Record<string, unknown>, true)
       .find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS");
     expect(tuning?.value).toBe("14 (multiple tonal windows; provisional)");
-    expect(reportText(input)).toContain("14 (multiple tonal windows; provisional)");
+    const chartRects = chartPanelLayoutRects("sonic", sonicDashboardRowsForReport(input.sonicDna as unknown as Record<string, unknown>, true));
+    expect(chartPanelHeight("sonic")).toBe(300);
+    expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-11")).toBe(true);
   });
 });
