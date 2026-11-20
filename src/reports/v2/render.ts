@@ -1,6 +1,8 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import { generateAuditReport, planAuditReportPages, buildArNotesDecisionContext, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
 import { loadReportFonts } from "../fonts.js";
+import { chartsForSection } from "../generate-audit-report.js";
+import { chartPanelHeight, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
 
 const W=595.28,H=841.89,M=42;
@@ -405,6 +407,21 @@ export async function generateAuditReportV2(input:AuditReportInput,tier:AuditRep
    if(spec.lines?.length){
     const body=spec.lines.filter(Boolean),h=card(page,M,y,W-2*M,spec.title,body,fonts,{accent:C.gold});
     if(h>y-95)throw new Error("Report v2 page content exceeds available A4 space: "+spec.title);
+   }
+  }
+  const legacyChartSection: Record<string,string> = {
+   "Identity and source reconciliation":"Identity and source reconciliation",
+   "Evidence ledger and scorecard":"Evidence ledger and provenance",
+   "A&R positioning":"Creative identity and A&R positioning",
+   "Strengths, risks and actions":"Strengths and creative leverage",
+   "Release and promotion plan":"Promotion plan"
+  };
+  const chartSection=legacyChartSection[spec.title];
+  if(chartSection){
+   for(const panel of chartsForSection(input,chartSection)){
+    const panelHeight=chartPanelHeight(panel.kind,panel.rows,W-2*M),panelTop=H-380;
+    if(panelTop-panelHeight<76)throw new Error("Evidence chart cannot fit safely on "+spec.title);
+    drawChartPanel(page,{...panel,fixture:rec(input.evidence).fixture===true,y:panelTop,width:W-2*M},fonts.regular,fonts.bold);
    }
   }
   drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
