@@ -1017,7 +1017,7 @@ export async function processAuditJob(
               diagnostic: { code: "DSP_CATALOG_LOOKUP_UNAVAILABLE", message: result.error ?? "The DSP catalogue lookup did not return a record.", stage: "catalog_lookup", retryable: true }, attemptedAt: generatedAt,
             })),
           ],
-          strategicSynthesis: masterDna.bpm !== null ? [{ claim: "A tempo measurement was returned by analysis of the uploaded master.", evidenceRefs: ["signal:tempo_bpm"], evidenceClass: "OBSERVED", limitations: ["The current estimator score is not a calibrated probability."] }] : [],
+          strategicSynthesis: masterDna.bpm !== null ? [{ claim: "A tempo measurement was returned by analysis of the uploaded master.", evidenceRefs: ["signal:tempo_bpm"], evidenceClass: "OBSERVED", numericClaims: [{ value: masterDna.bpm, unit: "BPM", evidenceRef: "signal:tempo_bpm" }], limitations: ["The current estimator score is not a calibrated probability."] }] : [],
           pipelineDiagnostics: masterDna.limitations.map((message) => ({ code: "ANALYSIS_LIMITATION", message, stage: "sonic_dna", retryable: false })),
         });
       } catch (error) {
