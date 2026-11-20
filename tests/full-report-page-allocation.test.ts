@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { partitionFullReportUnits } from "../src/reports/v2/render.js";
+import { normalizePdfText, partitionFullReportUnits } from "../src/reports/v2/render.js";
 
 describe("full report page allocation", () => {
   it("balances ordered content by measured height instead of heuristic weights", () => {
@@ -16,10 +16,16 @@ describe("full report page allocation", () => {
 
   it("creates exactly the requested number of non-empty ordered pages", () => {
     const units = ["a", "b", "c", "d", "e"];
-    const pages = partitionFullReportUnits(units, [80, 90, 70, 100, 60], 3, 200);
+    const heights = [80, 90, 70, 100, 60];
+    const pages = partitionFullReportUnits(units, heights, 3, 200);
     expect(pages).toHaveLength(3);
     expect(pages?.flat()).toEqual(units);
     expect(pages?.every(page => page.length > 0)).toBe(true);
-    expect(pages?.every(page => page.reduce((sum, unit) => sum + [80,90,70,100,60][units.indexOf(unit)], 0) <= 200)).toBe(true);
+    expect(pages?.every(page => page.reduce((sum, unit) => sum + heights[units.indexOf(unit)], 0) <= 200)).toBe(true);
+  });
+
+  it("normalizes unsupported symbols and typography before standard-font measurement", () => {
+    expect(normalizePdfText("A&R — “Live” • 🎵 ₦1,000…")).toBe('A&R - "Live" - ? NGN 1,000...');
+    expect(normalizePdfText("Beyoncé")).toBe("Beyoncé");
   });
 });

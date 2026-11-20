@@ -96,14 +96,46 @@ export interface AuditStageFailureDiagnostic {
   failureCode: AuditFailureCode;
   errorName: string;
   timedOut: boolean;
+  errorCode: string;
+  stackFingerprint: string;
+  durationMs?: number;
 }
 
-export function buildAuditStageFailureDiagnostic(stage: string, error: unknown): AuditStageFailureDiagnostic {
+function safeAuditErrorCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  const known: Array<[RegExp, string]> = [
+    [/Full report content cannot fit the approved 12-page V2 allocation/i, "PDF_FULL_REPORT_ALLOCATION_UNFIT"],
+    [/Full report section heading exceeds its allocated v2 page/i, "PDF_FULL_REPORT_HEADING_OVERFLOW"],
+    [/Full report content exceeds its existing page allocation/i, "PDF_FULL_REPORT_CONTENT_OVERFLOW"],
+    [/Report v2 renderer did not return a PDF/i, "PDF_RENDERER_INVALID_OUTPUT"],
+    [/Report JSON payload does not contain a valid audit report input/i, "PDF_REPORT_INPUT_INVALID"],
+    [/Report source is neither a PDF nor valid JSON/i, "PDF_REPORT_SOURCE_INVALID"],
+    [/WinAnsi|cannot encode|encode.*character|glyph/i, "PDF_FONT_ENCODING_ERROR"],
+  ];
+  return known.find(([pattern]) => pattern.test(message))?.[1] ?? "UNCLASSIFIED_STAGE_ERROR";
+}
+
+function safeStackFingerprint(error: unknown): string {
+  const stack = error instanceof Error ? error.stack ?? "" : "";
+  const frames = stack.split("\n").slice(1).map(line => {
+    const match = line.match(/^\s*at\s+([A-Za-z0-9_.$<>-]+)(?:\s+\(|$)/);
+    return match?.[1] ?? "";
+  }).filter(Boolean).slice(0, 4);
+  if (!frames.length) return "stk-unknown";
+  let hash = 2166136261;
+  for (const char of frames.join("|")) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return "stk-" + (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function buildAuditStageFailureDiagnostic(stage: string, error: unknown, durationMs?: number): AuditStageFailureDiagnostic {
   const failureCode = classifyAuditFailure(error);
   const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(error.name)
     ? error.name
     : "UnknownError";
-  return { stage, failureCode, errorName, timedOut: failureCode === "timeout" };
+  return { stage, failureCode, errorName, timedOut: failureCode === "timeout", errorCode: safeAuditErrorCode(error), stackFingerprint: safeStackFingerprint(error), ...(Number.isFinite(durationMs) ? { durationMs: Math.max(0, Math.round(durationMs!)) } : {}) };
 }
 
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
@@ -194,6 +226,7 @@ async function awaitWithStage<T>(
 ): Promise<T> {
   return await awaitWithLease(deps, async (leaseSignal) => {
     const captureMemory = MEMORY_DIAGNOSTIC_STAGES.has(stage);
+    const stageStartedAt = Date.now();
     if (captureMemory) logStageMemory(stage, "start");
     let onAbort: (() => void) | undefined;
     const leaseAbort = leaseSignal ? new Promise<never>((_resolve, reject) => {
@@ -211,7 +244,7 @@ async function awaitWithStage<T>(
         leaseAbort,
       ]);
     } catch (error) {
-      try { deps.onStageFailure?.(buildAuditStageFailureDiagnostic(stage, error)); }
+      try { deps.onStageFailure?.(buildAuditStageFailureDiagnostic(stage, error, Date.now() - stageStartedAt)); }
       catch { /* Diagnostics must never replace the original processing failure. */ }
       throw error;
     } finally {

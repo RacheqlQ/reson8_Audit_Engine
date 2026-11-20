@@ -13,9 +13,12 @@ describe("audit stage failure diagnostics", () => {
       failureCode: "processing_error",
       errorName: "Error",
       timedOut: false,
+      errorCode: "UNCLASSIFIED_STAGE_ERROR",
+      stackFingerprint: expect.stringMatching(/^stk-[a-f0-9]{8}$/),
     });
     expect(JSON.stringify(diagnostic)).not.toContain("owner-private");
     expect(JSON.stringify(diagnostic)).not.toContain("secret");
+    expect(JSON.stringify(diagnostic)).not.toContain("report.pdf");
   });
 
   it("marks stage timeouts without including the timeout message", () => {
@@ -29,6 +32,26 @@ describe("audit stage failure diagnostics", () => {
       failureCode: "timeout",
       errorName: "Error",
       timedOut: true,
+      errorCode: "UNCLASSIFIED_STAGE_ERROR",
+      stackFingerprint: expect.stringMatching(/^stk-[a-f0-9]{8}$/),
     });
+  });
+
+  it("classifies known full-report layout failures without exposing report text", () => {
+    const diagnostic = buildAuditStageFailureDiagnostic(
+      "full_pdf_generation",
+      new Error("Full report content cannot fit the approved 12-page V2 allocation without clipping or omission."),
+    );
+    expect(diagnostic.errorCode).toBe("PDF_FULL_REPORT_ALLOCATION_UNFIT");
+    expect(JSON.stringify(diagnostic)).not.toContain("approved 12-page");
+  });
+
+  it("classifies unsupported PDF font encoding failures without exposing the offending text", () => {
+    const diagnostic = buildAuditStageFailureDiagnostic(
+      "full_pdf_generation",
+      new Error("WinAnsi cannot encode 🎵"),
+    );
+    expect(diagnostic.errorCode).toBe("PDF_FONT_ENCODING_ERROR");
+    expect(JSON.stringify(diagnostic)).not.toContain("🎵");
   });
 });
