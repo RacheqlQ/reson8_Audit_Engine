@@ -140,8 +140,9 @@ describe("audio metadata tag extraction", () => {
     expect(readAudioTags(malformed)).toMatchObject({ genres: [], track: null });
   });
 
-  it("extracts ISRC from the iTunes freeform metadata atom in an MP4/M4A master", () => {
+  it("extracts valid ISRCs and rejects malformed values in MP4/M4A freeform metadata", () => {
     expect(readAudioTags(mp4FreeformIsrc("NG-ABC-26-00001")).isrc).toBe("NGABC2600001");
+    expect(readAudioTags(mp4FreeformIsrc("not-an-isrc")).isrc).toBeNull();
   });
 
   it("does not expose malformed embedded ISRC tag values as recording identifiers", () => {
