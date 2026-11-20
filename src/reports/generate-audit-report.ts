@@ -196,11 +196,11 @@ export function reportableAssessmentItems(items:string[]):string[] {
 function professionalEvidenceLanguage(value:string):string {
  value=normalizeRmsEnvelopeWording(value);
  return value
-  .replace(/acousticFeatureProfile\\.predictions\\.mood/gi,"provisional uploaded-master mood analysis")
-  .replace(/acousticFeatureProfile\\.predictions\\.energy/gi,"provisional uploaded-master energy analysis")
-  .replace(/\\bVALIDATED_MODEL_NOT_CONFIGURED\\b/gi,"a validated mood model is not configured")
-  .replace(/\\bCALIBRATED_ENERGY_MODEL_NOT_CONFIGURED\\b/gi,"a calibrated perceptual-energy model is not configured")
-  .replace(/\\bCALIBRATED_CLASSIFIER_NOT_CONFIGURED\\b/gi,"a calibrated tonal classifier is not configured")
+  .replace(/acousticFeatureProfile\.predictions\.mood/gi,"provisional uploaded-master mood analysis")
+  .replace(/acousticFeatureProfile\.predictions\.energy/gi,"provisional uploaded-master energy analysis")
+  .replace(/\bVALIDATED_MODEL_NOT_CONFIGURED\b/gi,"a validated mood model is not configured")
+  .replace(/\bCALIBRATED_ENERGY_MODEL_NOT_CONFIGURED\b/gi,"a calibrated perceptual-energy model is not configured")
+  .replace(/\bCALIBRATED_CLASSIFIER_NOT_CONFIGURED\b/gi,"a calibrated tonal classifier is not configured")
   .replace(/Vocal analysis:\s*Not performed[^.]*\./gi,"")
   .replace(/vocal presence\/absence is unknown[^.]*\./gi,"")
   .replace(/(?:learned audio(?:-genre)?|audio-only genre|vocal|detection|classification) model(?: status)?[^.]*\b(?:disabled|not configured|unavailable)\b[^.]*\.?/gi,"")
