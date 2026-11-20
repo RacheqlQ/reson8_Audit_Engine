@@ -37,8 +37,8 @@ export function classifyRelativeMajorMinorAmbiguity(
  independent:Pick<IndependentKeyEstimate,"key"|"mode"|"score"|"margin">,
 ):boolean {
  if(!primary.key||!primary.mode||!independent.key||!independent.mode||primary.mode===independent.mode)return false;
- const primaryPitch=NOTES.indexOf(primary.key);
- const independentPitch=NOTES.indexOf(independent.key);
+ const primaryPitch=NOTES.indexOf(primary.key as typeof NOTES[number]);
+ const independentPitch=NOTES.indexOf(independent.key as typeof NOTES[number]);
  if(primaryPitch<0||independentPitch<0)return false;
  const distance=(independentPitch-primaryPitch+12)%12;
  const relativePair=distance===3||distance===9;
