@@ -48,13 +48,13 @@ describe("Phase 2 estimator window consensus", () => {
     expect(result.windowConsensus.observedAgreement).toBeNull();
   });
 
-  it("abstains when independent audio pathways disagree by an unresolved half-time/double-time factor", () => {
+  it("preserves a supported primary pulse and reports its half-time interpretation", () => {
     const sampleRate = 8000;
     const seconds = 24;
     const samples = pulse(120, seconds, sampleRate);
     // A 60 BPM low-frequency pulse coexists with 120 BPM high-frequency attacks.
-    // Without meter/context evidence, audio periodicity alone cannot safely
-    // decide whether the perceived beat is 60 or 120 BPM.
+    // The 60 BPM low-frequency pulse is a valid half-time interpretation
+    // of the 120 BPM attack pulse, not a contradictory tempo estimate.
     for (let beat = 0; beat < seconds; beat++) {
       const start = Math.round(beat * sampleRate);
       const length = Math.min(Math.round(sampleRate * 0.12), samples.length - start);
@@ -64,10 +64,10 @@ describe("Phase 2 estimator window consensus", () => {
       }
     }
     const result = estimateTempo(samples, sampleRate);
-    expect(result.bpm).toBeNull();
-    expect(result.confidence).toBeNull();
-    expect(result.abstentionReason).toMatch(/half.time|double.time|octave|ambiguous/i);
-    expect(result.alternateTempo).not.toBeNull();
+    expect(result.bpm).toBe(120);
+    expect(result.alternateTempo).toBeCloseTo(60, 0);
+    expect(result.confidence).not.toBeNull();
+    expect(result.abstentionReason).toBeNull();
   });
 
 });
