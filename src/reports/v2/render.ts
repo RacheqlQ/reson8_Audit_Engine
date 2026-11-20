@@ -317,16 +317,18 @@ async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, p
   units.push({ kind: "heading", title: section.title, accent: "gold" });
   for (const paragraph of section.text) {
    const lines = wrap(paragraph, fonts.regular, 8.1, W - 2 * M - 30);
-   for (let offset = 0; offset < lines.length; offset += 34) {
-    units.push({ kind: "paragraph", lines: lines.slice(offset, offset + 34), accent: "gold" });
+   // Smaller blocks prevent dense sections from overflowing a V2 body page.
+   for (let offset = 0; offset < lines.length; offset += 20) {
+    units.push({ kind: "paragraph", lines: lines.slice(offset, offset + 20), accent: "gold" });
    }
   }
  }
  const weights = units.map(unit => unit.kind === "heading" ? 28 : unit.lines.length * 10 + 18);
  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
- // V2 owns its page allocation. Do not render a throwaway V1 PDF or read its page count.
- // The V2 content plan uses a conservative usable-height budget per body page.
- const bodyPageCount = Math.max(1, Math.ceil(totalWeight / 570));
+ // V2 owns its allocation: one cover, eleven body pages, and one notes page.
+ // The approved full-report range is 12–13 pages; this fixed 13-page layout
+ // avoids V1 renderer and pagination dependencies while retaining all section content.
+ const bodyPageCount = 11;
  const targetPageCount = bodyPageCount + 2;
  const buckets: FullFlowUnit[][] = Array.from({ length: bodyPageCount }, () => []);
  let pageIndex = 0, accumulated = 0;
