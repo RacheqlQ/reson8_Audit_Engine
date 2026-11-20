@@ -116,9 +116,7 @@ describe("audit status query efficiency", () => {
       catalogSources: [
         { platform: "spotify", status: "recognized" },
       ],
-      isrcCatalogSources: [
-        { platform: "musicbrainz", status: "partial", reason: "Multiple recording candidates returned; ambiguous fields were withheld." },
-      ],
+
     });
   });
   it("does not present automatic ISRC provider attempts as submitted DSP evidence", async () => {
@@ -138,10 +136,9 @@ describe("audit status query efficiency", () => {
     const status = await createSupabaseAuditStore().getAuditStatus("job-isrc-only");
     expect(status.catalogUrlsSubmitted).toEqual([]);
     expect(status.catalogSources).toEqual([]);
-    expect(status.isrcCatalogSources).toEqual([
-      expect.objectContaining({ platform: "musicbrainz", status: "recognized" }),
-      expect.objectContaining({ platform: "spotify", status: "unavailable" }),
-    ]);
+    expect(status.catalogSources).toEqual([]);
+    expect(JSON.stringify(status)).not.toContain("api.spotify.com");
+    expect(JSON.stringify(status)).not.toContain("musicbrainz.org/ws/2/isrc");
   });
 
 });
