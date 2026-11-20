@@ -3,6 +3,7 @@ import { planAuditReportPages, buildArNotesDecisionContext, chartsForSection, me
 import { loadReportFonts } from "../fonts.js";
 import { chartPanelHeight, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
+import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
 
 const W=595.28,H=841.89,M=42;
 const C={
@@ -79,7 +80,7 @@ function pageBase(pdf:PDFDocument,title:string,fonts:Fonts):PDFPage{
  const p=pdf.addPage([W,H]);p.drawRectangle({x:0,y:0,width:W,height:H,color:C.paper});header(p,title,fonts);return p;
 }
 export function buildNextActionLine(input: AuditReportInput): string {
- const assessment=rec(input.assessment), recommendation=str(rec(assessment.releaseStrategy).recommendation,"");
+ const assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)), recommendation=str(rec(assessment.releaseStrategy).recommendation,"");
  const firstGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(Boolean)??"";
  return "Recommended next step: "+(recommendation||firstGap||"Not supplied");
 }
@@ -93,7 +94,7 @@ export function buildReleaseFramingLine(input: AuditReportInput): string {
 }
 
 export function buildPositioningLines(input: AuditReportInput): string[] {
- const evidence = rec(input.evidence), assessment = rec(input.assessment);
+ const evidence = rec(input.evidence), assessment = sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence));
  const lines: string[] = [];
  const genre = str(evidence.genre, "");
  const genreSource = str(evidence.genreSource ?? evidence.genreProvider ?? evidence.genreProvenance, "");
@@ -170,7 +171,7 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  return summaryTop-summaryHeight-14;
 }
 function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
- const e=rec(input.evidence),a=rec(input.assessment),sonic=rec(input.sonicDna);
+ const e=rec(input.evidence),a=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)),sonic=rec(input.sonicDna);
  const pages:PageSpec[]=[
   {title:"Cover and verdict",kind:"cover",blocks:metricBlock(data),lines:[
    "Artist: "+str(e.artist)+"   Track: "+str(e.title),
