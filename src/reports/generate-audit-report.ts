@@ -187,8 +187,8 @@ function drawSpotifyMark(page:PDFPage,x:number,y:number,size:number):void {
 
 function normalizeRmsEnvelopeWording(value:string):string {
  return value
-  .replace(/RMS[- ]envelope spread\\s*\\(internal proxy;\\s*not mastering dynamic range\\)\\s*\\(internal proxy;\\s*not mastering dynamic range\\)/gi,"RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)")
-  .replace(/RMS[- ]envelope spread\\s*\\(internal proxy;\\s*not mastering dynamic range\\)/gi,"RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)");
+  .replace(/RMS[- ]envelope spread\s*\(internal proxy;\s*not mastering dynamic range\)\s*\(internal proxy;\s*not mastering dynamic range\)/gi,"RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)")
+  .replace(/RMS[- ]envelope spread\s*\(internal proxy;\s*not mastering dynamic range\)/gi,"RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)");
 }
 function professionalEvidenceLanguage(value:string):string {
  value=normalizeRmsEnvelopeWording(value);
@@ -228,14 +228,14 @@ function executiveDiagnosticMessage(code:string,message:string,metricName?:strin
  };
  if(metricName==="tempo_bpm"&&code==="MEASUREMENT_UNAVAILABLE")return "No tempo value passed the reliability threshold. Any provisional candidate is reported separately in the Sonic DNA analysis.";
  const safe=known[code]??message
-  .replace(/acousticFeatureProfile\\.predictions\\.mood/gi,"the uploaded-master provisional mood analysis")
-  .replace(/acousticFeatureProfile\\.predictions\\.energy/gi,"the uploaded-master provisional energy analysis")
+  .replace(/acousticFeatureProfile\.predictions\.mood/gi,"the uploaded-master provisional mood analysis")
+  .replace(/acousticFeatureProfile\.predictions\.energy/gi,"the uploaded-master provisional energy analysis")
   .replace(/CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED|VALIDATED_MODEL_NOT_CONFIGURED|CALIBRATED_CLASSIFIER_NOT_CONFIGURED|MEASUREMENT_UNAVAILABLE|PROVIDER_NOT_CONFIGURED|NO_UNAMBIGUOUS_RECORD_ID|PROVIDER_LOOKUP_UNAVAILABLE|PROVIDER_RETRIEVAL_TIMESTAMP_MISSING/g,"analysis limitation");
- return safe.replace(/\\s+/g," ").trim();
+ return safe.replace(/\s+/g," ").trim();
 }
 function executiveMetricLabel(name:string):string {
  const labels:Record<string,string>={tempo_bpm:"Confirmed tempo",integrated_loudness_lufs:"Integrated loudness",loudness_range_lu:"Loudness range",true_peak_dbfs:"True peak",rms_level_dbfs:"RMS signal level",spectral_centroid_hz:"Spectral centroid",spectral_bandwidth_hz:"Spectral bandwidth",spectral_rolloff_hz:"Spectral rolloff",zero_crossing_rate:"Zero-crossing rate"};
- return labels[name]??name.replace(/^acoustic_/,"").replace(/_median$/," median").replace(/_/g," ").replace(/\\b\\w/g,(letter)=>letter.toUpperCase());
+ return labels[name]??name.replace(/^acoustic_/,"").replace(/_median$/," median").replace(/_/g," ").replace(/\b\w/g,(letter)=>letter.toUpperCase());
 }
 export function metadataFieldStatus(e:Record<string,unknown>,field:string):string{
  const value=text(field==="genre"?(e.genre??e.genres):e[field]);
