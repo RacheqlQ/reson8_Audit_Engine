@@ -478,10 +478,10 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    card(page,M,H-245,W-2*M,"Execution timeline · PLAN",timelineLines.length?["ILLUSTRATIVE PLAN — proposed guidance, not a verified campaign outcome.",...timelineLines]:["NOT SUPPLIED: no execution timeline was included in the persisted assessment."],fonts,{accent:C.amber});
    const sonic=rec(input.sonicDna);
    const loudness=[
-    finite(sonic.loudnessLufs)?"Integrated loudness: "+Number(sonic.loudnessLufs).toFixed(1)+" LUFS":"Integrated loudness: NOT MEASURED",
-    finite(sonic.loudnessRangeLu)?"Loudness range: "+Number(sonic.loudnessRangeLu).toFixed(1)+" LU":"Loudness range: NOT MEASURED",
-    finite(sonic.truePeakDbfs)?"True peak: "+Number(sonic.truePeakDbfs).toFixed(1)+" dBFS":"True peak: NOT MEASURED",
-    finite(sonic.rmsLevelDbfs)?"RMS level: "+Number(sonic.rmsLevelDbfs).toFixed(1)+" dBFS":"RMS level: NOT MEASURED"
+    Number.isFinite(sonic.loudnessLufs)?"Integrated loudness: "+Number(sonic.loudnessLufs).toFixed(1)+" LUFS":"Integrated loudness: NOT MEASURED",
+    Number.isFinite(sonic.loudnessRangeLu)?"Loudness range: "+Number(sonic.loudnessRangeLu).toFixed(1)+" LU":"Loudness range: NOT MEASURED",
+    Number.isFinite(sonic.truePeakDbfs)?"True peak: "+Number(sonic.truePeakDbfs).toFixed(1)+" dBFS":"True peak: NOT MEASURED",
+    Number.isFinite(sonic.rmsLevelDbfs)?"RMS level: "+Number(sonic.rmsLevelDbfs).toFixed(1)+" dBFS":"RMS level: NOT MEASURED"
    ];
    card(page,M,H-430,W-2*M,"Loudness, true peak and LRA panel",[...loudness,"Descriptive measurements only; no mastering-readiness verdict is inferred."],fonts,{accent:C.gold});
   }else if(spec.kind==="axes"){
