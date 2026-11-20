@@ -43,7 +43,7 @@ function metricBlock(data:ReportV2Data):Block[]{
 }
 function scoreChip(page:PDFPage,x:number,y:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
  page.drawRectangle({x,y,width:158,height:48,color:C.white,borderColor:C.line,borderWidth:.7});
- page.drawCircle({x:x+13,y:y+24,size:4,color});
+ page.drawCircle({x:x+13,y:y+31,size:3.5,color});
  page.drawText(label.toUpperCase(),{x:x+24,y:y+28,size:6.5,font:fonts.bold,color:C.muted});
  drawWrapped(page,value,x+12,y+15,134,fonts.bold,9,color,11);
 }
@@ -171,8 +171,11 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts){
   const peak=data.energySeries.reduce((a,b)=>b.value>a.value?b:a),dip=data.energySeries.reduce((a,b)=>b.value<a.value?b:a);
   page.drawCircle({x:left+(peak.timeSeconds-t0)/dt*(right-left),y:plotBottom+(peak.value-min)/span*(plotTop-plotBottom),size:4,color:C.teal});
   page.drawCircle({x:left+(dip.timeSeconds-t0)/dt*(right-left),y:plotBottom+(dip.value-min)/span*(plotTop-plotBottom),size:4,color:C.coral});
-  page.drawText("Peak "+peak.timeSeconds.toFixed(1)+"s",{x:left,y:plotBottom-13,size:6,font:fonts.bold,color:C.teal});
-  page.drawText("Dip "+dip.timeSeconds.toFixed(1)+"s",{x:right-60,y:plotBottom-13,size:6,font:fonts.bold,color:C.coral});
+  const peakX=left+(peak.timeSeconds-t0)/dt*(right-left),dipX=left+(dip.timeSeconds-t0)/dt*(right-left);
+  const peakLabelX=Math.max(left,Math.min(right-42,peakX-21)),dipLabelX=Math.max(left,Math.min(right-38,dipX-19));
+  const sameRegion=Math.abs(peakLabelX-dipLabelX)<46;
+  page.drawText("Peak "+peak.timeSeconds.toFixed(1)+"s",{x:peakLabelX,y:plotBottom-13,size:6,font:fonts.bold,color:C.teal});
+  page.drawText("Dip "+dip.timeSeconds.toFixed(1)+"s",{x:dipLabelX,y:plotBottom-(sameRegion?24:13),size:6,font:fonts.bold,color:C.coral});
  }
 }
 function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
@@ -189,6 +192,10 @@ function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
 function drawComparables(page:PDFPage,input:AuditReportInput,data:ReportV2Data,fonts:Fonts){
  const e=rec(input.evidence),position=rec(e.marketPosition),score=typeof position.score==="number"&&Number.isFinite(position.score)?position.score:null;
  let y=H-104;
+ if(score===null){
+  card(page,M,y,W-2*M,"Market position not scored",["No supported market-position score or audience benchmark was supplied. The source-attributed comparables below are context only; they do not establish audience reach, playlist placement or campaign performance."],fonts,{accent:C.amber});
+  y-=76;
+ }
  if(score!==null){
   card(page,M,y,W-2*M,"Market position",[score+" / 100 · "+str(position.label,"Position label not supplied"),"Confidence: "+str(position.confidence,"Not supplied"),"Basis: "+str(position.basis,"Source-attributed comparables")],fonts,{accent:C.gold});
   const barX=M+14,barY=y-52,barW=W-2*M-28;page.drawRectangle({x:barX,y:barY,width:barW,height:12,color:C.line});page.drawRectangle({x:barX,y:barY,width:barW*score/100,height:12,color:C.teal});page.drawCircle({x:barX+barW*score/100,y:barY+6,size:7,color:C.white,borderColor:C.ink,borderWidth:1});y-=105;
