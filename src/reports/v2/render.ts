@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
-import { generateAuditReport, planAuditReportPages, buildArNotesDecisionContext, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
+import { planAuditReportPages, buildArNotesDecisionContext, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
 import { loadReportFonts } from "../fonts.js";
 import { chartPanelHeight, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
@@ -311,9 +311,6 @@ function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
 type FullFlowUnit = { kind: "heading"; title: string; accent: string } | { kind: "paragraph"; lines: string[]; accent: string };
 
 async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, pdf: PDFDocument, fonts: Fonts): Promise<Uint8Array> {
- const original = await generateAuditReport(input, "full");
- const targetPageCount = (await PDFDocument.load(original)).getPageCount();
- if (targetPageCount < 3) throw new Error("The existing full report page count is too small for the v2 full-report layout.");
  const sectionPlans = planAuditReportPages(input, "full");
  const units: FullFlowUnit[] = [];
  for (const section of sectionPlans) {
@@ -325,10 +322,13 @@ async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, p
    }
   }
  }
- const bodyPageCount = targetPageCount - 2;
- const buckets: FullFlowUnit[][] = Array.from({ length: bodyPageCount }, () => []);
  const weights = units.map(unit => unit.kind === "heading" ? 28 : unit.lines.length * 10 + 18);
  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+ // V2 owns its page allocation. Do not render a throwaway V1 PDF or read its page count.
+ // The V2 content plan uses a conservative usable-height budget per body page.
+ const bodyPageCount = Math.max(1, Math.ceil(totalWeight / 570));
+ const targetPageCount = bodyPageCount + 2;
+ const buckets: FullFlowUnit[][] = Array.from({ length: bodyPageCount }, () => []);
  let pageIndex = 0, accumulated = 0;
  for (let index = 0; index < units.length; index++) {
   const remainingUnits = units.length - index;
