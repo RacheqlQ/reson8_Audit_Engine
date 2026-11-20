@@ -236,7 +236,9 @@ function windowConsensusSummary(value:unknown,independent?:unknown):string|null 
  if(!value||typeof value!=="object"||Array.isArray(value))return null;
  const record=value as Record<string,unknown>;
  const count=typeof record.windowCount==="number"&&Number.isInteger(record.windowCount)?record.windowCount:0;
- const independentRecord=independent&&typeof independent==="object"&&!Array.isArray(independent)?independent as Record<string,unknown>:null;\n const independentText=independentRecord?(typeof independentRecord.bpm==="number"?"Independent low-frequency model: "+independentRecord.bpm.toFixed(1)+" BPM (raw periodicity score "+String(independentRecord.score??"n/a")+")":typeof independentRecord.key==="string"?"Independent Goertzel model: "+independentRecord.key+" "+String(independentRecord.mode??"")+" (raw score "+String(independentRecord.score??"n/a")+")":null):null;\n if(count<1)return "Unavailable — no usable analysis windows."+(independentText?" "+independentText:"");
+ const independentRecord=independent&&typeof independent==="object"&&!Array.isArray(independent)?independent as Record<string,unknown>:null;
+ const independentText=independentRecord?(typeof independentRecord.bpm==="number"?"Independent low-frequency model: "+independentRecord.bpm.toFixed(1)+" BPM (raw periodicity score "+String(independentRecord.score??"n/a")+")":typeof independentRecord.key==="string"?"Independent Goertzel model: "+independentRecord.key+" "+String(independentRecord.mode??"")+" (raw score "+String(independentRecord.score??"n/a")+")":null):null;
+ if(count<1)return "Unavailable — no usable analysis windows."+(independentText?" "+independentText:"");
  const winner=typeof record.winner==="string"&&record.winner.trim()?record.winner:"No stable majority";
  const agreement=typeof record.observedAgreement==="number"&&Number.isFinite(record.observedAgreement)
   ?"; observed agreement "+record.observedAgreement.toFixed(2):"";
