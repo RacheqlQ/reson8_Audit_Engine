@@ -193,7 +193,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  let y=top-112;
  if(data.structure){
   const height=116;card(page,M,y,W-2*M,"Structure",[],fonts,{height,accent:C.gold});
-  const left=M+14,barY=y-43,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));
+  const left=M+14,barY=y-63,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));
   const palette=[C.teal,C.gold,C.amber,C.coral];
   page.drawText("TRACK TIMELINE · ELAPSED SECONDS",{x:left,y:barY+25,size:6,font:fonts.bold,color:C.muted});
   data.structure.forEach((s,i)=>{const x=left+(s.startSeconds/total)*barW,w=barW*(s.endSeconds-s.startSeconds)/total;page.drawRectangle({x,y:barY,width:w,height:18,color:palette[i%palette.length]});page.drawText(String(s.index),{x:x+w/2-2,y:barY+5,size:6,font:fonts.bold,color:C.white});});
@@ -230,7 +230,7 @@ function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  names.forEach((name,i)=>{const a=-Math.PI/2+i*2*Math.PI/5;const x=cx+Math.cos(a)*(r+22),y=cy+Math.sin(a)*(r+22);page.drawText(name+" "+axes[name].value,{x:x-28,y,size:7,font:fonts.bold,color:C.ink});});
  const note="Supplied axis scores only. Scale: 0–100; higher values indicate a higher score on that named axis. No reference average or audience-overlap claim is implied.";
  drawWrapped(page,note,330,cy+60,180,fonts.regular,8,C.muted,11);
- page.drawText("SCALE 0–100",{x:330,y:cy+28,size:6.5,font:fonts.bold,color:C.gold});
+
  let y=cy-155;
  names.forEach(name=>{const item=axes[name];page.drawRectangle({x:M,y:y-15,width:W-2*M,height:38,color:C.white,borderColor:C.line,borderWidth:.6});page.drawText(name,{x:M+12,y:y+8,size:8,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+112,y:y+5,width:150,height:6,color:C.line});page.drawRectangle({x:M+112,y:y+5,width:150*item.value/100,height:6,color:item.value<60?C.amber:C.teal});page.drawText(String(item.value),{x:M+270,y:y+5,size:8,font:fonts.bold,color:C.ink});drawWrapped(page,item.note??"Axis note not supplied.",M+310,y+8,190,fonts.regular,7,C.muted,9);y-=45;});
 }
@@ -258,9 +258,9 @@ function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  page.drawText("0s",{x:left,y:mid-42,size:6,font:fonts.regular,color:C.muted});
  page.drawText(max.toFixed(1)+"s",{x:right-24,y:mid-42,size:6,font:fonts.regular,color:C.muted});
  moments.forEach((m,i)=>{const x=left+(m.timestampSeconds/max)*(right-left);const color=m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal;page.drawLine({start:{x,y:mid-23},end:{x,y:mid+24},color,thickness:1.6});page.drawCircle({x,y:mid+26,size:8,color});page.drawText(String(i+1),{x:x-2.5,y:mid+23,size:6,font:fonts.bold,color:C.white});page.drawText(m.timestampSeconds.toFixed(1)+"s",{x:x-14,y:mid-34-(i%2)*9,size:6,font:fonts.bold,color});});
- page.drawText("● Strength",{x:M+14,y:mid-12,size:6.5,font:fonts.bold,color:C.teal});
- page.drawText("● Check",{x:M+94,y:mid-12,size:6.5,font:fonts.bold,color:C.amber});
- page.drawText("● Risk",{x:M+160,y:mid-12,size:6.5,font:fonts.bold,color:C.coral});
+ page.drawCircle({x:M+17,y:mid-9,size:2.5,color:C.teal});page.drawText("Strength",{x:M+24,y:mid-12,size:6.5,font:fonts.bold,color:C.teal});
+ page.drawCircle({x:M+98,y:mid-9,size:2.5,color:C.amber});page.drawText("Check",{x:M+105,y:mid-12,size:6.5,font:fonts.bold,color:C.amber});
+ page.drawCircle({x:M+164,y:mid-9,size:2.5,color:C.coral});page.drawText("Risk",{x:M+171,y:mid-12,size:6.5,font:fonts.bold,color:C.coral});
  let y=mid-48;
  moments.forEach((m,i)=>{const h=card(page,M,y,W-2*M,m.timestampSeconds.toFixed(2)+"s · "+m.title,[m.note],fonts,{accent:m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal});y-=h+8;});
  card(page,M,y,W-2*M,"How moments are chosen",["Moments are rendered from supplied timestamped detector output or device flags. This report does not create or infer additional flags."],fonts,{accent:C.gold});
@@ -409,9 +409,9 @@ export async function generateAuditReportV2(input:AuditReportInput,tier:AuditRep
    card(page,M,summaryTop,W-2*M,"Executive summary",[summary.replace(/^Executive summary:\s*/,"")],fonts,{accent:C.gold});
    const next=spec.lines?.[3]??"Recommended next step not supplied.";
    card(page,M,summaryTop-115,W-2*M,"Recommended next step",[next.replace(/^Recommended next step:\s*/,"")],fonts,{accent:C.gold});
-   page.drawText("IN THIS REPORT",{x:M,y:132,size:7,font:fonts.bold,color:C.gold});
+   page.drawText("IN THIS REPORT",{x:M,y:190,size:7,font:fonts.bold,color:C.gold});
    const toc=pages.slice(1);
-   toc.forEach((p,i)=>{const col=i<5?0:1,row=i<5?i:i-5,x=M+col*250,y=165-row*14;page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});drawWrapped(page,p.title,x+28,y,205,fonts.regular,7,C.ink,8);});
+   toc.forEach((p,i)=>{const col=i<5?0:1,row=i<5?i:i-5,x=M+col*250,y=174-row*14;page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});drawWrapped(page,p.title,x+28,y,205,fonts.regular,7,C.ink,8);});
   }else if(spec.kind==="axes"||spec.kind==="comparables"||spec.kind==="moments"){
    let y=H-92;for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:spec.kind==="moments"?(b.label.includes("Risk")?C.coral:C.teal):C.gold,provenance:b.provenance+" · "+b.confidence});y-=h+8;}
   }else{
