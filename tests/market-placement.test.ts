@@ -57,7 +57,7 @@ describe("Phase 5 market placement strategy", () => {
     expect(plan.playlistTargets[1]).toMatchObject({
       provider: "spotify",
       name: "Afrobeats Select",
-      matchStatus: "similarity_candidate",
+      matchStatus: "membership_unverified",
     });
     expect(plan.playlistTargets[0].limitations.join(" ")).toMatch(/does not establish curator interest/i);
   });
