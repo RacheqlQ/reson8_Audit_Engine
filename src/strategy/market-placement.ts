@@ -168,6 +168,7 @@ function shortFormHooks(sonicDna: Record<string, unknown> | null, executionMode:
   const profile = record(sonicDna?.acousticFeatureProfile);
   const summaries = Array.isArray(profile.windowSummaries) ? profile.windowSummaries.map(record) : [];
   const rmsValues = summaries.map((item) => finite(item.rmsDbfs)).filter((value): value is number => value !== null);
+  if (!summaries.length || !rmsValues.length) return unavailable("Windowed RMS summaries were unavailable, so onset peaks cannot be paired with energy context.");
   const minRms = rmsValues.length ? Math.min(...rmsValues) : 0;
   const maxRms = rmsValues.length ? Math.max(...rmsValues) : 0;
   const energyAt = (time: number): number => {
