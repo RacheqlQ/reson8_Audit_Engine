@@ -289,7 +289,14 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
 }
 
 export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAudio:boolean):Array<{label:string;value:string|null}> {
- const vocal=s?.vocalFeatures&&typeof s.vocalFeatures==="object"?s.vocalFeatures as Record<string,unknown>:{};
+ const profile=s?.acousticFeatureProfile&&typeof s.acousticFeatureProfile==="object"?s.acousticFeatureProfile as Record<string,unknown>:{};
+ const descriptors=profile.descriptors&&typeof profile.descriptors==="object"?profile.descriptors as Record<string,unknown>:{};
+ const provenance=profile.provenance&&typeof profile.provenance==="object"?profile.provenance as Record<string,unknown>:{};
+ const descriptor=(name:string,decimals:number):string|null=>{
+  const value=descriptors[name];
+  const median=value&&typeof value==="object"?(value as Record<string,unknown>).median:null;
+  return hasAudio?metric(median,decimals,"Unavailable"):null;
+ };
  return [
   {label:"SAMPLE RATE HZ",value:hasAudio?metric(s?.sampleRate,0):null},
   {label:"CHANNELS",value:hasAudio?metric(s?.channels,0):null},
@@ -297,7 +304,15 @@ export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAu
   {label:"SPECTRAL BANDWIDTH HZ",value:hasAudio?metric(s?.spectralBandwidthHz,0):null},
   {label:"SPECTRAL ROLLOFF HZ",value:hasAudio?metric(s?.spectralRolloffHz,0):null},
   {label:"ZERO CROSSING RATE",value:hasAudio?metric(s?.zeroCrossingRate,4):null},
-  {label:"SIGNAL PERIODICITY ACTIVITY RATIO",value:hasAudio?metric(vocal.periodicityActivityRatio,2):null}
+  {label:"WINDOWED RMS MEDIAN DBFS",value:descriptor("rmsDbfs",2)},
+  {label:"WINDOWED PEAK MEDIAN DBFS",value:descriptor("peakDbfs",2)},
+  {label:"WINDOWED CREST FACTOR DB",value:descriptor("crestFactorDb",2)},
+  {label:"SPECTRAL FLATNESS MEDIAN",value:descriptor("spectralFlatness",4)},
+  {label:"LOW BAND ENERGY RATIO",value:descriptor("lowBandEnergyRatio",4)},
+  {label:"MID BAND ENERGY RATIO",value:descriptor("midBandEnergyRatio",4)},
+  {label:"HIGH BAND ENERGY RATIO",value:descriptor("highBandEnergyRatio",4)},
+  {label:"ACOUSTIC ANALYSIS WINDOWS",value:hasAudio?metric(provenance.windowCount,0,"Unavailable"):null},
+  {label:"ACOUSTIC FEATURE VERSION",value:hasAudio?val(provenance.featureVersion,"Unavailable"):null}
  ];
 }
 
