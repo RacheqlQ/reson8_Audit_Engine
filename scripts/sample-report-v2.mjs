@@ -36,4 +36,4 @@ const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20
 const fullPdf=await PDFDocument.load(fullBytes);
 if(fullPdf.getPageCount()!==12)throw new Error("v2-complete-synthetic-full expected 12 pages; got "+fullPdf.getPageCount());
 await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
-process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\\n");
+process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\n");
