@@ -97,6 +97,7 @@ export interface AuditStageFailureDiagnostic {
   errorName: string;
   timedOut: boolean;
   errorCode: string;
+  stackFingerprint: string;
   durationMs?: number;
 }
 
@@ -114,12 +115,27 @@ function safeAuditErrorCode(error: unknown): string {
   return known.find(([pattern]) => pattern.test(message))?.[1] ?? "UNCLASSIFIED_STAGE_ERROR";
 }
 
+function safeStackFingerprint(error: unknown): string {
+  const stack = error instanceof Error ? error.stack ?? "" : "";
+  const frames = stack.split("\\n").slice(1).map(line => {
+    const match = line.match(/^\\s*at\\s+([A-Za-z0-9_.$<>-]+)(?:\\s+\\(|$)/);
+    return match?.[1] ?? "";
+  }).filter(Boolean).slice(0, 4);
+  if (!frames.length) return "stk-unknown";
+  let hash = 2166136261;
+  for (const char of frames.join("|")) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return "stk-" + (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 export function buildAuditStageFailureDiagnostic(stage: string, error: unknown, durationMs?: number): AuditStageFailureDiagnostic {
   const failureCode = classifyAuditFailure(error);
   const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(error.name)
     ? error.name
     : "UnknownError";
-  return { stage, failureCode, errorName, timedOut: failureCode === "timeout", errorCode: safeAuditErrorCode(error), ...(Number.isFinite(durationMs) ? { durationMs: Math.max(0, Math.round(durationMs!)) } : {}) };
+  return { stage, failureCode, errorName, timedOut: failureCode === "timeout", errorCode: safeAuditErrorCode(error), stackFingerprint: safeStackFingerprint(error), ...(Number.isFinite(durationMs) ? { durationMs: Math.max(0, Math.round(durationMs!)) } : {}) };
 }
 
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
