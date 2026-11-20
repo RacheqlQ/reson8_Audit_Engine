@@ -12,9 +12,12 @@ describe("Phase 5 report integration", () => {
       sonicDna: input.sonicDna,
       playlistDiscovery: input.evidence.playlistDiscovery as Record<string, unknown> | undefined,
     });
+    input.evidence.playlistDiscovery = { moodTagsUsed: ["driving"], moodSource: "DSP catalogue sonic profile; uploaded-master provisional audio_feature_heuristics_v1", candidates: [], outcomes: [] };
     const pages = planAuditReportPages(input, "full");
     const text = pages.flatMap((page) => [page.title, ...page.text]).join(" ");
     expect(text).toContain("Executive market placement and DSP targeting");
+    expect(text).toContain("candidate-track BPM, key, energy and acoustic feature vectors");
+    expect(text).toContain("provisional audio_feature_heuristics_v1 outputs, not calibrated perceptual predictions");
     expect(text).toContain("Territory prioritization");
     expect(text).toContain("No verified territory-level audience telemetry");
     expect(text).toContain("Timestamped short-form edit candidates");
