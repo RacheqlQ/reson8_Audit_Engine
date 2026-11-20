@@ -77,6 +77,15 @@ describe("combined master and DSP processing", () => {
         reportInputs.push(input);
         events.push("generated-"+tier);
         expect(input.evidence).toMatchObject({ sourceCombination: "master_and_dsp", artist: "Master Artist", title: "Master Song" });
+        expect(input.evidence.canonicalEvidence).toMatchObject({
+          schemaVersion: "1.0.0",
+          auditId: "combined-1",
+          sourceEvidence: { sourceCombination: "master_and_dsp" },
+          assessmentEvidence: { sourceCombination: "master_and_dsp" },
+          reconciliation: { reconciledFields: expect.any(Array) },
+        });
+        expect(input.evidence.canonicalEvidence.assessmentEvidence).toBe(assessmentInput.evidence);
+        expect(input.evidence.canonicalEvidence.identityFieldProvenance).toEqual(assessmentInput.evidence.identity.fieldProvenance);
         expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master", evidenceClass: "OBSERVED" });
         expect(input.sonicDna).toHaveProperty("tempoCandidateBpm");
         expect(input.sonicDna).toHaveProperty("keyCandidates");
