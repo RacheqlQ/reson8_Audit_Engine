@@ -164,17 +164,33 @@ export function estimateGoertzelKey(samples: Float32Array, sampleRate: number): 
   if (!Number.isFinite(sampleRate) || sampleRate <= 0 || samples.length < sampleRate * 2 || signalRms(samples) < 1e-5) {
     return unavailable("Insufficient duration or signal energy for Goertzel key analysis.");
   }
+  // Analyze three evenly spaced 2-second excerpts. A full-track Goertzel
+  // sweep scales with recording duration and made long-form analysis
+  // needlessly expensive; these excerpts bound work while sampling beginning,
+  // middle, and end rather than silently truncating to the intro.
+  const windowLength = Math.min(samples.length, Math.max(2, Math.floor(sampleRate * 2)));
+  const windowCount = Math.min(3, Math.max(1, Math.floor(samples.length / windowLength)));
+  const windows: Float32Array[] = [];
+  for (let windowIndex = 0; windowIndex < windowCount; windowIndex++) {
+    const start = windowCount === 1 ? 0 : Math.round(windowIndex * (samples.length - windowLength) / (windowCount - 1));
+    windows.push(samples.subarray(start, start + windowLength));
+  }
   const profile = Array(12).fill(0) as number[];
   let analyzedPitchCount = 0;
   for (let midi = 36; midi <= 84; midi++) {
     const frequency = 440 * Math.pow(2, (midi - 69) / 12);
     if (frequency >= sampleRate / 2) continue;
-    const power = goertzelPower(samples, sampleRate, frequency);
+    let power = 0;
+    let lowerSide = 0;
+    let upperSide = 0;
+    for (const window of windows) {
+      power += goertzelPower(window, sampleRate, frequency) / windows.length;
+      lowerSide += goertzelPower(window, sampleRate, frequency * Math.pow(2, -50 / 1200)) / windows.length;
+      upperSide += goertzelPower(window, sampleRate, frequency * Math.pow(2, 50 / 1200)) / windows.length;
+    }
     // Require a narrow local spectral peak, not merely energy at a queried
     // frequency. Broadband noise and window leakage otherwise populate many
     // pitch classes and can accidentally correlate with a key template.
-    const lowerSide = goertzelPower(samples, sampleRate, frequency * Math.pow(2, -50 / 1200));
-    const upperSide = goertzelPower(samples, sampleRate, frequency * Math.pow(2, 50 / 1200));
     const targetAmplitude = Math.sqrt(power);
     const sideFloor = (Math.sqrt(lowerSide) + Math.sqrt(upperSide)) / 2;
     if (power > 1e-10 && targetAmplitude > sideFloor * 1.8) {
@@ -185,8 +201,11 @@ export function estimateGoertzelKey(samples: Float32Array, sampleRate: number): 
   const total = profile.reduce((sum, value) => sum + value, 0);
   const strongestPitchClass = Math.max(...profile);
   const activePitchClasses = profile.filter(value => value >= strongestPitchClass * 0.12 && value > 1e-7).length;
-  if (analyzedPitchCount < 2 || total < 1e-7 || activePitchClasses < 3) {
-    return unavailable("Fewer than three distinct pitch classes had sufficient relative energy to support key analysis.", analyzedPitchCount);
+  const probabilities = profile.map(value => total > 0 ? value / total : 0).filter(value => value > 0);
+  const pitchClassEntropy = -probabilities.reduce((sum, value) => sum + value * Math.log(value), 0);
+  const topThreeShare = [...profile].sort((a, b) => b - a).slice(0, 3).reduce((sum, value) => sum + value, 0) / Math.max(EPSILON, total);
+  if (analyzedPitchCount < 2 || total < 1e-7 || activePitchClasses < 3 || pitchClassEntropy > 2.35 || topThreeShare < 0.34) {
+    return unavailable("Pitch-class evidence was sparse or too diffuse to support a stable tonal center.", analyzedPitchCount);
   }
   const normalized = profile.map(value => value / total);
   const candidates: Array<{ key: number; mode: Mode; score: number }> = [];
