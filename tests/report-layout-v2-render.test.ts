@@ -1,11 +1,22 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { generateAuditReportV2 } from "../src/reports/v2/render.js";
+import { buildPositioningLines, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import { generateAuditReport } from "../src/reports/generate-audit-report.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("v2 gated report pages", () => {
+  it("provides a useful positioning decision panel when no lane evidence exists", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.assessment.laneHypotheses = [];
+    input.assessment.adjacentLanes = [];
+    input.evidence.genre = null;
+    const lines = buildPositioningLines(input);
+    expect(lines.join(" ")).toContain("Positioning not established");
+    expect(lines.join(" ")).toContain("provider-attributed genre");
+    expect(lines.every((line: string) => line.trim().length > 0)).toBe(true);
+  });
+
   it("omits market, Sonic DNA and moments pages for the Phillo/Stunixx low-confidence reference fixture", async () => {
     const input = structuredClone(ambiguousAudioFixture) as any;
     input.evidence = { ...input.evidence, artist: "Stunixx", title: "Phillo", album: null, isrc: null, upc: null, label: null,
