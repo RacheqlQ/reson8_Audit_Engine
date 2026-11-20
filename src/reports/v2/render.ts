@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
-import { generateAuditReport, planAuditReportPages, buildArNotesDecisionContext, chartsForSection, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
+import { generateAuditReport, planAuditReportPages, buildArNotesDecisionContext, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
 import { loadReportFonts } from "../fonts.js";
 import { chartPanelHeight, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
@@ -116,16 +116,57 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
  return lines;
 }
 
-function identityLines(e:Record<string,unknown>):string[]{
- const reconciliation=rec(e.reconciliation),conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
- const fields=["artist","title","album","releaseDate","isrc","upc","label","genre"];
- return fields.map(field=>{
-  const value=str(e[field],"Unavailable");
-  const conflict=conflicts.find(c=>c.field===field);
-  const state=conflict?"CONFLICT":value==="Unavailable"?"UNAVAILABLE":arr(rec(reconciliation).reconciledFields).includes(field)?"CROSS-CHECKED":"SOURCE-RETURNED";
-  const conflictValues=conflict?arr(conflict.values).map(v=>str(v)).join(" vs "):"";
-  return field.toUpperCase()+": "+(conflict?conflictValues:value)+" ["+state+"]";
+function identityStatusLabel(status:string):string{
+ if(status.startsWith("Unavailable"))return "Unavailable";
+ if(status.startsWith("Conflicting"))return "Conflict";
+ if(status.startsWith("Cross-checked"))return "Cross-checked";
+ if(status.startsWith("Read from embedded")||status.startsWith("Returned by"))return "Source-returned";
+ if(status.startsWith("Analytical hypothesis"))return "Hypothesis";
+ if(status.startsWith("Synthetic test"))return "Synthetic";
+ if(status.startsWith("Parsed from uploaded filename"))return "Provisional";
+ if(status.startsWith("Available"))return "Unconfirmed";
+ return status;
+}
+export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{field:string;value:string;status:string;source:string}>{
+ const e=rec(input.evidence),reconciliation=rec(e.reconciliation),conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
+ const fields:[string,string][]=[["artist","Artist"],["title","Track"],["album","Album"],["genre","Genre"],["releaseDate","Release date"],["isrc","ISRC"],["upc","UPC"],["label","Label"]];
+ return fields.map(([key,label])=>{
+  const conflict=conflicts.find(item=>item.field===key);
+  const raw=key==="genre"?(e.genre??e.genres):e[key];
+  const value=conflict?arr(conflict.values).map(v=>str(v,"")).filter(Boolean).join(" vs "):Array.isArray(raw)?raw.map(v=>str(v,"")).filter(Boolean).join(", "):str(raw,"Unavailable");
+  const status=conflict?"Conflict":identityStatusLabel(metadataFieldStatus(e,key));
+  const source=metadataFieldSource(e,key).replace(/^Field source:\\s*/,"");
+  return {field:label,value,status,source};
  });
+}
+function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fonts):number{
+ const e=rec(input.evidence),rows=buildIdentityReconciliationRows(input),x=M,width=W-2*M,top=H-100,headerH=22,rowH=36;
+ const columns=[78,164,128,141],labels=["FIELD","VALUE","STATUS","SOURCE"];
+ page.drawRectangle({x,y:top-headerH,width,height:headerH,color:C.charcoal});
+ let cx=x;
+ labels.forEach((label,index)=>{page.drawText(label,{x:cx+8,y:top-15,size:6.6,font:fonts.bold,color:C.white});cx+=columns[index];});
+ rows.forEach((row,index)=>{
+  const rowTop=top-headerH-index*rowH,rowBottom=rowTop-rowH;
+  page.drawRectangle({x,y:rowBottom,width,height:rowH,color:index%2===0?C.white:C.paper,borderColor:C.line,borderWidth:.45});
+  const values=[row.field,row.value,row.status,row.source],colors=[C.ink,C.ink,row.status==="Conflict"?C.coral:row.status==="Cross-checked"?C.teal:row.status==="Unavailable"?C.muted:row.status==="Hypothesis"?C.amber:C.ink,C.muted];
+  let cellX=x;
+  values.forEach((value,col)=>{
+   const font=col===0||col===2?fonts.bold:fonts.regular,size=col===0?7.1:col===1?7:6.7,maxLines=3,lines=wrap(value||"Not supplied",font,size,columns[col]-14);
+   if(lines.length>maxLines)throw new Error("Identity reconciliation cell exceeds its row: "+row.field+" / "+labels[col]);
+   lines.forEach((line,lineIndex)=>page.drawText(line,{x:cellX+8,y:rowTop-11-lineIndex*8,size,font,color:colors[col]}));
+   cellX+=columns[col];
+  });
+ });
+ const tableBottom=top-headerH-rows.length*rowH,summaryTop=tableBottom-10;
+ const checked=arr(e.metadataSourcesChecked).map(v=>str(v,"")).filter(Boolean).join(", ")||"Not supplied";
+ const providers=arr(e.sourceProviders).map(v=>str(v,"")).filter(Boolean).join(", ")||"Not supplied";
+ const summaryHeight=card(page,M,summaryTop,width,"Provider lookup and reconciliation context",[
+  "Sources checked: "+checked,
+  "Provider responses: "+providers,
+  "Platform coverage: "+str(e.platformCoverage,"Not supplied"),
+  "Conflict policy: conflicting values remain visible; no source is silently preferred."
+ ],fonts,{accent:C.gold});
+ return summaryTop-summaryHeight-14;
 }
 function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
  const e=rec(input.evidence),a=rec(input.assessment),sonic=rec(input.sonicDna);
@@ -136,7 +177,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "Executive summary: "+str(a.executiveSummary,"No executive summary supplied."),
    buildNextActionLine(input)
   ]},
-  {title:"Identity and source reconciliation",blocks:[],lines:[...identityLines(e),"Sources checked: "+arr(e.metadataSourcesChecked).map(v=>str(v)).join(", ")||"Sources checked: Not supplied","Platform coverage: "+str(e.platformCoverage,"Not supplied")]},
+  {title:"Identity and source reconciliation",kind:"identity",blocks:[]},
   {title:"Track snapshot",kind:"snapshot",blocks:metricBlock(data),lines:[
    ...(data.structure?["STRUCTURE — "+data.structure.map(s=>s.index+". "+s.label+" ("+s.startSeconds+"–"+s.endSeconds+"s)").join(" | ")]:[]),
    ...(data.energySeries?["ENERGY SERIES — "+data.energySeries.length+" timestamped points; peak/dip derived from supplied series."]:[])
@@ -371,7 +412,9 @@ export async function generateAuditReportV2(input:AuditReportInput,tier:AuditRep
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,spec.title,fonts);
   let chartCursor=H-380;
-  if(spec.kind==="snapshot"){
+  if(spec.kind==="identity"){
+   chartCursor=drawIdentityReconciliation(page,input,fonts);
+  }else if(spec.kind==="snapshot"){
    drawSnapshot(page,data,fonts);
   }else if(spec.kind==="axes"){
    drawSonicAxes(page,data,fonts);
