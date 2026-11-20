@@ -20,6 +20,7 @@ export interface TempoEstimate {
  downbeatGridAssumption:"four-beat grouping for diagnostics only"|null;
  abstentionReason:string|null;
  windowConsensus:BootstrapConsensusDiagnostics;
+ independentEstimator?:IndependentTempoEstimate;
 }
 export interface SonicDnaFeatures {
  sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; tempoCandidateBpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
@@ -221,7 +222,11 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
   if(estimate.bpm!==null)labels.push(String(Math.round(estimate.bpm)));
  }
  const windowConsensus=bootstrapCategoricalConsensus(labels,{iterations:1000,seed:17});
- return {...overall,windowConsensus};
+ const independentEstimator=estimateLowFrequencyEnvelopeTempo(samples,sampleRate);
+ const disagreement=overall.bpm!==null&&independentEstimator.bpm!==null&&Math.abs(overall.bpm-independentEstimator.bpm)>Math.max(3,overall.bpm*0.03);
+ return disagreement
+  ? {...overall,bpm:null,confidence:null,abstentionReason:"Independent transient and low-frequency envelope tempo estimators disagreed; no single tempo is asserted.",windowConsensus,independentEstimator}
+  : {...overall,windowConsensus,independentEstimator};
 }
 
 export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):SonicDnaFeatures {
@@ -255,7 +260,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  const frames:number[]=[],frame=Math.max(256,Math.floor(rate*0.05));
  for(let s=0;s<a.length;s+=frame){const end=Math.min(a.length,s+frame);let sum=0;for(let i=s;i<end;i++)sum+=a[i]*a[i];frames.push(Math.sqrt(sum/Math.max(1,end-s)));}
  frames.sort((x,y)=>x-y);
- const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),keyBase=estimateKey(a,rate),independentKey:IndependentKeyEstimate=estimateGoertzelKey(a,rate),key=keyBase.key!==null&&independentKey.key!==null&&(keyBase.key!==independentKey.key||keyBase.mode!==independentKey.mode)?{...keyBase,key:null,mode:null,limitation:"Independent FFT/chroma and Goertzel key estimators disagreed; no key or mode is asserted."}:keyBase;
+ const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),keyBase=estimateKey(a,rate),independentKey:IndependentKeyEstimate=estimateGoertzelKey(a,rate),key=keyBase.key!==null&&independentKey.key!==null&&independentKey.score>=0.25&&(independentKey.margin??0)>=0.05&&(keyBase.key!==independentKey.key||keyBase.mode!==independentKey.mode)?{...keyBase,key:null,mode:null,limitation:"Independent FFT/chroma and Goertzel key estimators disagreed; no key or mode is asserted."}:keyBase;
  // Signal descriptors are reported in their own numeric fields. Do not
  // relabel RMS, zero-crossing rate, or spectral centroid as emotional mood.
  // A validated, licensed mood model is not currently integrated.
