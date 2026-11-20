@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMarketPlacementPlan } from "../src/strategy/market-placement.js";
+import { buildMarketPlacementPlan, buildPlaylistMoodContext } from "../src/strategy/market-placement.js";
 
 const master = {
   provenance: "uploaded_audio_master",
@@ -180,6 +180,16 @@ describe("Phase 5 market placement strategy", () => {
     });
     expect(plan.shortFormHooks).toMatchObject({ status: "unavailable", segments: [] });
     expect(plan.shortFormHooks.limitations.join(" ")).toMatch(/windowed RMS summaries were unavailable/i);
+  });
+
+  it("combines provider mood tags with provisional master mood while retaining both sources", () => {
+    const context = buildPlaylistMoodContext(
+      ["warm", "upbeat"],
+      { acousticFeatureProfile: { predictions: { mood: { status: "provisional", labels: ["driving", "warm"] } } } },
+    );
+    expect(context.moodTags).toEqual(["warm", "upbeat", "driving"]);
+    expect(context.moodSource).toContain("DSP catalogue sonic profile");
+    expect(context.moodSource).toContain("uploaded-master provisional audio_feature_heuristics_v1");
   });
 
 });
