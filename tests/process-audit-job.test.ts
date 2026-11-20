@@ -129,6 +129,8 @@ describe("processAuditJob", () => {
       generateReport: async (_input, tier) => {
         expect((_input.evidence as Record<string, unknown>).playlistDiscovery).toMatchObject({ status: "available", candidates: [{ name: "Afrobeats Discovery", provider: "apple_music" }] });
         expect(_input.executionMode).toBe("master");
+        expect((_input.realMasterContract as { directSignalMeasurements: Array<{ name: string; unit: string }> }).directSignalMeasurements)
+          .toEqual(expect.arrayContaining([expect.objectContaining({ name: "rms_envelope_spread_db", unit: "dB" })]));
         expect(_input.sonicDna?.acousticFeatureProfile).toEqual(persistedDna?.acousticFeatureProfile);
         expect(_input.sonicDna?.rhythmFeatures).toEqual(persistedDna?.rhythmFeatures);
         expect(_input.sonicDna?.harmonicFeatures).toEqual(persistedDna?.harmonicFeatures);
