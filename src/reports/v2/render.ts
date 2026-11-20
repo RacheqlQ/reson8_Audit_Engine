@@ -4,6 +4,7 @@ import { loadReportFonts } from "../fonts.js";
 import { chartPanelHeight, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
+import { countEvidenceLayers } from "../charts.js";
 
 const W=595.28,H=841.89,M=42;
 const C={
@@ -79,6 +80,14 @@ function header(page:PDFPage,title:string,fonts:Fonts){
 function pageBase(pdf:PDFDocument,title:string,fonts:Fonts):PDFPage{
  const p=pdf.addPage([W,H]);p.drawRectangle({x:0,y:0,width:W,height:H,color:C.paper});header(p,title,fonts);return p;
 }
+export function buildEvidenceLedgerSummary(labels: Array<{ label: string }>): string {
+ const counts = countEvidenceLayers(labels);
+ return "Measured: " + counts.OBSERVED
+  + " · Source matches: " + counts.RECOGNIZED
+  + " · Cross-checked: " + counts.RECONCILED
+  + " · Hypotheses: " + counts.INFERRED;
+}
+
 export function buildNextActionLine(input: AuditReportInput): string {
  const assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)), recommendation=str(rec(assessment.releaseStrategy).recommendation,"");
  const firstGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(Boolean)??"";
@@ -199,7 +208,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    ...(data.sonicAxes?["SONIC DNA AXES — "+Object.entries(data.sonicAxes).map(([name,axis])=>name+" "+axis.value+"/100"+(axis.note?" ("+axis.note+")":"")).join("; ")]:[])
   ]},
   {title:"Evidence ledger and scorecard",blocks:[],lines:[
-   "Measured: "+(sonic?Object.keys(sonic).length:"0")+" · Source matches: "+arr(e.sources).length+" · Cross-checked: "+arr(rec(e.reconciliation).reconciledFields).length+" · Hypotheses: "+arr(a.laneHypotheses).length,
+   buildEvidenceLedgerSummary(arr(a.evidenceLabels).map(value => rec(value) as { label: string })),
    "Headline score: "+(data.headlineScore===null?"N/D — no scored headline value supplied":data.headlineScore+"/100"),
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
    "Market evidence: "+(data.hasVerifiedCommercialEvidence?"Source-attributed commercial data supplied":"Insufficient — no verified commercial source data supplied."),
