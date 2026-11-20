@@ -420,6 +420,7 @@ export async function generateAuditReportV2(input:AuditReportInput,tier:AuditRep
    if(spec.lines?.length){
     const body=spec.lines.filter(Boolean),h=card(page,M,y,W-2*M,spec.title,body,fonts,{accent:C.gold});
     if(h>y-95)throw new Error("Report v2 page content exceeds available A4 space: "+spec.title);
+    y-=h+14;
    }
   }
   const legacyChartSection: Record<string,string> = {
@@ -431,7 +432,9 @@ export async function generateAuditReportV2(input:AuditReportInput,tier:AuditRep
   };
   const chartSection=legacyChartSection[spec.title];
   if(chartSection){
-   let chartCursor=H-380;
+   // Anchor evidence panels to the actual end of the page's content card.
+   // The fit guard below still fails closed when the complete chart cannot fit.
+   let chartCursor=y;
    for(const panel of chartsForSection(input,chartSection)){
     const panelHeight=chartPanelHeight(panel.kind,panel.rows,W-2*M),panelTop=chartCursor;
     if(panelTop-panelHeight<76)throw new Error("Evidence charts cannot fit safely on "+spec.title);
