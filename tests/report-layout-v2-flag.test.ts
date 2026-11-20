@@ -1,45 +1,27 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ensurePdfReport } from "../src/reports/pdf-output.js";
-import { generateAuditReport } from "../src/reports/generate-audit-report.js";
+import { generateAuditReportV2 } from "../src/reports/v2/render.js";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
-afterEach(() => vi.unstubAllEnvs());
-
-describe("REPORT_LAYOUT v2 opt-in and fallback", () => {
-  it("routes to the existing v1 renderer by default", async () => {
+describe("v2-only report generation", () => {
+  it("routes every newly generated report through v2 without an environment flag", async () => {
     vi.stubEnv("REPORT_LAYOUT", "");
-    const expected = await generateAuditReport(fullAudioFixture as any, "full");
+    const expected = await generateAuditReportV2(fullAudioFixture as any, "full");
     const actual = await ensurePdfReport(fullAudioFixture, "full");
     expect((await PDFDocument.load(actual)).getPageCount()).toBe((await PDFDocument.load(expected)).getPageCount());
   });
 
   it("renders a valid PDF with gated pages omitted when v2 has only metadata/audio evidence", async () => {
-    vi.stubEnv("REPORT_LAYOUT", "v2");
     const bytes = await ensurePdfReport(metadataOnlyFixture, "full");
     const pdf = await PDFDocument.load(bytes);
-    const expected = await generateAuditReport(metadataOnlyFixture as any, "full");
-    expect(pdf.getPageCount()).toBe((await PDFDocument.load(expected)).getPageCount());
+    expect(pdf.getPageCount()).toBeGreaterThan(0);
     expect(pdf.getForm().getFields().map(field => field.getName())).toContain("ar_notes");
   });
 
-  it("uses v2 only for the explicit v2 flag; unknown values remain v1", async () => {
-    vi.stubEnv("REPORT_LAYOUT", "anything-else");
-    const expected = await generateAuditReport(fullAudioFixture as any, "sample");
-    const actual = await ensurePdfReport(fullAudioFixture, "sample");
-    expect((await PDFDocument.load(actual)).getPageCount()).toBe((await PDFDocument.load(expected)).getPageCount());
-  });
-
-  it("logs a v2 rendering failure and falls back to the unchanged v1 renderer", async () => {
-    vi.stubEnv("REPORT_LAYOUT", "v2");
-    const input = structuredClone(fullAudioFixture) as any;
-    const expected = await generateAuditReport(input, "full");
+  it("does not silently fall back to v1 if the v2 renderer fails", async () => {
     const createPdf = vi.spyOn(PDFDocument, "create").mockRejectedValueOnce(new Error("forced v2 fixture failure"));
-    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const actual = await ensurePdfReport(input, "full");
-    expect(log).toHaveBeenCalledWith("[report-layout-v2] Rendering failed; falling back to v1.", expect.any(Error));
-    expect((await PDFDocument.load(actual)).getPageCount()).toBe((await PDFDocument.load(expected)).getPageCount());
+    await expect(ensurePdfReport(fullAudioFixture, "full")).rejects.toThrow("forced v2 fixture failure");
     createPdf.mockRestore();
-    log.mockRestore();
   });
 });
