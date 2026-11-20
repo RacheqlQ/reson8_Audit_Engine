@@ -92,7 +92,6 @@ describe("uploaded master provenance in reports", () => {
     expect(signal.find((row) => row.label === "SPECTRAL FLATNESS MEDIAN")?.value).toBe("0.0123");
     expect(signal.find((row) => row.label === "LOW BAND ENERGY RATIO")?.value).toBe("0.4200");
     expect(signal.find((row) => row.label === "ACOUSTIC PROFILE / WINDOWING")?.value).toBe("acoustic-profile-v1; 24 windows");
-    expect(signal.find((row) => row.label === "ACOUSTIC PROFILE / WINDOWING")?.value).toBe("acoustic-profile-v1; 24 windows");
   });
 
   it("states the combined master-plus-DSP source mode and actual provider lookup outcome", () => {
