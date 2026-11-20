@@ -289,6 +289,7 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
 }
 
 export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAudio:boolean):Array<{label:string;value:string|null}> {
+ const vocal=s?.vocalFeatures&&typeof s.vocalFeatures==="object"?s.vocalFeatures as Record<string,unknown>:{};
  const profile=s?.acousticFeatureProfile&&typeof s.acousticFeatureProfile==="object"?s.acousticFeatureProfile as Record<string,unknown>:{};
  const descriptors=profile.descriptors&&typeof profile.descriptors==="object"?profile.descriptors as Record<string,unknown>:{};
  const provenance=profile.provenance&&typeof profile.provenance==="object"?profile.provenance as Record<string,unknown>:{};
@@ -312,7 +313,8 @@ export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAu
   {label:"MID BAND ENERGY RATIO",value:descriptor("midBandEnergyRatio",4)},
   {label:"HIGH BAND ENERGY RATIO",value:descriptor("highBandEnergyRatio",4)},
   {label:"ACOUSTIC ANALYSIS WINDOWS",value:hasAudio?metric(provenance.windowCount,0,"Unavailable"):null},
-  {label:"ACOUSTIC FEATURE VERSION",value:hasAudio?val(provenance.featureVersion,"Unavailable"):null}
+  {label:"ACOUSTIC ANALYSIS WINDOWS",value:hasAudio?metric(provenance.windowCount,0,"Unavailable"):null},
+  {label:"SIGNAL PERIODICITY ACTIVITY RATIO",value:hasAudio?metric(vocal.periodicityActivityRatio,2):null}
  ];
 }
 
@@ -338,7 +340,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
   {
    title:"Signal characteristics",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
    rows:signalDashboardRowsForReport(s,hasAudio),
-   shows:"File format and signal-derived spectral/periodicity measurements with their original units.",cantShow:"Vocal presence, musical mood, genre or commercial performance."
+   shows:"File format and signal-derived acoustic descriptors with their original units. "+(s?.acousticFeatureProfile&&typeof s.acousticFeatureProfile==="object"?(()=>{const profile=s.acousticFeatureProfile as Record<string,unknown>,p=profile.provenance&&typeof profile.provenance==="object"?profile.provenance as Record<string,unknown>:{};return "Profile "+val(p.featureVersion,"unavailable")+"; analysis "+val(p.analysisSampleRateHz,"unknown")+" Hz; "+val(p.windowCount,"0")+" windows; "+val(p.windowSizeSamples,"unknown")+"-sample windows / "+val(p.hopSizeSamples,"unknown")+"-sample hop; "+val(p.aggregation,"unknown")+"; "+val(p.downmix,"unknown")+"; resampling "+val(p.analysisResampling,"unknown")+"."})():"Acoustic feature profile not available."),cantShow:"Vocal presence, musical mood, perceptual energy, genre or commercial performance."
   }
  ];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
