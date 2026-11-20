@@ -186,9 +186,7 @@ function drawSpotifyMark(page:PDFPage,x:number,y:number,size:number):void {
 }
 
 function normalizeRmsEnvelopeWording(value:string):string {
- return value
-  .replace(/RMS[- ]envelope spread\s*\(internal proxy;\s*not mastering dynamic range\)\s*\(internal proxy;\s*not mastering dynamic range\)/gi,"RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)")
-  .replace(/RMS[- ]envelope spread\s*\(internal proxy;\s*not mastering dynamic range\)/gi,"RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)");
+ return value.replace(/RMS-envelope spread \\(internal proxy; not mastering RMS-envelope spread \\(internal proxy; not mastering dynamic range\\)\\)/gi,"RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)");
 }
 function professionalEvidenceLanguage(value:string):string {
  value=normalizeRmsEnvelopeWording(value);
@@ -376,7 +374,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  ];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"RMS / envelope",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
- if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(a.strengths.map(professionalEvidenceLanguage).filter((item)=>item.trim().length>0).slice(0,10),a.risks.map(professionalEvidenceLanguage).filter((item)=>item.trim().length>0).slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
+ if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(reportableAssessmentItems(a.strengths).slice(0,10),reportableAssessmentItems(a.risks).slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
  if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:"See provider-attributed playlist shortlist in A&R positioning"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
  if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",evidenceClass:"illustrative",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
  return [];
@@ -558,8 +556,8 @@ const curatorCampaignBody=[
  ...(playlistCandidateLines.length?["DSP playlist candidates aligned to the confirmed genre/adjacent lanes:",...playlistCandidateLines]:["No aligned DSP playlist candidates are currently available from the configured catalogue search APIs."]),
  playlistMoodSummary,
  a.aAndRPositioning.rationale]},
- {title:"Strengths and creative leverage",accent:"teal",body:a.strengths.length?a.strengths:["No audio-measured strengths are asserted without an uploaded master."]},
- {title:"Risks and diligence",accent:"coral",body:a.risks},
+ {title:"Strengths and creative leverage",accent:"teal",body:reportableAssessmentItems(a.strengths).length?reportableAssessmentItems(a.strengths):["No audio-measured strengths are asserted without an uploaded master."]},
+ {title:"Risks and diligence",accent:"coral",body:reportableAssessmentItems(a.risks)},
  {title:"Evidence-derived scorecard",accent:"blue",body:[score("Tempo and lane fit",a.scorecard.tempoLaneFit),score("Rhythmic consistency",a.scorecard.rhythmicConsistency),score("RMS-envelope spread and RMS signal level",a.scorecard.dynamicRangeLoudness),score("Metadata completeness",a.scorecard.metadataCompleteness),score("Release readiness",a.scorecard.releaseReadiness)]},
  {title:"Human listening checklist (unscored)",accent:"violet",body:a.humanListeningChecklist},
  {title:"Production and arrangement guidance",accent:"teal",body:[a.productionArrangementGuidance,industryPractice("General lane craft knowledge, not track-specific evidence."),industryPractice(a.industryPractice),...a.listeningChecks]},
