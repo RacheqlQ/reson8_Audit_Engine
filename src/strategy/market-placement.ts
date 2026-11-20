@@ -109,7 +109,11 @@ function playlistTargets(value: unknown): PlaylistTarget[] {
   return targets.slice(0, 8).map((item, index) => ({ ...item, rank: index + 1 }));
 }
 
-function isIsoCountryCode(value: string): boolean {\n  if (!/^[A-Z]{2}$/.test(value)) return false;\n  const name = new Intl.DisplayNames(["en"], { type: "region" }).of(value);\n  return Boolean(name && name !== value && name !== "Unknown Region");\n}\n\nfunction territoryPriorities(evidence: Record<string, unknown>): TerritoryPriorities {
+function isIsoCountryCode(value: string): boolean {
+  if (!/^[A-Z]{2}$/.test(value)) return false;\n  const name = new Intl.DisplayNames(["en"], { type: "region" }).of(value);\n  return Boolean(name && name !== value && name !== "Unknown Region");
+}
+
+function territoryPriorities(evidence: Record<string, unknown>): TerritoryPriorities {
   const telemetry = record(evidence.audienceTelemetry);
   const provider = clean(telemetry.provider);
   const metric = clean(telemetry.metric);
