@@ -91,7 +91,7 @@ describe("uploaded master provenance in reports", () => {
     expect(signal.find((row) => row.label === "WINDOWED CREST FACTOR DB")?.value).toBe("16.85");
     expect(signal.find((row) => row.label === "SPECTRAL FLATNESS MEDIAN")?.value).toBe("0.0123");
     expect(signal.find((row) => row.label === "LOW BAND ENERGY RATIO")?.value).toBe("0.4200");
-    expect(signal.find((row) => row.label === "ACOUSTIC ANALYSIS WINDOWS")?.value).toBe("24");
+    expect(signal.find((row) => row.label === "ACOUSTIC PROFILE / WINDOWING")?.value).toBe("acoustic-profile-v1; 24 windows");
     expect(signal.find((row) => row.label === "ACOUSTIC PROFILE / WINDOWING")?.value).toBe("acoustic-profile-v1; 24 windows");
   });
 
