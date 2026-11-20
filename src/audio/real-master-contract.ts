@@ -95,7 +95,26 @@ const ExternalRecordSchema = z.discriminatedUnion("status", [
       recordId: z.string().min(1),
       retrievedAt: z.string().datetime(),
     }).strict()),
-  }).strict(),
+  }).strict().superRefine((record, ctx) => {
+    for (const field of Object.keys(record.fields)) {
+      if (!record.fieldProvenance[field]) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["fieldProvenance", field],
+          message: "Verified external field is missing field-level provenance.",
+        });
+      }
+    }
+    for (const field of Object.keys(record.fieldProvenance)) {
+      if (!Object.prototype.hasOwnProperty.call(record.fields, field)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["fieldProvenance", field],
+          message: "Field provenance exists without a returned field.",
+        });
+      }
+    }
+  }),
   z.object({
     status: z.literal("unavailable"),
     provider: z.string().min(1),
@@ -105,12 +124,19 @@ const ExternalRecordSchema = z.discriminatedUnion("status", [
   }).strict(),
 ]);
 
+const NumericClaimSchema = z.object({
+  value: z.number().finite(),
+  unit: z.string().min(1),
+  evidenceRef: z.string().min(1),
+}).strict();
+
 const StrategicSynthesisSchema = z.object({
   claim: z.string().min(1),
   evidenceRefs: z.array(z.string().min(1)).min(1),
   evidenceClass: z.enum(["OBSERVED", "RECOGNIZED", "RECONCILED", "INFERRED"]),
   confidence: z.number().min(0).max(1).optional(),
   limitations: z.array(z.string()).default([]),
+  numericClaims: z.array(NumericClaimSchema).default([]),
 }).strict();
 
 export const RealMasterAuditContractSchema = z.object({
@@ -125,7 +151,8 @@ export const RealMasterAuditContractSchema = z.object({
   pipelineDiagnostics: z.array(DiagnosticSchema).default([]),
 }).strict().superRefine((contract, ctx) => {
   const refs = new Set<string>();
-  contract.directSignalMeasurements.forEach((metric, index) => refs.add(`signal:${metric.name}`));
+  const measuredSignals = new Map(contract.directSignalMeasurements.map((metric) => [`signal:${metric.name}`, metric]));
+  contract.directSignalMeasurements.forEach((metric) => refs.add(`signal:${metric.name}`));
   contract.calibratedPredictions.forEach((prediction) => refs.add(`prediction:${prediction.name}`));
   contract.provisionalPredictions.forEach((prediction) => refs.add(`provisionalPrediction:${prediction.name}`));
   contract.externalRecords.forEach((record, index) => refs.add(`external:${record.status === "verified" ? record.recordId : record.provider}`));
@@ -139,6 +166,33 @@ export const RealMasterAuditContractSchema = z.object({
         });
       }
     }
+    claim.numericClaims.forEach((numericClaim, numericIndex) => {
+      const path = ["strategicSynthesis", index, "numericClaims", numericIndex];
+      if (!claim.evidenceRefs.includes(numericClaim.evidenceRef)) {
+        ctx.addIssue({
+          code: "custom",
+          path,
+          message: "Numeric claim evidence reference must also appear in the synthesis evidence references.",
+        });
+        return;
+      }
+      const measurement = measuredSignals.get(numericClaim.evidenceRef);
+      if (!measurement || measurement.status !== "measured") {
+        ctx.addIssue({
+          code: "custom",
+          path,
+          message: "Numeric claim must reference an available measured signal, not an unavailable or non-measurement record.",
+        });
+        return;
+      }
+      if (measurement.unit !== numericClaim.unit || measurement.value !== numericClaim.value) {
+        ctx.addIssue({
+          code: "custom",
+          path,
+          message: "Numeric claim value and unit must exactly match the referenced measured signal.",
+        });
+      }
+    });
   });
 });
 
