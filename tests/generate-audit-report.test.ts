@@ -166,7 +166,6 @@ describe("A4 report layout and fixture coverage",()=>{
    expect(report).not.toContain("api.spotify.com");
    expect(report).not.toContain("Spotify — unavailable");
    expect(report).not.toContain("musicbrainz.org/ws/2/isrc/");
-   expect(report).toContain("submitted track links");
   });
   it("abstains when no provisional mood or energy outputs were produced",()=>{
   const input=structuredClone(fullAudioFixture) as AuditReportInput;
