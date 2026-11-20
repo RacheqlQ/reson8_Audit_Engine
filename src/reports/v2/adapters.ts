@@ -162,6 +162,15 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const energyValue = firstFinite(audio, ["energy", "rmsEnergy", "loudnessLufs", "rmsLevelDbfs"]);
   const energyConfidence = confidence(audio?.energyConfidence ?? audio?.rmsEnergyConfidence ?? audio?.loudnessConfidence);
   const energyMethod = methodOf(audio, ["energyMethod", "loudnessMethod", "method"]);
+  const loudnessMetrics = [
+    finite(audio?.loudnessLufs) ? "Integrated loudness " + Number(audio?.loudnessLufs).toFixed(1) + " LUFS" : null,
+    finite(audio?.loudnessRangeLu) ? "Loudness range " + Number(audio?.loudnessRangeLu).toFixed(1) + " LU" : null,
+    finite(audio?.truePeakDbfs) ? "True peak " + Number(audio?.truePeakDbfs).toFixed(1) + " dBFS" : null,
+    finite(audio?.rmsLevelDbfs) ? "RMS level " + Number(audio?.rmsLevelDbfs).toFixed(1) + " dBFS" : null,
+  ].filter((value): value is string => value !== null);
+  const energyDisplay = loudnessMetrics.length
+    ? loudnessMetrics.join(" · ") + (energyValue === null ? "" : " · Energy index " + Number(energyValue).toFixed(1))
+    : energyValue === null ? null : energyValue;
   const structure = sectionsFrom(audio);
   const energySeries = seriesFrom(audio);
   const sonicAxes = axesFrom(audio);
@@ -170,8 +179,15 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const notYetMeasured: string[] = [];
   if (!tempoReliable) {
     const candidate = firstFinite(audio, ["tempoCandidateBpm", "bpm"]);
-    if (candidate !== null) {
-      notYetMeasured.push(candidate + " (provisional BPM candidate; half-time " + (candidate / 2).toFixed(1) + " BPM; double-time " + (candidate * 2).toFixed(1) + " BPM; not a confirmed tempo).");
+    if (candidate !== null && candidate >= 40 && candidate <= 220) {
+      const alternatives = [candidate / 2, candidate * 2]
+        .filter(value => value >= 40 && value <= 220)
+        .map(value => Number(value.toFixed(1)));
+      notYetMeasured.push(candidate + " BPM (provisional tempo candidate" +
+        (alternatives.length ? "; plausible half/double-time alternatives: " + alternatives.join(" / ") + " BPM" : "") +
+        "; not a confirmed tempo).");
+    } else if (candidate !== null) {
+      notYetMeasured.push("Tempo candidate " + candidate + " BPM abstained: outside the plausible 40–220 BPM reporting range.");
     }
   }
   if (!keyReliable) {
@@ -202,7 +218,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       evidence: sourceLine(record(audio?.harmonicFeatures), "Uploaded-master harmonic evidence"),
     },
     energy: {
-      value: energyConfidence && energyValue !== null ? energyValue : null,
+      value: energyDisplay,
       confidence: energyConfidence,
       method: energyMethod,
       evidence: sourceLine(audio, "Uploaded-master energy evidence"),

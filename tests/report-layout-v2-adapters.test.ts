@@ -64,4 +64,31 @@ describe("v2 read-only evidence adapters", () => {
     expect(data.energySeries).toBeNull();
     expect(data.comparables).toBeNull();
   });
+
+  it("renders measured loudness components even when no composite energy confidence exists", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      ...input.sonicDna,
+      energy: null,
+      energyConfidence: null,
+      loudnessConfidence: null,
+      loudnessLufs: -15.1,
+      loudnessRangeLu: 10.8,
+      truePeakDbfs: -2.3,
+      rmsLevelDbfs: -18.4,
+    };
+    const data = adaptReportV2(input);
+    expect(data.energy.value).toContain("Integrated loudness -15.1 LUFS");
+    expect(data.energy.value).toContain("Loudness range 10.8 LU");
+    expect(data.energy.value).toContain("True peak -2.3 dBFS");
+    expect(data.energy.value).toContain("RMS level -18.4 dBFS");
+  });
+
+  it("does not print half-time or double-time BPM candidates outside 40–220 BPM", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = { ...input.sonicDna, bpm: 55, tempoCandidateBpm: 55, tempoConfidence: 0.1 };
+    const data = adaptReportV2(input);
+    expect(data.notYetMeasured.join(" ")).not.toContain("27.5 BPM");
+    expect(data.notYetMeasured.join(" ")).toContain("55 BPM");
+  });
 });
