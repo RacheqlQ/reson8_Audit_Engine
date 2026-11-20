@@ -56,6 +56,13 @@ The production queue worker exposes the existing isolated vocal-analysis worker 
 adds CPU and resident-memory pressure on the Render worker. When the flag is off, the audit
 records vocal analysis as unavailable rather than inferring vocal presence or delivery.
 
+When the flag is explicitly enabled, a conservative admission check runs before loading the
+vocal worker. It compares current process RSS plus one PCM-sized working-copy allowance and a
+192 MiB reserve against the known 512 MiB service memory ceiling. If the estimate exceeds
+that budget or the readings are invalid, vocal inference is skipped and the main audit
+continues. This is a static preflight heuristic, not a measured peak-RSS guarantee; it does
+not authorize enabling the feature in production.
+
 Do not enable this flag in production until a real-master run has recorded peak RSS, elapsed
 time, timeout behavior, and successful persistence of the final vocal result. No production
 environment setting is changed by this code change.
