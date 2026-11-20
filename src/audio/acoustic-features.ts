@@ -169,7 +169,6 @@ export function extractAcousticFeatureProfile(samples:Float32Array,sampleRate:nu
   }
   const frames=samples.length/validChannels,duration=frames/sampleRate;
   if(frames<WINDOW_SIZE)return emptyProfile(sampleRate,validChannels,duration,"INSUFFICIENT_ANALYSIS_WINDOWS");
-  const mono=new Float32Array(frames);
   let signalEnergy=0;
   for(let frame=0;frame<frames;frame++){
     let sum=0;
@@ -177,7 +176,7 @@ export function extractAcousticFeatureProfile(samples:Float32Array,sampleRate:nu
       const value=samples[frame*validChannels+channel]!;
       sum+=Number.isFinite(value)?value:0;
     }
-    const value=sum/validChannels;mono[frame]=value;signalEnergy+=value*value;
+    const value=sum/validChannels;signalEnergy+=value*value;
   }
   if(Math.sqrt(signalEnergy/frames)<1e-6)return emptyProfile(sampleRate,validChannels,duration,"NO_MEASURABLE_SIGNAL");
   const possible=Math.floor((frames-WINDOW_SIZE)/HOP_SIZE)+1;
