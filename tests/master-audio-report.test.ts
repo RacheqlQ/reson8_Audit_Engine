@@ -116,7 +116,7 @@ describe("uploaded master provenance in reports", () => {
     expect(musical.find((row) => row.label === "INTEGRATED LOUDNESS LUFS")?.value).toBe("-11.3");
     expect(musical.find((row) => row.label === "LOUDNESS RANGE LRA")?.value).toBe("4.2");
     expect(musical.find((row) => row.label === "TRUE PEAK dBFS")?.value).toBe("-1.1");
-    expect(musical.find((row) => row.label === "RMS ENVELOPE SPREAD dB")?.value).toBe("13.1");
+    expect(musical.find((row) => row.label === "RMS ENVELOPE SPREAD (PROXY) dB")?.value).toBe("13.1");
     expect(signal.find((row) => row.label === "SAMPLE RATE HZ")?.value).toBe("48000");
     expect(signal.find((row) => row.label === "CHANNELS")?.value).toBe("2");
     expect(signal.find((row) => row.label === "SPECTRAL CENTROID HZ")?.value).toBe("1850");
@@ -280,7 +280,7 @@ describe("uploaded master provenance in reports", () => {
     ];
     const report = reportText(input, "sample");
     const musical = rows(input).musical;
-    expect(musical.find((row) => row.label === "RMS ENVELOPE SPREAD dB")?.value).toBe("22.4");
+    expect(musical.find((row) => row.label === "RMS ENVELOPE SPREAD (PROXY) dB")?.value).toBe("22.4");
     expect(musical.find((row) => row.label === "LOUDNESS RANGE LRA")?.value).toBe("10.8");
     expect(report).not.toMatch(/healthy measured dynamic range of 22\.36 dB/i);
   });
