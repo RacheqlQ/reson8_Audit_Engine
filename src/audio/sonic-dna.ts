@@ -226,12 +226,7 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const tempoRatio=overall.bpm!==null&&independentEstimator.bpm!==null?overall.bpm/independentEstimator.bpm:null;
  const octaveRelated=tempoRatio!==null&&[0.5,1,2].some(ratio=>Math.abs(tempoRatio-ratio)<=Math.max(0.03,ratio*0.03));
  const unstableWindows=windowConsensus.windowCount>=3&&(windowConsensus.winner===null||(windowConsensus.observedAgreement??0)<0.6);
- const distinctOctaveCandidates=octaveRelated&&overall.bpm!==null&&independentEstimator.bpm!==null&&Math.abs(overall.bpm-independentEstimator.bpm)>Math.max(3,overall.bpm*0.03);
- const unresolvedOctaveAmbiguity=distinctOctaveCandidates&&independentEstimator.score>=0.4;
  const materialDisagreement=overall.bpm!==null&&independentEstimator.bpm!==null&&!octaveRelated&&independentEstimator.score>=0.4&&unstableWindows;
- if(unresolvedOctaveAmbiguity) {
-  return {...overall,bpm:null,confidence:null,alternateTempo:independentEstimator.bpm,abstentionReason:"Independent audio pathways support half-time/double-time-related candidates; without meter evidence, no single tempo is asserted.",windowConsensus,independentEstimator};
- }
  return materialDisagreement
   ? {...overall,bpm:null,confidence:null,abstentionReason:"Independent tempo pathways materially disagreed and the primary tempo windows were unstable; no single tempo is asserted.",windowConsensus,independentEstimator}
   : {...overall,alternateTempo:overall.alternateTempo??(octaveRelated?independentEstimator.bpm:null),windowConsensus,independentEstimator};
