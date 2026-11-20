@@ -153,4 +153,33 @@ describe("Phase 5 market placement strategy", () => {
     expect(plan.positioning.dj.basis.join(" ")).toMatch(/120 BPM/);
     expect(plan.positioning.club.limitations.join(" ")).toMatch(/not evidence of venue demand/i);
   });
+  it("rejects malformed country codes and incomplete retrieval timestamps", () => {
+    const plan = buildMarketPlacementPlan({
+      executionMode: "combined",
+      evidence: {
+        audienceTelemetry: {
+          verified: true, provider: "spotify", metric: "monthly_listeners",
+          reportingPeriod: "2026-10", retrievedAt: "2026-11-01",
+          territories: [{ countryCode: "ZZ", value: 100 }],
+        },
+      },
+      sonicDna: master,
+    });
+    expect(plan.territoryPriorities.status).toBe("unavailable");
+    expect(plan.territoryPriorities.territories).toEqual([]);
+  });
+
+  it("withholds hook candidates when windowed RMS context is absent", () => {
+    const plan = buildMarketPlacementPlan({
+      executionMode: "master",
+      evidence: {},
+      sonicDna: {
+        ...master,
+        acousticFeatureProfile: { predictions: master.acousticFeatureProfile.predictions, windowSummaries: [] },
+      },
+    });
+    expect(plan.shortFormHooks).toMatchObject({ status: "unavailable", segments: [] });
+    expect(plan.shortFormHooks.limitations.join(" ")).toMatch(/windowed RMS summaries were unavailable/i);
+  });
+
 });
