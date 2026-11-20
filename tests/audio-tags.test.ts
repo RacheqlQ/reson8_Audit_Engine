@@ -60,6 +60,30 @@ function wavInfo(tags: Record<string, string>): Uint8Array {
   return new Uint8Array([82,73,70,70, (body.length)&255, (body.length>>8)&255, (body.length>>16)&255, (body.length>>24)&255, ...body]);
 }
 
+function mp4Atom(type: string, payload: Uint8Array): Uint8Array {
+  const bytes = new Uint8Array(8 + payload.length);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, bytes.length);
+  bytes.set(new TextEncoder().encode(type), 4);
+  bytes.set(payload, 8);
+  return bytes;
+}
+function mp4FreeformIsrc(value: string): Uint8Array {
+  const encoder = new TextEncoder();
+  const fullBox = new Uint8Array([0, 0, 0, 0]);
+  const dataPrefix = new Uint8Array([0, 0, 0, 1, 0, 0, 0, 0]);
+  const mean = mp4Atom("mean", new Uint8Array([...fullBox, ...encoder.encode("com.apple.iTunes")]));
+  const name = mp4Atom("name", new Uint8Array([...fullBox, ...encoder.encode("ISRC")]));
+  const data = mp4Atom("data", new Uint8Array([...dataPrefix, ...encoder.encode(value)]));
+  const item = mp4Atom("----", new Uint8Array([...mean, ...name, ...data]));
+  const ilst = mp4Atom("ilst", item);
+  const meta = mp4Atom("meta", new Uint8Array([...fullBox, ...ilst]));
+  const udta = mp4Atom("udta", meta);
+  const moov = mp4Atom("moov", udta);
+  const ftyp = mp4Atom("ftyp", new Uint8Array([...encoder.encode("M4A "), 0, 0, 0, 0, ...encoder.encode("M4A "), ...encoder.encode("mp42")]));
+  return new Uint8Array([...ftyp, ...moov]);
+}
+
 describe("audio metadata tag extraction", () => {
   it("extracts ID3v2 title, artist, album, ISRC, genre, date and label", () => {
     expect(readAudioTags(id3({
@@ -114,6 +138,10 @@ describe("audio metadata tag extraction", () => {
     const malformed = id3v1({ genre: 17, track: 4 });
     malformed[0] = 0;
     expect(readAudioTags(malformed)).toMatchObject({ genres: [], track: null });
+  });
+
+  it("extracts ISRC from the iTunes freeform metadata atom in an MP4/M4A master", () => {
+    expect(readAudioTags(mp4FreeformIsrc("NG-ABC-26-00001")).isrc).toBe("NGABC2600001");
   });
 
   it("does not expose malformed embedded ISRC tag values as recording identifiers", () => {
