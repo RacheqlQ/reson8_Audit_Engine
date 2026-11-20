@@ -417,10 +417,12 @@ export async function generateAuditReportV2(input:AuditReportInput,tier:AuditRep
   };
   const chartSection=legacyChartSection[spec.title];
   if(chartSection){
+   let chartCursor=H-380;
    for(const panel of chartsForSection(input,chartSection)){
-    const panelHeight=chartPanelHeight(panel.kind,panel.rows,W-2*M),panelTop=H-380;
-    if(panelTop-panelHeight<76)throw new Error("Evidence chart cannot fit safely on "+spec.title);
+    const panelHeight=chartPanelHeight(panel.kind,panel.rows,W-2*M),panelTop=chartCursor;
+    if(panelTop-panelHeight<76)throw new Error("Evidence charts cannot fit safely on "+spec.title);
     drawChartPanel(page,{...panel,fixture:rec(input.evidence).fixture===true,y:panelTop,width:W-2*M},fonts.regular,fonts.bold);
+    chartCursor=panelTop-panelHeight-12;
    }
   }
   drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
