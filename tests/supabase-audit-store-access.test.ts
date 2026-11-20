@@ -115,10 +115,35 @@ describe("audit status query efficiency", () => {
       catalogUrlsSubmitted: ["https://open.spotify.com/track/123"],
       catalogSources: [
         { platform: "spotify", status: "recognized" },
+      ],
+      isrcCatalogSources: [
         { platform: "musicbrainz", status: "partial", reason: "Multiple recording candidates returned; ambiguous fields were withheld." },
       ],
     });
   });
+  it("does not present automatic ISRC provider attempts as submitted DSP evidence", async () => {
+    process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
+    process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
+    const job = { id: "job-isrc-only", status: "failed", error_code: "processing_error", error_message: "failed", catalog_metadata: {} };
+    const events = [
+      { event_type: "catalog_ingestion", status: "recognized", created_at: "2026-11-18T10:00:03.000Z", payload: { platform: "musicbrainz", canonicalUrl: "https://musicbrainz.org/ws/2/isrc/USABC1234567", lookupType: "isrc", isrc: "USABC1234567", status: "recognized", reason: "MusicBrainz returned an ISRC recording match." } },
+      { event_type: "catalog_ingestion", status: "unavailable", created_at: "2026-11-18T10:00:04.000Z", payload: { platform: "spotify", canonicalUrl: "https://api.spotify.com/v1/search?q=isrc%3AUSABC1234567", lookupType: "isrc", isrc: "USABC1234567", status: "unavailable", reason: "Spotify API returned HTTP 403 Forbidden." } },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes("/audit_jobs?") ? job : url.includes("/audit_events?") ? events : [];
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const status = await createSupabaseAuditStore().getAuditStatus("job-isrc-only");
+    expect(status.catalogUrlsSubmitted).toEqual([]);
+    expect(status.catalogSources).toEqual([]);
+    expect(status.isrcCatalogSources).toEqual([
+      expect.objectContaining({ platform: "musicbrainz", status: "recognized" }),
+      expect.objectContaining({ platform: "spotify", status: "unavailable" }),
+    ]);
+  });
+
 });
 
 describe("DSP provider failure persistence", () => {
