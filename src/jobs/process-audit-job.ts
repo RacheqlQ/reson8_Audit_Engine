@@ -74,6 +74,7 @@ export interface AuditProcessorDependencies {
   markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal, errorCode?: AuditFailureCode): Promise<void>;
   stopHeartbeat?(): Promise<void>;
   signal?: AbortSignal;
+  onStageFailure?(diagnostic: AuditStageFailureDiagnostic): void;
 }
 
 
@@ -89,6 +90,21 @@ export const AI_ASSESSMENT_STAGE_TIMEOUT_MS = 10 * 60_000;
 export const AUDIT_JOB_DEADLINE_MS = 20 * 60_000;
 
 export type AuditFailureCode = "capacity" | "auth" | "malformed_output" | "timeout" | "provider_unavailable" | "processing_error";
+
+export interface AuditStageFailureDiagnostic {
+  stage: string;
+  failureCode: AuditFailureCode;
+  errorName: string;
+  timedOut: boolean;
+}
+
+export function buildAuditStageFailureDiagnostic(stage: string, error: unknown): AuditStageFailureDiagnostic {
+  const failureCode = classifyAuditFailure(error);
+  const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(error.name)
+    ? error.name
+    : "UnknownError";
+  return { stage, failureCode, errorName, timedOut: failureCode === "timeout" };
+}
 
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
   const message = error instanceof Error ? error.message : String(error);
@@ -194,6 +210,10 @@ async function awaitWithStage<T>(
         ),
         leaseAbort,
       ]);
+    } catch (error) {
+      try { deps.onStageFailure?.(buildAuditStageFailureDiagnostic(stage, error)); }
+      catch { /* Diagnostics must never replace the original processing failure. */ }
+      throw error;
     } finally {
       if (onAbort && leaseSignal) leaseSignal.removeEventListener("abort", onAbort);
       if (captureMemory) logStageMemory(stage, "end");

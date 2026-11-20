@@ -143,6 +143,14 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     saveReport: async (jobId, _claimToken, tier, pdf, reportInput, signal) => store.saveReport(jobId, _claimToken, tier, pdf, reportInput, signal),
     markCompleted: async (jobId, _claimToken, signal) => store.markCompleted(jobId, _claimToken, signal),
     markFailed: async (jobId, _claimToken, message, signal, errorCode) => store.markFailed(jobId, _claimToken, message, signal, errorCode),
+    onStageFailure: (diagnostic) => {
+      console.error(JSON.stringify({
+        worker: "audit",
+        jobId: job.id,
+        event: "audit_stage_failed",
+        ...diagnostic,
+      }));
+    },
   };
 
   const leaseController = new AbortController();
