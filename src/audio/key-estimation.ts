@@ -368,7 +368,7 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     return {
       key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
       method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, limitation: "Key and mode confidence was below threshold; no key is asserted.",
+      fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, windowConsensus, limitation: "Key and mode confidence was below threshold; no key is asserted.",
     };
   }
   return {
