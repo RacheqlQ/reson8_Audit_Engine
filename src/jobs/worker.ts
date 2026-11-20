@@ -1,4 +1,6 @@
 import { createAudioDecoder } from "../audio/decoder.js";
+import { unavailableVocalAnalysis } from "../audio/vocal-analysis.js";
+import { assessVocalAnalysisMemory } from "../audio/vocal-memory-guard.js";
 import { createRecognitionSample } from "../audio/recognition-sample.js";
 import { AuddClient } from "../providers/audd/client.js";
 import { getAssessmentProviderReadiness, providerDecision } from "../providers/provider-policy.js";
@@ -107,6 +109,11 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
     decode: async (bytes, _mimeType, signal) => decoder.decode(bytes, signal),
     ...(process.env.ENABLE_VOCAL_ANALYSIS === "true" ? {
       analyzeVocals: async (samples: Float32Array, sampleRate: number, channels: number, signal?: AbortSignal) => {
+        const preflight = assessVocalAnalysisMemory({
+          rssBytes: process.memoryUsage().rss,
+          pcmBytes: samples.byteLength,
+        });
+        if (!preflight.allowed) return unavailableVocalAnalysis(preflight.reason ?? "Vocal analysis skipped by memory preflight.");
         const { analyzeVocalsWithTimeout } = await import("../audio/vocal-analysis-worker-client.js");
         return analyzeVocalsWithTimeout(samples, sampleRate, channels, 150_000, signal);
       },
