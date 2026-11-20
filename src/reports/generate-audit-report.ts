@@ -232,18 +232,18 @@ export function metadataFieldSource(e:Record<string,unknown>,field:string):strin
  const labels:Record<string,string>={spotify:"Spotify",musicbrainz:"MusicBrainz",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",audd:"AudD recognition",id3:"Embedded audio tags",filename:"Uploaded filename"};
  return typeof provider==="string"&&labels[provider]? "Field source: "+labels[provider] : "Field source: unavailable";
 }
-function windowConsensusSummary(value:unknown):string|null {
+function windowConsensusSummary(value:unknown,independent?:unknown):string|null {
  if(!value||typeof value!=="object"||Array.isArray(value))return null;
  const record=value as Record<string,unknown>;
  const count=typeof record.windowCount==="number"&&Number.isInteger(record.windowCount)?record.windowCount:0;
- if(count<1)return "Unavailable — no usable analysis windows.";
+ const independentRecord=independent&&typeof independent==="object"&&!Array.isArray(independent)?independent as Record<string,unknown>:null;\n const independentText=independentRecord?(typeof independentRecord.bpm==="number"?"Independent low-frequency model: "+independentRecord.bpm.toFixed(1)+" BPM (raw periodicity score "+String(independentRecord.score??"n/a")+")":typeof independentRecord.key==="string"?"Independent Goertzel model: "+independentRecord.key+" "+String(independentRecord.mode??"")+" (raw score "+String(independentRecord.score??"n/a")+")":null):null;\n if(count<1)return "Unavailable — no usable analysis windows."+(independentText?" "+independentText:"");
  const winner=typeof record.winner==="string"&&record.winner.trim()?record.winner:"No stable majority";
  const agreement=typeof record.observedAgreement==="number"&&Number.isFinite(record.observedAgreement)
   ?"; observed agreement "+record.observedAgreement.toFixed(2):"";
  const lower=typeof record.lowerAgreementBound==="number"&&Number.isFinite(record.lowerAgreementBound)?record.lowerAgreementBound:null;
  const upper=typeof record.upperAgreementBound==="number"&&Number.isFinite(record.upperAgreementBound)?record.upperAgreementBound:null;
  const interval=lower!==null&&upper!==null?"; 95% bootstrap resampling interval "+lower.toFixed(2)+"–"+upper.toFixed(2):"";
- return winner+" across "+count+" windows"+agreement+interval+" (stability diagnostic; not a calibrated probability).";
+ return winner+" across "+count+" windows"+agreement+interval+" (stability diagnostic; not a calibrated probability)."+(independentText?" "+independentText:"");
 }
 
 export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAudio:boolean):Array<{label:string;value:string|null}> {
@@ -262,12 +262,12 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
   {label:"TEMPO CANDIDATE BPM",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" (provisional; prominence diagnostic "+(tempoConfidence===null?"not available":tempoConfidence.toFixed(2))+(leadingTempoScore&&typeof leadingTempoScore.score==="number"?"; candidate score "+leadingTempoScore.score.toFixed(3):"")+")":null},
   {label:"TEMPO DETECTION REASON",value:hasAudio&&!tempoReliable?(tempoReason||"No tempo candidate passed the reliability gate."):null},
-  {label:"TEMPO WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(rhythm.windowConsensus):null},
+  {label:"TEMPO WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(rhythm.windowConsensus,rhythm.independentEstimator):null},
   {label:"BEAT GRID STATUS",value:!hasAudio?null:beatTimes.length?String(rhythm.beatGridStatus||"provisional")+" (candidate; not independently validated)":"Not established"},
   {label:"BEAT TIMESTAMP COUNT",value:!hasAudio?null:beatTimes.length?String(beatTimes.length)+" generated timestamps; count is not a reliability measure":"No beat timestamps generated"},
   {label:"KEY / MODE",value:keyReliable?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
   {label:"KEY / MODE CANDIDATES",value:hasAudio&&!keyReliable&&keyCandidates?keyCandidates:null},
-  {label:"KEY WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(harmonic.windowConsensus):null},
+  {label:"KEY WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(harmonic.windowConsensus,harmonic.independentEstimator):null},
   {label:"KEY CONFIDENCE DIAGNOSTIC",value:hasAudio&&!keyReliable&&typeof s?.keyConfidence==="number"?(s.keyConfidence.toFixed(2)+" raw estimator score; not a calibrated probability; segment agreement "+(typeof s.keySegmentAgreement==="number"?s.keySegmentAgreement.toFixed(2):"not available")):null},
   {label:"KEY CANDIDATE REASON",value:hasAudio&&!keyReliable?text(harmonic.limitation)||"Key and mode did not pass the reliability gate.":null},
   {label:"TUNING OFFSET CANDIDATE CENTS",value:hasAudio&&hasMultipleTuningWindows(s)?metric(s?.keyTuningCents,0)+" (multiple tonal windows; provisional)":null},
