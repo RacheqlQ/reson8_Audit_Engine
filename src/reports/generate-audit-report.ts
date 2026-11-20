@@ -530,7 +530,8 @@ const curatorCampaignBody=[
  {title:"30 / 60 / 90-day execution plan",accent:"violet",body:["DAYS 01–30 — "+a.executionPlan.days30,"DAYS 31–60 — "+a.executionPlan.days60,"DAYS 61–90 — "+a.executionPlan.days90]},
  ...(i.marketPlacement?[
  {title:"Executive market placement and DSP targeting",accent:"blue" as const,body:[
-  ...(i.marketPlacement.playlistTargets.length?i.marketPlacement.playlistTargets.map((target)=>"TARGET "+target.rank+" — "+target.provider+" — "+target.name+" — priority "+target.priorityScore+"/100 — "+target.matchStatus+" — "+target.matchBasis.join("; ")+" — retrieved "+val(target.retrievedAt)):["No provider-returned playlist candidates are available for this audit."]),
+  ...(i.marketPlacement.playlistPresence.length?["EXISTING ISRC PRESENCE — not an outreach prospect",...i.marketPlacement.playlistPresence.map((target)=>target.provider+" — "+target.name+" — exact ISRC present — "+target.matchBasis.join("; ")+" — retrieved "+val(target.retrievedAt))]:[]),
+  ...(i.marketPlacement.playlistTargets.length?["TARGET SHORTLIST — membership absent or unverified",...i.marketPlacement.playlistTargets.map((target)=>"TARGET "+target.rank+" — "+target.provider+" — "+target.name+" — priority "+target.priorityScore+"/85 — "+target.matchStatus+" — "+target.matchBasis.join("; ")+" — retrieved "+val(target.retrievedAt))]:["No outreach shortlist candidates are available from the configured provider results."]),
   "Targeting rule: exact ISRC presence ranks ahead of genre/mood similarity; priority scores are ordering aids, not placement probabilities.",
   "Acoustic similarity: "+i.marketPlacement.acousticSimilarity.reason,
   "Playlist limitations: candidates do not establish curator interest, editorial acceptance, placement, audience size or commercial performance."
