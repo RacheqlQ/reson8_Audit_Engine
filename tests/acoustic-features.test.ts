@@ -34,6 +34,7 @@ describe("multi-window acoustic feature profile",()=>{
     expect(profile.provenance).toMatchObject({
       sourceSampleRateHz:sampleRate,
       analysisSampleRateHz:sampleRate,
+      analysisResampling:"none",
       channels:1,
       durationSeconds:seconds,
       sourceStartSeconds:0,
