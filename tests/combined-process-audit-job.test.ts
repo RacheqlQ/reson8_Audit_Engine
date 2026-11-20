@@ -34,6 +34,7 @@ describe("combined master and DSP processing", () => {
       raw: { provider: "musicbrainz" },
     };
 
+    const reportInputs: unknown[] = [];
     const result = await processAuditJob("combined-1", {
       getJob: async () => ({
         id: "combined-1", ownerId: null, sourceAudioPath: "anonymous/combined-1/master.wav",
@@ -73,6 +74,7 @@ describe("combined master and DSP processing", () => {
       },
       saveAssessment: async () => { events.push("assessment-saved"); },
       generateReport: async (input, tier) => {
+        reportInputs.push(input);
         events.push("generated-"+tier);
         expect(input.evidence).toMatchObject({ sourceCombination: "master_and_dsp", artist: "Master Artist", title: "Master Song" });
         expect(input.sonicDna).toMatchObject({ provenance: "uploaded_audio_master", evidenceClass: "OBSERVED" });
@@ -82,12 +84,24 @@ describe("combined master and DSP processing", () => {
         externalRecordsCaptured = input.realMasterContract?.externalRecords;
         return new Uint8Array([37,80,68,70,45]);
       },
-      saveReport: async (_id, _token, tier, _pdf, reportInput) => { events.push("saved-"+tier); if(tier==="full") expect(reportInput?.evidence).toMatchObject({ sourceCombination: "master_and_dsp" }); },
+      saveReport: async (_id, _token, tier, _pdf, reportInput) => {
+        events.push("saved-"+tier);
+        if(tier==="full"){
+          expect(reportInput).toBe(reportInputs[0]);
+          expect(reportInput).toMatchObject({
+            evidence:{sourceCombination:"master_and_dsp"},
+            sonicDna:expect.any(Object),
+            assessment:expect.any(Object),
+          });
+        }
+      },
       markCompleted: async () => { events.push("completed"); },
       markFailed: async (_id, _token, message) => { throw new Error(message); },
     });
 
     expect(result.status).toBe("completed");
+    expect(reportInputs).toHaveLength(2);
+    expect(reportInputs[0]).toBe(reportInputs[1]);
     expect(externalRecordsCaptured).toEqual(expect.arrayContaining([
       expect.objectContaining({ provider: "musicbrainz", status: "verified", retrievedAt: "2026-11-19T12:00:00.000Z" }),
       expect.objectContaining({ provider: "spotify", status: "verified", retrievedAt: expect.any(String) }),
