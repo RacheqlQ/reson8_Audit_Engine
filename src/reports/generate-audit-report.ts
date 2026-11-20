@@ -248,6 +248,23 @@ function executiveDiagnosticMessage(code:string,message:string,metricName?:strin
   .replace(/CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED|VALIDATED_MODEL_NOT_CONFIGURED|CALIBRATED_CLASSIFIER_NOT_CONFIGURED|MEASUREMENT_UNAVAILABLE|PROVIDER_NOT_CONFIGURED|NO_UNAMBIGUOUS_RECORD_ID|PROVIDER_LOOKUP_UNAVAILABLE|PROVIDER_RETRIEVAL_TIMESTAMP_MISSING/g,"analysis limitation");
  return safe.replace(/\s+/g," ").trim();
 }
+function safeSourceFileLabel(sourceAudioPath:string):string {
+ const basename=sourceAudioPath.split(/[\\/]/).filter(Boolean).pop()??"";
+ const safe=normalizeReportText(basename.replace(/[\u0000-\u001F\u007F]/g,"").trim()).slice(0,100);
+ return safe||"Uploaded audio master";
+}
+function executiveMethodLabel(method:string):string {
+ const labels:Record<string,string>={
+  decoded_master_duration:"decoded audio duration",audio_decoder:"audio decoder metadata",
+  high_frequency_transient_autocorrelation:"transient-based tempo estimator",transient_autocorrelation:"transient-based tempo estimator",
+  audio_decoder_loudness:"audio loudness measurement",audio_decoder_loudness_range:"EBU loudness-range measurement",
+  audio_decoder_true_peak:"true-peak measurement",pcm_rms:"PCM RMS signal measurement",
+  pcm_rms_envelope_p95_p10:"RMS-envelope percentile measurement",fft_spectral_centroid:"spectral-centroid analysis",
+  fft_spectral_bandwidth:"spectral-bandwidth analysis",fft_spectral_rolloff:"spectral-rolloff analysis",
+  pcm_zero_crossing_rate:"zero-crossing-rate analysis",audio_feature_heuristics_v1:"signal-feature heuristic analysis"
+ };
+ return labels[method]??"signal-analysis method (technical identifier withheld)";
+}
 function executiveMetricLabel(name:string):string {
  const labels:Record<string,string>={tempo_bpm:"Confirmed tempo",integrated_loudness_lufs:"Integrated loudness",loudness_range_lu:"Loudness range",true_peak_dbfs:"True peak",rms_level_dbfs:"RMS signal level",rms_envelope_spread_db:"RMS-envelope spread (internal proxy)",spectral_centroid_hz:"Spectral centroid",spectral_bandwidth_hz:"Spectral bandwidth",spectral_rolloff_hz:"Spectral rolloff",zero_crossing_rate:"Zero-crossing rate"};
  return labels[name]??name.replace(/^acoustic_/,"").replace(/_median$/," median").replace(/_/g," ").replace(/\b\w/g,(letter)=>letter.toUpperCase());
@@ -296,23 +313,27 @@ function windowConsensusSummary(value:unknown,independent?:unknown):string|null 
 export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAudio:boolean):Array<{label:string;value:string|null}> {
  const tempoReliable=hasAudio&&isReliableTempo(s);
  const keyReliable=hasAudio&&isReliableKey(s);
- const tempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
+ const rhythm=s?.rhythmFeatures&&typeof s.rhythmFeatures==="object"?s.rhythmFeatures as Record<string,unknown>:{};
+ const independentEstimator=rhythm.independentEstimator&&typeof rhythm.independentEstimator==="object"?rhythm.independentEstimator as Record<string,unknown>:{};
+ const independentTempoCandidate=typeof independentEstimator.bpm==="number"&&Number.isFinite(independentEstimator.bpm)?independentEstimator.bpm:null;
+ const directTempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
+ const tempoCandidate=directTempoCandidate??independentTempoCandidate;
+ const tempoCandidateSource=directTempoCandidate!==null?"primary tempo estimator":"independent low-frequency estimator";
  const tempoConfidence=typeof s?.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)?s.tempoConfidence:null;
  const alternateTempo=typeof s?.alternateTempo==="number"&&Number.isFinite(s.alternateTempo)&&s.alternateTempo>=40&&s.alternateTempo<=240?s.alternateTempo:null;
  const primaryTempo=typeof s?.bpm==="number"&&Number.isFinite(s.bpm)?s.bpm:null;
  const tempoRatio=primaryTempo!==null&&alternateTempo!==null?alternateTempo/primaryTempo:null;
  const alternateTempoRelation=tempoRatio!==null&&Math.abs(tempoRatio-0.5)<=0.03?"half-time":tempoRatio!==null&&Math.abs(tempoRatio-2)<=0.06?"double-time":"related pulse";
- const rhythm=s?.rhythmFeatures&&typeof s.rhythmFeatures==="object"?s.rhythmFeatures as Record<string,unknown>:{};
  const tempoScores=Array.isArray(rhythm.candidateScores)?rhythm.candidateScores.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
  const leadingTempoScore=tempoScores.find((item)=>item.bpm===tempoCandidate);
  const tempoReason=text(rhythm.abstentionReason);
  const beatTimes=Array.isArray(rhythm.beatTimesSeconds)?rhythm.beatTimesSeconds:[];
  const harmonic=s?.harmonicFeatures&&typeof s.harmonicFeatures==="object"?s.harmonicFeatures as Record<string,unknown>:{};
- const keyCandidates=Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")).slice(0,3).map((item)=>[text(item.key),text(item.mode),typeof item.score==="number"?"score "+item.score.toFixed(3):""].filter(Boolean).join(" ")).join("; "):"";
+ const keyCandidates=Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")).slice(0,3).map((item)=>[text(item.key),text(item.mode),typeof item.score==="number"?"raw estimator score "+item.score.toFixed(3)+" (not a calibrated probability)":""].filter(Boolean).join(" ")).join("; "):"";
  return [
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
   {label:"TEMPO ALTERNATE INTERPRETATION",value:tempoReliable&&alternateTempo!==null&&primaryTempo!==null&&alternateTempo!==primaryTempo?String(alternateTempo)+" BPM ("+alternateTempoRelation+" interpretation; alternate metrical level)":null},
-  {label:"TEMPO CANDIDATE BPM",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" (provisional; prominence diagnostic "+(tempoConfidence===null?"not available":tempoConfidence.toFixed(2))+(leadingTempoScore&&typeof leadingTempoScore.score==="number"?"; candidate score "+leadingTempoScore.score.toFixed(3):"")+")":null},
+  {label:"TEMPO CANDIDATE BPM",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" (provisional; "+tempoCandidateSource+"; prominence diagnostic "+(tempoConfidence===null?"not available":tempoConfidence.toFixed(2))+(leadingTempoScore&&typeof leadingTempoScore.score==="number"?"; candidate score "+leadingTempoScore.score.toFixed(3):"")+")":null},
   {label:"PROVISIONAL HALF / DOUBLE-TIME RELATIONS",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" BPM candidate; half-time "+(tempoCandidate/2).toFixed(1)+" BPM; double-time "+(tempoCandidate*2).toFixed(1)+" BPM (derived arithmetic relationships only; not independently validated beat interpretations)":null},
   {label:"TEMPO DETECTION REASON",value:hasAudio&&!tempoReliable?(tempoReason||"No tempo candidate passed the reliability gate."):null},
   {label:"TEMPO WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(rhythm.windowConsensus,rhythm.independentEstimator):null},
@@ -550,11 +571,11 @@ const curatorCampaignBody=[
  ...(i.realMasterContract? [{
   title:"Master evidence contract and provenance",accent:"teal" as const,
   body:[
-   "SOURCE FILE: "+i.realMasterContract.source.sourceAudioPath,
+   "SOURCE FILE: "+safeSourceFileLabel(i.realMasterContract.source.sourceAudioPath),
    "SOURCE SHA-256: "+i.realMasterContract.source.sha256,
    "SOURCE MIME / SIZE: "+i.realMasterContract.source.mimeType+" / "+i.realMasterContract.source.byteLength+" bytes",
-   ...i.realMasterContract.directSignalMeasurements.map((m)=>executiveMetricLabel(m.name)+": "+(m.status==="measured"?text(m.value)+" "+m.unit+"; method "+m.method+"; measured: "+m.measuredAt:"Not reported as a confirmed measurement; "+m.diagnostics.map((d)=>executiveDiagnosticMessage(d.code,d.message,m.name)).join("; "))),
-   ...(i.realMasterContract.provisionalPredictions??[]).map((p)=>"PROVISIONAL "+(p.name==="audio_mood"?"AUDIO MOOD":"AUDIO ENERGY")+": "+p.label+" (heuristic score "+p.score+"/100; not a probability; method "+p.method+")."),
+   ...i.realMasterContract.directSignalMeasurements.map((m)=>executiveMetricLabel(m.name)+": "+(m.status==="measured"?text(m.value)+" "+m.unit+"; method: "+executiveMethodLabel(m.method)+"; measured: "+m.measuredAt:"Not reported as a confirmed measurement; "+m.diagnostics.map((d)=>executiveDiagnosticMessage(d.code,d.message,m.name)).join("; "))),
+   ...(i.realMasterContract.provisionalPredictions??[]).map((p)=>"PROVISIONAL "+(p.name==="audio_mood"?"AUDIO MOOD":"AUDIO ENERGY")+": "+p.label+" (heuristic score "+p.score+"/100; not a probability; method: "+executiveMethodLabel(p.method)+")."),
    ...(i.realMasterContract.calibratedPredictions??[]).map((p) => {
     if (p.status !== "predicted") {
      return executiveMetricLabel(p.name) + ": No calibrated model is configured. " + p.diagnostics.map((d) => executiveDiagnosticMessage(d.code,d.message)).join("; ");
