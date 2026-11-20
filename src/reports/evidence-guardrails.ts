@@ -254,15 +254,27 @@ function stripMismatchedMeasuredNumericClaims(value: unknown, sonicDna: Record<s
       const hz = sentence.match(/(?<![\w.])(-?\d+(?:\.\d+)?)\s*Hz\b/i);
       if (hz) {
         const lower = sentence.toLowerCase();
-        const candidates = lower.includes("centroid")
-          ? [sonicDna?.spectralCentroidHz]
-          : lower.includes("bandwidth")
-            ? [sonicDna?.spectralBandwidthHz]
-            : lower.includes("rolloff")
-              ? [sonicDna?.spectralRolloffHz]
-              : [sonicDna?.spectralCentroidHz, sonicDna?.spectralBandwidthHz, sonicDna?.spectralRolloffHz];
+        const candidates = lower.includes("sample rate")
+          ? [sonicDna?.sampleRate]
+          : lower.includes("centroid")
+            ? [sonicDna?.spectralCentroidHz]
+            : lower.includes("bandwidth")
+              ? [sonicDna?.spectralBandwidthHz]
+              : lower.includes("rolloff")
+                ? [sonicDna?.spectralRolloffHz]
+                : [sonicDna?.spectralCentroidHz, sonicDna?.spectralBandwidthHz, sonicDna?.spectralRolloffHz];
         if (!candidates.some((candidate) => numericValueMatchesMeasurement(Number(hz[1]), candidate, 0.51))) return false;
       }
+      const duration = matches(/\b(?:duration|runtime)\s*(?:of|:|is)?\s*(-?\d+(?:\.\d+)?)\s*(?:s|sec|seconds)\b/i, sonicDna?.durationSeconds, 0.051);
+      if (duration === false) return false;
+      const channels = matches(/(?<![\w.])(\d+)\s+channels?\b/i, sonicDna?.channels, 0);
+      if (channels === false) return false;
+      const rmsEnergy = matches(/\bRMS energy\s*(?:of|:|is)?\s*(-?\d+(?:\.\d+)?)/i, sonicDna?.rmsEnergy, 0.00051);
+      if (rmsEnergy === false) return false;
+      const zeroCrossing = matches(/\bzero[- ]crossing rate\s*(?:of|:|is)?\s*(-?\d+(?:\.\d+)?)/i, sonicDna?.zeroCrossingRate, 0.00051);
+      if (zeroCrossing === false) return false;
+      const envelopeSpread = matches(/\bRMS[- ]envelope spread\s*(?:of|:|is)?\s*(-?\d+(?:\.\d+)?)\s*dB\b/i, sonicDna?.dynamicRangeDb, 0.051);
+      if (envelopeSpread === false) return false;
       return true;
     });
     return kept.join(" ").trim();
