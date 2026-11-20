@@ -52,7 +52,7 @@ for(const [name,input] of variants){
   const bytes=await ensurePdfReport(reportInput,tier);
   const pdf=await PDFDocument.load(bytes);
   if(tier==="sample"&&pdf.getPageCount()!==9)throw new Error(name+" sample report must be exactly 9 pages; got "+pdf.getPageCount());
-  if(tier==="full"&&(pdf.getPageCount()<12||pdf.getPageCount()>13))throw new Error(name+" full report must be 12 or 13 pages; got "+pdf.getPageCount());
+  if(tier==="full"&&pdf.getPageCount()!==12)throw new Error(name+" full report must be exactly 12 pages; got "+pdf.getPageCount());
   const filename=name+"-"+tier+"-audit-report.pdf";
   const fileUrl=new URL(filename,out),filePath=fileUrl.pathname;
   await writeFile(fileUrl,bytes);
@@ -95,6 +95,13 @@ for(const [name,input] of variants){
   if(tier==="sample"){
    for(const label of chartLabels){
     if(!normalizedExtracted.includes(normalizeReportText(label).replace(/\s+/g," ").trim()))throw new Error(filename+" is missing a complete lane-constellation label: "+label);
+   }
+  }
+  if(name==="combined-master-and-dsp"&&tier==="full"){
+   const requiredCharts=["Evidence layers","DSP platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"];
+   const fullText=normalizedExtracted.toLocaleLowerCase();
+   for(const chart of requiredCharts){
+    if(!fullText.includes(chart.toLocaleLowerCase()))throw new Error(filename+" is missing a sample-parity chart: "+chart);
    }
   }
   if(name==="long-form-audio"&&tier==="full"){

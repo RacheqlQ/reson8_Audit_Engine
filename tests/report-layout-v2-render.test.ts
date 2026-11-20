@@ -82,8 +82,7 @@ describe("v2 gated report pages", () => {
   it("keeps a full report within the approved 12–13 page range without consulting v1 pagination", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(12);
-    expect(pdf.getPageCount()).toBeLessThanOrEqual(13);
+    expect(pdf.getPageCount()).toBe(12);
   });
 
   it("keeps an expanded real-world narrative inside the fixed 12-page full-report allocation", async () => {
@@ -110,8 +109,7 @@ describe("v2 gated report pages", () => {
     };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(12);
-    expect(pdf.getPageCount()).toBeLessThanOrEqual(13);
+    expect(pdf.getPageCount()).toBe(12);
   });
 
   it("omits every gated page for a minimal audio-only fixture", async () => {
