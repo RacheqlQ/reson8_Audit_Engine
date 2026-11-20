@@ -457,12 +457,12 @@ describe("Phase 1 real-master report contract",()=>{
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Master evidence contract and provenance");
   expect(report).toContain("SOURCE SHA-256: "+"a".repeat(64));
-  expect(report).toContain("tempo_bpm: 96 BPM; method transient_autocorrelation");
-  expect(report).toContain("tempo_bpm: 96 BPM; method transient_autocorrelation; measured: 2026-11-19T12:00:00.000Z");
-  expect(report).toContain("true_peak_dbfs: UNAVAILABLE; DECODER_METRIC_MISSING");
-  expect(report).toContain("calibrated_audio_mood: UNAVAILABLE; VALIDATED_MODEL_NOT_CONFIGURED");
-  expect(report).toContain("calibrated_key_mode_probability: UNAVAILABLE; CALIBRATED_CLASSIFIER_NOT_CONFIGURED");
-  expect(report).toContain("calibrated_energy_classification: high (84.0% calibrated; model energy-model-v2; calibration isotonic / energy-calibration-v1");
+  expect(report).toContain("Confirmed tempo: 96 BPM; method transient_autocorrelation");
+  expect(report).toContain("Confirmed tempo: 96 BPM; method transient_autocorrelation; measured: 2026-11-19T12:00:00.000Z");
+  expect(report).toContain("True peak: Not reported as a confirmed measurement; The decoder did not return a true-peak measurement.");
+  expect(report).toContain("Calibrated audio mood: No calibrated model is configured. A validated mood model is not configured");
+  expect(report).toContain("Calibrated key mode probability: No calibrated model is configured. A calibrated key/mode probability model is not configured");
+  expect(report).toContain("Calibrated energy classification: high (84.0% calibrated; model energy-model-v2; calibration isotonic / energy-calibration-v1");
   expect(report).toContain("validation held-out-validation-2026 (n=240); ECE 0.042; Brier 0.116");
   expect(report).toContain("feature drivers: rms_energy supports (0.620), spectral_flux opposes (-0.180)");
   expect(report).toContain("EXTERNAL RECORD: musicbrainz / recording-mbid; retrieved: 2026-11-19T12:05:00.000Z");
