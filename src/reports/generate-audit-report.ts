@@ -313,7 +313,6 @@ export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAu
   {label:"MID BAND ENERGY RATIO",value:descriptor("midBandEnergyRatio",4)},
   {label:"HIGH BAND ENERGY RATIO",value:descriptor("highBandEnergyRatio",4)},
   {label:"ACOUSTIC ANALYSIS WINDOWS",value:hasAudio?metric(provenance.windowCount,0,"Unavailable"):null},
-  {label:"ACOUSTIC ANALYSIS WINDOWS",value:hasAudio?metric(provenance.windowCount,0,"Unavailable"):null},
   {label:"SIGNAL PERIODICITY ACTIVITY RATIO",value:hasAudio?metric(vocal.periodicityActivityRatio,2):null}
  ];
 }
