@@ -453,7 +453,9 @@ describe("Sonic DNA provisional candidate reporting", () => {
     expect(rows.find((row) => row.label === "TEMPO BPM")?.value).toBeNull();
     expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 (provisional");
     expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
-      .toContain("165 BPM candidate; half-time 82.5 BPM; double-time 330.0 BPM");
+      .toContain("165 BPM candidate; half-time 82.5 BPM");
+    expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
+      .not.toContain("double-time 330.0 BPM");
     expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
       .toContain("not independently validated beat interpretations");
     const reportInput=structuredClone(fullAudioFixture) as AuditReportInput;

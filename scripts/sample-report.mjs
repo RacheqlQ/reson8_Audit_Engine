@@ -129,7 +129,8 @@ try{
  if(/(?:128\s*BPM(?!\s*candidate\b)|high-energy|Afrobeats|24000 streams|market demand|commercial potential|24000 monthly listeners|commercially successful)/i.test(unsafeText)){
   throw new Error("Generated PDF reintroduced an unsupported tempo, genre or commercial claim");
  }
- if(!/128\s+BPM candidate;\s*half-time 64\.0 BPM;\s*double-time 256\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF lost or mislabelled provisional tempo relationships");
+ if(!/128\s+BPM candidate;\s*half-time 64\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF lost or mislabelled provisional tempo relationships");
+ if(/double-time 256\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF printed an implausible double-time candidate");
  if(!unsafeText.includes("Further listening and source verification are required")){
   throw new Error("Generated PDF lost the supported A&R Notes decision-context sentence");
  }
