@@ -78,6 +78,20 @@ function header(page:PDFPage,title:string,fonts:Fonts){
 function pageBase(pdf:PDFDocument,title:string,fonts:Fonts):PDFPage{
  const p=pdf.addPage([W,H]);p.drawRectangle({x:0,y:0,width:W,height:H,color:C.paper});header(p,title,fonts);return p;
 }
+export function buildNextActionLine(input: AuditReportInput): string {
+ const assessment=rec(input.assessment), recommendation=str(rec(assessment.releaseStrategy).recommendation,"");
+ const firstGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(Boolean)??"";
+ return "Recommended next step: "+(recommendation||firstGap||"Not supplied");
+}
+
+export function buildReleaseFramingLine(input: AuditReportInput): string {
+ const release=Date.parse(String(rec(input.evidence).releaseDate??""));
+ const generated=Date.parse(String(input.generatedAt??""));
+ return Number.isFinite(release)&&Number.isFinite(generated)&&release<generated
+  ? "Post-release framing: release date is in the past."
+  : "Release framing: date does not establish a past release.";
+}
+
 export function buildPositioningLines(input: AuditReportInput): string[] {
  const evidence = rec(input.evidence), assessment = rec(input.assessment);
  const lines: string[] = [];
@@ -120,7 +134,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "Artist: "+str(e.artist)+"   Track: "+str(e.title),
    "Audit date: "+dateText(input.generatedAt)+"   Release date: "+dateText(e.releaseDate),
    "Executive summary: "+str(a.executiveSummary,"No executive summary supplied."),
-   "Recommended next step: "+str(rec(a.releaseStrategy).recommendation,"Complete identity, rights and master verification.")
+   buildNextActionLine(input)
   ]},
   {title:"Identity and source reconciliation",blocks:[],lines:[...identityLines(e),"Sources checked: "+arr(e.metadataSourcesChecked).map(v=>str(v)).join(", ")||"Sources checked: Not supplied","Platform coverage: "+str(e.platformCoverage,"Not supplied")]},
   {title:"Track snapshot",kind:"snapshot",blocks:metricBlock(data),lines:[
@@ -144,7 +158,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence.")
   ]},
   {title:"Release and promotion plan",blocks:[],lines:[
-   Date.parse(String(e.releaseDate??""))<Date.now()?"Post-release framing: release date is in the past.":"Release framing: date does not establish a past release.",
+   buildReleaseFramingLine(input),
    "General guidance: "+str(a.industryPractice,"No industry guidance supplied."),
    "Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v)).join("; "),
    "Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v)).join("; "),
