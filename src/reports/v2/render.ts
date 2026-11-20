@@ -55,11 +55,11 @@ function metricBlock(data:ReportV2Data):Block[]{
   {label:"ENERGY / LOUDNESS",value:data.energy.value===null?"N/D":String(data.energy.value),confidence:data.energy.confidence??"Low",provenance:prov(data.energy.evidence)}
  ];
 }
-function scoreChip(page:PDFPage,x:number,y:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
- page.drawRectangle({x,y,width:158,height:48,color:C.white,borderColor:C.line,borderWidth:.7});
+function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
+ page.drawRectangle({x,y,width,height:48,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawCircle({x:x+13,y:y+31,size:3.5,color});
  page.drawText(label.toUpperCase(),{x:x+24,y:y+28,size:6.5,font:fonts.bold,color:C.muted});
- drawWrapped(page,value,x+12,y+15,134,fonts.bold,9,color,11);
+ drawWrapped(page,value,x+12,y+15,width-24,fonts.bold,8.2,color,10);
 }
 function card(page:PDFPage,x:number,top:number,width:number,title:string,body:string[],fonts:Fonts,opts:{accent?:typeof C.teal;height?:number;provenance?:string}={}):number{
  const pad=12,titleH=14,bodyW=width-pad*2;let bodyHeight=0;
@@ -223,6 +223,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    "Headline score: "+(data.headlineScore===null?"N/D — no scored headline value supplied":data.headlineScore+"/100"),
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
    "Market evidence: "+(data.hasVerifiedCommercialEvidence?"Source-attributed commercial data supplied":"Insufficient — no verified commercial source data supplied."),
+   ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
    ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
   {title:"A&R positioning",blocks:[],lines:buildPositioningLines(input)},
@@ -496,12 +497,11 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    drawWrapped(page,str(e.artist,"Artist not supplied"),M,H-155,W-2*M,fonts.bold,22,C.ink,27);
    drawWrapped(page,str(e.title,"Track not supplied"),M,H-186,W-2*M,fonts.regular,14,C.muted,18);
    page.drawText("AUDIT "+input.auditId+"  ·  "+dateText(input.generatedAt)+"  ·  "+dateText(e.releaseDate),{x:M,y:H-210,size:7,font:fonts.regular,color:C.muted});
-   const chipY=H-260;
-   scoreChip(page,M,chipY,"Audio quality","N/D — no scored quality metric",C.teal,fonts);
-   const reconciliation=rec(e.reconciliation);
-   const identityStatus=arr(reconciliation.conflicts).length?"Conflict":arr(reconciliation.reconciledFields).length?"Cross-checked":"Unavailable";
-   scoreChip(page,M+166,chipY,"Identity confidence",identityStatus,C.amber,fonts);
-   scoreChip(page,M+332,chipY,"Market evidence",data.hasVerifiedCommercialEvidence?"Source-attributed":"Insufficient",C.coral,fonts);
+   const chipY=H-260,chipGap=8,chipWidth=(W-2*M-chipGap*3)/4;
+   const chipColors=[C.teal,C.amber,C.coral,C.gold] as const;
+   data.decisionDimensions.forEach((dimension,index)=>{
+    scoreChip(page,M+index*(chipWidth+chipGap),chipY,chipWidth,dimension.name,dimension.status,chipColors[index]??C.gold,fonts);
+   });
    if(data.headlineScore!==null){
     const ringX=M+65,ringY=H-355;
     page.drawCircle({x:ringX,y:ringY,size:43,color:C.paper,borderColor:C.line,borderWidth:9});

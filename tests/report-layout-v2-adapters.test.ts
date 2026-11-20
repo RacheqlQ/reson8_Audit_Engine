@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adaptReportV2 } from "../src/reports/v2/adapters.js";
+import { adaptReportV2, buildDecisionDimensions } from "../src/reports/v2/adapters.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { metadataOnlyFixture, fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
@@ -82,6 +82,53 @@ describe("v2 read-only evidence adapters", () => {
     expect(data.energy.value).toContain("Loudness range 10.8 LU");
     expect(data.energy.value).toContain("True peak -2.3 dBFS");
     expect(data.energy.value).toContain("RMS level -18.4 dBFS");
+  });
+
+  it("splits the verdict into conservative audio, identity, market and release-readiness dimensions", () => {
+    const input = structuredClone(metadataOnlyFixture) as any;
+    const initial = buildDecisionDimensions(input);
+    expect(initial.map(item => item.name)).toEqual(["Audio", "Identity", "Market", "Release readiness"]);
+    expect(initial.map(item => item.status)).toEqual(["NOT MEASURED", "UNVERIFIED", "NOT ESTABLISHED", "NOT CLEARED"]);
+
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      bpm: 120,
+      tempoConfidence: 0.9,
+      key: "C",
+      mode: "major",
+      keyConfidence: 0.9,
+      keySegmentAgreement: 0.9,
+      loudnessLufs: -14.2,
+    };
+    input.evidence = {
+      ...input.evidence,
+      artist: "Fixture Artist",
+      title: "Fixture Track",
+      isrc: "USAAA2600001",
+      sourceProviders: ["tidal", "apple_music"],
+      fieldProvenance: { artist: "tidal", title: "apple_music", isrc: "tidal" },
+      reconciliation: { reconciledFields: ["artist", "title", "isrc"], conflicts: [] },
+      commercialMetrics: { verified: true, source: "fixture provider", reportingPeriod: "fixture period", streams: 1234 },
+      rightsClearanceVerified: true,
+      deliveryConfirmed: true,
+      releaseStatusVerified: true,
+      masterApprovalVerified: true,
+    };
+    const complete = buildDecisionDimensions(input);
+    expect(complete.map(item => item.status)).toEqual(["MEASURED", "CROSS-CHECKED", "PERFORMANCE VERIFIED", "GATES VERIFIED"]);
+    expect(complete[0].basis).toContain("confidence-qualified tempo");
+    expect(complete[3].basis).toContain("All four required release gates");
+
+    input.evidence.reconciliation = { reconciledFields: ["artist", "title"], conflicts: [{ field: "isrc" }] };
+    input.evidence.commercialMetrics = undefined;
+    input.evidence.verifiedComparables = [{
+      title: "Fixture comparable", year: 2024, lane: "Fixture lane", similarity: 70,
+      basis: "Fixture-only comparison", source: "fixture provider",
+    }];
+    const conflict = buildDecisionDimensions(input);
+    expect(conflict[1].status).toBe("CONFLICTS OPEN");
+    expect(conflict[2].status).toBe("CATALOGUE CONTEXT ONLY");
   });
 
   it("does not print half-time or double-time BPM candidates outside 40–220 BPM", () => {

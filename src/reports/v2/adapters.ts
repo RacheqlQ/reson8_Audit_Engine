@@ -1,4 +1,5 @@
 import { hasMultipleTuningWindows, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
+import { hasSubmittedMasterAudio } from "../../audio/master-audio-evidence.js";
 import type { AuditReportInput } from "../generate-audit-report.js";
 
 export type ConfidenceTag = "High" | "Medium" | "Low";
@@ -27,6 +28,13 @@ export interface ReportV2Data {
   scoreDrivers: Array<{ label: string; score: number; weight: number | null; evidence: string }> | null;
   hasVerifiedCommercialEvidence: boolean;
   notYetMeasured: string[];
+  decisionDimensions: DecisionDimension[];
+}
+
+export interface DecisionDimension {
+  name: "Audio" | "Identity" | "Market" | "Release readiness";
+  status: string;
+  basis: string;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -137,6 +145,88 @@ function commercialEvidenceExists(evidence: UnknownRecord | null): boolean {
   }
   return false;
 }
+export function buildDecisionDimensions(input: AuditReportInput): DecisionDimension[] {
+  const evidence = record(input.evidence);
+  const audio = record(input.sonicDna);
+  const reconciliation = record(evidence?.reconciliation);
+  const conflicts = Array.isArray(reconciliation?.conflicts) ? reconciliation.conflicts : [];
+  const reconciledFields = Array.isArray(reconciliation?.reconciledFields) ? reconciliation.reconciledFields : [];
+  const sourceProviders = Array.isArray(evidence?.sourceProviders) ? evidence.sourceProviders.filter(value => typeof value === "string") : [];
+  const fieldProvenance = record(evidence?.fieldProvenance);
+  const identityFields = ["artist", "title", "isrc"].filter(field =>
+    nonEmpty(evidence?.[field]) && (nonEmpty(fieldProvenance?.[field]) !== null || sourceProviders.length > 0)
+  );
+  const tempoMeasured = isReliableTempo(audio as Parameters<typeof isReliableTempo>[0]);
+  const keyMeasured = isReliableKey(audio);
+  const descriptiveMeasurements = [
+    "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "rmsLevelDbfs", "rmsEnergy",
+    "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate",
+  ].filter(field => finite(audio?.[field]));
+  const audioSubmitted = hasSubmittedMasterAudio(evidence ?? {}, audio);
+  const audioMeasures = [
+    ...(tempoMeasured ? ["confidence-qualified tempo"] : []),
+    ...(keyMeasured ? ["confidence-qualified key"] : []),
+    ...descriptiveMeasurements,
+  ];
+  const audioStatus = !audioSubmitted
+    ? "NOT MEASURED"
+    : audioMeasures.length ? "MEASURED" : "ANALYSIS INCOMPLETE";
+  const audioBasis = !audioSubmitted
+    ? "No uploaded-master provenance marker is present."
+    : audioMeasures.length
+      ? "Uploaded-master evidence: " + audioMeasures.join(", ") + ". Descriptive measurements do not establish artistic quality or mastering readiness."
+      : "An uploaded master is recorded, but no supported technical measurements are available.";
+
+  const identityStatus = conflicts.length
+    ? "CONFLICTS OPEN"
+    : reconciledFields.length >= 2
+      ? "CROSS-CHECKED"
+      : identityFields.length >= 2
+        ? "SOURCE-RETURNED"
+        : "UNVERIFIED";
+  const identityBasis = conflicts.length
+    ? conflicts.length + " identity field conflict(s) remain unresolved."
+    : reconciledFields.length >= 2
+      ? "Reconciled fields: " + reconciledFields.join(", ") + "."
+      : identityFields.length >= 2
+        ? "Source-attributed identity fields: " + identityFields.join(", ") + "."
+        : "Fewer than two core identity fields have source attribution.";
+
+  const hasCommercial = commercialEvidenceExists(evidence);
+  const marketPlacement = record(input.marketPlacement);
+  const hasCatalogueContext = Boolean(
+    comparablesFrom(evidence)
+    || (Array.isArray(marketPlacement?.playlistPresence) && marketPlacement.playlistPresence.length)
+    || (Array.isArray(marketPlacement?.playlistTargets) && marketPlacement.playlistTargets.length)
+  );
+  const marketStatus = hasCommercial
+    ? "PERFORMANCE VERIFIED"
+    : hasCatalogueContext ? "CATALOGUE CONTEXT ONLY" : "NOT ESTABLISHED";
+  const marketBasis = hasCommercial
+    ? "At least one non-negative commercial metric has a verified source and reporting period."
+    : hasCatalogueContext
+      ? "Source-attributed catalogue or playlist context is present; audience demand and commercial performance are not established."
+      : "No verified commercial-performance record or source-attributed market comparison is available.";
+
+  const readinessGates = [
+    ["rightsClearanceVerified", "rights clearance"],
+    ["deliveryConfirmed", "delivery confirmation"],
+    ["releaseStatusVerified", "release status"],
+    ["masterApprovalVerified", "final master approval"],
+  ] as const;
+  const missingGates = readinessGates.filter(([key]) => evidence?.[key] !== true).map(([, label]) => label);
+  const releaseStatus = missingGates.length ? "NOT CLEARED" : "GATES VERIFIED";
+  const releaseBasis = missingGates.length
+    ? "Not source-verified: " + missingGates.join(", ") + "."
+    : "All four required release gates are explicitly marked verified in the supplied evidence.";
+  return [
+    { name: "Audio", status: audioStatus, basis: audioBasis },
+    { name: "Identity", status: identityStatus, basis: identityBasis },
+    { name: "Market", status: marketStatus, basis: marketBasis },
+    { name: "Release readiness", status: releaseStatus, basis: releaseBasis },
+  ];
+}
+
 function driversFrom(assessment: UnknownRecord | null): ReportV2Data["scoreDrivers"] {
   const raw = assessment?.scoreDrivers;
   if (!Array.isArray(raw) || raw.length === 0) return null;
@@ -227,6 +317,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
     headlineScore: finite(assessment?.headlineScore) && assessment.headlineScore >= 0 && assessment.headlineScore <= 100 ? assessment.headlineScore : null,
     scoreDrivers: driversFrom(assessment),
     hasVerifiedCommercialEvidence: commercialEvidenceExists(evidence),
+    decisionDimensions: buildDecisionDimensions(input),
     notYetMeasured,
   };
 }
