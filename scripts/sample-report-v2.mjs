@@ -30,3 +30,10 @@ for(const [name,input,expected] of [
  await writeFile(file,bytes);
  process.stdout.write(name+": "+pdf.getPageCount()+" pages; gated-page count verified.\n");
 }
+
+
+const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
+const fullPdf=await PDFDocument.load(fullBytes);
+if(fullPdf.getPageCount()!==12)throw new Error("v2-complete-synthetic-full expected 12 pages; got "+fullPdf.getPageCount());
+await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
+process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\\n");
