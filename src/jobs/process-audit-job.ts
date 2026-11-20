@@ -558,7 +558,7 @@ export async function processAuditJob(
       decodedMaster = decoded;
       masterDna = {
         ...dna,
-        acousticFeatureProfile: { ...dna.acousticFeatureProfile, provenance: { ...dna.acousticFeatureProfile.provenance, sourceAudioSha256: masterSha256, measuredAt: masterMeasuredAt } },
+        acousticFeatureProfile: { ...dna.acousticFeatureProfile, provenance: { ...dna.acousticFeatureProfile.provenance, sourceSampleRateHz: decoded.sampleRate, analysisResampling: dna.acousticFeatureProfile.provenance.analysisSampleRateHz < decoded.sampleRate ? "block_average_antialias" : "none", channels: decoded.channels, sourceAudioSha256: masterSha256, measuredAt: masterMeasuredAt } },
         loudnessLufs: decoded.loudnessLufs ?? dna.loudnessLufs,
         loudnessRangeLu: decoded.loudnessRangeLu ?? null,
         truePeakDbfs: decoded.truePeakDbfs ?? null,
