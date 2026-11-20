@@ -871,6 +871,7 @@ export async function processAuditJob(
             ["loudness_range_lu", masterDna.loudnessRangeLu ?? null, "LU", "audio_decoder_loudness_range"],
             ["true_peak_dbfs", masterDna.truePeakDbfs ?? null, "dBFS", "audio_decoder_true_peak"],
             ["rms_level_dbfs", masterDna.rmsLevelDbfs, "dBFS", "pcm_rms"],
+            ["rms_envelope_spread_db", masterDna.dynamicRangeDb, "dB", "pcm_rms_envelope_p95_p10"],
             ["spectral_centroid_hz", masterDna.spectralCentroidHz, "Hz", "fft_spectral_centroid"],
             ["spectral_bandwidth_hz", masterDna.spectralBandwidthHz, "Hz", "fft_spectral_bandwidth"],
             ["spectral_rolloff_hz", masterDna.spectralRolloffHz, "Hz", "fft_spectral_rolloff"],
