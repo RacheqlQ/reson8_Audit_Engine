@@ -919,7 +919,19 @@ export async function processAuditJob(
         };
       }
     }
-    const reportEvidence = playlistDiscovery ? { ...evidence, playlistDiscovery } : evidence;
+    const reportSourceEvidence = playlistDiscovery ? { ...evidence, playlistDiscovery } : evidence;
+    // Persist one canonical evidence envelope with both report tiers. The AI
+    // assessment and the PDFs now reference the exact same sanitized evidence
+    // projection, while retaining the broader source record for auditability.
+    const canonicalEvidence = Object.freeze({
+      schemaVersion: "1.0.0",
+      auditId: jobId,
+      sourceEvidence: reportSourceEvidence,
+      assessmentEvidence,
+      identityFieldProvenance: assessmentIdentity.fieldProvenance,
+      reconciliation: assessmentReconciliationEvidence,
+    });
+    const reportEvidence = { ...reportSourceEvidence, canonicalEvidence };
     const generatedAt = new Date().toISOString();
     const executionMode = hasMaster && hasCatalog ? "combined" : hasMaster ? "master" : "dsp_link";
     let realMasterContract: RealMasterAuditContract | null = null;
