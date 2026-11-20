@@ -98,7 +98,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "Recommended next step: "+str(rec(a.releaseStrategy).recommendation,"Complete identity, rights and master verification.")
   ]},
   {title:"Identity and source reconciliation",blocks:[],lines:[...identityLines(e),"Sources checked: "+arr(e.metadataSourcesChecked).map(v=>str(v)).join(", ")||"Sources checked: Not supplied","Platform coverage: "+str(e.platformCoverage,"Not supplied")]},
-  {title:"Track snapshot",blocks:metricBlock(data),lines:[
+  {title:"Track snapshot",kind:"snapshot",blocks:metricBlock(data),lines:[
    ...(data.structure?["STRUCTURE — "+data.structure.map(s=>s.index+". "+s.label+" ("+s.startSeconds+"–"+s.endSeconds+"s)").join(" | ")]:[]),
    ...(data.energySeries?["ENERGY SERIES — "+data.energySeries.length+" timestamped points; peak/dip derived from supplied series."]:[])
   ]},
@@ -138,12 +138,82 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
  ];
  return pages;
 }
+
+function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Block,fonts:Fonts){
+ const y=top-94;page.drawRectangle({x,y,width,height:94,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawText(block.label,{x:x+12,y:top-17,size:7,font:fonts.bold,color:C.muted});
+ drawWrapped(page,block.value,x+12,top-43,width-24,fonts.bold,15,C.ink,18);
+ const tag=block.confidence??"Low",tagColor=tag==="High"?C.teal:tag==="Medium"?C.amber:C.coral;
+ page.drawRectangle({x:x+12,y:top-65,width:tag.length*5+34,height:14,color:C.paper});
+ page.drawText(tag+" confidence",{x:x+17,y:top-61,size:6.5,font:fonts.bold,color:tagColor});
+ drawWrapped(page,block.provenance??"Provenance not supplied",x+12,top-78,width-24,fonts.regular,6.5,C.muted,8);
+}
+function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts){
+ const blocks=metricBlock(data),gap=10,width=(W-2*M-gap*2)/3,top=H-92;
+ blocks.forEach((b,i)=>drawMetricCard(page,M+i*(width+gap),top,width,b,fonts));
+ let y=top-112;
+ if(data.structure){
+  const height=116;card(page,M,y,W-2*M,"Structure",[],fonts,{height,accent:C.gold});
+  const left=M+14,barY=y-43,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));
+  let x=left;const palette=[C.teal,C.gold,C.amber,C.coral];
+  data.structure.forEach((s,i)=>{const w=barW*(s.endSeconds-s.startSeconds)/total;page.drawRectangle({x,y:barY,width:w,height:18,color:palette[i%palette.length]});page.drawText(String(s.index),{x:x+w/2-2,y:barY-12,size:6,font:fonts.bold,color:C.ink});x+=w;});
+  let lineY=barY-28;data.structure.forEach((s,i)=>{const label=s.index+" "+s.label+"  "+s.startSeconds.toFixed(0)+"–"+s.endSeconds.toFixed(0)+"s";const col=i%2;drawWrapped(page,label,M+14+col*250,lineY-Math.floor(i/2)*12,238,fonts.regular,6.7,C.muted,8);});
+  y-=height+14;
+ }
+ if(data.energySeries){
+  const h=178,topY=y;page.drawRectangle({x:M,y:topY-h,width:W-2*M,height:h,color:C.white,borderColor:C.line,borderWidth:.7});
+  page.drawText("ENERGY OVER TIME",{x:M+12,y:topY-16,size:7,font:fonts.bold,color:C.gold});
+  const left=M+28,right=W-M-16,plotTop=topY-34,plotBottom=topY-h+24;
+  const vals=data.energySeries.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),span=max-min||1;
+  for(let g=0;g<=4;g++){const gy=plotBottom+(plotTop-plotBottom)*g/4;page.drawLine({start:{x:left,y:gy},end:{x:right,y:gy},color:C.line,thickness:.5});}
+  const t0=data.energySeries[0].timeSeconds,t1=data.energySeries[data.energySeries.length-1].timeSeconds,dt=t1-t0||1;
+  for(let i=1;i<data.energySeries.length;i++){const a=data.energySeries[i-1],b=data.energySeries[i];page.drawLine({start:{x:left+(a.timeSeconds-t0)/dt*(right-left),y:plotBottom+(a.value-min)/span*(plotTop-plotBottom)},end:{x:left+(b.timeSeconds-t0)/dt*(right-left),y:plotBottom+(b.value-min)/span*(plotTop-plotBottom)},color:C.teal,thickness:2.2});}
+  const peak=data.energySeries.reduce((a,b)=>b.value>a.value?b:a),dip=data.energySeries.reduce((a,b)=>b.value<a.value?b:a);
+  page.drawCircle({x:left+(peak.timeSeconds-t0)/dt*(right-left),y:plotBottom+(peak.value-min)/span*(plotTop-plotBottom),size:4,color:C.teal});
+  page.drawCircle({x:left+(dip.timeSeconds-t0)/dt*(right-left),y:plotBottom+(dip.value-min)/span*(plotTop-plotBottom),size:4,color:C.coral});
+  page.drawText("Peak "+peak.timeSeconds.toFixed(1)+"s",{x:left,y:plotBottom-13,size:6,font:fonts.bold,color:C.teal});
+  page.drawText("Dip "+dip.timeSeconds.toFixed(1)+"s",{x:right-60,y:plotBottom-13,size:6,font:fonts.bold,color:C.coral});
+ }
+}
+function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
+ const axes=data.sonicAxes!;const names=Object.keys(axes) as Array<keyof typeof axes>,cx=170,cy=555,r=118;
+ for(let ring=1;ring<=4;ring++){const rr=r*ring/4;for(let i=0;i<5;i++){const a=-Math.PI/2+i*2*Math.PI/5,b=-Math.PI/2+(i+1)*2*Math.PI/5;page.drawLine({start:{x:cx+Math.cos(a)*rr,y:cy+Math.sin(a)*rr},end:{x:cx+Math.cos(b)*rr,y:cy+Math.sin(b)*rr},color:C.line,thickness:.6});}}
+ const pts=names.map((name,i)=>{const a=-Math.PI/2+i*2*Math.PI/5,v=axes[name].value/100;return {x:cx+Math.cos(a)*r*v,y:cy+Math.sin(a)*r*v};});
+ pts.forEach((p,i)=>{const q=pts[(i+1)%pts.length];page.drawLine({start:p,end:q,color:C.teal,thickness:2.2});page.drawCircle({x:p.x,y:p.y,size:4,color:C.teal});});
+ names.forEach((name,i)=>{const a=-Math.PI/2+i*2*Math.PI/5;const x=cx+Math.cos(a)*(r+22),y=cy+Math.sin(a)*(r+22);page.drawText(name+" "+axes[name].value,{x:x-28,y,size:7,font:fonts.bold,color:C.ink});});
+ const note="Five-axis Sonic DNA scores are supplied evidence. No reference-average overlay is shown because no reference set was supplied.";
+ drawWrapped(page,note,330,cy+60,180,fonts.regular,8,C.muted,11);
+ let y=cy-155;
+ names.forEach(name=>{const item=axes[name];page.drawRectangle({x:M,y:y-15,width:W-2*M,height:38,color:C.white,borderColor:C.line,borderWidth:.6});page.drawText(name,{x:M+12,y:y+8,size:8,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+112,y:y+5,width:150,height:6,color:C.line});page.drawRectangle({x:M+112,y:y+5,width:150*item.value/100,height:6,color:item.value<60?C.amber:C.teal});page.drawText(String(item.value),{x:M+270,y:y+5,size:8,font:fonts.bold,color:C.ink});drawWrapped(page,item.note??"Axis note not supplied.",M+310,y+8,190,fonts.regular,7,C.muted,9);y-=45;});
+}
+function drawComparables(page:PDFPage,input:AuditReportInput,data:ReportV2Data,fonts:Fonts){
+ const e=rec(input.evidence),position=rec(e.marketPosition),score=typeof position.score==="number"&&Number.isFinite(position.score)?position.score:null;
+ let y=H-104;
+ if(score!==null){
+  card(page,M,y,W-2*M,"Market position",[score+" / 100 · "+str(position.label,"Position label not supplied"),"Confidence: "+str(position.confidence,"Not supplied"),"Basis: "+str(position.basis,"Source-attributed comparables")],fonts,{accent:C.gold});
+  const barX=M+14,barY=y-52,barW=W-2*M-28;page.drawRectangle({x:barX,y:barY,width:barW,height:12,color:C.line});page.drawRectangle({x:barX,y:barY,width:barW*score/100,height:12,color:C.teal});page.drawCircle({x:barX+barW*score/100,y:barY+6,size:7,color:C.white,borderColor:C.ink,borderWidth:1});y-=105;
+ }
+ card(page,M,y,W-2*M,"Closest comparables",[],fonts,{height:28+data.comparables!.length*43,accent:C.gold});
+ const top=y-32;data.comparables!.forEach((c,i)=>{const yy=top-i*43;page.drawText(c.title,{x:M+14,y:yy,size:8,font:fonts.bold,color:C.ink});page.drawText(String(c.year)+" · "+c.lane,{x:M+170,y:yy,size:7,font:fonts.regular,color:C.muted});page.drawText(c.similarity+"%",{x:W-M-45,y:yy,size:8,font:fonts.bold,color:C.teal});drawWrapped(page,c.basis+" · "+c.source,M+14,yy-12,W-2*M-28,fonts.regular,6.5,C.muted,8);page.drawLine({start:{x:M+12,y:yy-20},end:{x:W-M-12,y:yy-20},color:C.line,thickness:.5});});
+}
+function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
+ const moments=data.moments!,top=H-104,left=M+22,right=W-M-22,mid=top-45;
+ page.drawRectangle({x:M,y:mid-30,width:W-2*M,height:90,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawLine({start:{x:left,y:mid},end:{x:right,y:mid},color:C.gold,thickness:1.4});
+ const max=Math.max(...moments.map(m=>m.timestampSeconds),1);
+ moments.forEach((m,i)=>{const x=left+(m.timestampSeconds/max)*(right-left);const color=m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal;page.drawLine({start:{x,y:mid-23},end:{x,y:mid+24},color,thickness:1.6});page.drawCircle({x,y:mid+26,size:8,color});page.drawText(String(i+1),{x:x-2.5,y:mid+23,size:6,font:fonts.bold,color:C.white});page.drawText(m.timestampSeconds.toFixed(1)+"s",{x:x-14,y:mid-34,size:6,font:fonts.bold,color:C.ink});});
+ if(!data.energySeries)page.drawText("Moment timeline only — waveform samples were not supplied.",{x:M+14,y:mid-12,size:7,font:fonts.italic,color:C.muted});
+ let y=mid-48;
+ moments.forEach((m,i)=>{const h=card(page,M,y,W-2*M,m.timestampSeconds.toFixed(2)+"s · "+m.title,[m.note],fonts,{accent:m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal});y-=h+8;});
+ card(page,M,y,W-2*M,"How moments are chosen",["Moments are rendered from supplied timestamped detector output or device flags. This report does not create or infer additional flags."],fonts,{accent:C.gold});
+}
+
 export async function generateAuditReportV2(input:AuditReportInput):Promise<Uint8Array>{
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
  const pages=buildPages(input,data),total=pages.length;
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,spec.title,fonts);
-  if(spec.kind==="cover"){
+  if(spec.kind==="snapshot"){\n   drawSnapshot(page,data,fonts);\n  }else if(spec.kind==="axes"){\n   drawSonicAxes(page,data,fonts);\n  }else if(spec.kind==="comparables"){\n   drawComparables(page,input,data,fonts);\n  }else if(spec.kind==="moments"){\n   drawMoments(page,data,fonts);\n  }else if(spec.kind==="cover"){
    page.drawText("TRACK AUDIT",{x:M,y:H-112,size:8,font:fonts.bold,color:C.gold});
    drawWrapped(page,str(rec(input.evidence).artist,"Artist not supplied"),M,H-155,W-2*M,fonts.bold,22,C.ink,27);
    drawWrapped(page,str(rec(input.evidence).title,"Track not supplied"),M,H-186,W-2*M,fonts.regular,14,C.muted,18);
