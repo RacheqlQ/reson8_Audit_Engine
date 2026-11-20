@@ -179,9 +179,12 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  if(data.structure){
   const height=116;card(page,M,y,W-2*M,"Structure",[],fonts,{height,accent:C.gold});
   const left=M+14,barY=y-43,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));
-  let x=left;const palette=[C.teal,C.gold,C.amber,C.coral];
-  data.structure.forEach((s,i)=>{const w=barW*(s.endSeconds-s.startSeconds)/total;page.drawRectangle({x,y:barY,width:w,height:18,color:palette[i%palette.length]});page.drawText(String(s.index),{x:x+w/2-2,y:barY-12,size:6,font:fonts.bold,color:C.ink});x+=w;});
-  let lineY=barY-28;data.structure.forEach((s,i)=>{const label=s.index+" "+s.label+"  "+s.startSeconds.toFixed(0)+"–"+s.endSeconds.toFixed(0)+"s";const col=i%2;drawWrapped(page,label,M+14+col*250,lineY-Math.floor(i/2)*12,238,fonts.regular,6.7,C.muted,8);});
+  const palette=[C.teal,C.gold,C.amber,C.coral];
+  page.drawText("TRACK TIMELINE · ELAPSED SECONDS",{x:left,y:barY+25,size:6,font:fonts.bold,color:C.muted});
+  data.structure.forEach((s,i)=>{const x=left+(s.startSeconds/total)*barW,w=barW*(s.endSeconds-s.startSeconds)/total;page.drawRectangle({x,y:barY,width:w,height:18,color:palette[i%palette.length]});page.drawText(String(s.index),{x:x+w/2-2,y:barY+5,size:6,font:fonts.bold,color:C.white});});
+  page.drawText("0s",{x:left,y:barY-12,size:6,font:fonts.regular,color:C.muted});
+  page.drawText(total.toFixed(0)+"s",{x:left+barW-18,y:barY-12,size:6,font:fonts.regular,color:C.muted});
+  let lineY=barY-28;data.structure.forEach((s,i)=>{const label=s.index+" · "+s.label+"  "+s.startSeconds.toFixed(1)+"–"+s.endSeconds.toFixed(1)+"s";const col=i%2;drawWrapped(page,label,M+14+col*250,lineY-Math.floor(i/2)*12,238,fonts.regular,6.7,C.muted,8);});
   y-=height+14;
  }
  if(data.energySeries){
