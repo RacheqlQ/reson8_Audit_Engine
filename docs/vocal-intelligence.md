@@ -48,3 +48,18 @@ Implementation dependencies are pinned in `package.json` and `package-lock.json`
 - Human review and calibrated vocal-presence accuracy: not implemented.
 - Singing/speech/rap and lead/backing classification: not implemented.
 - Production deployment: not performed.
+
+## Queue-worker integration
+
+The production queue worker exposes the existing isolated vocal-analysis worker through the
+`ENABLE_VOCAL_ANALYSIS=true` feature gate. The default remains off because model inference
+adds CPU and resident-memory pressure on the Render worker. When the flag is off, the audit
+records vocal analysis as unavailable rather than inferring vocal presence or delivery.
+
+Do not enable this flag in production until a real-master run has recorded peak RSS, elapsed
+time, timeout behavior, and successful persistence of the final vocal result. No production
+environment setting is changed by this code change.
+
+Track-structure and section-boundary analysis is not implemented in the current Node.js
+pipeline. Reports must explicitly abstain from verse/chorus/bridge claims until a separately
+validated section-segmentation stage is implemented and evaluated.

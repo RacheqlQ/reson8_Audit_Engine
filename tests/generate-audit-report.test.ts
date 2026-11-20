@@ -142,19 +142,19 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Assessment confidence: a model-generated evidence-quality indicator");
   expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
- it("labels mood and energy as provisional audio-feature estimates, not calibrated model outputs",()=>{
+ it("abstains when no provisional mood or energy outputs were produced",()=>{
   const input=structuredClone(fullAudioFixture) as AuditReportInput;
   input.evidence={...input.evidence,fixture:false,masterAudio:{evidenceClass:"OBSERVED",provenance:"uploaded_audio_master"}};
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs.");
-  expect(report).toContain("These estimates are derived from the uploaded signal, are not probabilities");
+  expect(report).toContain("No provisional master-derived mood or energy labels were produced by this run");
+  expect(report).not.toContain("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs.");
   expect(report).not.toMatch(/Mood classification: Not performed — no validated audio mood model is configured/i);
  });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
   const pages=planAuditReportPages(fixtures[0],"full");
   const report=pages.flatMap(p=>[p.title,...p.text]).join(" ");
   expect(report).toContain("Tempo and lane fit");expect(report).toContain("Rhythmic consistency");
-  expect(report).toContain("RMS-envelope spread and RMS signal level");expect(report).toContain("Human listening checklist");
+  expect(report).toContain("RMS-envelope spread (internal proxy) and RMS signal level");expect(report).toContain("Human listening checklist");
   expect(report).toContain("General industry guidance");expect(report).toContain("references to verify");
  });
  it("prints field-level source attribution and leaves absent provenance explicitly unavailable",()=>{
@@ -208,7 +208,7 @@ describe("A4 report layout and fixture coverage",()=>{
    "Further listening and source verification are required before any external decision."
   ].join(" ");
   const context=buildArNotesDecisionContext(input);
-  const forbidden=/\b(?:128\s*BPM|high-energy|Afrobeats|24000 streams|market demand|commercial potential)\b/i;
+  const forbidden=/\b(?:128\s*BPM(?!\s*candidate\b)|high-energy|Afrobeats|24000 streams|market demand|commercial potential)\b/i;
   expect(context.summary).not.toMatch(forbidden);
   expect(context.summary).toContain("Further listening and source verification are required");
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
@@ -244,7 +244,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
   expect(report).toMatch(/Metadata completeness — \d+\/100/);
   expect(report).toContain("Album metadata is present but conflicting");
-  expect(report).not.toMatch(/128\s*BPM|high-energy|album title is missing/i);
+  expect(report).not.toMatch(/128\s*BPM(?!\s*candidate\b)|high-energy|album title is missing/i);
  });
  it("reports present-but-conflicting generic release metadata instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
@@ -427,6 +427,15 @@ describe("Sonic DNA provisional candidate reporting", () => {
     }, true);
     expect(rows.find((row) => row.label === "TEMPO BPM")?.value).toBeNull();
     expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 (provisional");
+    expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
+      .toContain("165 BPM candidate; half-time 82.5 BPM; double-time 330.0 BPM");
+    expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
+      .toContain("not independently validated beat interpretations");
+    const reportInput=structuredClone(fullAudioFixture) as AuditReportInput;
+    reportInput.sonicDna={...reportInput.sonicDna,provenance:"uploaded_audio_master",tempoCandidateBpm:165,tempoConfidence:0.28};
+    const reportText=planAuditReportPages(reportInput,"full").flatMap((page)=>[page.title,...page.text]).join(" ");
+    expect(reportText).toContain("165 BPM candidate; half-time 82.5 BPM; double-time 330.0 BPM");
+    expect(reportText).toContain("derived arithmetic relationships only; not independently validated beat interpretations");
     expect(rows.find((row) => row.label === "TEMPO DETECTION REASON")?.value).toContain("reliable result");
     expect(rows.find((row) => row.label === "BEAT GRID STATUS")?.value).toContain("tentative (candidate; not independently validated)");
     expect(rows.find((row) => row.label === "BEAT TIMESTAMP COUNT")?.value).toContain("512 generated timestamps");
@@ -457,12 +466,12 @@ describe("Phase 1 real-master report contract",()=>{
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Master evidence contract and provenance");
   expect(report).toContain("SOURCE SHA-256: "+"a".repeat(64));
-  expect(report).toContain("tempo_bpm: 96 BPM; method transient_autocorrelation");
-  expect(report).toContain("tempo_bpm: 96 BPM; method transient_autocorrelation; measured: 2026-11-19T12:00:00.000Z");
-  expect(report).toContain("true_peak_dbfs: UNAVAILABLE; DECODER_METRIC_MISSING");
-  expect(report).toContain("calibrated_audio_mood: UNAVAILABLE; VALIDATED_MODEL_NOT_CONFIGURED");
-  expect(report).toContain("calibrated_key_mode_probability: UNAVAILABLE; CALIBRATED_CLASSIFIER_NOT_CONFIGURED");
-  expect(report).toContain("calibrated_energy_classification: high (84.0% calibrated; model energy-model-v2; calibration isotonic / energy-calibration-v1");
+  expect(report).toContain("Confirmed tempo: 96 BPM; method: transient-based tempo estimator");
+  expect(report).toContain("Confirmed tempo: 96 BPM; method: transient-based tempo estimator; measured: 2026-11-19T12:00:00.000Z");
+  expect(report).toContain("True peak: Not reported as a confirmed measurement; The decoder did not return a true-peak measurement.");
+  expect(report).toContain("Calibrated Audio Mood: No calibrated model is configured. A validated mood model is not configured");
+  expect(report).toContain("Calibrated Key Mode Probability: No calibrated model is configured. A calibrated key/mode probability model is not configured");
+  expect(report).toContain("Calibrated Energy Classification: high (84.0% calibrated; model energy-model-v2; calibration isotonic / energy-calibration-v1");
   expect(report).toContain("validation held-out-validation-2026 (n=240); ECE 0.042; Brier 0.116");
   expect(report).toContain("feature drivers: rms_energy supports (0.620), spectral_flux opposes (-0.180)");
   expect(report).toContain("EXTERNAL RECORD: musicbrainz / recording-mbid; retrieved: 2026-11-19T12:05:00.000Z");

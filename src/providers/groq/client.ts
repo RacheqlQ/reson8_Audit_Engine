@@ -3,7 +3,7 @@ import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails
 import { sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
 import { markAssessmentProviderUnavailable } from "../provider-policy.js";
 
-export const GROQ_PROMPT_VERSION = "audit-ar-v6";
+export const GROQ_PROMPT_VERSION = "audit-ar-v6-analysis-integration-2026-11-20";
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 
 const EvidenceLabelSchema = z.object({
@@ -109,6 +109,14 @@ const SYSTEM_PROMPT = [
   "Every evidence label must name its actual source. For INFERRED use source groq_assessment to identify an A&R hypothesis, including genre or lane positioning; for INDUSTRY PRACTICE use source industry_practice. Do not label recommendations as observed facts or hypotheses as measurements.",
   "When sonicDna.genreClassification is supplied, treat its provider-backed genres as source-weighted evidence, keep region and city-scene tags separate from genre labels, and retain unmapped provider tags as unresolved. If primaryGenre is null or abstained is true, do not state a definitive genre. Tempo is only a weak prior capped at fifteen percent of the genre score; never infer a genre from BPM alone. Describe genre and lane interpretations as INFERRED hypotheses, not OBSERVED facts.",
   "When tempoConfidence is missing, null, zero, or below 0.5, treat any BPM value as an unverified candidate: do not repeat the number, describe the track as fast/slow/high-energy on that basis, score tempoLaneFit or rhythmicConsistency, or use it in playlist/release recommendations. Abstain and state that confidence is insufficient. A confidence threshold is a conservative reporting gate, not a calibrated accuracy claim.",
+  "When rhythmFeatures contains candidateScores, windowConsensus, or independentEstimator but the confirmed tempo field is null, do not claim the analysis returned no tempo candidate. State that provisional tempo evidence exists, describe its low-confidence/consensus limitation without promoting a candidate to confirmed BPM, and keep tempoLaneFit and rhythmicConsistency unscored.",
+  "When harmonicFeatures.topCandidates or windowConsensus are present but the confirmed key/mode is null, preserve the candidate and disagreement context as provisional tonal evidence. Do not claim no tonal analysis was performed and do not assert a single key or mode.",
+  "When acousticFeatureProfile.predictions.mood.status is provisional, use its supplied labels as provisional signal-derived descriptors in creativeIdentity or A&R positioning; explicitly state that they are heuristic, not calibrated perceptual probabilities, and do not claim provisional tags are unavailable. Do not infer listener emotion, playlist acceptance or market demand from them.",
+  "When acousticFeatureProfile.predictions.energy.status is provisional, report the supplied low/moderate/high estimate as a heuristic signal descriptor with its score out of 100, never as a probability or validated perceptual-energy prediction.",
+  "Use vocalFeatures only when its status is analyzed and report its measured activity/pitch descriptors with their limitations. If unavailable or not analyzed, explicitly abstain; do not infer voice presence, delivery, layering or lyrics.",
+  "Only discuss verse, chorus, bridge, intro/outro or other section boundaries when an explicit track-structure analysis result is supplied. Do not infer song structure from genre, energy, tempo candidates or general arrangement conventions.",
+  "Use reconciled identity fields, field provenance, catalogSources and external provider records when supplied. Name MusicBrainz or a DSP only when that provider actually returned a record; retain ISRC conflicts and ambiguous matches rather than choosing an unsupported identity.",
+  "Strengths, risks and actionable recommendations must cite the actual supplied sonic, vocal, genre and catalog evidence. Do not substitute generic template prose when specific measurements or source conflicts are present; distinguish unavailable analysis from a low-confidence candidate that was calculated.",
   "If genreClassification.primaryGenre is null or genreClassification.abstained is true, A&R lane positioning must remain unconfirmed; do not fill the gap with tempo, mood, or generic genre stereotypes.",
   "When commercial-performance evidence is absent, marketability must be undetermined. Never infer demand from genre, tempo, catalog popularity or metadata.",
   "A null score means insufficient evidence. RMS-envelope spread and RMS dBFS are descriptive measurements, not mastering-readiness criteria; keep technical delivery readiness unscored unless destination-specific integrated-loudness, loudness-range and true-peak targets are supplied.",

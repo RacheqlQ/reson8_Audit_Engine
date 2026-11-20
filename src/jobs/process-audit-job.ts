@@ -851,6 +851,14 @@ export async function processAuditJob(
     const executionMode = hasMaster && hasCatalog ? "combined" : hasMaster ? "master" : "dsp_link";
     let realMasterContract: RealMasterAuditContract | null = null;
     if (masterDna && realMasterSource) {
+      const rhythmDiagnostics = masterDna.rhythmFeatures && typeof masterDna.rhythmFeatures === "object"
+        ? masterDna.rhythmFeatures as Record<string, unknown>
+        : {};
+      const independentTempo = rhythmDiagnostics.independentEstimator && typeof rhythmDiagnostics.independentEstimator === "object"
+        ? rhythmDiagnostics.independentEstimator as Record<string, unknown>
+        : {};
+      const provisionalTempoCandidate = masterDna.tempoCandidateBpm
+        ?? (typeof independentTempo.bpm === "number" && Number.isFinite(independentTempo.bpm) ? independentTempo.bpm : null);
       try {
         realMasterContract = parseRealMasterAuditContract({
           schemaVersion: "1.0.0", auditId: jobId, source: { sourceKind: "uploaded_master", ...realMasterSource },
@@ -863,6 +871,7 @@ export async function processAuditJob(
             ["loudness_range_lu", masterDna.loudnessRangeLu ?? null, "LU", "audio_decoder_loudness_range"],
             ["true_peak_dbfs", masterDna.truePeakDbfs ?? null, "dBFS", "audio_decoder_true_peak"],
             ["rms_level_dbfs", masterDna.rmsLevelDbfs, "dBFS", "pcm_rms"],
+            ["rms_envelope_spread_db", masterDna.dynamicRangeDb, "dB", "pcm_rms_envelope_p95_p10"],
             ["spectral_centroid_hz", masterDna.spectralCentroidHz, "Hz", "fft_spectral_centroid"],
             ["spectral_bandwidth_hz", masterDna.spectralBandwidthHz, "Hz", "fft_spectral_bandwidth"],
             ["spectral_rolloff_hz", masterDna.spectralRolloffHz, "Hz", "fft_spectral_rolloff"],
@@ -870,7 +879,15 @@ export async function processAuditJob(
             ...Object.entries(masterDna.acousticFeatureProfile.descriptors).map(([name, descriptor]) => [`acoustic_${name}_median`, masterDna.acousticFeatureProfile.status === "measured" ? descriptor.median : null, descriptor.unit, descriptor.method]),
           ].map(([name, value, unit, method]) => typeof value === "number" && Number.isFinite(value)
             ? { name, status: "measured", value, unit, method, measuredAt: masterMeasuredAt ?? generatedAt, diagnostics: [] }
-            : buildUnavailableMetric(String(name), "MEASUREMENT_UNAVAILABLE", "The configured analysis stage did not return a finite measurement for this uploaded master.", String(unit), String(method))),
+            : buildUnavailableMetric(
+              String(name),
+              String(name) === "tempo_bpm" && provisionalTempoCandidate !== null ? "TEMPO_BELOW_REPORTING_THRESHOLD" : "MEASUREMENT_UNAVAILABLE",
+              String(name) === "tempo_bpm" && provisionalTempoCandidate !== null
+                ? "The tempo analysis returned a provisional candidate of " + provisionalTempoCandidate + " BPM, but it did not meet the reportability threshold. Window consensus and independent-estimator diagnostics remain available in Sonic DNA."
+                : "The configured analysis stage did not return a finite measurement for this uploaded master.",
+              String(unit),
+              String(method),
+            )),
           provisionalPredictions: [
             ...(masterDna.acousticFeatureProfile.predictions.mood.status === "provisional" ? [{
               name: "audio_mood" as const, status: "provisional" as const,
