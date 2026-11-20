@@ -11,7 +11,7 @@ export interface ChartRow {
 export type ChartKind = "bars" | "sonic" | "spectrum" | "constellation" | "layers" | "tension" | "timeline" | "chain" | "radar";
 export type ChartEvidenceClass = "measured" | "provider-recognized" | "inferred" | "assessment-derived" | "illustrative";
 export interface ChartPanelInput {
-  title: string; rows: ChartRow[]; shows: string; cantShow: string;
+  title: string; rows: ChartRow[]; shows: string; cantShow: string; evidenceRefs?: string[];
   kind?: ChartKind; evidenceClass?: ChartEvidenceClass; inferred?: boolean; unavailable?: boolean; fixture?: boolean; y?: number; width?: number;
 }
 export interface ChartRect { x:number; y:number; width:number; height:number; id:string; }
@@ -259,6 +259,22 @@ export function chartPanelStatus(input: Pick<ChartPanelInput, "fixture" | "infer
   default:return "UNCLASSIFIED";
  }
 }
+
+export function chartEvidenceIntegrityErrors(input: Pick<ChartPanelInput, "evidenceClass" | "evidenceRefs" | "rows">): string[] {
+ const refs = (input.evidenceRefs ?? []).filter((ref) => typeof ref === "string" && ref.trim());
+ const errors: string[] = [];
+ if (refs.length === 0) errors.push("Chart assertion has no evidence reference.");
+ const numericRows = input.rows.filter((row) => typeof row.value === "number" && Number.isFinite(row.value));
+ if (numericRows.length > 0 && refs.length === 0) errors.push("Numeric chart values are not linked to source evidence.");
+ const validPrefix = input.evidenceClass === "measured" ? refs.every((ref) => ref.startsWith("sonicDna"))
+  : input.evidenceClass === "provider-recognized" ? refs.every((ref) => ref.startsWith("evidence."))
+  : input.evidenceClass === "assessment-derived" || input.evidenceClass === "inferred" ? refs.every((ref) => ref.startsWith("assessment."))
+  : input.evidenceClass === "illustrative" ? refs.every((ref) => ref.startsWith("reportTemplates."))
+  : false;
+ if (!validPrefix) errors.push("Chart evidence references do not match the declared evidence class.");
+ return errors;
+}
+
 export function chartPanelDisplayStatus(input: Pick<ChartPanelInput, "fixture" | "inferred" | "unavailable" | "evidenceClass">): string {
  const status=chartPanelStatus(input);
  const evidence=input.evidenceClass==="provider-recognized"?"PROVIDER-RECOGNIZED"
