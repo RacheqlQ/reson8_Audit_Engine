@@ -20,7 +20,7 @@ describe("combined master and DSP processing", () => {
     const events: string[] = [];
     let assessmentInput: any;
     let externalRecordsCaptured: unknown;
-    const recognition: AuditRecognition = { matched: false };
+    const recognition: AuditRecognition = { matched: true, title: "Recognized Track", artist: "Recognized Artist", isrc: "not-an-isrc" };
     const musicBrainzMetadata: CatalogMetadata = {
       ...metadata,
       platform: "musicbrainz",
