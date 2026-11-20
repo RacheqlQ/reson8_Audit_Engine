@@ -120,7 +120,7 @@ try{
    "Further listening and source verification are required before any external decision."
   ].join(" ")
  };
- const unsafeBytes=await generateAuditReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
+ const unsafeBytes=await ensurePdfReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
  await writeFile(evidenceCheckPath,unsafeBytes);
  const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
  if(/(?:128\s*BPM(?!\s*candidate\b)|high-energy|Afrobeats|24000 streams|market demand|commercial potential|24000 monthly listeners|commercially successful)/i.test(unsafeText)){
