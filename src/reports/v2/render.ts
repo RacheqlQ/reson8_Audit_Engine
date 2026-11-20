@@ -154,6 +154,30 @@ export function buildReleaseFramingLine(input: AuditReportInput): string {
   : "Release framing: date does not establish a past release.";
 }
 
+export function buildPlaylistProviderStatusLines(input: AuditReportInput): string[] {
+ const discovery=rec(rec(input.evidence).playlistDiscovery);
+ const outcomes=arr(discovery.outcomes).map(value=>rec(value));
+ if(!outcomes.length) {
+  return ["Playlist discovery not run: no normalized ISRC or persisted provider outcome was available; no playlist target is asserted."];
+ }
+ return outcomes.flatMap(outcome=>{
+  const provider=outcome.provider==="spotify"?"Spotify":outcome.provider==="apple_music"?"Apple Music":str(outcome.provider,"DSP provider");
+  const status=str(outcome.status,"unavailable");
+  const reason=str(outcome.reason,"No provider reason was persisted.");
+  if(status==="not_configured"||status==="unavailable") {
+   const required=outcome.provider==="spotify"
+    ? "Required environment variables: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET."
+    : outcome.provider==="apple_music"
+      ? "Required environment variable: APPLE_MUSIC_DEVELOPER_TOKEN."
+      : "";
+   const guidance=status==="not_configured"?"not configured":"request failed or unavailable";
+   return [provider+" provider unavailable: "+reason+" "+(required?required:"")].filter(Boolean);
+  }
+  if(status==="partial")return [provider+" provider partially available: "+reason];
+  return [];
+ });
+}
+
 export function buildPositioningLines(input: AuditReportInput): string[] {
  const evidence = rec(input.evidence), assessment = sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence));
  const lines: string[] = [];
@@ -284,6 +308,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    "General guidance: "+str(a.industryPractice,"No industry guidance supplied."),
    "Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v)).join("; "),
    "Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v)).join("; "),
+   ...buildPlaylistProviderStatusLines(input),
    ...(e.label||e.partner?["Supplied label / partner: "+str(e.label??e.partner)]:[])
   ]},
   {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>"[ ] "+str(v)).concat([notesContext.verdict,notesContext.summary,...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),"Editable notes field: use the PDF form field named ar_notes."])},
