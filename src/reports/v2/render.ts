@@ -1,10 +1,9 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import { planAuditReportPages, buildArNotesDecisionContext, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
 import { loadReportFonts } from "../fonts.js";
-import { chartPanelHeight, drawChartPanel } from "../charts.js";
+import { chartPanelHeight, countEvidenceLayers, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
-import { countEvidenceLayers } from "../charts.js";
 
 const W=595.28,H=841.89,M=42;
 const C={
