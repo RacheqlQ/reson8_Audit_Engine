@@ -22,6 +22,8 @@ describe("multi-window acoustic feature profile",()=>{
     expect(profile.descriptors.crestFactorDb).toMatchObject({unit:"dB",method:"peak_to_rms"});
     expect(profile.descriptors.spectralCentroidHz).toMatchObject({unit:"Hz"});
     expect(profile.descriptors.spectralFlatness).toMatchObject({unit:"ratio"});
+    expect(profile.windowSummaries[0]).toHaveProperty("spectralFlux");
+    expect(profile.windowSummaries[0]?.spectralFlux).toEqual(expect.any(Number));
     expect(profile.descriptors.zeroCrossingRate).toMatchObject({unit:"ratio"});
     expect(profile.descriptors.lowBandEnergyRatio).toMatchObject({unit:"ratio"});
     expect(profile.descriptors.midBandEnergyRatio).toMatchObject({unit:"ratio"});
