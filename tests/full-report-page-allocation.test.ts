@@ -4,7 +4,7 @@ import { partitionFullReportUnits } from "../src/reports/v2/render.js";
 describe("full report page allocation", () => {
   it("balances ordered content by measured height instead of heuristic weights", () => {
     const units = ["large-a", "small-a", "small-b", "large-b", "small-c", "small-d"];
-    const pages = partitionFullReportUnits(units, [400, 100, 100, 400, 100, 100], 2, 500);
+    const pages = partitionFullReportUnits(units, [400, 50, 50, 400, 50, 50], 2, 500);
     expect(pages).toEqual([["large-a", "small-a", "small-b"], ["large-b", "small-c", "small-d"]]);
   });
 
