@@ -142,7 +142,32 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Assessment confidence: a model-generated evidence-quality indicator");
   expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
- it("abstains when no provisional mood or energy outputs were produced",()=>{
+ it("keeps automatic ISRC lookup attempts out of submitted DSP coverage and the evidence chain",()=>{
+   const input=structuredClone(fullAudioFixture) as AuditReportInput;
+   input.evidence={
+    ...input.evidence,
+    isrc:"USSM10501515",
+    fieldProvenance:{...((input.evidence.fieldProvenance as Record<string,unknown>)??{}),isrc:"musicbrainz"},
+    metadataSourcesChecked:["tidal","apple_music","musicbrainz"],
+    catalogSources:[
+     {platform:"tidal",catalogId:"11335944",canonicalUrl:"https://tidal.com/browse/track/11335944",status:"recognized",reason:"Provider returned track metadata."},
+     {platform:"apple_music",catalogId:"322847207",canonicalUrl:"https://music.apple.com/ng/song/will-you-be-there/322847207",status:"recognized",reason:"Provider returned track metadata."}
+    ],
+    isrcCatalogSources:[
+     {platform:"musicbrainz",canonicalUrl:"https://musicbrainz.org/ws/2/isrc/USSM10501515",status:"recognized",reason:"MusicBrainz returned an ISRC recording match."},
+     {platform:"spotify",canonicalUrl:"https://api.spotify.com/v1/search?q=isrc%3AUSSM10501515",status:"unavailable",reason:"Spotify API returned HTTP 403 Forbidden."}
+    ]
+   };
+   const pages=planAuditReportPages(input,"full");
+   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
+   expect(report).toContain("TIDAL — recognized");
+   expect(report).toContain("Apple Music — recognized");
+   expect(report).toContain("Field source: MusicBrainz");
+   expect(report).not.toContain("api.spotify.com");
+   expect(report).not.toContain("Spotify — unavailable");
+   expect(report).not.toContain("musicbrainz.org/ws/2/isrc/");
+  });
+  it("abstains when no provisional mood or energy outputs were produced",()=>{
   const input=structuredClone(fullAudioFixture) as AuditReportInput;
   input.evidence={...input.evidence,fixture:false,masterAudio:{evidenceClass:"OBSERVED",provenance:"uploaded_audio_master"}};
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");

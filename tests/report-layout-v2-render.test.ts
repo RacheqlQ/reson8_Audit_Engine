@@ -86,6 +86,19 @@ describe("v2 gated report pages", () => {
     expect(pdf.getPageCount()).toBeLessThanOrEqual(13);
   });
 
+  it("keeps an expanded real-world narrative inside the fixed 12-page full-report allocation", async () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.assessment.executiveSummary = Array(3).fill(input.assessment.executiveSummary).join(" ");
+    input.assessment.strengths = [...input.assessment.strengths, ...Array(5).fill(
+      "The arrangement offers a clear opportunity for a human A&R reviewer to test the hook, vocal performance, production balance and listener context against the submitted master."
+    )];
+    input.assessment.risks = [...input.assessment.risks, ...Array(5).fill(
+      "A release decision still requires rights clearance, delivery confirmation, approved final master and source-attributed commercial reporting."
+    )];
+    const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
+    expect(pdf.getPageCount()).toBe(12);
+  });
+
   it("keeps optional analytical evidence within 13 full-report pages", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.sonicDna = {

@@ -386,157 +386,184 @@ function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
 }
 
 type FullFlowUnit = { kind: "heading"; title: string; accent: string } | { kind: "paragraph"; lines: string[]; accent: string };
-
 export function partitionFullReportUnits<T>(
- units: T[],
- heights: number[],
- pageCount: number,
- capacity: number,
-): T[][] | null {
- if (!Number.isInteger(pageCount) || pageCount < 1 || units.length < pageCount
-     || heights.length !== units.length || !Number.isFinite(capacity) || capacity <= 0) return null;
- if (heights.some(height => !Number.isFinite(height) || height <= 0 || height > capacity)) return null;
-
- const canFit = (limit: number): boolean => {
-  let pages = 1, used = 0;
-  for (const height of heights) {
-   if (used + height > limit + 1e-7) { pages++; used = height; }
-   else used += height;
+ units:T[],
+ heights:number[],
+ pageCount:number,
+ capacity:number,
+):T[][]|null{
+ if(!Number.isInteger(pageCount)||pageCount<1||units.length<pageCount
+  ||heights.length!==units.length||!Number.isFinite(capacity)||capacity<=0)return null;
+ if(heights.some(height=>!Number.isFinite(height)||height<=0||height>capacity))return null;
+ const canFit=(limit:number):boolean=>{
+  let pages=1,used=0;
+  for(const height of heights){
+   if(used+height>limit+1e-7){pages++;used=height;}
+   else used+=height;
   }
-  return pages <= pageCount;
+  return pages<=pageCount;
  };
- if (!canFit(capacity)) return null;
-
- let low = Math.max(...heights), high = capacity;
- for (let iteration = 0; iteration < 52; iteration++) {
-  const middle = (low + high) / 2;
-  if (canFit(middle)) high = middle;
-  else low = middle;
+ if(!canFit(capacity))return null;
+ let low=Math.max(...heights),high=capacity;
+ for(let iteration=0;iteration<52;iteration++){
+  const middle=(low+high)/2;
+  if(canFit(middle))high=middle;
+  else low=middle;
  }
-
- const pages: T[][] = [];
- let page: T[] = [], used = 0;
- for (let index = 0; index < units.length; index++) {
-  if (page.length > 0 && used + heights[index] > high + 1e-6) {
-   pages.push(page);
-   page = [];
-   used = 0;
+ const pages:T[][]=[];
+ let page:T[]=[],used=0;
+ for(let index=0;index<units.length;index++){
+  if(page.length>0&&used+heights[index]>high+1e-6){
+   pages.push(page);page=[];used=0;
   }
-  page.push(units[index]);
-  used += heights[index];
+  page.push(units[index]);used+=heights[index];
  }
- if (page.length) pages.push(page);
-
- while (pages.length < pageCount) {
-  let splitIndex = -1, largestPage = 1;
-  for (let index = 0; index < pages.length; index++) {
-   if (pages[index].length > largestPage) {
-    largestPage = pages[index].length;
-    splitIndex = index;
-   }
+ if(page.length)pages.push(page);
+ while(pages.length<pageCount){
+  let splitIndex=-1,largestPage=1;
+  for(let index=0;index<pages.length;index++){
+   if(pages[index].length>largestPage){largestPage=pages[index].length;splitIndex=index;}
   }
-  if (splitIndex < 0) return null;
-  const current = pages[splitIndex];
-  const midpoint = Math.floor(current.length / 2);
-  pages.splice(splitIndex, 1, current.slice(0, midpoint), current.slice(midpoint));
+  if(splitIndex<0)return null;
+  const current=pages[splitIndex],midpoint=Math.floor(current.length/2);
+  pages.splice(splitIndex,1,current.slice(0,midpoint),current.slice(midpoint));
  }
- return pages.length === pageCount ? pages : null;
+ return pages.length===pageCount?pages:null;
 }
-
-function fullFlowUnitHeight(unit: FullFlowUnit, fonts: Fonts): number {
- const contentHeight = unit.kind === "heading"
-  ? wrap(unit.title, fonts.bold, 11, W - 2 * M - 24).length * 14 + 13
-  : unit.lines.length * 10.2 + 17;
- return contentHeight + (unit.kind === "heading" ? 7 : 6);
+type FullReportLayoutProfile = {
+ bodyFontSize:number; bodyLineHeight:number; paragraphPadding:number; paragraphGap:number; maxParagraphLines:number;
+ headingFontSize:number; headingLineHeight:number; headingPadding:number; headingGap:number;
+};
+const FULL_REPORT_LAYOUT_PROFILES:FullReportLayoutProfile[]=[
+ {bodyFontSize:8.1,bodyLineHeight:10.2,paragraphPadding:17,paragraphGap:6,maxParagraphLines:20,headingFontSize:11,headingLineHeight:14,headingPadding:13,headingGap:7},
+ {bodyFontSize:7.7,bodyLineHeight:9.5,paragraphPadding:13,paragraphGap:5,maxParagraphLines:16,headingFontSize:10.5,headingLineHeight:13,headingPadding:12,headingGap:6},
+ {bodyFontSize:7.3,bodyLineHeight:8.8,paragraphPadding:10,paragraphGap:4,maxParagraphLines:12,headingFontSize:10,headingLineHeight:12,headingPadding:10,headingGap:5},
+];
+function fullFlowUnitHeight(unit:FullFlowUnit,fonts:Fonts,profile:FullReportLayoutProfile):number{
+ const contentHeight=unit.kind==="heading"
+  ?wrap(unit.title,fonts.bold,profile.headingFontSize,W-2*M-24).length*profile.headingLineHeight+profile.headingPadding
+  :unit.lines.length*profile.bodyLineHeight+profile.paragraphPadding;
+ return contentHeight+(unit.kind==="heading"?profile.headingGap:profile.paragraphGap);
 }
-
-async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, pdf: PDFDocument, fonts: Fonts): Promise<Uint8Array> {
- const sectionPlans = planAuditReportPages(input, "full");
- const units: FullFlowUnit[] = [];
- for (const section of sectionPlans) {
-  units.push({ kind: "heading", title: section.title, accent: "gold" });
-  for (const paragraph of section.text) {
-   const lines = wrap(paragraph, fonts.regular, 8.1, W - 2 * M - 30);
-   // Smaller blocks prevent dense sections from overflowing a V2 body page.
-   for (let offset = 0; offset < lines.length; offset += 20) {
-    units.push({ kind: "paragraph", lines: lines.slice(offset, offset + 20), accent: "gold" });
+function buildFullFlowUnits(
+ sectionPlans:ReturnType<typeof planAuditReportPages>,
+ provisionalEvidence:string[],
+ fonts:Fonts,
+ profile:FullReportLayoutProfile,
+):FullFlowUnit[]{
+ const units:FullFlowUnit[]=[];
+ for(const section of sectionPlans){
+  units.push({kind:"heading",title:section.title,accent:"gold"});
+  for(const paragraph of section.text){
+   const lines=wrap(paragraph,fonts.regular,profile.bodyFontSize,W-2*M-30);
+   for(let offset=0;offset<lines.length;offset+=profile.maxParagraphLines){
+    units.push({kind:"paragraph",lines:lines.slice(offset,offset+profile.maxParagraphLines),accent:"gold"});
    }
   }
  }
- const provisionalEvidence = data.notYetMeasured.filter(value =>
-  /provisional harmonic candidate|multiple tonal windows; provisional/i.test(value));
- if (provisionalEvidence.length) {
-  units.push({ kind: "heading", title: "Provisional harmonic and tuning evidence", accent: "gold" });
-  for (const detail of provisionalEvidence) {
-   units.push({ kind: "paragraph", lines: wrap(detail, fonts.regular, 8.1, W - 2 * M - 30), accent: "gold" });
-  }
- }
- const pageCapacity = H - 94 - 64;
- const measuredHeights = units.map(unit => fullFlowUnitHeight(unit, fonts));
- const buckets = partitionFullReportUnits(units, measuredHeights, 10, pageCapacity);
- if (!buckets) throw new Error("Full report content cannot fit the approved 12-page V2 allocation without clipping or omission.");
- const targetPageCount = 12;
-
- const cover = pageBase(pdf, "Full A&R report", fonts);
- const evidence = rec(input.evidence), assessment = rec(input.assessment);
- drawWrapped(cover, "FULL A&R REPORT", M, H - 112, W - 2 * M, fonts.bold, 8, C.gold, 11);
- drawWrapped(cover, str(evidence.artist, "Artist not supplied"), M, H - 155, W - 2 * M, fonts.bold, 22, C.ink, 27);
- drawWrapped(cover, str(evidence.title, "Track not supplied"), M, H - 187, W - 2 * M, fonts.regular, 14, C.muted, 18);
- drawWrapped(cover, "Audit " + input.auditId + " · Generated " + dateText(input.generatedAt) + " · Release " + dateText(evidence.releaseDate), M, H - 211, W - 2 * M, fonts.regular, 7, C.muted, 9);
- const reconciliation = rec(evidence.reconciliation);
- const identityStatus = arr(reconciliation.conflicts).length ? "Conflict" : arr(reconciliation.reconciledFields).length ? "Recognized" : "Insufficient";
- scoreChip(cover, M, H - 285, "Audio evidence", data.tempo.value !== null || data.key.value !== null ? "Partial" : "Insufficient", C.amber, fonts);
- scoreChip(cover, M + 166, H - 285, "Identity", identityStatus, identityStatus === "Recognized" ? C.teal : C.amber, fonts);
- scoreChip(cover, M + 332, H - 285, "Market evidence", data.hasVerifiedCommercialEvidence ? "Source-attributed" : "Insufficient", data.hasVerifiedCommercialEvidence ? C.teal : C.muted, fonts);
- const metricWidth = (W - 2 * M - 16) / 3;
- metricBlock(data).forEach((block, index) => drawMetricCard(cover, M + index * (metricWidth + 8), H - 325, metricWidth, block, fonts));
- const summary = str(assessment.executiveSummary, "");
- if (summary) card(cover, M, H - 450, W - 2 * M, "Executive assessment", [summary], fonts, { accent: C.gold });
- const recommendation = str(rec(assessment.releaseStrategy).recommendation, "");
- const evidenceGap = arr(assessment.evidenceGaps).map(value => str(value, "")).find(Boolean) ?? "";
- const nextAction = recommendation || evidenceGap;
- if (nextAction) card(cover, M, H - 585, W - 2 * M, "Next action", [nextAction], fonts, { accent: C.gold });
- drawFooter(cover, "Reson8 A&R Audit", input.auditId, 1, targetPageCount, fonts);
-
- for (let index = 0; index < buckets.length; index++) {
-  const page = pageBase(pdf, "A&R findings · " + (index + 1), fonts);
-  let y = H - 94;
-  for (const unit of buckets[index]) {
-   if (unit.kind === "heading") {
-    const lines = wrap(unit.title, fonts.bold, 11, W - 2 * M - 24);
-    const h = lines.length * 14 + 13;
-    if (y - h < 64) throw new Error("Full report section heading exceeds its allocated v2 page: " + unit.title);
-    page.drawRectangle({ x: M, y: y - h + 2, width: W - 2 * M, height: h, color: C.white, borderColor: C.line, borderWidth: .6 });
-    page.drawRectangle({ x: M, y: y - 1, width: 3, height: h - 2, color: C.gold });
-    lines.forEach((line, lineIndex) => page.drawText(line, { x: M + 13, y: y - 13 - lineIndex * 14, size: 11, font: fonts.bold, color: C.ink }));
-    y -= h + 7;
-   } else {
-    const h = unit.lines.length * 10.2 + 17;
-    if (y - h < 64) throw new Error("Full report content exceeds its existing page allocation.");
-    page.drawRectangle({ x: M, y: y - h + 1, width: W - 2 * M, height: h, color: C.white, borderColor: C.line, borderWidth: .5 });
-    unit.lines.forEach((line, lineIndex) => page.drawText(line, { x: M + 12, y: y - 12 - lineIndex * 10.2, size: 8.1, font: fonts.regular, color: C.ink }));
-    y -= h + 6;
+ if(provisionalEvidence.length){
+  units.push({kind:"heading",title:"Provisional harmonic and tuning evidence",accent:"gold"});
+  for(const detail of provisionalEvidence){
+   const lines=wrap(detail,fonts.regular,profile.bodyFontSize,W-2*M-30);
+   for(let offset=0;offset<lines.length;offset+=profile.maxParagraphLines){
+    units.push({kind:"paragraph",lines:lines.slice(offset,offset+profile.maxParagraphLines),accent:"gold"});
    }
   }
-  drawFooter(page, "Reson8 A&R Audit", input.auditId, index + 2, targetPageCount, fonts);
  }
- const notesPage = pageBase(pdf, "A&R notes and decision context", fonts);
- const context = buildArNotesDecisionContext(input);
- let notesY = H - 105;
- const contextHeight = 52 + wrap(context.summary, fonts.regular, 8, W - 2 * M - 28).length * 10;
- card(notesPage, M, notesY, W - 2 * M, context.heading, [context.verdict, context.summary], fonts, { accent: C.gold, height: contextHeight });
- notesY -= contextHeight + 12;
- if (context.prompts.length) {
-  const promptHeight = context.prompts.reduce((sum, prompt) => sum + wrap(prompt, fonts.regular, 7.4, W - 2 * M - 28).length * 9 + 4, 0) + 18;
-  card(notesPage, M, notesY, W - 2 * M, "Review prompts", context.prompts, fonts, { accent: C.gold, height: promptHeight });
+ return units;
+}
+async function renderFullReportV2(input:AuditReportInput,data:ReportV2Data,pdf:PDFDocument,fonts:Fonts):Promise<Uint8Array>{
+ const sectionPlans=planAuditReportPages(input,"full");
+ const provisionalEvidence=data.notYetMeasured.filter(value=>/provisional harmonic candidate|multiple tonal windows; provisional/i.test(value));
+ const pageCapacity=H-94-64,targetPageCount=12,bodyPageCount=targetPageCount-2;
+ let units:FullFlowUnit[]=[];
+ let buckets:FullFlowUnit[][]|null=null;
+ let selectedProfile:FullReportLayoutProfile|null=null;
+ for(const profile of FULL_REPORT_LAYOUT_PROFILES){
+  const candidateUnits=buildFullFlowUnits(sectionPlans,provisionalEvidence,fonts,profile);
+  const heights=candidateUnits.map(unit=>fullFlowUnitHeight(unit,fonts,profile));
+  const candidateBuckets=partitionFullReportUnits(candidateUnits,heights,bodyPageCount,pageCapacity);
+  if(candidateBuckets){
+   units=candidateUnits;
+   buckets=candidateBuckets;
+   selectedProfile=profile;
+   break;
+  }
  }
- notesPage.drawText("PRIVATE WORKING NOTES", { x: M, y: 195, size: 7, font: fonts.bold, color: C.gold });
- const form = pdf.getForm(), notes = form.createTextField("ar_notes");
+ if(!buckets||!selectedProfile){
+  const diagnosticUnits=buildFullFlowUnits(sectionPlans,provisionalEvidence,fonts,FULL_REPORT_LAYOUT_PROFILES.at(-1)!);
+  const diagnosticHeights=diagnosticUnits.map(unit=>fullFlowUnitHeight(unit,fonts,FULL_REPORT_LAYOUT_PROFILES.at(-1)!));
+  console.error(JSON.stringify({
+   event:"full_report_layout_allocation_failed",
+   unitCount:diagnosticUnits.length,
+   pageCount:bodyPageCount,
+   pageCapacity,
+   totalMeasuredHeight:Math.round(diagnosticHeights.reduce((sum,height)=>sum+height,0)),
+   largestUnitHeight:Math.round(Math.max(0,...diagnosticHeights)),
+   profileCount:FULL_REPORT_LAYOUT_PROFILES.length,
+  }));
+  throw new Error("Full report content cannot fit the approved 12-page V2 allocation without clipping or omission.");
+ }
+ const profile=selectedProfile;
+ const cover=pageBase(pdf,"Full A&R report",fonts);
+ const evidence=rec(input.evidence),assessment=rec(input.assessment);
+ drawWrapped(cover,"FULL A&R REPORT",M,H-112,W-2*M,fonts.bold,8,C.gold,11);
+ drawWrapped(cover,str(evidence.artist,"Artist not supplied"),M,H-155,W-2*M,fonts.bold,22,C.ink,27);
+ drawWrapped(cover,str(evidence.title,"Track not supplied"),M,H-187,W-2*M,fonts.regular,14,C.muted,18);
+ drawWrapped(cover,"Audit "+input.auditId+" · Generated "+dateText(input.generatedAt)+" · Release "+dateText(evidence.releaseDate),M,H-211,W-2*M,fonts.regular,7,C.muted,9);
+ const reconciliation=rec(evidence.reconciliation);
+ const identityStatus=arr(reconciliation.conflicts).length?"Conflict":arr(reconciliation.reconciledFields).length?"Recognized":"Insufficient";
+ scoreChip(cover,M,H-285,"Audio evidence",data.tempo.value!==null||data.key.value!==null?"Partial":"Insufficient",C.amber,fonts);
+ scoreChip(cover,M+166,H-285,"Identity",identityStatus,identityStatus==="Recognized"?C.teal:C.amber,fonts);
+ scoreChip(cover,M+332,H-285,"Market evidence",data.hasVerifiedCommercialEvidence?"Source-attributed":"Insufficient",data.hasVerifiedCommercialEvidence?C.teal:C.muted,fonts);
+ const metricWidth=(W-2*M-16)/3;
+ metricBlock(data).forEach((block,index)=>drawMetricCard(cover,M+index*(metricWidth+8),H-325,metricWidth,block,fonts));
+ const summary=str(assessment.executiveSummary,"");
+ if(summary)card(cover,M,H-450,W-2*M,"Executive assessment",[summary],fonts,{accent:C.gold});
+ const recommendation=str(rec(assessment.releaseStrategy).recommendation,"");
+ const evidenceGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(Boolean)??"";
+ const nextAction=recommendation||evidenceGap;
+ if(nextAction)card(cover,M,H-585,W-2*M,"Next action",[nextAction],fonts,{accent:C.gold});
+ drawFooter(cover,"Reson8 A&R Audit",input.auditId,1,targetPageCount,fonts);
+ for(let index=0;index<buckets.length;index++){
+  const page=pageBase(pdf,"A&R findings · "+(index+1),fonts);
+  let y=H-94;
+  for(const unit of buckets[index]){
+   if(unit.kind==="heading"){
+    const lines=wrap(unit.title,fonts.bold,profile.headingFontSize,W-2*M-24);
+    const h=lines.length*profile.headingLineHeight+profile.headingPadding;
+    if(y-h<64)throw new Error("Full report section heading exceeds its allocated v2 page: "+unit.title);
+    page.drawRectangle({x:M,y:y-h+2,width:W-2*M,height:h,color:C.white,borderColor:C.line,borderWidth:.6});
+    page.drawRectangle({x:M,y:y-1,width:3,height:h-2,color:C.gold});
+    lines.forEach((line,lineIndex)=>page.drawText(line,{x:M+13,y:y-11-lineIndex*profile.headingLineHeight,size:profile.headingFontSize,font:fonts.bold,color:C.ink}));
+    y-=h+profile.headingGap;
+   }else{
+    const h=unit.lines.length*profile.bodyLineHeight+profile.paragraphPadding;
+    if(y-h<64)throw new Error("Full report content exceeds its existing page allocation.");
+    page.drawRectangle({x:M,y:y-h+1,width:W-2*M,height:h,color:C.white,borderColor:C.line,borderWidth:.5});
+    unit.lines.forEach((line,lineIndex)=>page.drawText(line,{x:M+12,y:y-10-lineIndex*profile.bodyLineHeight,size:profile.bodyFontSize,font:fonts.regular,color:C.ink}));
+    y-=h+profile.paragraphGap;
+   }
+  }
+  drawFooter(page,"Reson8 A&R Audit",input.auditId,index+2,targetPageCount,fonts);
+ }
+ const notesPage=pageBase(pdf,"A&R notes and decision context",fonts);
+ const context=buildArNotesDecisionContext(input);
+ let notesY=H-105;
+ const contextHeight=52+wrap(context.summary,fonts.regular,8,W-2*M-28).length*10;
+ card(notesPage,M,notesY,W-2*M,context.heading,[context.verdict,context.summary],fonts,{accent:C.gold,height:contextHeight});
+ notesY-=contextHeight+12;
+ if(context.prompts.length){
+  const promptHeight=context.prompts.reduce((sum,prompt)=>sum+wrap(prompt,fonts.regular,7.4,W-2*M-28).length*9+4,0)+18;
+  card(notesPage,M,notesY,W-2*M,"Review prompts",context.prompts,fonts,{accent:C.gold,height:promptHeight});
+ }
+ notesPage.drawText("PRIVATE WORKING NOTES",{x:M,y:195,size:7,font:fonts.bold,color:C.gold});
+ const form=pdf.getForm(),notes=form.createTextField("ar_notes");
  notes.enableMultiline();
- notes.addToPage(notesPage, { x: M, y: 66, width: W - 2 * M, height: 112, borderWidth: .7, borderColor: C.gold, backgroundColor: C.white });
- notes.setFontSize(8); notes.updateAppearances(fonts.regular);
- drawFooter(notesPage, "Reson8 A&R Audit", input.auditId, targetPageCount, targetPageCount, fonts);
- if (pdf.getPageCount() !== targetPageCount) throw new Error("Full report v2 page count differs from the existing full report.");
+ notes.addToPage(notesPage,{x:M,y:66,width:W-2*M,height:112,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
+ notes.setFontSize(8);notes.updateAppearances(fonts.regular);
+ drawFooter(notesPage,"Reson8 A&R Audit",input.auditId,targetPageCount,targetPageCount,fonts);
+ if(pdf.getPageCount()!==targetPageCount)throw new Error("Full report v2 page count differs from the existing full report.");
  return pdf.save();
 }
 
