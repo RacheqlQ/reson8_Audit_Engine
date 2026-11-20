@@ -134,8 +134,8 @@ export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{f
   const conflict=conflicts.find(item=>item.field===key);
   const raw=key==="genre"?(e.genre??e.genres):e[key];
   const value=conflict?arr(conflict.values).map(v=>str(v,"")).filter(Boolean).join(" vs "):Array.isArray(raw)?raw.map(v=>str(v,"")).filter(Boolean).join(", "):str(raw,"Unavailable");
-  const status=conflict?"Conflict":identityStatusLabel(metadataFieldStatus(e,key));
-  const source=metadataFieldSource(e,key).replace("Field source: ","");
+  const sourceLabel=metadataFieldSource(e,key),source=sourceLabel.replace("Field source: ","");
+  const status=conflict?"Conflict":source!=="unavailable"?"Source-returned":identityStatusLabel(metadataFieldStatus(e,key));
   return {field:label,value,status,source};
  });
 }
