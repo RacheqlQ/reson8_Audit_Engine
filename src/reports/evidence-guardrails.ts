@@ -227,22 +227,22 @@ function numericValueMatchesMeasurement(claimed: number, measured: unknown, tole
  */
 function stripMismatchedMeasuredNumericClaims(value: unknown, sonicDna: Record<string, unknown> | null | undefined): unknown {
   if (typeof value === "string") {
-    const sentences = value.split(/(?<=[.!?])\\s+(?=[A-Z])/);
+    const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const kept = sentences.filter((sentence) => {
       const matches = (pattern: RegExp, expected: unknown, tolerance: number): boolean | null => {
         const match = sentence.match(pattern);
         if (!match) return null;
         return numericValueMatchesMeasurement(Number(match[1]), expected, tolerance);
       };
-      const bpm = matches(/\\b(-?\\d+(?:\\.\\d+)?)\\s*BPM\\b/i, sonicDna?.bpm, 0.51);
+      const bpm = matches(/\b(-?\d+(?:\.\d+)?)\s*BPM\b/i, sonicDna?.bpm, 0.51);
       if (bpm === false) return false;
-      const lufs = matches(/\\b(-?\\d+(?:\\.\\d+)?)\\s*LUFS\\b/i, sonicDna?.loudnessLufs, 0.051);
+      const lufs = matches(/\b(-?\d+(?:\.\d+)?)\s*LUFS\b/i, sonicDna?.loudnessLufs, 0.051);
       if (lufs === false) return false;
-      const loudnessRange = matches(/\\b(?:loudness range|LRA)\\s*(?:of|:|is)?\\s*(-?\\d+(?:\\.\\d+)?)\\s*LU\\b/i, sonicDna?.loudnessRangeLu, 0.051);
+      const loudnessRange = matches(/\b(?:loudness range|LRA)\s*(?:of|:|is)?\s*(-?\d+(?:\.\d+)?)\s*LU\b/i, sonicDna?.loudnessRangeLu, 0.051);
       if (loudnessRange === false) return false;
-      const truePeakClaim = /\\btrue peak\\b/i.test(sentence);
-      const rmsClaim = /\\bRMS\\b|\\brms level\\b/i.test(sentence);
-      const dbfs = sentence.match(/\\b(-?\\d+(?:\\.\\d+)?)\\s*dBFS\\b/i);
+      const truePeakClaim = /\btrue peak\b/i.test(sentence);
+      const rmsClaim = /\bRMS\b|\brms level\b/i.test(sentence);
+      const dbfs = sentence.match(/\b(-?\d+(?:\.\d+)?)\s*dBFS\b/i);
       if (dbfs) {
         const candidates = truePeakClaim
           ? [sonicDna?.truePeakDbfs]
@@ -251,7 +251,7 @@ function stripMismatchedMeasuredNumericClaims(value: unknown, sonicDna: Record<s
             : [sonicDna?.truePeakDbfs, sonicDna?.rmsLevelDbfs];
         if (!candidates.some((candidate) => numericValueMatchesMeasurement(Number(dbfs[1]), candidate, 0.051))) return false;
       }
-      const hz = sentence.match(/\\b(-?\\d+(?:\\.\\d+)?)\\s*Hz\\b/i);
+      const hz = sentence.match(/\b(-?\d+(?:\.\d+)?)\s*Hz\b/i);
       if (hz) {
         const lower = sentence.toLowerCase();
         const candidates = lower.includes("centroid")
