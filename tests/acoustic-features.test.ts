@@ -64,6 +64,8 @@ describe("multi-window acoustic feature profile",()=>{
     const short=extractAcousticFeatureProfile(new Float32Array(1024),16000);
     expect(short.status).toBe("insufficient_evidence");
     expect(short.abstentionReasons).toContain("INSUFFICIENT_ANALYSIS_WINDOWS");
+    expect(short.predictions.mood.status).toBe("unavailable");
+    expect(short.predictions.energy.status).toBe("unavailable");
   });
 
   it("caps window count while retaining coverage through the end of a long recording",()=>{
@@ -85,20 +87,25 @@ describe("multi-window acoustic feature profile",()=>{
     expect(profile.descriptors.highBandEnergyRatio.median).toBeLessThanOrEqual(1);
   });
 
-  it("does not turn signal descriptors into mood or calibrated energy labels",()=>{
+  it("derives provisional mood and energy estimates from audio features without presenting probabilities",()=>{
     const profile=extractAcousticFeatureProfile(tone(3000,5,16000),16000);
     expect(profile.predictions.mood).toMatchObject({
-      status:"unavailable",
-      label:null,
+      status:"provisional",
+      method:"audio_feature_heuristics_v1",
       probability:null,
-      reasonCode:"VALIDATED_MODEL_NOT_CONFIGURED",
     });
+    expect(profile.predictions.mood.labels.length).toBeGreaterThan(0);
+    expect(profile.predictions.mood.scores).toEqual(expect.objectContaining({
+      bright:expect.any(Number),dark:expect.any(Number),driving:expect.any(Number),
+      calm:expect.any(Number),tense:expect.any(Number),warm:expect.any(Number),
+    }));
     expect(profile.predictions.energy).toMatchObject({
-      status:"unavailable",
-      label:null,
+      status:"provisional",
+      method:"audio_feature_heuristics_v1",
       probability:null,
-      reasonCode:"CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED",
     });
+    expect(profile.predictions.energy.score).toBeGreaterThanOrEqual(0);
+    expect(profile.predictions.energy.score).toBeLessThanOrEqual(100);
   });
 
   it("reports percentile summaries from multiple windows rather than a single clip-wide average",()=>{
