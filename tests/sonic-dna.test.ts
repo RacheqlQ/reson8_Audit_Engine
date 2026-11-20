@@ -102,6 +102,8 @@ describe("Sonic DNA",()=>{
   expect(result.key).toBeNull();
   expect(result.mode).toBeNull();
   expect(result.bpm).toBeNull();
+  expect(result.acousticFeatureProfile.status).toBe("insufficient_evidence");
+  expect(result.limitations.some((item)=>item.includes("NO_MEASURABLE_SIGNAL"))).toBe(true);
   expect(result.limitations.length).toBeGreaterThan(0);
  });
  it.each([
