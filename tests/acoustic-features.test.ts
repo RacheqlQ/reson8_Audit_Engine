@@ -65,6 +65,25 @@ describe("multi-window acoustic feature profile",()=>{
     expect(short.abstentionReasons).toContain("INSUFFICIENT_ANALYSIS_WINDOWS");
   });
 
+  it("caps window count while retaining coverage through the end of a long recording",()=>{
+    const sampleRate=16000,seconds=180;
+    const profile=extractAcousticFeatureProfile(tone(440,seconds,sampleRate),sampleRate);
+    expect(profile.provenance.windowCount).toBe(128);
+    expect(profile.provenance.maxWindowsApplied).toBe(true);
+    expect(profile.windowSummaries[0]?.startSeconds).toBe(0);
+    expect(profile.windowSummaries.at(-1)?.endSeconds).toBeGreaterThan(179);
+  });
+
+  it("keeps the three frequency-band power ratios bounded and normalized",()=>{
+    const profile=extractAcousticFeatureProfile(tone(440,5,16000),16000);
+    const total=profile.descriptors.lowBandEnergyRatio.median
+      +profile.descriptors.midBandEnergyRatio.median
+      +profile.descriptors.highBandEnergyRatio.median;
+    expect(total).toBeCloseTo(1,5);
+    expect(profile.descriptors.lowBandEnergyRatio.median).toBeGreaterThanOrEqual(0);
+    expect(profile.descriptors.highBandEnergyRatio.median).toBeLessThanOrEqual(1);
+  });
+
   it("does not turn signal descriptors into mood or calibrated energy labels",()=>{
     const profile=extractAcousticFeatureProfile(tone(3000,5,16000),16000);
     expect(profile.predictions.mood).toMatchObject({
