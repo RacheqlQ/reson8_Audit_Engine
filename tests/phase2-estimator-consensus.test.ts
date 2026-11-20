@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzePcm, estimateTempo } from "../src/audio/sonic-dna.js";
+import { analyzePcm, classifyRelativeMajorMinorAmbiguity, estimateTempo } from "../src/audio/sonic-dna.js";
 import { sonicDashboardRowsForReport } from "../src/reports/generate-audit-report.js";
 
 function pulse(bpm: number, seconds = 24, sampleRate = 8000): Float32Array {
@@ -41,6 +41,16 @@ describe("Phase 2 estimator window consensus", () => {
       },
     });
     expect(result.key).toBe("C");
+  });
+
+
+  it("withholds a relative major/minor tonal centre only when both acoustic pathways are strong", () => {
+    const primary = { key: "C", mode: "major" as const, confidence: 0.91, segmentAgreement: 0.92 };
+    const independent = { key: "A", mode: "minor" as const, score: 0.42, margin: 0.08 };
+    expect(classifyRelativeMajorMinorAmbiguity(primary, independent)).toBe(true);
+    expect(classifyRelativeMajorMinorAmbiguity(primary, { ...independent, key: "G" })).toBe(false);
+    expect(classifyRelativeMajorMinorAmbiguity(primary, { ...independent, margin: 0.01 })).toBe(false);
+    expect(classifyRelativeMajorMinorAmbiguity({ ...primary, confidence: 0.7 }, independent)).toBe(false);
   });
 
   it("does not claim tempo window consensus when the signal has insufficient evidence", () => {
