@@ -97,6 +97,7 @@ export interface AuditStageFailureDiagnostic {
   errorName: string;
   timedOut: boolean;
   errorCode: string;
+  durationMs?: number;
 }
 
 function safeAuditErrorCode(error: unknown): string {
@@ -113,12 +114,12 @@ function safeAuditErrorCode(error: unknown): string {
   return known.find(([pattern]) => pattern.test(message))?.[1] ?? "UNCLASSIFIED_STAGE_ERROR";
 }
 
-export function buildAuditStageFailureDiagnostic(stage: string, error: unknown): AuditStageFailureDiagnostic {
+export function buildAuditStageFailureDiagnostic(stage: string, error: unknown, durationMs?: number): AuditStageFailureDiagnostic {
   const failureCode = classifyAuditFailure(error);
   const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(error.name)
     ? error.name
     : "UnknownError";
-  return { stage, failureCode, errorName, timedOut: failureCode === "timeout", errorCode: safeAuditErrorCode(error) };
+  return { stage, failureCode, errorName, timedOut: failureCode === "timeout", errorCode: safeAuditErrorCode(error), ...(Number.isFinite(durationMs) ? { durationMs: Math.max(0, Math.round(durationMs!)) } : {}) };
 }
 
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
@@ -209,6 +210,7 @@ async function awaitWithStage<T>(
 ): Promise<T> {
   return await awaitWithLease(deps, async (leaseSignal) => {
     const captureMemory = MEMORY_DIAGNOSTIC_STAGES.has(stage);
+    const stageStartedAt = Date.now();
     if (captureMemory) logStageMemory(stage, "start");
     let onAbort: (() => void) | undefined;
     const leaseAbort = leaseSignal ? new Promise<never>((_resolve, reject) => {
@@ -226,7 +228,7 @@ async function awaitWithStage<T>(
         leaseAbort,
       ]);
     } catch (error) {
-      try { deps.onStageFailure?.(buildAuditStageFailureDiagnostic(stage, error)); }
+      try { deps.onStageFailure?.(buildAuditStageFailureDiagnostic(stage, error, Date.now() - stageStartedAt)); }
       catch { /* Diagnostics must never replace the original processing failure. */ }
       throw error;
     } finally {
