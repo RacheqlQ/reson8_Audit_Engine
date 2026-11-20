@@ -452,6 +452,7 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
     rhythmFeatures: dna.rhythmFeatures,
     harmonicFeatures: dna.harmonicFeatures,
     vocalFeatures: dna.vocalFeatures,
+    acousticFeatureProfile: dna.acousticFeatureProfile,
     moodTags: dna.moodTags,
     genreContext: dna.genreContext,
     ...(dna.genreClassification ? { genreClassification: dna.genreClassification } : {}),
@@ -846,11 +847,13 @@ export async function processAuditJob(
             ["spectral_bandwidth_hz", masterDna.spectralBandwidthHz, "Hz", "fft_spectral_bandwidth"],
             ["spectral_rolloff_hz", masterDna.spectralRolloffHz, "Hz", "fft_spectral_rolloff"],
             ["zero_crossing_rate", masterDna.zeroCrossingRate, "ratio", "pcm_zero_crossing_rate"],
+            ...Object.entries(masterDna.acousticFeatureProfile.descriptors).map(([name, descriptor]) => [`acoustic_${name}_median`, descriptor.median, descriptor.unit, descriptor.method]),
           ].map(([name, value, unit, method]) => typeof value === "number" && Number.isFinite(value)
             ? { name, status: "measured", value, unit, method, measuredAt: masterMeasuredAt ?? generatedAt, diagnostics: [] }
             : buildUnavailableMetric(String(name), "MEASUREMENT_UNAVAILABLE", "The configured analysis stage did not return a finite measurement for this uploaded master.", String(unit), String(method))),
           calibratedPredictions: [
             { name: "calibrated_audio_mood", status: "unavailable", label: null, probability: null, reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "No validated and calibrated audio mood model is configured; signal descriptors are not substituted for emotional labels.", stage: "audio_classification", retryable: false }] },
+            { name: "calibrated_audio_energy", status: "unavailable", label: null, probability: null, reasonCodes: ["CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED", message: "Acoustic energy descriptors are available, but no human-labelled, calibrated energy model is configured; no perceptual energy label is asserted.", stage: "audio_classification", retryable: false }] },
             { name: "calibrated_key_mode_probability", status: "unavailable", label: null, probability: null, reasonCodes: ["CALIBRATED_CLASSIFIER_NOT_CONFIGURED"], diagnostics: [{ code: "CALIBRATED_CLASSIFIER_NOT_CONFIGURED", message: "The tonal estimator returns candidate scores, not a calibrated class probability; candidate confidence is reported separately.", stage: "key_analysis", retryable: false }] },
           ],
           externalRecords: [
