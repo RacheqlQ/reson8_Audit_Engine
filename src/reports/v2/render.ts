@@ -30,7 +30,7 @@ export function normalizePdfText(value:string):string {
 }
 const str=(v:unknown,fallback="Not supplied")=>typeof v==="string"&&v.trim()?normalizePdfText(v.trim()):typeof v==="number"&&Number.isFinite(v)?String(v):fallback;
 const arr=(v:unknown):unknown[]=>Array.isArray(v)?v:[];
-const INTERNAL_ANALYSIS_STATUS = /(?:vocal analysis.{0,80}(?:temporarily disabled|not performed|unavailable|disabled|not run)|vocal presence(?:\\s*\\/\\s*absence)? is unknown|learned audio model.{0,40}disabled|detection model.{0,40}disabled)/i;
+const INTERNAL_ANALYSIS_STATUS = /(?:vocal analysis.{0,80}(?:temporarily disabled|not performed|unavailable|disabled|not run)|vocal presence(?:\s*\/\s*absence)? is unknown|learned audio model.{0,40}disabled|detection model.{0,40}disabled)/i;
 export function publicReportLimitations(value: unknown): string[] {
  return arr(value).map(item=>str(item,"")).filter(line=>line&&!INTERNAL_ANALYSIS_STATUS.test(line));
 }
