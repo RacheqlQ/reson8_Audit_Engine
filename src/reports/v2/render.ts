@@ -18,8 +18,7 @@ const str=(v:unknown,fallback="Not supplied")=>typeof v==="string"&&v.trim()?v.t
 const arr=(v:unknown):unknown[]=>Array.isArray(v)?v:[];
 const dateText=(v:unknown)=>{const s=str(v,"");return s?s.slice(0,10):"Date not supplied";};
 function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
- const words=value.replace(/[\r
-]+/g," ").split(/\s+/).filter(Boolean),out:string[]=[];let line="";
+ const words=value.replace(/\s+/g," ").split(" ").filter(Boolean),out:string[]=[];let line="";
  for(const word of words){
   let token=word;
   if(font.widthOfTextAtSize(token,size)>width){
