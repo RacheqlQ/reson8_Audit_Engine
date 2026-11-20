@@ -25,7 +25,7 @@ export function normalizePdfText(value:string):string {
   .replace(/\u2022/g,"-")
   .replace(/\u00a0/g," ")
   .replace(/\u20a6/g,"NGN ")
-  .replace(/[^\u0000-\u00ff]/g,"?");
+  .replace(/[^\u0000-\u00ff]/gu,"?");
 }
 const str=(v:unknown,fallback="Not supplied")=>typeof v==="string"&&v.trim()?normalizePdfText(v.trim()):typeof v==="number"&&Number.isFinite(v)?String(v):fallback;
 const arr=(v:unknown):unknown[]=>Array.isArray(v)?v:[];
