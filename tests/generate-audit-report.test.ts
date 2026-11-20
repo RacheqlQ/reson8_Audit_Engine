@@ -464,9 +464,9 @@ describe("Phase 1 real-master report contract",()=>{
   expect(report).toContain("Confirmed tempo: 96 BPM; method transient_autocorrelation");
   expect(report).toContain("Confirmed tempo: 96 BPM; method transient_autocorrelation; measured: 2026-11-19T12:00:00.000Z");
   expect(report).toContain("True peak: Not reported as a confirmed measurement; The decoder did not return a true-peak measurement.");
-  expect(report).toContain("Calibrated audio mood: No calibrated model is configured. A validated mood model is not configured");
-  expect(report).toContain("Calibrated key mode probability: No calibrated model is configured. A calibrated key/mode probability model is not configured");
-  expect(report).toContain("Calibrated energy classification: high (84.0% calibrated; model energy-model-v2; calibration isotonic / energy-calibration-v1");
+  expect(report).toContain("Calibrated Audio Mood: No calibrated model is configured. A validated mood model is not configured");
+  expect(report).toContain("Calibrated Key Mode Probability: No calibrated model is configured. A calibrated key/mode probability model is not configured");
+  expect(report).toContain("Calibrated Energy Classification: high (84.0% calibrated; model energy-model-v2; calibration isotonic / energy-calibration-v1");
   expect(report).toContain("validation held-out-validation-2026 (n=240); ECE 0.042; Brier 0.116");
   expect(report).toContain("feature drivers: rms_energy supports (0.620), spectral_flux opposes (-0.180)");
   expect(report).toContain("EXTERNAL RECORD: musicbrainz / recording-mbid; retrieved: 2026-11-19T12:05:00.000Z");
