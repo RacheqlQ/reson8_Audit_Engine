@@ -397,6 +397,35 @@ describe("Phillo evidence guardrails", () => {
     expect(claims).toContain("Measured RMS-envelope spread (internal proxy; not mastering dynamic range): 13.11 dB");
   });
 
+
+  it("withholds unsupported numeric claims for duration, sample rate, channels and acoustic descriptors", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "Duration is 180 seconds. Sample rate is 48000 Hz. The master has 2 channels. RMS energy is 0.42 and zero-crossing rate is 0.125.",
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master", durationSeconds: 179.5, sampleRate: 44100, channels: 1,
+      rmsEnergy: 0.31, zeroCrossingRate: 0.09,
+    });
+    expect(result.executiveSummary).not.toMatch(/180 seconds|48000 Hz|2 channels|0.42|0.125/);
+  });
+
+  it("retains rounded numeric acoustic claims only when they match the uploaded-master measurement", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "Duration is 179.5 seconds. Sample rate is 44100 Hz. The master has 1 channel. RMS energy is 0.31 and zero-crossing rate is 0.09.",
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master", durationSeconds: 179.5, sampleRate: 44100, channels: 1,
+      rmsEnergy: 0.31, zeroCrossingRate: 0.09,
+    });
+    expect(result.executiveSummary).toContain("179.5 seconds");
+    expect(result.executiveSummary).toContain("44100 Hz");
+    expect(result.executiveSummary).toContain("1 channel");
+    expect(result.executiveSummary).toContain("0.31");
+    expect(result.executiveSummary).toContain("0.09");
+  });
+
   it("fills all five scorecard dimensions when a zero-confidence assessment is incomplete", () => {
     const assessment = {
       ...baseAssessment,
