@@ -242,7 +242,7 @@ function executiveDiagnosticMessage(code:string,message:string,metricName?:strin
  return safe.replace(/\s+/g," ").trim();
 }
 function executiveMetricLabel(name:string):string {
- const labels:Record<string,string>={tempo_bpm:"Confirmed tempo",integrated_loudness_lufs:"Integrated loudness",loudness_range_lu:"Loudness range",true_peak_dbfs:"True peak",rms_level_dbfs:"RMS signal level",spectral_centroid_hz:"Spectral centroid",spectral_bandwidth_hz:"Spectral bandwidth",spectral_rolloff_hz:"Spectral rolloff",zero_crossing_rate:"Zero-crossing rate"};
+ const labels:Record<string,string>={tempo_bpm:"Confirmed tempo",integrated_loudness_lufs:"Integrated loudness",loudness_range_lu:"Loudness range",true_peak_dbfs:"True peak",rms_level_dbfs:"RMS signal level",rms_envelope_spread_db:"RMS-envelope spread (internal proxy)",spectral_centroid_hz:"Spectral centroid",spectral_bandwidth_hz:"Spectral bandwidth",spectral_rolloff_hz:"Spectral rolloff",zero_crossing_rate:"Zero-crossing rate"};
  return labels[name]??name.replace(/^acoustic_/,"").replace(/_median$/," median").replace(/_/g," ").replace(/\b\w/g,(letter)=>letter.toUpperCase());
 }
 export function metadataFieldStatus(e:Record<string,unknown>,field:string):string{
