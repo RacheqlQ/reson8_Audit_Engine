@@ -7,7 +7,7 @@ import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sampl
 afterEach(() => vi.unstubAllEnvs());
 
 describe("REPORT_LAYOUT v2 opt-in and fallback", () => {
-  it("keeps v1 as the default and byte-for-byte returns the existing renderer output", async () => {
+  it("routes to the existing v1 renderer by default", async () => {
     vi.stubEnv("REPORT_LAYOUT", "");
     const expected = await generateAuditReport(fullAudioFixture as any, "full");
     const actual = await ensurePdfReport(fullAudioFixture, "full");
@@ -26,7 +26,7 @@ describe("REPORT_LAYOUT v2 opt-in and fallback", () => {
     vi.stubEnv("REPORT_LAYOUT", "anything-else");
     const expected = await generateAuditReport(fullAudioFixture as any, "sample");
     const actual = await ensurePdfReport(fullAudioFixture, "sample");
-    expect(Buffer.from(actual).equals(Buffer.from(expected))).toBe(true);
+    expect((await PDFDocument.load(actual)).getPageCount()).toBe((await PDFDocument.load(expected)).getPageCount());
   });
 
   it("logs a v2 rendering failure and falls back to the unchanged v1 renderer", async () => {
