@@ -4,6 +4,7 @@ import type { CreateAuditJobDependencies } from "../jobs/create-audit-job.js";
 import type { AuditFailureCode, AuditJobRecord } from "../jobs/process-audit-job.js";
 import type { AuditRecognition } from "../providers/audd/normalize.js";
 import { type CatalogMetadata } from "../providers/dsp/catalog.js";
+import type { IsrcProviderOutcome } from "../providers/dsp/isrc-catalog.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { getAuditProgress, getAuditProgressStep, type AuditProgressSnapshot } from "../jobs/audit-progress.js";
 import type { MetadataReconciliation } from "../metadata/ReconciliationEngine.js";
@@ -42,6 +43,7 @@ export interface SupabaseAuditStore {
     error: string,
     signal?: AbortSignal,
   ): Promise<void>;
+  saveIsrcLookupOutcome(jobId: string, claimToken: string, isrc: string, outcome: IsrcProviderOutcome, signal?: AbortSignal): Promise<void>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment, signal?: AbortSignal): Promise<void>;
   loadAssessmentSectionGroup(jobId: string, group: string): Promise<unknown | null>;
@@ -325,6 +327,30 @@ export function createSupabaseAuditStore(
           status: "unavailable",
           error: error.slice(0, 240),
           evidenceClass: null,
+        },
+      }, signal);
+    },
+    async saveIsrcLookupOutcome(jobId, claimToken, isrc, outcome, signal) {
+      const canonicalUrl = outcome.provider === "musicbrainz"
+        ? `https://musicbrainz.org/ws/2/isrc/${encodeURIComponent(isrc)}`
+        : `https://api.spotify.com/v1/search?q=isrc%3A${encodeURIComponent(isrc)}&type=track`;
+      const status = outcome.status === "not_configured" ? "unavailable" : outcome.status;
+      await fencedStep(jobId, claimToken, "catalog_metadata", {
+        platform: outcome.provider,
+        catalogId: isrc,
+        raw: { lookupType: "isrc", providerStatus: outcome.status, reason: outcome.reason },
+        evidenceStatus: status,
+        eventPayload: {
+          platform: outcome.provider,
+          catalogId: isrc,
+          canonicalUrl,
+          sourceUrl: canonicalUrl,
+          lookupType: "isrc",
+          isrc,
+          status,
+          reason: outcome.reason.slice(0, 240),
+          error: outcome.status === "unavailable" || outcome.status === "not_configured" ? outcome.reason.slice(0, 240) : null,
+          evidenceClass: outcome.status === "recognized" ? "RECOGNIZED" : outcome.status === "partial" ? "PARTIAL" : null,
         },
       }, signal);
     },
