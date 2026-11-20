@@ -96,7 +96,7 @@ function normalizeIsrc(value: unknown): string | null {
   if (!normalized) return null;
 
   const isrc = normalized.replace(/[\s-]/g, "").toUpperCase();
-  return /^[A-Z]{2}[A-Z0-9]{3}[A-Z0-9]{7}$/.test(isrc) ? isrc : normalized.toUpperCase();
+  return /^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/.test(isrc) ? isrc : null;
 }
 
 function cleanGenres(value: unknown): string[] {
