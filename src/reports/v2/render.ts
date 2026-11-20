@@ -181,23 +181,23 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
   {title:"Identity and source reconciliation",kind:"identity",blocks:[]},
   {title:"Track snapshot",kind:"snapshot",blocks:metricBlock(data),lines:[
    ...(data.structure?["STRUCTURE — "+data.structure.map(s=>s.index+". "+s.label+" ("+s.startSeconds+"–"+s.endSeconds+"s)").join(" | ")]:[]),
-   ...(data.energySeries?["ENERGY SERIES — "+data.energySeries.length+" timestamped points; peak/dip derived from supplied series."]:[])
+   ...(data.energySeries?["ENERGY SERIES — "+data.energySeries.length+" timestamped points; peak/dip derived from supplied series."]:[]),
+   ...(data.sonicAxes?["SONIC DNA AXES — "+Object.entries(data.sonicAxes).map(([name,axis])=>name+" "+axis.value+"/100"+(axis.note?" ("+axis.note+")":"")).join("; ")]:[])
   ]},
-  ...(data.sonicAxes?[{title:"Sonic DNA",kind:"axes",blocks:Object.entries(data.sonicAxes).map(([label,v])=>({label,value:v.value+"/100",provenance:v.note??"No axis note supplied.",confidence:"Measured"}))} as PageSpec]:[]),
-  ...(data.comparables?[{title:"Market placement",kind:"comparables",blocks:data.comparables.map(c=>({label:c.title,value:c.year+" · "+c.lane+" · "+c.similarity+"% similarity",provenance:c.basis+" · Source: "+c.source,confidence:"Source-attributed"}))} as PageSpec]:[]),
-  ...(data.moments?[{title:"Flagged moments",kind:"moments",blocks:data.moments.map(m=>({label:m.timestampSeconds.toFixed(2)+"s · "+m.tag,value:m.title,provenance:m.note,confidence:"Timestamp supplied"}))} as PageSpec]:[]),
   {title:"Evidence ledger and scorecard",blocks:[],lines:[
    "Measured: "+(sonic?Object.keys(sonic).length:"0")+" · Source matches: "+arr(e.sources).length+" · Cross-checked: "+arr(rec(e.reconciliation).reconciledFields).length+" · Hypotheses: "+arr(a.laneHypotheses).length,
    "Headline score: "+(data.headlineScore===null?"N/D — no scored headline value supplied":data.headlineScore+"/100"),
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
-   "Market evidence: "+(data.hasVerifiedCommercialEvidence?"Source-attributed commercial data supplied":"Insufficient — no verified commercial source data supplied.")
+   "Market evidence: "+(data.hasVerifiedCommercialEvidence?"Source-attributed commercial data supplied":"Insufficient — no verified commercial source data supplied."),
+   ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
   {title:"A&R positioning",blocks:[],lines:buildPositioningLines(input)},
   {title:"Strengths, risks and actions",blocks:[],lines:[
    "Strengths: "+arr(a.strengths).map(v=>str(v)).join("; ")||"No measured strengths supplied.",
    "Risks: "+arr(a.risks).map(v=>str(v)).join("; ")||"No evidenced risks supplied.",
    "Priorities: "+arr(rec(a.releaseStrategy).priorities).map(v=>str(v)).join("; ")||"No priorities supplied.",
-   "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence.")
+   "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence."),
+   ...(data.moments??[]).map(m=>"Flagged moment "+m.timestampSeconds.toFixed(2)+"s · "+m.tag+" · "+m.title+" — "+m.note)
   ]},
   {title:"Release and promotion plan",blocks:[],lines:[
    buildReleaseFramingLine(input),
@@ -263,6 +263,20 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts){
   page.drawText("Peak "+peak.timeSeconds.toFixed(1)+"s",{x:peakLabelX,y:plotBottom-13,size:6,font:fonts.bold,color:C.teal});
   page.drawText("Dip "+dip.timeSeconds.toFixed(1)+"s",{x:dipLabelX,y:plotBottom-(sameRegion?24:13),size:6,font:fonts.bold,color:C.coral});
  }
+ if(data.sonicAxes){
+  const axes=Object.entries(data.sonicAxes),panelHeight=30+axes.length*22,top=y-8,bottom=top-panelHeight;
+  if(bottom<72)throw new Error("Sonic DNA axis evidence cannot fit safely on the nine-page sample snapshot.");
+  page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
+  page.drawText("SONIC DNA AXES · SUPPLIED SCORES / 100",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
+  axes.forEach(([name,axis],index)=>{
+   const yy=top-35-index*22;
+   page.drawText(name,{x:M+12,y:yy,size:7,font:fonts.bold,color:C.ink});
+   page.drawRectangle({x:M+100,y:yy-2,width:160,height:6,color:C.line});
+   page.drawRectangle({x:M+100,y:yy-2,width:160*axis.value/100,height:6,color:axis.value<60?C.amber:C.teal});
+   page.drawText(String(axis.value),{x:M+270,y:yy-1,size:7,font:fonts.bold,color:C.ink});
+   drawWrapped(page,axis.note??"Axis note not supplied.",M+300,yy,W-2*M-312,fonts.regular,6.2,C.muted,7);
+  });
+ }
 }
 function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  const axes=data.sonicAxes!;const names=Object.keys(axes) as Array<keyof typeof axes>,cx=170,cy=555,r=118;
@@ -325,25 +339,37 @@ async function renderFullReportV2(input: AuditReportInput, data: ReportV2Data, p
  }
  const weights = units.map(unit => unit.kind === "heading" ? 28 : unit.lines.length * 10 + 18);
  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
- // V2 owns its allocation: one cover, eleven body pages, and one notes page.
- // The approved full-report range is 12–13 pages; this fixed 13-page layout
- // avoids V1 renderer and pagination dependencies while retaining all section content.
- const bodyPageCount = 11;
- const targetPageCount = bodyPageCount + 2;
- const buckets: FullFlowUnit[][] = Array.from({ length: bodyPageCount }, () => []);
- let pageIndex = 0, accumulated = 0;
- for (let index = 0; index < units.length; index++) {
-  const remainingUnits = units.length - index;
-  const remainingPages = bodyPageCount - pageIndex;
+ const allocate = (bodyPageCount: number): FullFlowUnit[][] => {
+  const buckets: FullFlowUnit[][] = Array.from({ length: bodyPageCount }, () => []);
   const target = totalWeight / bodyPageCount;
-  if (pageIndex < bodyPageCount - 1 && buckets[pageIndex].length > 0
-      && accumulated >= target * (pageIndex + 1) && remainingUnits >= remainingPages) {
-   pageIndex++;
+  let pageIndex = 0, accumulated = 0;
+  for (let index = 0; index < units.length; index++) {
+   if (pageIndex < bodyPageCount - 1 && buckets[pageIndex].length > 0
+       && accumulated >= target * (pageIndex + 1)) pageIndex++;
+   buckets[pageIndex].push(units[index]);
+   accumulated += weights[index];
   }
-  buckets[pageIndex].push(units[index]);
-  accumulated += weights[index];
+  return buckets;
+ };
+ const fits = (buckets: FullFlowUnit[][]): boolean => buckets.every(bucket => {
+  let y = H - 94;
+  for (const unit of bucket) {
+   const height = unit.kind === "heading"
+    ? wrap(unit.title, fonts.bold, 11, W - 2 * M - 24).length * 14 + 20
+    : unit.lines.length * 10.2 + 23;
+   if (y - height < 64) return false;
+   y -= height + 6;
+  }
+  return bucket.length > 0;
+ });
+ let bodyPageCount = 10;
+ let buckets = allocate(bodyPageCount);
+ if (!fits(buckets)) {
+  bodyPageCount = 11;
+  buckets = allocate(bodyPageCount);
  }
- if (buckets.some(bucket => bucket.length === 0)) throw new Error("Full report content cannot be distributed across the existing page allocation.");
+ if (!fits(buckets)) throw new Error("Full report content cannot fit within the approved 13-page V2 allocation without clipping or omission.");
+ const targetPageCount = bodyPageCount + 2;
 
  const cover = pageBase(pdf, "Full A&R report", fonts);
  const evidence = rec(input.evidence), assessment = rec(input.assessment);
