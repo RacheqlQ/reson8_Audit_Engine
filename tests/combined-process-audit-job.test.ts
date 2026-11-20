@@ -20,6 +20,7 @@ describe("combined master and DSP processing", () => {
     const events: string[] = [];
     let assessmentInput: any;
     let externalRecordsCaptured: unknown;
+    const persistedIsrcOutcomes: unknown[] = [];
     const recognition: AuditRecognition = { matched: true, title: "Recognized Track", artist: "Recognized Artist", isrc: "not-an-isrc" };
     const musicBrainzMetadata: CatalogMetadata = {
       ...metadata,
@@ -44,7 +45,13 @@ describe("combined master and DSP processing", () => {
       collectIsrcCatalogMetadata: async (isrc) => {
         events.push("isrc-catalog");
         expect(isrc).toBe("USABC1234567");
-        return { isrc: "USABC1234567", metadata: [musicBrainzMetadata], outcomes: [{ provider: "musicbrainz", status: "recognized", reason: "MusicBrainz returned an ISRC recording match." }] };
+        return { isrc: "USABC1234567", metadata: [musicBrainzMetadata], outcomes: [
+          { provider: "musicbrainz", status: "recognized", reason: "MusicBrainz returned an ISRC recording match." },
+          { provider: "spotify", status: "not_configured", reason: "Spotify client credentials are not configured or provider policy is disabled." },
+        ] };
+      },
+      saveIsrcLookupOutcome: async (_id, _token, isrc, outcome) => {
+        persistedIsrcOutcomes.push({ isrc, ...outcome });
       },
       saveCatalogMetadata: async () => { events.push("catalog-saved"); },
       recognizeUrl: async () => ({ matched: false }),
@@ -85,6 +92,10 @@ describe("combined master and DSP processing", () => {
       expect.objectContaining({ provider: "musicbrainz", status: "verified", retrievedAt: "2026-11-19T12:00:00.000Z" }),
       expect.objectContaining({ provider: "spotify", status: "verified", retrievedAt: expect.any(String) }),
     ]));
+    expect(persistedIsrcOutcomes).toEqual([
+      { isrc: "USABC1234567", provider: "musicbrainz", status: "recognized", reason: "MusicBrainz returned an ISRC recording match." },
+      { isrc: "USABC1234567", provider: "spotify", status: "not_configured", reason: "Spotify client credentials are not configured or provider policy is disabled." },
+    ]);
     expect(assessmentInput.evidence).toMatchObject({ sourceCombination: "master_and_dsp" });
     expect(assessmentInput.evidence).toMatchObject({ platform: "musicbrainz" });
     expect(assessmentInput.catalogMetadata).toMatchObject({ platform: "musicbrainz", artist: "Master Artist", title: "Master Song" });
