@@ -70,4 +70,26 @@ describe("Phase 2 estimator window consensus", () => {
     expect(result.abstentionReason).toBeNull();
   });
 
+  it("labels an alternate tempo as half-time or double-time in the report", () => {
+    const halfTimeRows = sonicDashboardRowsForReport({
+      provenance: "uploaded_audio_master",
+      bpm: 120,
+      alternateTempo: 60,
+      tempoConfidence: 0.8,
+      rhythmFeatures: { status: "measured" },
+    }, true);
+    expect(halfTimeRows.find(row => row.label === "TEMPO ALTERNATE INTERPRETATION")?.value)
+      .toMatch(/60 BPM.*half-time/i);
+
+    const doubleTimeRows = sonicDashboardRowsForReport({
+      provenance: "uploaded_audio_master",
+      bpm: 96,
+      alternateTempo: 192,
+      tempoConfidence: 0.8,
+      rhythmFeatures: { status: "measured" },
+    }, true);
+    expect(doubleTimeRows.find(row => row.label === "TEMPO ALTERNATE INTERPRETATION")?.value)
+      .toMatch(/192 BPM.*double-time/i);
+  });
+
 });
