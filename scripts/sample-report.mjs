@@ -127,6 +127,7 @@ try{
    ...(Array.isArray(unsafeInput.assessment.limitations)?unsafeInput.assessment.limitations:[]),
    "Vocal analysis: Not performed - Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
    "Vocal presence/absence is unknown and is not inferred.",
+   "No vocal conclusion is available because the separation model did not complete.",
    "Learned audio model: disabled.",
    "Detection model status: disabled."
   ],
@@ -154,6 +155,7 @@ try{
  const internalStatusNotices=[
   "Vocal analysis: Not performed",
   "Vocal presence/absence is unknown",
+  "No vocal conclusion is available",
   "Learned audio model: disabled",
   "Detection model status: disabled"
  ];
