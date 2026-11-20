@@ -12,6 +12,13 @@ describe("v2-only report generation", () => {
     expect(source).not.toContain("PDFDocument.load(original)");
   });
 
+  it("wires the production queue worker to the v2-only PDF entry point", async () => {
+    const source = await readFile(new URL("../src/jobs/worker.ts", import.meta.url), "utf8");
+    expect(source).toContain('import { ensurePdfReport } from "../reports/pdf-output.js"');
+    expect(source).toContain("generateReport: ensurePdfReport");
+    expect(source).not.toContain('import { generateAuditReport } from "../reports/generate-audit-report.js"');
+  });
+
   it("routes every newly generated report through v2 without an environment flag", async () => {
     vi.stubEnv("REPORT_LAYOUT", "");
     const expected = await generateAuditReportV2(fullAudioFixture as any, "full");
