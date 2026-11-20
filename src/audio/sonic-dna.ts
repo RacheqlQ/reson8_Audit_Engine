@@ -292,7 +292,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  // Signal descriptors are reported in their own numeric fields. Do not
  // relabel RMS, zero-crossing rate, or spectral centroid as emotional mood.
  // A validated, licensed mood model is not currently integrated.
- const moodTags:string[]=[];
+ const moodTags=acousticFeatureProfile.predictions.mood.status==="provisional"?acousticFeatureProfile.predictions.mood.labels:[];
  const limitations:string[]=[];
  if(resolvedKey.limitation)limitations.push(resolvedKey.limitation);
  if(tempo.bpm===null)limitations.push("Tempo could not be determined reliably from the supplied audio.");
