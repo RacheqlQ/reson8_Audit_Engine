@@ -52,6 +52,7 @@ export interface PositioningRecommendation {
 export interface MarketPlacementPlan {
   version: "market-placement-v1";
   playlistTargets: PlaylistTarget[];
+  acousticSimilarity: { status: "unavailable"; reason: string };
   territoryPriorities: TerritoryPriorities;
   shortFormHooks: ShortFormHooks;
   positioning: {
@@ -274,6 +275,25 @@ function rollout(targetCount: number, hooksAvailable: boolean, territoryStatus: 
   ];
 }
 
+
+export function buildPlaylistMoodContext(
+  providerMoodTags: readonly string[],
+  sonicDna: { acousticFeatureProfile?: unknown } | null,
+): { moodTags: string[]; moodSource: string | null } {
+  const providerTags = unique([...providerMoodTags]);
+  const profile = record(sonicDna?.acousticFeatureProfile);
+  const predictions = record(profile.predictions);
+  const mood = record(predictions.mood);
+  const audioTags = mood.status === "provisional" && Array.isArray(mood.labels)
+    ? mood.labels.filter((label): label is string => typeof label === "string").map((label) => label.trim()).filter(Boolean)
+    : [];
+  const sources = [
+    ...(providerTags.length ? ["DSP catalogue sonic profile"] : []),
+    ...(audioTags.length ? ["uploaded-master provisional audio_feature_heuristics_v1"] : []),
+  ];
+  return { moodTags: unique([...providerTags, ...audioTags]), moodSource: sources.length ? sources.join("; ") : null };
+}
+
 export function buildMarketPlacementPlan(input: MarketPlacementInput): MarketPlacementPlan {
   const targets = playlistTargets(input.playlistDiscovery);
   const territories = territoryPriorities(input.evidence);
@@ -282,6 +302,7 @@ export function buildMarketPlacementPlan(input: MarketPlacementInput): MarketPla
   return {
     version: "market-placement-v1",
     playlistTargets: targets,
+    acousticSimilarity: { status: "unavailable", reason: "The configured playlist endpoints do not expose candidate-track BPM, key, energy and acoustic feature vectors. Playlist targeting therefore uses exact ISRC presence plus provider-returned genre/mood metadata; no track-to-playlist acoustic similarity score is asserted." },
     territoryPriorities: territories,
     shortFormHooks: hooks,
     positioning: fit,
