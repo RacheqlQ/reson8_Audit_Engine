@@ -170,7 +170,6 @@ export function buildPlaylistProviderStatusLines(input: AuditReportInput): strin
     : outcome.provider==="apple_music"
       ? "Required environment variable: APPLE_MUSIC_DEVELOPER_TOKEN."
       : "";
-   const guidance=status==="not_configured"?"not configured":"request failed or unavailable";
    return [provider+" provider unavailable: "+reason+" "+(required?required:"")].filter(Boolean);
   }
   if(status==="partial")return [provider+" provider partially available: "+reason];
