@@ -102,4 +102,94 @@ describe("real-master audit contract", () => {
     });
     expect(parsed.externalRecords[0]?.status).toBe("verified");
   });
+  it("rejects verified external fields without matching field-level provenance", () => {
+    expect(() => parseRealMasterAuditContract({
+      schemaVersion: "1.0.0",
+      auditId: "audit-missing-field-provenance",
+      source: { sourceKind: "uploaded_master", sourceAudioPath: "jobs/1/master.wav", sha256: "d".repeat(64), mimeType: "audio/wav", byteLength: 100 },
+      directSignalMeasurements: [],
+      calibratedPredictions: [],
+      externalRecords: [{
+        status: "verified", provider: "musicbrainz", recordId: "recording-id",
+        retrievedAt: "2026-11-19T12:00:00.000Z",
+        fields: { isrc: "USAAA2600001", title: "Track" },
+        fieldProvenance: { isrc: { provider: "musicbrainz", recordId: "recording-id", retrievedAt: "2026-11-19T12:00:00.000Z" } },
+      }],
+      strategicSynthesis: [],
+    })).toThrow(/field-level provenance/i);
+  });
+
+  it("rejects field provenance entries that do not correspond to a returned field", () => {
+    expect(() => parseRealMasterAuditContract({
+      schemaVersion: "1.0.0",
+      auditId: "audit-orphan-field-provenance",
+      source: { sourceKind: "uploaded_master", sourceAudioPath: "jobs/1/master.wav", sha256: "e".repeat(64), mimeType: "audio/wav", byteLength: 100 },
+      directSignalMeasurements: [],
+      calibratedPredictions: [],
+      externalRecords: [{
+        status: "verified", provider: "musicbrainz", recordId: "recording-id",
+        retrievedAt: "2026-11-19T12:00:00.000Z",
+        fields: { isrc: "USAAA2600001" },
+        fieldProvenance: {
+          isrc: { provider: "musicbrainz", recordId: "recording-id", retrievedAt: "2026-11-19T12:00:00.000Z" },
+          title: { provider: "musicbrainz", recordId: "recording-id", retrievedAt: "2026-11-19T12:00:00.000Z" },
+        },
+      }],
+      strategicSynthesis: [],
+    })).toThrow(/field provenance.*without a returned field/i);
+  });
+
+  it("accepts numeric synthesis claims only when value and unit match their measured evidence reference", () => {
+    const parsed = parseRealMasterAuditContract({
+      schemaVersion: "1.0.0",
+      auditId: "audit-numeric-claim",
+      source: { sourceKind: "uploaded_master", sourceAudioPath: "jobs/1/master.wav", sha256: "f".repeat(64), mimeType: "audio/wav", byteLength: 100 },
+      directSignalMeasurements: [{
+        name: "tempo_bpm", status: "measured", value: 120, unit: "BPM",
+        method: "high_frequency_transient_autocorrelation",
+        measuredAt: "2026-11-19T12:00:00.000Z", diagnostics: [],
+      }],
+      calibratedPredictions: [],
+      externalRecords: [],
+      strategicSynthesis: [{
+        claim: "The uploaded master measured 120 BPM.",
+        evidenceRefs: ["signal:tempo_bpm"],
+        evidenceClass: "OBSERVED",
+        numericClaims: [{ value: 120, unit: "BPM", evidenceRef: "signal:tempo_bpm" }],
+      }],
+    });
+    expect(parsed.strategicSynthesis[0]?.numericClaims).toEqual([
+      { value: 120, unit: "BPM", evidenceRef: "signal:tempo_bpm" },
+    ]);
+  });
+
+  it("rejects numeric synthesis claims whose value, unit, or referenced measurement does not match", () => {
+    const base = {
+      schemaVersion: "1.0.0",
+      auditId: "audit-numeric-mismatch",
+      source: { sourceKind: "uploaded_master", sourceAudioPath: "jobs/1/master.wav", sha256: "1".repeat(64), mimeType: "audio/wav", byteLength: 100 },
+      directSignalMeasurements: [{
+        name: "tempo_bpm", status: "measured", value: 120, unit: "BPM",
+        method: "high_frequency_transient_autocorrelation",
+        measuredAt: "2026-11-19T12:00:00.000Z", diagnostics: [],
+      }],
+      calibratedPredictions: [],
+      externalRecords: [],
+    };
+    for (const numericClaim of [
+      { value: 121, unit: "BPM", evidenceRef: "signal:tempo_bpm" },
+      { value: 120, unit: "Hz", evidenceRef: "signal:tempo_bpm" },
+      { value: 120, unit: "BPM", evidenceRef: "signal:missing_metric" },
+    ]) {
+      expect(() => parseRealMasterAuditContract({
+        ...base,
+        strategicSynthesis: [{
+          claim: "The uploaded master measured 120 BPM.",
+          evidenceRefs: ["signal:tempo_bpm"],
+          evidenceClass: "OBSERVED",
+          numericClaims: [numericClaim],
+        }],
+      })).toThrow();
+    }
+  });
 });
