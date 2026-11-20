@@ -147,10 +147,12 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
  const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[])]
   .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
+  .map(professionalEvidenceLanguage)
+  .filter((item)=>item.trim().length>0)
   .filter((item,index,items)=>items.indexOf(item)===index)
   .slice(0,1)
   .map((item)=>item.length>105?item.slice(0,102)+"...":item);
- const fullSummary=val(safeAssessment.executiveSummary,"Further listening and source verification are required.");
+ const fullSummary=professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required."));
  const safeSummary=fullSummary.length>180?fullSummary.slice(0,177)+"...":fullSummary;
  const nextAction="Verify identity, rights and the submitted master before pitching.";
  return {
@@ -201,6 +203,11 @@ function professionalEvidenceLanguage(value:string):string {
   .replace(/\bVALIDATED_MODEL_NOT_CONFIGURED\b/gi,"a validated mood model is not configured")
   .replace(/\bCALIBRATED_ENERGY_MODEL_NOT_CONFIGURED\b/gi,"a calibrated perceptual-energy model is not configured")
   .replace(/\bCALIBRATED_CLASSIFIER_NOT_CONFIGURED\b/gi,"a calibrated tonal classifier is not configured")
+  .replace(/\\bTEMPO_BELOW_REPORTING_THRESHOLD\\b/gi,"tempo candidate below the reporting threshold")
+  .replace(/\\bMEASUREMENT_UNAVAILABLE\\b/gi,"measurement not available")
+  .replace(/\\bPROVIDER_NOT_CONFIGURED\\b/gi,"provider lookup not configured")
+  .replace(/\\bNO_UNAMBIGUOUS_RECORD_ID\\b/gi,"no unambiguous provider record was returned")
+  .replace(/\\bPROVIDER_LOOKUP_UNAVAILABLE\\b/gi,"provider lookup unavailable")
   .replace(/Vocal analysis:\s*Not performed[^.]*\./gi,"")
   .replace(/vocal presence\/absence is unknown[^.]*\./gi,"")
   .replace(/(?:learned audio(?:-genre)?|audio-only genre|vocal|detection|classification) model(?: status)?[^.]*\b(?:disabled|not configured|unavailable)\b[^.]*\.?/gi,"")
