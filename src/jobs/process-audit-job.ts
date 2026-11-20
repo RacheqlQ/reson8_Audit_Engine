@@ -96,6 +96,21 @@ export interface AuditStageFailureDiagnostic {
   failureCode: AuditFailureCode;
   errorName: string;
   timedOut: boolean;
+  errorCode: string;
+}
+
+function safeAuditErrorCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  const known: Array<[RegExp, string]> = [
+    [/Full report content cannot fit the approved 12-page V2 allocation/i, "PDF_FULL_REPORT_ALLOCATION_UNFIT"],
+    [/Full report section heading exceeds its allocated v2 page/i, "PDF_FULL_REPORT_HEADING_OVERFLOW"],
+    [/Full report content exceeds its existing page allocation/i, "PDF_FULL_REPORT_CONTENT_OVERFLOW"],
+    [/Report v2 renderer did not return a PDF/i, "PDF_RENDERER_INVALID_OUTPUT"],
+    [/Report JSON payload does not contain a valid audit report input/i, "PDF_REPORT_INPUT_INVALID"],
+    [/Report source is neither a PDF nor valid JSON/i, "PDF_REPORT_SOURCE_INVALID"],
+    [/WinAnsi|cannot encode|encode.*character|glyph/i, "PDF_FONT_ENCODING_ERROR"],
+  ];
+  return known.find(([pattern]) => pattern.test(message))?.[1] ?? "UNCLASSIFIED_STAGE_ERROR";
 }
 
 export function buildAuditStageFailureDiagnostic(stage: string, error: unknown): AuditStageFailureDiagnostic {
@@ -103,7 +118,7 @@ export function buildAuditStageFailureDiagnostic(stage: string, error: unknown):
   const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(error.name)
     ? error.name
     : "UnknownError";
-  return { stage, failureCode, errorName, timedOut: failureCode === "timeout" };
+  return { stage, failureCode, errorName, timedOut: failureCode === "timeout", errorCode: safeAuditErrorCode(error) };
 }
 
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
