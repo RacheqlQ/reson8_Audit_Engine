@@ -224,7 +224,7 @@ function parseMp4Isrc(bytes: Uint8Array): string | null {
         const mean = children.find((child) => child.type === "mean");
         const data = children.find((child) => child.type === "data");
         const isFreeformIsrc = atom.type === "----"
-          && mp4Text(bytes, name!, 4)?.toUpperCase() === "ISRC"
+          && Boolean(name && mp4Text(bytes, name, 4)?.toUpperCase() === "ISRC")
           && (!mean || mp4Text(bytes, mean, 4)?.toLowerCase() === "com.apple.itunes");
         const isDirectIsrc = atom.type === "ISRC" || atom.type === "isrc";
         const value = data ? mp4Text(bytes, data, 8) : isDirectIsrc ? mp4Text(bytes, atom, 0) : null;
