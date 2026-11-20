@@ -558,6 +558,7 @@ export async function processAuditJob(
       decodedMaster = decoded;
       masterDna = {
         ...dna,
+        acousticFeatureProfile: { ...dna.acousticFeatureProfile, provenance: { ...dna.acousticFeatureProfile.provenance, sourceAudioSha256: masterSha256, measuredAt: masterMeasuredAt } },
         loudnessLufs: decoded.loudnessLufs ?? dna.loudnessLufs,
         loudnessRangeLu: decoded.loudnessRangeLu ?? null,
         truePeakDbfs: decoded.truePeakDbfs ?? null,
