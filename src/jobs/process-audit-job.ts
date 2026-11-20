@@ -853,22 +853,22 @@ export async function processAuditJob(
             ? { name, status: "measured", value, unit, method, measuredAt: masterMeasuredAt ?? generatedAt, diagnostics: [] }
             : buildUnavailableMetric(String(name), "MEASUREMENT_UNAVAILABLE", "The configured analysis stage did not return a finite measurement for this uploaded master.", String(unit), String(method))),
           provisionalPredictions: [
-            {
-              name: "audio_mood", status: "provisional",
-              label: masterDna.acousticFeatureProfile.predictions.mood.status === "provisional" ? masterDna.acousticFeatureProfile.predictions.mood.labels.join(", ") : "Insufficient audio evidence",
-              score: masterDna.acousticFeatureProfile.predictions.mood.status === "provisional" ? Math.max(...Object.values(masterDna.acousticFeatureProfile.predictions.mood.scores)) : 0,
-              scoreScale: "0-100", method: "audio_feature_heuristics_v1", probability: null,
+            ...(masterDna.acousticFeatureProfile.predictions.mood.status === "provisional" ? [{
+              name: "audio_mood" as const, status: "provisional" as const,
+              label: masterDna.acousticFeatureProfile.predictions.mood.labels.join(", "),
+              score: Math.max(...Object.values(masterDna.acousticFeatureProfile.predictions.mood.scores)),
+              scoreScale: "0-100" as const, method: "audio_feature_heuristics_v1" as const, probability: null,
               featureDrivers: ["spectral_centroid_hz", "spectral_flux", "spectral_flatness", "low_band_energy_ratio", "mid_band_energy_ratio"],
-              diagnostics: masterDna.acousticFeatureProfile.predictions.mood.status === "provisional" ? [] : [{ code: "INSUFFICIENT_AUDIO_EVIDENCE", message: "A provisional mood estimate could not be derived from the available audio windows.", stage: "audio_classification", retryable: false }],
-            },
-            {
-              name: "audio_energy", status: "provisional",
-              label: masterDna.acousticFeatureProfile.predictions.energy.status === "provisional" ? masterDna.acousticFeatureProfile.predictions.energy.label : "Insufficient audio evidence",
-              score: masterDna.acousticFeatureProfile.predictions.energy.status === "provisional" ? masterDna.acousticFeatureProfile.predictions.energy.score : 0,
-              scoreScale: "0-100", method: "audio_feature_heuristics_v1", probability: null,
+              diagnostics: [],
+            }] : []),
+            ...(masterDna.acousticFeatureProfile.predictions.energy.status === "provisional" ? [{
+              name: "audio_energy" as const, status: "provisional" as const,
+              label: masterDna.acousticFeatureProfile.predictions.energy.label,
+              score: masterDna.acousticFeatureProfile.predictions.energy.score,
+              scoreScale: "0-100" as const, method: "audio_feature_heuristics_v1" as const, probability: null,
               featureDrivers: ["rms_dbfs", "spectral_flux", "spectral_centroid_hz", "zero_crossing_rate"],
-              diagnostics: masterDna.acousticFeatureProfile.predictions.energy.status === "provisional" ? [] : [{ code: "INSUFFICIENT_AUDIO_EVIDENCE", message: "A provisional energy estimate could not be derived from the available audio windows.", stage: "audio_classification", retryable: false }],
-            },
+              diagnostics: [],
+            }] : []),
           ],
           calibratedPredictions: [
             { name: "calibrated_audio_mood", status: "unavailable", label: null, probability: null, reasonCodes: ["VALIDATED_MODEL_NOT_CONFIGURED"], diagnostics: [{ code: "VALIDATED_MODEL_NOT_CONFIGURED", message: "A calibrated mood probability is not asserted; provisional audio-derived mood tags are available in acousticFeatureProfile.predictions.mood.", stage: "audio_classification", retryable: false }] },
