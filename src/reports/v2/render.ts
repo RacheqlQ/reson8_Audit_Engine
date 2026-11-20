@@ -262,6 +262,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts){
   const sameRegion=Math.abs(peakLabelX-dipLabelX)<46;
   page.drawText("Peak "+peak.timeSeconds.toFixed(1)+"s",{x:peakLabelX,y:plotBottom-13,size:6,font:fonts.bold,color:C.teal});
   page.drawText("Dip "+dip.timeSeconds.toFixed(1)+"s",{x:dipLabelX,y:plotBottom-(sameRegion?24:13),size:6,font:fonts.bold,color:C.coral});
+  y-=h+12;
  }
  if(data.sonicAxes){
   const axes=Object.entries(data.sonicAxes),panelHeight=30+axes.length*22,top=y-8,bottom=top-panelHeight;
