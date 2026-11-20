@@ -392,7 +392,7 @@ function sections(i:AuditReportInput):Section[]{
  const playlistMoodTags=Array.isArray(playlistDiscovery.moodTagsUsed)?playlistDiscovery.moodTagsUsed.map(text).filter(Boolean):[];
  const playlistMoodSource=text(playlistDiscovery.moodSource)||"source not supplied";
  const playlistMoodNotes=[
-  ...(playlistMoodSource.includes("catalogue sonic profile")?["Catalogue mood descriptors are provider-supplied metadata."]:[]),
+  ...(playlistMoodSource.includes("catalogue sonic profile")?["Catalogue mood descriptors are provider-supplied metadata, not an audio-derived mood measurement."]:[]),
   ...(playlistMoodSource.includes("uploaded-master provisional audio_feature_heuristics_v1")?["Uploaded-master mood tags are provisional audio_feature_heuristics_v1 outputs, not calibrated perceptual predictions."]:[])
  ];
  const playlistMoodSummary=playlistMoodTags.length
