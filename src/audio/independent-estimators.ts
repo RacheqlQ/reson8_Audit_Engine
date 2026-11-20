@@ -178,23 +178,33 @@ export function estimateGoertzelKey(samples: Float32Array, sampleRate: number): 
   const profile = Array(12).fill(0) as number[];
   let analyzedPitchCount = 0;
   for (let midi = 36; midi <= 84; midi++) {
-    const frequency = 440 * Math.pow(2, (midi - 69) / 12);
-    if (frequency >= sampleRate / 2) continue;
-    let power = 0;
-    let lowerSide = 0;
-    let upperSide = 0;
+    const nominalFrequency = 440 * Math.pow(2, (midi - 69) / 12);
+    if (nominalFrequency >= sampleRate / 2) continue;
+    let supportedWindows = 0;
+    let accumulatedStrength = 0;
     for (const window of windows) {
-      power += goertzelPower(window, sampleRate, frequency) / windows.length;
-      lowerSide += goertzelPower(window, sampleRate, frequency * Math.pow(2, -50 / 1200)) / windows.length;
-      upperSide += goertzelPower(window, sampleRate, frequency * Math.pow(2, 50 / 1200)) / windows.length;
+      // Search a narrow tuning neighborhood rather than testing only the
+      // equal-tempered center. This tolerates modest global tuning drift.
+      let peakPower = 0;
+      for (let cents = -40; cents <= 40; cents += 10) {
+        const candidateFrequency = nominalFrequency * Math.pow(2, cents / 1200);
+        peakPower = Math.max(peakPower, goertzelPower(window, sampleRate, candidateFrequency));
+      }
+      const lowerSide = goertzelPower(window, sampleRate, nominalFrequency * Math.pow(2, -80 / 1200));
+      const upperSide = goertzelPower(window, sampleRate, nominalFrequency * Math.pow(2, 80 / 1200));
+      const peakAmplitude = Math.sqrt(peakPower);
+      const sideFloor = (Math.sqrt(lowerSide) + Math.sqrt(upperSide)) / 2;
+      // Require the same pitch class to show a narrow peak in separate
+      // excerpts. Independent noise peaks rarely persist at one note across
+      // beginning/middle/end, while sustained musical tones do.
+      if (peakPower > 1e-10 && peakAmplitude > sideFloor * 1.8) {
+        supportedWindows++;
+        accumulatedStrength += Math.max(0, peakAmplitude - sideFloor);
+      }
     }
-    // Require a narrow local spectral peak, not merely energy at a queried
-    // frequency. Broadband noise and window leakage otherwise populate many
-    // pitch classes and can accidentally correlate with a key template.
-    const targetAmplitude = Math.sqrt(power);
-    const sideFloor = (Math.sqrt(lowerSide) + Math.sqrt(upperSide)) / 2;
-    if (power > 1e-10 && targetAmplitude > sideFloor * 1.8) {
-      profile[midi % 12] += Math.max(0, targetAmplitude - sideFloor);
+    const requiredWindows = windows.length >= 3 ? 2 : 1;
+    if (supportedWindows >= requiredWindows) {
+      profile[midi % 12] += accumulatedStrength / windows.length;
       analyzedPitchCount++;
     }
   }
