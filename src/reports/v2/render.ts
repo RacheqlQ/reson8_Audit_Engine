@@ -30,6 +30,10 @@ export function normalizePdfText(value:string):string {
 }
 const str=(v:unknown,fallback="Not supplied")=>typeof v==="string"&&v.trim()?normalizePdfText(v.trim()):typeof v==="number"&&Number.isFinite(v)?String(v):fallback;
 const arr=(v:unknown):unknown[]=>Array.isArray(v)?v:[];
+const INTERNAL_ANALYSIS_STATUS = /(?:vocal analysis.{0,80}(?:temporarily disabled|not performed|unavailable|disabled|not run)|vocal presence(?:\\s*\\/\\s*absence)? is unknown|learned audio model.{0,40}disabled|detection model.{0,40}disabled)/i;
+export function publicReportLimitations(value: unknown): string[] {
+ return arr(value).map(item=>str(item,"")).filter(line=>line&&!INTERNAL_ANALYSIS_STATUS.test(line));
+}
 const dateText=(v:unknown)=>{const s=str(v,"");return s?s.slice(0,10):"Date not supplied";};
 function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
  const words=normalizePdfText(value).replace(/\s+/g," ").split(" ").filter(Boolean),out:string[]=[];let line="";
@@ -289,7 +293,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    "Key method: "+str(data.key.method,"Not supplied")+" · "+data.key.evidence,
    "Energy method: "+str(data.energy.method,"Not supplied")+" · "+data.energy.evidence,
    "Worked example: when evidence is insufficient, display a dash and mark any estimate provisional; do not convert absence into a score.",
-   "Limitations: "+arr(a.limitations).map(v=>str(v)).join("; "),
+   "Limitations: "+publicReportLimitations(a.limitations).join("; "),
    "AI-assisted analysis, not a forecast.",
    ...(technicalProfile.length?["Technical descriptors: "+technicalProfile.join(" · ")+". RMS signal level is dBFS; RMS-envelope spread is an internal proxy, not mastering dynamic range."]:[])
   ]}
