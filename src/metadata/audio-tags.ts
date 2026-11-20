@@ -135,6 +135,93 @@ function parseFlacComments(bytes: Uint8Array): AudioTagMetadata {
   }
   return result;
 }
+
+function parseOggCommentPacket(packet: Uint8Array): AudioTagMetadata | null {
+  const isOpus = packet.length >= 8 && new TextDecoder("ascii").decode(packet.subarray(0, 8)) === "OpusTags";
+  const isVorbis = packet.length >= 7 && packet[0] === 3
+    && new TextDecoder("ascii").decode(packet.subarray(1, 7)) === "vorbis";
+  if (!isOpus && !isVorbis) return null;
+  const result: AudioTagMetadata = { ...EMPTY, genres: [] };
+  let cursor = isOpus ? 8 : 7;
+  if (cursor + 4 > packet.length) return result;
+  const vendorLength = littleEndian32(packet, cursor);
+  cursor += 4 + vendorLength;
+  if (cursor + 4 > packet.length) return result;
+  const commentCount = Math.min(littleEndian32(packet, cursor), 1000);
+  cursor += 4;
+  for (let index = 0; index < commentCount && cursor + 4 <= packet.length; index++) {
+    const commentLength = littleEndian32(packet, cursor);
+    cursor += 4;
+    if (commentLength <= 0 || cursor + commentLength > packet.length) break;
+    const comment = new TextDecoder("utf-8").decode(packet.subarray(cursor, cursor + commentLength));
+    cursor += commentLength;
+    const separator = comment.indexOf("=");
+    if (separator <= 0) continue;
+    const key = comment.slice(0, separator).trim().toUpperCase();
+    const value = comment.slice(separator + 1).trim();
+    if (!value) continue;
+    if (key === "TITLE") result.title ??= value;
+    else if (key === "ARTIST" || key === "ALBUMARTIST") result.artist ??= value;
+    else if (key === "ALBUM") result.album ??= value;
+    else if (key === "ISRC") result.isrc ??= normalizeTagIsrc(value);
+    else if (key === "GENRE") result.genres = [...new Set([...result.genres, ...value.split(/[;,/]/).map((item) => item.trim()).filter(Boolean)])];
+    else if (key === "DATE" || key === "YEAR" || key === "RELEASEDATE") result.releaseDate ??= value;
+    else if (key === "LABEL" || key === "ORGANIZATION") result.label ??= value;
+  }
+  return result;
+}
+
+function parseOggComments(bytes: Uint8Array): AudioTagMetadata {
+  const empty: AudioTagMetadata = { ...EMPTY, genres: [] };
+  if (bytes.length < 27 || String.fromCharCode(...bytes.subarray(0, 4)) !== "OggS" || bytes[4] !== 0) return empty;
+  let offset = 0;
+  let streamSerial: number | null = null;
+  let packetParts: Uint8Array[] = [];
+  let packetLength = 0;
+  let discardPacket = false;
+  while (offset + 27 <= bytes.length) {
+    if (String.fromCharCode(...bytes.subarray(offset, offset + 4)) !== "OggS" || bytes[offset + 4] !== 0) break;
+    const serial = littleEndian32(bytes, offset + 14);
+    const segmentCount = bytes[offset + 26]!;
+    const lacingStart = offset + 27;
+    const bodyStart = lacingStart + segmentCount;
+    if (bodyStart > bytes.length) break;
+    let bodyOffset = bodyStart;
+    const pageSerial = streamSerial ?? serial;
+    if (streamSerial === null) streamSerial = serial;
+    for (let index = 0; index < segmentCount; index++) {
+      const segmentLength = bytes[lacingStart + index]!;
+      const segmentEnd = bodyOffset + segmentLength;
+      if (segmentEnd > bytes.length) return empty;
+      if (serial === pageSerial) {
+        if (!discardPacket && packetLength + segmentLength <= 1_048_576) {
+          packetParts.push(bytes.subarray(bodyOffset, segmentEnd));
+          packetLength += segmentLength;
+        } else {
+          packetParts = [];
+          packetLength = 0;
+          discardPacket = true;
+        }
+        if (segmentLength < 255) {
+          if (!discardPacket && packetLength > 0) {
+            const packet = new Uint8Array(packetLength);
+            let cursor = 0;
+            for (const part of packetParts) { packet.set(part, cursor); cursor += part.length; }
+            const comments = parseOggCommentPacket(packet);
+            if (comments && (comments.isrc || comments.title || comments.artist || comments.album || comments.genres.length)) return comments;
+          }
+          packetParts = [];
+          packetLength = 0;
+          discardPacket = false;
+        }
+      }
+      bodyOffset = segmentEnd;
+    }
+    offset = bodyOffset;
+  }
+  return empty;
+}
+
 function parseWavInfo(bytes: Uint8Array): AudioTagMetadata {
   const result: AudioTagMetadata = { ...EMPTY, genres: [] };
   if (bytes.length < 12 || String.fromCharCode(...bytes.subarray(0, 4)) !== "RIFF" ||
@@ -287,16 +374,17 @@ export function readAudioTags(input: Uint8Array): AudioTagMetadata {
   const v2 = parseId3(input);
   const flac = parseFlacComments(input);
   const wav = parseWavInfo(input);
+  const ogg = parseOggComments(input);
   const mp4Isrc = parseMp4Isrc(input);
   const v1 = parseId3v1(input);
   return {
-    title: v2.title ?? flac.title ?? wav.title ?? v1.title,
-    artist: v2.artist ?? flac.artist ?? wav.artist ?? v1.artist,
-    album: v2.album ?? flac.album ?? wav.album ?? v1.album,
-    isrc: v2.isrc ?? flac.isrc ?? wav.isrc ?? mp4Isrc,
-    genres: v2.genres.length ? v2.genres : flac.genres.length ? flac.genres : wav.genres.length ? wav.genres : v1.genres,
-    releaseDate: v2.releaseDate ?? flac.releaseDate ?? wav.releaseDate ?? v1.releaseDate,
-    label: v2.label ?? flac.label ?? wav.label,
+    title: v2.title ?? flac.title ?? ogg.title ?? wav.title ?? v1.title,
+    artist: v2.artist ?? flac.artist ?? ogg.artist ?? wav.artist ?? v1.artist,
+    album: v2.album ?? flac.album ?? ogg.album ?? wav.album ?? v1.album,
+    isrc: v2.isrc ?? flac.isrc ?? ogg.isrc ?? wav.isrc ?? mp4Isrc,
+    genres: v2.genres.length ? v2.genres : flac.genres.length ? flac.genres : ogg.genres.length ? ogg.genres : wav.genres.length ? wav.genres : v1.genres,
+    releaseDate: v2.releaseDate ?? flac.releaseDate ?? ogg.releaseDate ?? wav.releaseDate ?? v1.releaseDate,
+    label: v2.label ?? flac.label ?? ogg.label ?? wav.label,
     track: v1.track,
   };
 }
