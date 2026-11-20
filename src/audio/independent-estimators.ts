@@ -177,26 +177,26 @@ export function estimateGoertzelKey(samples: Float32Array, sampleRate: number): 
   }
   const profile = Array(12).fill(0) as number[];
   let analyzedPitchCount = 0;
+  const windowPeakPowers = windows.map(() => [] as number[]);
   for (let midi = 36; midi <= 84; midi++) {
     const nominalFrequency = 440 * Math.pow(2, (midi - 69) / 12);
     if (nominalFrequency >= sampleRate / 2) continue;
     let supportedWindows = 0;
     let accumulatedStrength = 0;
-    for (const window of windows) {
-      // Search a narrow tuning neighborhood rather than testing only the
-      // equal-tempered center. This tolerates modest global tuning drift.
+    for (let windowIndex = 0; windowIndex < windows.length; windowIndex++) {
+      const window = windows[windowIndex]!;
+      // Three-point tuning search covers modest drift without an unnecessarily
+      // expensive dense sweep. The ±30-cent samples include the +18-cent case.
       let peakPower = 0;
-      for (let cents = -40; cents <= 40; cents += 10) {
+      for (const cents of [-30, 0, 30]) {
         const candidateFrequency = nominalFrequency * Math.pow(2, cents / 1200);
         peakPower = Math.max(peakPower, goertzelPower(window, sampleRate, candidateFrequency));
       }
+      windowPeakPowers[windowIndex]!.push(peakPower);
       const lowerSide = goertzelPower(window, sampleRate, nominalFrequency * Math.pow(2, -80 / 1200));
       const upperSide = goertzelPower(window, sampleRate, nominalFrequency * Math.pow(2, 80 / 1200));
       const peakAmplitude = Math.sqrt(peakPower);
       const sideFloor = (Math.sqrt(lowerSide) + Math.sqrt(upperSide)) / 2;
-      // Require the same pitch class to show a narrow peak in separate
-      // excerpts. Independent noise peaks rarely persist at one note across
-      // beginning/middle/end, while sustained musical tones do.
       if (peakPower > 1e-10 && peakAmplitude > sideFloor * 1.8) {
         supportedWindows++;
         accumulatedStrength += Math.max(0, peakAmplitude - sideFloor);
@@ -208,14 +208,24 @@ export function estimateGoertzelKey(samples: Float32Array, sampleRate: number): 
       analyzedPitchCount++;
     }
   }
+  // Spectral flatness across the semitone bank distinguishes a diffuse,
+  // broadband spectrum from a tonal spectrum before applying key templates.
+  // This is a rejection diagnostic, not a genre or key-confidence score.
+  const flatnessByWindow = windowPeakPowers.map((powers) => {
+    if (!powers.length) return 1;
+    const arithmeticMean = powers.reduce((sum, value) => sum + value, 0) / powers.length;
+    const geometricMean = Math.exp(powers.reduce((sum, value) => sum + Math.log(Math.max(EPSILON, value)), 0) / powers.length);
+    return geometricMean / Math.max(EPSILON, arithmeticMean);
+  });
+  const meanSpectralFlatness = flatnessByWindow.reduce((sum, value) => sum + value, 0) / flatnessByWindow.length;
   const total = profile.reduce((sum, value) => sum + value, 0);
   const strongestPitchClass = Math.max(...profile);
   const activePitchClasses = profile.filter(value => value >= strongestPitchClass * 0.12 && value > 1e-7).length;
   const probabilities = profile.map(value => total > 0 ? value / total : 0).filter(value => value > 0);
   const pitchClassEntropy = -probabilities.reduce((sum, value) => sum + value * Math.log(value), 0);
   const topThreeShare = [...profile].sort((a, b) => b - a).slice(0, 3).reduce((sum, value) => sum + value, 0) / Math.max(EPSILON, total);
-  if (analyzedPitchCount < 2 || total < 1e-7 || activePitchClasses < 3 || pitchClassEntropy > 2.35 || topThreeShare < 0.34) {
-    return unavailable("Pitch-class evidence was sparse or too diffuse to support a stable tonal center.", analyzedPitchCount);
+  if (analyzedPitchCount < 2 || total < 1e-7 || activePitchClasses < 3 || pitchClassEntropy > 2.35 || topThreeShare < 0.34 || meanSpectralFlatness > 0.62) {
+    return unavailable("Pitch-class evidence was sparse, spectrally diffuse, or too weak to support a stable tonal center.", analyzedPitchCount);
   }
   const normalized = profile.map(value => value / total);
   const candidates: Array<{ key: number; mode: Mode; score: number }> = [];
