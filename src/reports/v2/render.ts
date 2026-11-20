@@ -187,7 +187,9 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  if(data.energySeries){
   const h=178,topY=y;page.drawRectangle({x:M,y:topY-h,width:W-2*M,height:h,color:C.white,borderColor:C.line,borderWidth:.7});
   page.drawText("ENERGY OVER TIME",{x:M+12,y:topY-16,size:7,font:fonts.bold,color:C.gold});
-  const left=M+28,right=W-M-16,plotTop=topY-34,plotBottom=topY-h+24;
+  page.drawText("Y: source energy units",{x:M+12,y:topY-29,size:6,font:fonts.italic,color:C.muted});
+  page.drawText("X: elapsed time (seconds)",{x:W-M-126,y:topY-h+8,size:6,font:fonts.italic,color:C.muted});
+  const left=M+28,right=W-M-16,plotTop=topY-42,plotBottom=topY-h+32;
   const vals=data.energySeries.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),span=max-min||1;
   for(let g=0;g<=4;g++){const gy=plotBottom+(plotTop-plotBottom)*g/4;page.drawLine({start:{x:left,y:gy},end:{x:right,y:gy},color:C.line,thickness:.5});}
   const t0=data.energySeries[0].timeSeconds,t1=data.energySeries[data.energySeries.length-1].timeSeconds,dt=t1-t0||1;
@@ -382,15 +384,15 @@ export async function generateAuditReportV2(input:AuditReportInput,tier:AuditRep
     const weights=drivers.length&&drivers.every(d=>d.weight!==null)?drivers.map(d=>d.label+" "+Math.round((d.weight??0)*100)+"%").join(", "):"Weighting not supplied.";
     page.drawText("Weighting: "+weights,{x:M+145,y:H-340-drivers.length*23-6,size:6.5,font:fonts.italic,color:C.muted});
    }
-   const metricTop=H-420,width=(W-2*M-16)/3;
+   const metricTop=H-320,width=(W-2*M-16)/3;
    spec.blocks.forEach((b,i)=>drawMetricCard(page,M+i*(width+8),metricTop,width,b,fonts));
    const summary=spec.lines?.[2]??"Executive summary not supplied.";
-   card(page,M,H-535,W-2*M,"Executive summary",[summary.replace(/^Executive summary:\s*/,"")],fonts,{accent:C.gold});
+   card(page,M,H-430,W-2*M,"Executive summary",[summary.replace(/^Executive summary:\s*/,"")],fonts,{accent:C.gold});
    const next=spec.lines?.[3]??"Recommended next step not supplied.";
-   card(page,M,H-665,W-2*M,"Recommended next step",[next.replace(/^Recommended next step:\s*/,"")],fonts,{accent:C.gold});
+   card(page,M,H-545,W-2*M,"Recommended next step",[next.replace(/^Recommended next step:\s*/,"")],fonts,{accent:C.gold});
    page.drawText("IN THIS REPORT",{x:M,y:132,size:7,font:fonts.bold,color:C.gold});
    const toc=pages.slice(1);
-   toc.forEach((p,i)=>{const col=i<5?0:1,row=i<5?i:i-5,x=M+col*250,y=110-row*15;page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});drawWrapped(page,p.title,x+28,y,205,fonts.regular,7,C.ink,8);});
+   toc.forEach((p,i)=>{const col=i<5?0:1,row=i<5?i:i-5,x=M+col*250,y=165-row*14;page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});drawWrapped(page,p.title,x+28,y,205,fonts.regular,7,C.ink,8);});
   }else if(spec.kind==="axes"||spec.kind==="comparables"||spec.kind==="moments"){
    let y=H-92;for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:spec.kind==="moments"?(b.label.includes("Risk")?C.coral:C.teal):C.gold,provenance:b.provenance+" · "+b.confidence});y-=h+8;}
   }else{
