@@ -5,9 +5,12 @@ const master = {
   provenance: "uploaded_audio_master",
   durationSeconds: 180,
   bpm: 120,
+  alternateTempo: 60,
   tempoConfidence: 0.86,
   key: "A",
   mode: "minor",
+  keyConfidence: 0.86,
+  keySegmentAgreement: 0.88,
   rhythmFeatures: {
     beatGridStatus: "tentative",
     onsetEnvelope: [0.05, 0.1, 0.18, 0.92, 0.3, 0.1, 0.08, 0.72, 0.2, 0.1, 0.05, 0.1],
@@ -151,6 +154,8 @@ describe("Phase 5 market placement strategy", () => {
     expect(plan.positioning.dj.status).toBe("review_required");
     expect(plan.positioning.club.status).toBe("review_required");
     expect(plan.positioning.dj.basis.join(" ")).toMatch(/120 BPM/);
+    expect(plan.positioning.dj.basis.join(" ")).toMatch(/60 BPM; this is an alternate half\/double-time reading/);
+    expect(plan.positioning.dj.basis.join(" ")).toMatch(/A minor/);
     expect(plan.positioning.club.limitations.join(" ")).toMatch(/not evidence of venue demand/i);
   });
   it("rejects malformed country codes and incomplete retrieval timestamps", () => {
