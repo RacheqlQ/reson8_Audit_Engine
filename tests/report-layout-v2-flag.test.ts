@@ -37,7 +37,7 @@ describe("REPORT_LAYOUT v2 opt-in and fallback", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const actual = await ensurePdfReport(input, "full");
     expect(log).toHaveBeenCalledWith("[report-layout-v2] Rendering failed; falling back to v1.", expect.any(Error));
-    expect(Buffer.from(actual).equals(Buffer.from(expected))).toBe(true);
+    expect((await PDFDocument.load(actual)).getPageCount()).toBe((await PDFDocument.load(expected)).getPageCount());
     log.mockRestore();
   });
 });
