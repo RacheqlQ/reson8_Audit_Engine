@@ -70,7 +70,7 @@ for(const [name,input] of variants){
     return {text:match[2].replace(/&amp;/g,"&").replace(/&quot;/g,'"'),yMin,yMax};
    });
    if(words.some(word=>word.yMin<790&&word.yMax>=790))throw new Error(filename+" has text crossing into the footer area on page "+(pageIndex+1));
-   if(pageIndex>0){
+   {
     const footerWords=words.filter(word=>word.yMin>=790).map(word=>word.text);
     const expectedPage=String(pageIndex+1),totalPages=String(pdf.getPageCount());
     if(!footerWords.includes("PAGE")||!footerWords.includes(expectedPage)||!footerWords.includes("OF")||!footerWords.includes(totalPages))throw new Error(filename+" has a missing or non-sequential V2 footer page number on page "+(pageIndex+1));
