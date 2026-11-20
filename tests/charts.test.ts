@@ -246,6 +246,24 @@ describe("native PDF chart helpers", () => {
     expect(()=>drawChartPanel(page,{title:"Long-form evidence",kind:"layers",rows:[{label:"OBSERVED",value:3},{label:"RECOGNIZED",value:1},{label:"RECONCILED",value:2},{label:"INFERRED",value:4}],shows:"A complete set of source-labelled claims with multiple independently attributed fields.",cantShow:"Truth, completeness, commercial relevance or listener response."},font,bold)).not.toThrow();
   });
 
+  it("requires every chart assertion to carry provenance matching its evidence class", () => {
+    expect(chartEvidenceIntegrityErrors({
+      evidenceClass: "measured", evidenceRefs: ["sonicDna.loudnessLufs"],
+      rows: [{ label: "LUFS", value: -14.2 }],
+    })).toEqual([]);
+    expect(chartEvidenceIntegrityErrors({
+      evidenceClass: "provider-recognized", evidenceRefs: ["assessment.scorecard"],
+      rows: [{ label: "Recognized", value: 2 }],
+    })).toContain("Chart evidence references do not match the declared evidence class.");
+    expect(chartEvidenceIntegrityErrors({
+      evidenceClass: "assessment-derived", rows: [{ label: "Score", value: 80 }],
+    })).toContain("Chart assertion has no evidence reference.");
+    expect(chartEvidenceIntegrityErrors({
+      evidenceClass: "illustrative", evidenceRefs: ["reportTemplates.discoveryPathway.v1"],
+      rows: [{ label: "Step", value: "Review" }],
+    })).toEqual([]);
+  });
+
   it("counts evidence layers exactly from the supplied labels", () => {
     expect(countEvidenceLayers([
       { label: "OBSERVED" },
