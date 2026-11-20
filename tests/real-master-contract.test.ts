@@ -65,6 +65,24 @@ describe("real-master audit contract", () => {
     })).toThrow();
   });
 
+  it("persists provisional mood and energy estimates without mislabelling them as calibrated probabilities", () => {
+    const parsed = parseRealMasterAuditContract({
+      schemaVersion: "1.0.0",
+      auditId: "audit-provisional",
+      source: { sourceKind: "uploaded_master", sourceAudioPath: "jobs/1/master.wav", sha256: "c".repeat(64), mimeType: "audio/wav", byteLength: 100 },
+      directSignalMeasurements: [],
+      calibratedPredictions: [],
+      provisionalPredictions: [
+        { name: "audio_mood", status: "provisional", label: "bright, driving", score: 72, scoreScale: "0-100", method: "audio_feature_heuristics_v1", probability: null, featureDrivers: ["spectral_centroid_hz", "spectral_flux"], diagnostics: [] },
+        { name: "audio_energy", status: "provisional", label: "high", score: 81, scoreScale: "0-100", method: "audio_feature_heuristics_v1", probability: null, featureDrivers: ["rms_dbfs", "spectral_flux"], diagnostics: [] },
+      ],
+      externalRecords: [],
+      strategicSynthesis: [],
+    });
+    expect(parsed.provisionalPredictions).toHaveLength(2);
+    expect(parsed.provisionalPredictions.every((prediction) => prediction.status === "provisional" && prediction.probability === null)).toBe(true);
+  });
+
   it("accepts verified external records only with source and retrieval provenance", () => {
     const parsed = parseRealMasterAuditContract({
       schemaVersion: "1.0.0",
