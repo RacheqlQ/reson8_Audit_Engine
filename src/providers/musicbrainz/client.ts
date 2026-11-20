@@ -124,7 +124,11 @@ export class MusicBrainzClient {
     const isrc = normalizeIsrc(value);
     await acquireRateLimitSlot(signal);
     const url = new URL(`${API_BASE}/isrc/${encodeURIComponent(isrc)}`);
-    url.searchParams.set("inc", "recordings+artist-credits+releases+labels");
+    // ISRC lookups return recordings by definition. Their supported recording
+    // includes are artist-credits and releases; `recordings` and `labels`
+    // are invalid here and cause MusicBrainz to reject the request with HTTP 400.
+    // Release labels require a separate /release/{mbid}?inc=labels lookup.
+    url.searchParams.set("inc", "artist-credits+releases");
     url.searchParams.set("fmt", "json");
 
     const response = await fetch(url, {

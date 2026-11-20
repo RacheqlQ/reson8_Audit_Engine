@@ -36,7 +36,9 @@ describe("MusicBrainz ISRC catalogue client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const requestedUrl = new URL(String(fetchMock.mock.calls[0][0]));
     expect(requestedUrl.pathname).toBe("/ws/2/isrc/GBAYE1212345");
-    expect(requestedUrl.searchParams.get("inc")).toContain("recordings");
+    expect(requestedUrl.searchParams.get("inc")).toBe("artist-credits+releases");
+    expect(requestedUrl.searchParams.get("inc")).not.toContain("labels");
+    expect(requestedUrl.searchParams.get("inc")).not.toContain("recordings");
     expect(requestedUrl.searchParams.get("fmt")).toBe("json");
     const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
     expect((requestInit.headers as Record<string, string>)["User-Agent"]).toContain("https://reson8-audit-engine.onrender.com");
