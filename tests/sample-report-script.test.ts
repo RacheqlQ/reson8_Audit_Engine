@@ -29,6 +29,7 @@ describe("sample-report command",()=>{
   const pkg=JSON.parse(await readFile(new URL("package.json",root),"utf8"));
   expect(pkg.scripts["sample-report"]).toBe("npm run build && node scripts/sample-report.mjs");
   const workflow=await readFile(new URL(".github/workflows/ci.yml",root),"utf8");
-  expect(workflow).toContain("path: artifacts/*.pdf");
+  expect(workflow).toContain("artifacts/*.pdf");
+  expect(workflow).toContain("artifacts/*.json");
  });
 });
