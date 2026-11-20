@@ -42,7 +42,7 @@ export interface AcousticFeatureProfile {
     midBandEnergyRatio:AcousticDescriptor;
     highBandEnergyRatio:AcousticDescriptor;
   };
-  windowSummaries:Array<{startSeconds:number;endSeconds:number;rmsDbfs:number;spectralCentroidHz:number;spectralFlatness:number}>;
+  windowSummaries:Array<{startSeconds:number;endSeconds:number;rmsDbfs:number;spectralCentroidHz:number;spectralFlatness:number;spectralFlux:number}>;
   predictions:{
     mood:{status:"provisional";labels:string[];scores:Record<"bright"|"dark"|"driving"|"calm"|"tense"|"warm",number>;method:"audio_feature_heuristics_v1";probability:null}
       |{status:"unavailable";labels:[];scores:null;method:"audio_feature_heuristics_v1";probability:null;reasonCode:string};
@@ -236,7 +236,7 @@ export function extractAcousticFeatureProfile(samples:Float32Array,sampleRate:nu
     const start=windowIndex*HOP_SIZE;
     const row=measureWindow(samples,start,sampleRate,validChannels,previous);
     rows.push(row);previous=row.magnitudes;
-    windowSummaries.push({startSeconds:start/sampleRate,endSeconds:(start+WINDOW_SIZE)/sampleRate,rmsDbfs:row.rmsDbfs,spectralCentroidHz:row.centroid,spectralFlatness:row.flatness});
+    windowSummaries.push({startSeconds:start/sampleRate,endSeconds:(start+WINDOW_SIZE)/sampleRate,rmsDbfs:row.rmsDbfs,spectralCentroidHz:row.centroid,spectralFlatness:row.flatness,spectralFlux:row.flux});
   }
   const values=(key:keyof Omit<WindowResult,"magnitudes">)=>rows.map(row=>row[key] as number);
   const methods={
