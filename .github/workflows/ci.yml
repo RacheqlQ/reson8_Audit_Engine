@@ -84,8 +84,7 @@ jobs:
         run: npm run build
 
       - name: Run zero-cost synthetic audio detector evaluation
-        if: always()
-        run: node scripts/audio-detector-evaluation.mjs
+        run: npm run evaluate:audio
 
       - name: Install PDF text-inspection tools
         if: always()
