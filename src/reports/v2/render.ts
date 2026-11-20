@@ -406,9 +406,7 @@ export function partitionFullReportUnits<T>(
  const pages: T[][] = [];
  let page: T[] = [], used = 0;
  for (let index = 0; index < units.length; index++) {
-  const remainingUnits = units.length - index;
-  const remainingPages = pageCount - pages.length;
-  if (page.length > 0 && (used + heights[index] > high + 1e-6 || remainingUnits === remainingPages)) {
+  if (page.length > 0 && used + heights[index] > high + 1e-6) {
    pages.push(page);
    page = [];
    used = 0;
@@ -417,6 +415,20 @@ export function partitionFullReportUnits<T>(
   used += heights[index];
  }
  if (page.length) pages.push(page);
+
+ while (pages.length < pageCount) {
+  let splitIndex = -1, largestPage = 1;
+  for (let index = 0; index < pages.length; index++) {
+   if (pages[index].length > largestPage) {
+    largestPage = pages[index].length;
+    splitIndex = index;
+   }
+  }
+  if (splitIndex < 0) return null;
+  const current = pages[splitIndex];
+  const midpoint = Math.floor(current.length / 2);
+  pages.splice(splitIndex, 1, current.slice(0, midpoint), current.slice(midpoint));
+ }
  return pages.length === pageCount ? pages : null;
 }
 
