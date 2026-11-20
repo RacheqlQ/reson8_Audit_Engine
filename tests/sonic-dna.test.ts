@@ -159,6 +159,8 @@ describe("Sonic DNA",()=>{
   const bright=Float32Array.from({length:sampleRate*2},(_,i)=>0.3*Math.sin(2*Math.PI*3500*i/sampleRate));
   const result=analyzePcm(bright,sampleRate);
   expect(result.moodTags).toEqual([]);
+  expect(result.acousticFeatureProfile.status).toBe("measured");
+  expect(result.acousticFeatureProfile.predictions.mood.status).toBe("unavailable");
   expect(result.spectralCentroidHz).toBeGreaterThan(3000);
   expect(Number.isFinite(result.rmsLevelDbfs)).toBe(true);
  });
