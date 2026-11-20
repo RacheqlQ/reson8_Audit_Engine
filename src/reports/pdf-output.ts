@@ -1,4 +1,5 @@
 import { generateAuditReport, type AuditReportInput, type AuditReportTier } from "./generate-audit-report.js";
+import { generateAuditReportV2 } from "./v2/render.js";
 
 export function isPdf(bytes: Uint8Array): boolean {
   return bytes.length >= 5
@@ -16,19 +17,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseReportInput(source: Uint8Array | string | unknown): AuditReportInput {
   let value: unknown = source;
   if (source instanceof Uint8Array) {
-    try {
-      value = JSON.parse(new TextDecoder().decode(source));
-    } catch {
-      throw new Error("Report source is neither a PDF nor valid JSON.");
-    }
+    try { value = JSON.parse(new TextDecoder().decode(source)); }
+    catch { throw new Error("Report source is neither a PDF nor valid JSON."); }
   } else if (typeof source === "string") {
-    try {
-      value = JSON.parse(source);
-    } catch {
-      throw new Error("Report source is neither a PDF nor valid JSON.");
-    }
+    try { value = JSON.parse(source); }
+    catch { throw new Error("Report source is neither a PDF nor valid JSON."); }
   }
-
   if (!isRecord(value)
     || typeof value.auditId !== "string"
     || typeof value.generatedAt !== "string"
@@ -42,7 +36,17 @@ function parseReportInput(source: Uint8Array | string | unknown): AuditReportInp
 
 export async function ensurePdfReport(source: Uint8Array | string | unknown, tier: AuditReportTier): Promise<Uint8Array> {
   if (source instanceof Uint8Array && isPdf(source)) return source;
-  const pdf = await generateAuditReport(parseReportInput(source), tier);
+  const input = parseReportInput(source);
+  if (process.env.REPORT_LAYOUT?.trim().toLowerCase() === "v2") {
+    try {
+      const v2 = await generateAuditReportV2(input);
+      if (isPdf(v2)) return v2;
+      throw new Error("Report v2 renderer did not return a PDF.");
+    } catch (error) {
+      console.error("[report-layout-v2] Rendering failed; falling back to v1.", error);
+    }
+  }
+  const pdf = await generateAuditReport(input, tier);
   if (!isPdf(pdf)) throw new Error("Audit report generator did not return a PDF.");
   return pdf;
 }
