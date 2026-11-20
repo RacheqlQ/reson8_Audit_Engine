@@ -188,10 +188,19 @@ describe("uploaded master provenance in reports", () => {
       ...input.sonicDna,
       provenance: "uploaded_audio_master",
       moodTags: ["Moderate RMS level", "Elevated zero-crossing rate"],
+      acousticFeatureProfile: {
+        status: "measured",
+        predictions: {
+          mood: { status: "provisional", labels: ["driving", "tense"], scores: { driving: 74, tense: 63 }, method: "audio_feature_heuristics_v1", probability: null },
+          energy: { status: "provisional", label: "high", score: 81, method: "audio_feature_heuristics_v1", probability: null },
+        },
+      },
       genreClassification: { primaryGenre: "Pop", abstained: false, genres: [{ label: "Pop", sources: ["apple_music"] }], model: { status: "disabled" } },
     };
     const report = reportText(input, "sample");
-    expect(report).toContain("Mood alignment was not asserted because no source-attributed DSP mood tags were available");
+    expect(report).toContain("No source-attributed DSP mood tags were returned for playlist search.");
+    expect(report).toContain("Uploaded-master provisional mood tags: driving, tense");
+    expect(report).toContain("Provisional uploaded-master energy estimate: high");
     expect(report).toContain("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs.");
     expect(report).toContain("These estimates are derived from the uploaded signal, are not probabilities");
     expect(report).not.toMatch(/model:.*disabled|Learned audio-genre model status/i);
