@@ -390,9 +390,14 @@ function sections(i:AuditReportInput):Section[]{
  const playlistOutcomes=Array.isArray(playlistDiscovery.outcomes)
   ? playlistDiscovery.outcomes.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))) : [];
  const playlistMoodTags=Array.isArray(playlistDiscovery.moodTagsUsed)?playlistDiscovery.moodTagsUsed.map(text).filter(Boolean):[];
+ const playlistMoodSource=text(playlistDiscovery.moodSource)||"source not supplied";
+ const playlistMoodNotes=[
+  ...(playlistMoodSource.includes("catalogue sonic profile")?["Catalogue mood descriptors are provider-supplied metadata."]:[]),
+  ...(playlistMoodSource.includes("uploaded-master provisional audio_feature_heuristics_v1")?["Uploaded-master mood tags are provisional audio_feature_heuristics_v1 outputs, not calibrated perceptual predictions."]:[])
+ ];
  const playlistMoodSummary=playlistMoodTags.length
-  ? "Mood search tags: "+playlistMoodTags.join(", ")+" [Source: "+(text(playlistDiscovery.moodSource)||"DSP catalogue metadata")+"]; these are provider-supplied catalogue descriptors, not an audio-derived mood measurement."
-  : "Mood alignment was not asserted because no source-attributed DSP mood tags were available; playlist matching is limited to the confirmed genre and adjacent lanes.";
+  ? "Mood search tags: "+playlistMoodTags.join(", ")+" [Source: "+playlistMoodSource+"]. "+(playlistMoodNotes.join(" ")||"Source attribution is incomplete; no calibrated mood claim is made.")
+  : "Mood alignment was not asserted because no source-attributed DSP or uploaded-master provisional mood tags were available; playlist matching is limited to the confirmed genre and adjacent lanes.";
  const vocalFeatures=s?.vocalFeatures&&typeof s.vocalFeatures==="object"&&!Array.isArray(s.vocalFeatures)?s.vocalFeatures as Record<string,unknown>:null;
  const vocalStatus=String(vocalFeatures?.status??"not_recorded");
  const vocalAnalysisPerformed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
