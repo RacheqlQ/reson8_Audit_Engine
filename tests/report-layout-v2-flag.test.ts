@@ -28,4 +28,16 @@ describe("REPORT_LAYOUT v2 opt-in and fallback", () => {
     const actual = await ensurePdfReport(fullAudioFixture, "sample");
     expect(Buffer.from(actual).equals(Buffer.from(expected))).toBe(true);
   });
+
+  it("logs a v2 rendering failure and falls back to the unchanged v1 renderer", async () => {
+    vi.stubEnv("REPORT_LAYOUT", "v2");
+    const input = structuredClone(fullAudioFixture) as any;
+    input.assessment.risks = ["Long evidence note ".repeat(1200)];
+    const expected = await generateAuditReport(input, "full");
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const actual = await ensurePdfReport(input, "full");
+    expect(log).toHaveBeenCalledWith("[report-layout-v2] Rendering failed; falling back to v1.", expect.any(Error));
+    expect(Buffer.from(actual).equals(Buffer.from(expected))).toBe(true);
+    log.mockRestore();
+  });
 });
