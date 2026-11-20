@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analyzePcm, estimateTempo } from "../src/audio/sonic-dna.js";
+import { sonicDashboardRowsForReport } from "../src/reports/generate-audit-report.js";
 
 function pulse(bpm: number, seconds = 24, sampleRate = 8000): Float32Array {
   const samples = new Float32Array(sampleRate * seconds);
