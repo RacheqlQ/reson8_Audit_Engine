@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import { buildArNotesDecisionContext, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
 import { loadReportFonts } from "../fonts.js";
-import { chartPanelHeight, countEvidenceLayers, drawChartPanel } from "../charts.js";
+import { chartEvidenceIntegrityErrors, chartPanelHeight, countEvidenceLayers, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
 
@@ -622,6 +622,8 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    // Anchor evidence panels to the actual end of the page's content card.
    // The fit guard below still fails closed when the complete chart cannot fit.
    for(const panel of chartsForSection(input,chartSection)){
+    const evidenceErrors=chartEvidenceIntegrityErrors(panel);
+    if(evidenceErrors.length)throw new Error("Report chart evidence integrity failed for "+panel.title+": "+evidenceErrors.join("; "));
     const panelHeight=chartPanelHeight(panel.kind,panel.rows,W-2*M),panelTop=chartCursor;
     if(panelTop-panelHeight<76)throw new Error("Evidence charts cannot fit safely on "+spec.title);
     drawChartPanel(page,{...panel,fixture:rec(input.evidence).fixture===true,y:panelTop,width:W-2*M},fonts.regular,fonts.bold);
