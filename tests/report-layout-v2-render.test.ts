@@ -1,6 +1,7 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, buildTempoDiagnosticLines, buildKeyDiagnosticLines, generateAuditReportV2 } from "../src/reports/v2/render.js";
+import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
+import * as reportV2Render from "../src/reports/v2/render.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
@@ -57,7 +58,7 @@ describe("v2 detector diagnostics", () => {
       independentEstimator: { bpm: 95.8, score: 0.6234 },
       abstentionReason: "Window stability did not meet the reporting gate."
     }};
-    const lines = buildTempoDiagnosticLines(input).join(" ");
+    const lines = reportV2Render.buildTempoDiagnosticLines(input).join(" ");
     expect(lines).toContain("96 BPM (score 0.812)");
     expect(lines).toContain("raw confidence score: 0.713");
     expect(lines).toContain("Independent low-frequency envelope estimate: 95.8 BPM");
@@ -77,7 +78,7 @@ describe("v2 detector diagnostics", () => {
       independentEstimatorDisagrees: true, relativeMajorMinorAmbiguity: true,
       limitation: "Independent estimators disagree; no single key is asserted."
     }};
-    const lines = buildKeyDiagnosticLines(input).join(" ");
+    const lines = reportV2Render.buildKeyDiagnosticLines(input).join(" ");
     expect(lines).toContain("A minor (score 0.710)");
     expect(lines).toContain("Segment agreement: 0.700 across 5");
     expect(lines).toContain("Tuning offset: -12.4 cents");
