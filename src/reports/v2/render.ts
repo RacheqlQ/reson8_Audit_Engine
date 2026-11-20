@@ -320,6 +320,8 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    "Tempo method: "+str(data.tempo.method,"Not supplied")+" · "+data.tempo.evidence,
    "Key method: "+str(data.key.method,"Not supplied")+" · "+data.key.evidence,
    "Energy method: "+str(data.energy.method,"Not supplied")+" · "+data.energy.evidence,
+   "Assessment model provenance: "+str(rec(a.generationProvenance).provider,"NOT RECORDED")+" / "+str(rec(a.generationProvenance).model,"NOT RECORDED")+" · prompt "+str(rec(a.generationProvenance).promptVersion,"NOT RECORDED")+" · generated "+str(rec(a.generationProvenance).generatedAt,"timestamp not recorded"),
+   "Narrative field provenance: "+(Object.entries(rec(rec(a.generationProvenance).fieldGroups)).map(([field,group])=>field+" → "+String(group)).join("; ")||"NOT RECORDED"),
    "Worked example: when evidence is insufficient, display a dash and mark any estimate provisional; do not convert absence into a score.",
    "Limitations: "+publicReportLimitations(a.limitations).join("; "),
    "AI-assisted analysis, not a forecast.",
