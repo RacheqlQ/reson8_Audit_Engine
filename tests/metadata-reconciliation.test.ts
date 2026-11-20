@@ -128,6 +128,32 @@ describe("Metadata reconciliation", () => {
     });
   });
 
+  it("keeps release-edition differences separate from recording identity", () => {
+    const result = reconcileMetadata({
+      spotify: {
+        title: "Don't Stop", artist: "Example Artist", isrc: "USABC2400001",
+        album: "Original Album", upc: "111111111111", label: "Original Label", releaseDate: "2024-01-01",
+      },
+      tidal: {
+        title: "Don’t   Stop", artist: "Example Artist", isrc: "US-ABC-24-00001",
+        album: "Deluxe Edition", upc: "222222222222", label: "Deluxe Label", releaseDate: "2025-02-01",
+      },
+    });
+    expect(result.status).toBe("reconciled");
+    expect(result.conflicts).toEqual([]);
+    expect(result.reconciledRecordingFields).toEqual(["title", "artist", "isrc"]);
+    expect(result.releaseContextFields).toEqual([]);
+    expect(result.releaseContextDifferences).toEqual([
+      { field: "album", values: ["Original Album", "Deluxe Edition"] },
+      { field: "upc", values: ["111111111111", "222222222222"] },
+      { field: "label", values: ["Original Label", "Deluxe Label"] },
+      { field: "releaseDate", values: ["2024-01-01", "2025-02-01"] },
+    ]);
+    expect(result.identity).toMatchObject({
+      title: "Don't Stop", artist: "Example Artist", isrc: "USABC2400001", album: "Original Album",
+    });
+  });
+
   it("ignores malformed ISRC claims instead of reconciling or conflicting on them", () => {
     const result = reconcileMetadata({
       musicbrainz: { title: "Example Track", isrc: "not-an-isrc" },

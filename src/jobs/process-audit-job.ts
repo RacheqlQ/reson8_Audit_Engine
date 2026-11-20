@@ -421,7 +421,10 @@ function reconciliationEvidence(reconciliation: MetadataReconciliation): Record<
       ? "RECONCILED"
       : reconciliation.identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
     reconciledFields: reconciliation.reconciledFields,
+    reconciledRecordingFields: reconciliation.reconciledRecordingFields,
+    releaseContextFields: reconciliation.releaseContextFields,
     conflicts: reconciliation.conflicts,
+    releaseContextDifferences: reconciliation.releaseContextDifferences,
     identity: identityEvidence(reconciliation.identity),
   };
 }
@@ -832,7 +835,10 @@ export async function processAuditJob(
         ? "RECONCILED"
         : assessmentIdentity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
       reconciledFields: assessmentReconciliation.reconciledFields,
+      reconciledRecordingFields: assessmentReconciliation.reconciledRecordingFields,
+      releaseContextFields: assessmentReconciliation.releaseContextFields,
       conflicts: assessmentReconciliation.conflicts,
+      releaseContextDifferences: assessmentReconciliation.releaseContextDifferences,
       identity: identityEvidence(assessmentIdentity),
     };
     const assessmentRecognition = recognitionEvidence(recognition);

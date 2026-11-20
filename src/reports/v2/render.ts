@@ -149,15 +149,19 @@ function identityStatusLabel(status:string):string{
  return status;
 }
 export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{field:string;value:string;status:string;source:string}>{
- const e=rec(input.evidence),reconciliation=rec(e.reconciliation),conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
+ const e=rec(input.evidence),reconciliation=rec(e.reconciliation);
+ const conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
+ const releaseDifferences=arr(reconciliation.releaseContextDifferences).map(v=>rec(v));
  const fields:[string,string][]=[["artist","Artist"],["title","Track"],["album","Album"],["genre","Genre"],["releaseDate","Release date"],["isrc","ISRC"],["upc","UPC"],["label","Label"]];
  return fields.map(([key,label])=>{
   const conflict=conflicts.find(item=>item.field===key);
+  const releaseDifference=releaseDifferences.find(item=>item.field===key);
   const raw=key==="genre"?(e.genre??e.genres):e[key];
-  const value=conflict?arr(conflict.values).map(v=>str(v,"")).filter(Boolean).join(" vs "):Array.isArray(raw)?raw.map(v=>str(v,"")).filter(Boolean).join(", "):str(raw,"Unavailable");
+  const differingValues=conflict??releaseDifference;
+  const value=differingValues?arr(differingValues.values).map(v=>str(v,"")).filter(Boolean).join(" vs "):Array.isArray(raw)?raw.map(v=>str(v,"")).filter(Boolean).join(", "):str(raw,"Unavailable");
   const sourceLabel=metadataFieldSource(e,key),source=sourceLabel.replace("Field source: ","");
   const fieldStatus=metadataFieldStatus(e,key);
-  const status=conflict?"Conflict":fieldStatus.startsWith("Available")&&source!=="unavailable"?"Source-returned":identityStatusLabel(fieldStatus);
+  const status=conflict?"Conflict":releaseDifference?"Release variant":fieldStatus.startsWith("Available")&&source!=="unavailable"?"Source-returned":identityStatusLabel(fieldStatus);
   return {field:label,value,status,source};
  });
 }
@@ -170,7 +174,7 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  rows.forEach((row,index)=>{
   const rowTop=top-headerH-index*rowH,rowBottom=rowTop-rowH;
   page.drawRectangle({x,y:rowBottom,width,height:rowH,color:index%2===0?C.white:C.paper,borderColor:C.line,borderWidth:.45});
-  const values=[row.field,row.value,row.status,row.source],colors=[C.ink,C.ink,row.status==="Conflict"?C.coral:row.status==="Cross-checked"?C.teal:row.status==="Unavailable"?C.muted:row.status==="Hypothesis"?C.amber:C.ink,C.muted];
+  const values=[row.field,row.value,row.status,row.source],colors=[C.ink,C.ink,row.status==="Conflict"?C.coral:row.status==="Release variant"||row.status==="Hypothesis"?C.amber:row.status==="Cross-checked"?C.teal:row.status==="Unavailable"?C.muted:C.ink,C.muted];
   let cellX=x;
   values.forEach((value,col)=>{
    const font=col===0||col===2?fonts.bold:fonts.regular,size=col===0?7.1:col===1?7:6.7,maxLines=3,lines=wrap(value||"Not supplied",font,size,columns[col]-14);
@@ -186,7 +190,7 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
   "Sources checked: "+checked,
   "Provider responses: "+providers,
   "Platform coverage: "+str(e.platformCoverage,"Not supplied"),
-  "Conflict policy: conflicting values remain visible; no source is silently preferred."
+  "Recording identity conflicts remain blocking; album, UPC, label and date differences are shown as release variants."
  ],fonts,{accent:C.gold});
  return summaryTop-summaryHeight-14;
 }

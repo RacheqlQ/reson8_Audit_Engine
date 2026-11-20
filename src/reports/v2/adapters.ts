@@ -150,7 +150,11 @@ export function buildDecisionDimensions(input: AuditReportInput): DecisionDimens
   const audio = record(input.sonicDna);
   const reconciliation = record(evidence?.reconciliation);
   const conflicts = Array.isArray(reconciliation?.conflicts) ? reconciliation.conflicts : [];
-  const reconciledFields = Array.isArray(reconciliation?.reconciledFields) ? reconciliation.reconciledFields : [];
+  const reconciledFields = Array.isArray(reconciliation?.reconciledRecordingFields)
+    ? reconciliation.reconciledRecordingFields
+    : Array.isArray(reconciliation?.reconciledFields)
+      ? reconciliation.reconciledFields.filter(field => !["album", "upc", "label", "releaseDate"].includes(String(field)))
+      : [];
   const sourceProviders = Array.isArray(evidence?.sourceProviders) ? evidence.sourceProviders.filter(value => typeof value === "string") : [];
   const fieldProvenance = record(evidence?.fieldProvenance);
   const identityFields = ["artist", "title", "isrc"].filter(field =>
