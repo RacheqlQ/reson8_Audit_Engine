@@ -11,6 +11,8 @@ export interface AcousticFeatureProfile {
   status:"measured"|"insufficient_evidence";
   provenance:{
     featureVersion:"acoustic-profile-v1";
+    sourceAudioSha256?:string;
+    measuredAt?:string;
     algorithm:"reson8-windowed-radix2-fft";
     sourceSampleRateHz:number;
     analysisSampleRateHz:number;
@@ -91,11 +93,11 @@ function fft(real:Float64Array,imag:Float64Array):void {
 
 type WindowResult={rmsDbfs:number;peakDbfs:number;crestFactorDb:number;centroid:number;bandwidth:number;rolloff:number;flatness:number;flux:number;zcr:number;low:number;mid:number;high:number;magnitudes:number[]};
 
-function measureWindow(samples:Float32Array,start:number,sampleRate:number,previous:number[]|null):WindowResult {
+function measureWindow(samples:Float32Array,start:number,sampleRate:number,channels:number,previous:number[]|null):WindowResult {
   const real=new Float64Array(WINDOW_SIZE),imag=new Float64Array(WINDOW_SIZE);
   let sumSquares=0,peak=0,crossings=0;
   for(let i=0;i<WINDOW_SIZE;i++){
-    const value=samples[start+i]??0;
+    let channelSum=0;\n    for(let channel=0;channel<channels;channel++){const raw=samples[(start+i)*channels+channel]??0;channelSum+=Number.isFinite(raw)?raw:0;}\n    const value=channelSum/channels;
     sumSquares+=value*value;peak=Math.max(peak,Math.abs(value));
     if(i>0&&((samples[start+i-1]!<0&&value>=0)||(samples[start+i-1]!>=0&&value<0)))crossings++;
     const hann=0.5-0.5*Math.cos(2*Math.PI*i/(WINDOW_SIZE-1));
@@ -183,7 +185,7 @@ export function extractAcousticFeatureProfile(samples:Float32Array,sampleRate:nu
   let previous:number[]|null=null;
   for(let index=0;index<count;index++){
     const start=Math.min(index*stride*HOP_SIZE,frames-WINDOW_SIZE);
-    const row=measureWindow(mono,start,sampleRate,previous);
+    const row=measureWindow(samples,start,sampleRate,validChannels,previous);
     rows.push(row);previous=row.magnitudes;
     windowSummaries.push({startSeconds:start/sampleRate,endSeconds:(start+WINDOW_SIZE)/sampleRate,rmsDbfs:row.rmsDbfs,spectralCentroidHz:row.centroid,spectralFlatness:row.flatness});
   }
