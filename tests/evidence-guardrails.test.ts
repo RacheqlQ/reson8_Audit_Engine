@@ -52,6 +52,28 @@ describe("Phillo evidence guardrails", () => {
     expect(isReliableTempo({ bpm: 220.01, tempoConfidence: 0.9 })).toBe(false);
   });
 
+  it("removes mismatched numeric tempo and loudness claims across assessment sections", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "The uploaded master measures 156 BPM. Integrated loudness is -14.0 LUFS.",
+      creativeIdentity: "The measured tempo is 120 BPM and integrated loudness is -11.3 LUFS.",
+      strengths: ["The track measures 156 BPM."],
+      risks: ["The loudness is -14.0 LUFS."],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 120,
+      tempoConfidence: 0.94,
+      loudnessLufs: -11.32,
+      loudnessRangeLu: 7.4,
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("156 BPM");
+    expect(serialized).not.toContain("-14.0 LUFS");
+    expect(result.creativeIdentity).toContain("120 BPM");
+    expect(result.creativeIdentity).toContain("-11.3 LUFS");
+  });
+
   it("filters out-of-range tempo candidates from every diagnostic estimate", () => {
     const lines = buildTempoDiagnosticLines({
       sonicDna: { rhythmFeatures: {
