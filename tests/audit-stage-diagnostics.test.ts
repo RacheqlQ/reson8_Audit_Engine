@@ -14,25 +14,7 @@ describe("audit stage failure diagnostics", () => {
       errorName: "Error",
       timedOut: false,
       errorCode: "UNCLASSIFIED_STAGE_ERROR",
-    
-  it("classifies known full-report layout failures without exposing report text", () => {
-    const diagnostic = buildAuditStageFailureDiagnostic(
-      "full_pdf_generation",
-      new Error("Full report content cannot fit the approved 12-page V2 allocation without clipping or omission."),
-    );
-    expect(diagnostic.errorCode).toBe("PDF_FULL_REPORT_ALLOCATION_UNFIT");
-    expect(JSON.stringify(diagnostic)).not.toContain("approved 12-page");
-  });
-
-  it("classifies unsupported PDF font encoding failures without exposing the offending text", () => {
-    const diagnostic = buildAuditStageFailureDiagnostic(
-      "full_pdf_generation",
-      new Error("WinAnsi cannot encode 🎵"),
-    );
-    expect(diagnostic.errorCode).toBe("PDF_FONT_ENCODING_ERROR");
-    expect(JSON.stringify(diagnostic)).not.toContain("🎵");
-  });
-});
+    });
     expect(JSON.stringify(diagnostic)).not.toContain("owner-private");
     expect(JSON.stringify(diagnostic)).not.toContain("secret");
   });
@@ -50,5 +32,23 @@ describe("audit stage failure diagnostics", () => {
       timedOut: true,
       errorCode: "UNCLASSIFIED_STAGE_ERROR",
     });
+  });
+
+  it("classifies known full-report layout failures without exposing report text", () => {
+    const diagnostic = buildAuditStageFailureDiagnostic(
+      "full_pdf_generation",
+      new Error("Full report content cannot fit the approved 12-page V2 allocation without clipping or omission."),
+    );
+    expect(diagnostic.errorCode).toBe("PDF_FULL_REPORT_ALLOCATION_UNFIT");
+    expect(JSON.stringify(diagnostic)).not.toContain("approved 12-page");
+  });
+
+  it("classifies unsupported PDF font encoding failures without exposing the offending text", () => {
+    const diagnostic = buildAuditStageFailureDiagnostic(
+      "full_pdf_generation",
+      new Error("WinAnsi cannot encode 🎵"),
+    );
+    expect(diagnostic.errorCode).toBe("PDF_FONT_ENCODING_ERROR");
+    expect(JSON.stringify(diagnostic)).not.toContain("🎵");
   });
 });
