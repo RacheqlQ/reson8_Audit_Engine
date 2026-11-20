@@ -196,6 +196,11 @@ export function reportableAssessmentItems(items:string[]):string[] {
 function professionalEvidenceLanguage(value:string):string {
  value=normalizeRmsEnvelopeWording(value);
  return value
+  .replace(/acousticFeatureProfile\\.predictions\\.mood/gi,"provisional uploaded-master mood analysis")
+  .replace(/acousticFeatureProfile\\.predictions\\.energy/gi,"provisional uploaded-master energy analysis")
+  .replace(/\\bVALIDATED_MODEL_NOT_CONFIGURED\\b/gi,"a validated mood model is not configured")
+  .replace(/\\bCALIBRATED_ENERGY_MODEL_NOT_CONFIGURED\\b/gi,"a calibrated perceptual-energy model is not configured")
+  .replace(/\\bCALIBRATED_CLASSIFIER_NOT_CONFIGURED\\b/gi,"a calibrated tonal classifier is not configured")
   .replace(/Vocal analysis:\s*Not performed[^.]*\./gi,"")
   .replace(/vocal presence\/absence is unknown[^.]*\./gi,"")
   .replace(/(?:learned audio(?:-genre)?|audio-only genre|vocal|detection|classification) model(?: status)?[^.]*\b(?:disabled|not configured|unavailable)\b[^.]*\.?/gi,"")
@@ -447,6 +452,7 @@ function sections(i:AuditReportInput):Section[]{
  if (hasAudio) {
   sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confidence-qualified measurements from provisional candidates and unavailable results. Only measurements that pass their metric-specific reliability gate are presented as confirmed.");
   if (e.fixture !== true) sonicDnaBody.push("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs. These estimates are derived from the uploaded signal, are not probabilities, and have not been validated against a rights-cleared human-labelled held-out dataset.");
+  sonicDnaBody.push("Track structure and section boundaries: not calculated in this pipeline version; no section-segmentation result is available to support verse, chorus, bridge or intro/outro claims.");
   if (vocalAnalysisPerformed) {
    const vocalSegments=Array.isArray(vocalFeatures?.activitySegments)?vocalFeatures.activitySegments.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))):[];
    const segmentSummary=vocalSegments.slice(0,8).map((segment)=>metric(segment.startSeconds,2)+"–"+metric(segment.endSeconds,2)+" s").join("; ");
