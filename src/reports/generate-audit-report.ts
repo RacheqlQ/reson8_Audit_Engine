@@ -295,7 +295,7 @@ export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAu
  const descriptor=(name:string,decimals:number):string|null=>{
   const value=descriptors[name];
   const median=value&&typeof value==="object"?(value as Record<string,unknown>).median:null;
-  return hasAudio?metric(median,decimals,"Unavailable"):null;
+  return hasAudio&&profile.status==="measured"?metric(median,decimals,"Unavailable"):hasAudio?"Unavailable":null;
  };
  return [
   {label:"SAMPLE RATE HZ",value:hasAudio?metric(s?.sampleRate,0):null},
