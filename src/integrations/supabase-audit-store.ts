@@ -641,12 +641,25 @@ export function createSupabaseAuditStore(
           reason: payload.status === "recognized" ? "Provider returned track metadata." : payload.status === "partial" ? "Provider returned incomplete metadata; some identity fields remain unresolved." : "Provider could not verify this submitted link.",
         });
       }
-      const catalogSources = catalogUrlsSubmitted.length ? normalizeDspTrackLinks(catalogUrlsSubmitted).map((link) =>
+      const submittedCatalogSources = catalogUrlsSubmitted.length ? normalizeDspTrackLinks(catalogUrlsSubmitted).map((link) =>
         catalogStatusMap.get(`${link.platform}:${link.canonicalUrl}`) ?? {
           platform: link.platform, catalogId: link.catalogId, canonicalUrl: link.canonicalUrl,
           status: job.status === "completed" || job.status === "failed" ? "unavailable" : "pending",
           reason: "Provider lookup has not completed.",
         }) : [];
+      const isrcCatalogSources = [...orderedEvents].reverse()
+        .filter((event) => event.event_type === "catalog_ingestion")
+        .flatMap((event) => {
+          const payload = event.payload as Record<string, unknown> | null;
+          if (payload?.lookupType !== "isrc" || typeof payload.platform !== "string" || typeof payload.canonicalUrl !== "string") return [];
+          return [{
+            platform: payload.platform,
+            canonicalUrl: payload.canonicalUrl,
+            status: typeof payload.status === "string" ? payload.status : "unavailable",
+            reason: typeof payload.reason === "string" ? payload.reason : "ISRC provider lookup completed without a detailed reason.",
+          }];
+        });
+      const catalogSources = [...submittedCatalogSources, ...isrcCatalogSources];
 
       const failureEvent = orderedEvents.find((event) => event.event_type === "audit_failed");
       const failurePayload = failureEvent?.payload as Record<string, unknown> | null;
