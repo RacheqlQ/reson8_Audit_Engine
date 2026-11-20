@@ -103,8 +103,8 @@ describe("processAuditJob", () => {
         expect(dna.channels).toBe(2);
         expect(dna.durationSeconds).toBe(4 / 44100);
         expect(dna.acousticFeatureProfile.predictions).toMatchObject({
-          mood: { status: "unavailable", reasonCode: "VALIDATED_MODEL_NOT_CONFIGURED" },
-          energy: { status: "unavailable", reasonCode: "CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED" },
+          mood: { status: "provisional", method: "audio_feature_heuristics_v1", probability: null },
+          energy: { status: "provisional", method: "audio_feature_heuristics_v1", probability: null },
         });
       },
       discoverPlaylists: async (input) => { events.push("playlist-discovery"); expect(input.isrc).toBe("NGABC2600001"); return { status: "available" as const, outcomes: [{ provider: "apple_music" as const, status: "available" as const, reason: "Deterministic test provider result." }], candidates: [{ provider: "apple_music" as const, id: "pl-test", name: "Afrobeats Discovery", url: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", sourceUrl: "https://music.apple.com/ng/playlist/afrobeats-discovery/pl-test", curatorName: "Apple Music", playlistType: "editorial", description: "Afrobeats selections", trackCount: 20, genreMatches: ["Afrobeats"], moodMatches: [], matchBasis: ["Primary genre match: Afrobeats"], containsIsrc: false, retrievedAt: "2026-11-19T12:00:00.000Z" }] }; },
