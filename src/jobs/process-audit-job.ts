@@ -597,11 +597,20 @@ export async function processAuditJob(
     }
 
     let isrcLookup: IsrcCatalogLookup | null = null;
-    const isrcCandidate = (recognition.matched ? recognition.isrc : null) ?? metadataSources.find((source) => source.isrc)?.isrc ?? masterTags?.isrc ?? null;
+    const isrcCandidates = [
+      recognition.matched ? recognition.isrc : null,
+      ...metadataSources.map((source) => source.isrc),
+      masterTags?.isrc ?? null,
+    ];
     let normalizedIsrc: string | null = null;
-    if (isrcCandidate) {
-      try { normalizedIsrc = normalizeIsrc(isrcCandidate); }
-      catch { normalizedIsrc = null; }
+    for (const candidate of isrcCandidates) {
+      if (!candidate) continue;
+      try {
+        normalizedIsrc = normalizeIsrc(candidate);
+        break;
+      } catch {
+        // A malformed higher-priority claim must not suppress a valid lower-priority source.
+      }
     }
     const isrcLookupAvailable = Boolean(
       deps.collectIsrcCatalogMetadata
