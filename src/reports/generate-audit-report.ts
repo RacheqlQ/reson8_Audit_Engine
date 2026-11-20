@@ -547,9 +547,9 @@ const curatorCampaignBody=[
      ? p.featureDrivers.map((d) => d.feature + " " + d.direction + " (" + d.contribution.toFixed(3) + ")").join(", ")
      : "none recorded";
     const diagnostics = p.diagnostics.length
-     ? "; diagnostics: " + p.diagnostics.map((d) => d.code + ": " + d.message).join("; ")
+     ? "; diagnostics: " + p.diagnostics.map((d) => executiveDiagnosticMessage(d.code,d.message)).join("; ")
      : "";
-    return p.name + ": " + p.label + " (" + (p.probability * 100).toFixed(1) +
+    return executiveMetricLabel(p.name) + ": " + p.label + " (" + (p.probability * 100).toFixed(1) +
      "% calibrated; model " + p.modelVersion + "; calibration " + p.calibration.method +
      " / " + p.calibration.modelVersion + "; validation " + p.calibration.validationDataset +
      " (n=" + p.calibration.validationSamples + "); ECE " +
