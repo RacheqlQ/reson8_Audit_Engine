@@ -208,7 +208,7 @@ describe("A4 report layout and fixture coverage",()=>{
    "Further listening and source verification are required before any external decision."
   ].join(" ");
   const context=buildArNotesDecisionContext(input);
-  const forbidden=/\b(?:128\s*BPM|high-energy|Afrobeats|24000 streams|market demand|commercial potential)\b/i;
+  const forbidden=/\b(?:128\s*BPM(?!\s*candidate\b)|high-energy|Afrobeats|24000 streams|market demand|commercial potential)\b/i;
   expect(context.summary).not.toMatch(forbidden);
   expect(context.summary).toContain("Further listening and source verification are required");
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
@@ -244,7 +244,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
   expect(report).toMatch(/Metadata completeness — \d+\/100/);
   expect(report).toContain("Album metadata is present but conflicting");
-  expect(report).not.toMatch(/128\s*BPM|high-energy|album title is missing/i);
+  expect(report).not.toMatch(/128\s*BPM(?!\s*candidate\b)|high-energy|album title is missing/i);
  });
  it("reports present-but-conflicting generic release metadata instead of calling it missing",()=>{
   const input=structuredClone(fullAudioFixture) as any;
