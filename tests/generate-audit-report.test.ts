@@ -461,7 +461,8 @@ describe("Sonic DNA provisional candidate reporting", () => {
     const reportInput=structuredClone(fullAudioFixture) as AuditReportInput;
     reportInput.sonicDna={...reportInput.sonicDna,provenance:"uploaded_audio_master",tempoCandidateBpm:165,tempoConfidence:0.28};
     const reportText=planAuditReportPages(reportInput,"full").flatMap((page)=>[page.title,...page.text]).join(" ");
-    expect(reportText).toContain("165 BPM candidate; half-time 82.5 BPM; double-time 330.0 BPM");
+    expect(reportText).toContain("165 BPM candidate; half-time 82.5 BPM");
+    expect(reportText).not.toContain("double-time 330.0 BPM");
     expect(reportText).toContain("derived arithmetic relationships only; not independently validated beat interpretations");
     expect(rows.find((row) => row.label === "TEMPO DETECTION REASON")?.value).toContain("reliable result");
     expect(rows.find((row) => row.label === "BEAT GRID STATUS")?.value).toContain("tentative (candidate; not independently validated)");

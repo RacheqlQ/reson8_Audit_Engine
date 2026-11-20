@@ -16,6 +16,7 @@ type Fonts={regular:PDFFont;bold:PDFFont;italic:PDFFont;boldItalic:PDFFont};
 type Block={label:string;value:string;provenance?:string;confidence?:string;color?:keyof typeof C};
 type PageSpec={title:string;blocks:Block[];lines?:string[];kind?:string};
 const rec=(v:unknown):Record<string,unknown>=>v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:{};
+const finite=(value:unknown):value is number=>typeof value==="number"&&Number.isFinite(value);
 export function normalizePdfText(value:string):string {
  return value
   .replace(/[\u2018\u2019]/g,"'")
