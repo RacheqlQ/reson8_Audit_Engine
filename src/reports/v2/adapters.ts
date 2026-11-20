@@ -1,4 +1,4 @@
-import { isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
+import { hasMultipleTuningWindows, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 import type { AuditReportInput } from "../generate-audit-report.js";
 
 export type ConfidenceTag = "High" | "Medium" | "Low";
@@ -168,6 +168,21 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const comparables = comparablesFrom(evidence);
   const moments = momentsFrom(audio, evidence);
   const notYetMeasured: string[] = [];
+  if (!tempoReliable) {
+    const candidate = firstFinite(audio, ["tempoCandidateBpm", "bpm"]);
+    if (candidate !== null) {
+      notYetMeasured.push(candidate + " (provisional BPM candidate; half-time " + (candidate / 2).toFixed(1) + " BPM; double-time " + (candidate * 2).toFixed(1) + " BPM; not a confirmed tempo).");
+    }
+  }
+  if (!keyReliable) {
+    const harmonic = record(audio?.harmonicFeatures);
+    const candidates = Array.isArray(harmonic?.topCandidates) ? harmonic.topCandidates.map(record).filter(Boolean) : [];
+    const labels = candidates.map(item => [nonEmpty(item?.key), nonEmpty(item?.mode)].filter(Boolean).join(" ")).filter(Boolean);
+    if (labels.length) notYetMeasured.push(labels[0] + " (provisional harmonic candidate; alternatives: " + labels.slice(1).join(", ") + "; no single key asserted).");
+  }
+  if (hasMultipleTuningWindows(audio)) {
+    notYetMeasured.push(audio?.keyTuningCents + " (multiple tonal windows; provisional; " + audio?.tuningEvidenceWindows + " windows; tuning offset is not a key assertion).");
+  }
   if (!structure) notYetMeasured.push("Track structure — no valid section boundaries supplied.");
   if (!energySeries) notYetMeasured.push("Energy-over-time curve — no valid timestamped energy or loudness series supplied.");
   if (!sonicAxes) notYetMeasured.push("Sonic DNA — all five scored axes are not supplied.");
