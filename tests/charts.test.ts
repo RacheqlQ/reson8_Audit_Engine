@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildStrengthRiskChartRows, compactChartItemSummary, parseChartMetricValue, strengthRiskItemsForColumn, chartPanelStatus, chartPanelDisplayStatus, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, radarScoreDisplayValue, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows, compactChartItemSummary, parseChartMetricValue, strengthRiskItemsForColumn, chartPanelStatus, chartPanelDisplayStatus, chartEvidenceIntegrityErrors, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, radarScoreDisplayValue, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
 import { checkLayout } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
