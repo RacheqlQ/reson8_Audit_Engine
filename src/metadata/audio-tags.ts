@@ -170,6 +170,83 @@ function parseWavInfo(bytes: Uint8Array): AudioTagMetadata {
   return result;
 }
 
+
+interface Mp4Atom {
+  type: string;
+  payloadStart: number;
+  end: number;
+}
+
+function mp4AtomChildren(bytes: Uint8Array, start: number, end: number): Mp4Atom[] {
+  const atoms: Mp4Atom[] = [];
+  let offset = start;
+  while (offset + 8 <= end) {
+    const size32 = ((bytes[offset]! << 24) | (bytes[offset + 1]! << 16) | (bytes[offset + 2]! << 8) | bytes[offset + 3]!) >>> 0;
+    const type = String.fromCharCode(...bytes.subarray(offset + 4, offset + 8));
+    let headerSize = 8;
+    let size = size32;
+    if (size32 === 1) {
+      if (offset + 16 > end) break;
+      const high = ((bytes[offset + 8]! << 24) | (bytes[offset + 9]! << 16) | (bytes[offset + 10]! << 8) | bytes[offset + 11]!) >>> 0;
+      const low = ((bytes[offset + 12]! << 24) | (bytes[offset + 13]! << 16) | (bytes[offset + 14]! << 8) | bytes[offset + 15]!) >>> 0;
+      size = high * 0x1_0000_0000 + low;
+      headerSize = 16;
+    } else if (size32 === 0) {
+      size = end - offset;
+    }
+    if (!Number.isSafeInteger(size) || size < headerSize || offset + size > end) break;
+    atoms.push({ type, payloadStart: offset + headerSize, end: offset + size });
+    offset += size;
+  }
+  return atoms;
+}
+
+function mp4Text(bytes: Uint8Array, atom: Mp4Atom, prefixBytes: number): string | null {
+  const start = atom.payloadStart + prefixBytes;
+  if (start >= atom.end) return null;
+  const value = new TextDecoder("utf-8").decode(bytes.subarray(start, atom.end))
+    .replace(/[\u0000]+/g, " ").replace(/\s+/g, " ").trim();
+  return value || null;
+}
+
+function parseMp4Isrc(bytes: Uint8Array): string | null {
+  if (bytes.length < 16) return null;
+  const topLevel = mp4AtomChildren(bytes, 0, bytes.length);
+  if (!topLevel.some((atom) => atom.type === "ftyp")) return null;
+  let isrc: string | null = null;
+
+  const visit = (atoms: readonly Mp4Atom[], depth: number): void => {
+    if (depth > 8 || isrc) return;
+    for (const atom of atoms) {
+      if (atom.type === "----" || atom.type === "ISRC" || atom.type === "isrc") {
+        const children = mp4AtomChildren(bytes, atom.payloadStart, atom.end);
+        const name = children.find((child) => child.type === "name");
+        const mean = children.find((child) => child.type === "mean");
+        const data = children.find((child) => child.type === "data");
+        const isFreeformIsrc = atom.type === "----"
+          && mp4Text(bytes, name!, 4)?.toUpperCase() === "ISRC"
+          && (!mean || mp4Text(bytes, mean, 4)?.toLowerCase() === "com.apple.itunes");
+        const isDirectIsrc = atom.type === "ISRC" || atom.type === "isrc";
+        const value = data ? mp4Text(bytes, data, 8) : isDirectIsrc ? mp4Text(bytes, atom, 0) : null;
+        if ((isFreeformIsrc || isDirectIsrc) && value) {
+          isrc = normalizeTagIsrc(value);
+          if (isrc) return;
+        }
+      }
+      if (atom.type === "moov" || atom.type === "udta" || atom.type === "ilst") {
+        visit(mp4AtomChildren(bytes, atom.payloadStart, atom.end), depth + 1);
+      } else if (atom.type === "meta") {
+        // ISO BMFF meta is a FullBox: four version/flags bytes precede child atoms.
+        visit(mp4AtomChildren(bytes, Math.min(atom.payloadStart + 4, atom.end), atom.end), depth + 1);
+      }
+      if (isrc) return;
+    }
+  };
+
+  visit(topLevel, 0);
+  return isrc;
+}
+
 const ID3V1_GENRES = [
   "Blues","Classic Rock","Country","Dance","Disco","Funk","Grunge","Hip-Hop","Jazz","Metal",
   "New Age","Oldies","Other","Pop","R&B","Rap","Reggae","Rock","Techno","Industrial",
@@ -210,12 +287,13 @@ export function readAudioTags(input: Uint8Array): AudioTagMetadata {
   const v2 = parseId3(input);
   const flac = parseFlacComments(input);
   const wav = parseWavInfo(input);
+  const mp4Isrc = parseMp4Isrc(input);
   const v1 = parseId3v1(input);
   return {
     title: v2.title ?? flac.title ?? wav.title ?? v1.title,
     artist: v2.artist ?? flac.artist ?? wav.artist ?? v1.artist,
     album: v2.album ?? flac.album ?? wav.album ?? v1.album,
-    isrc: v2.isrc ?? flac.isrc ?? wav.isrc,
+    isrc: v2.isrc ?? flac.isrc ?? wav.isrc ?? mp4Isrc,
     genres: v2.genres.length ? v2.genres : flac.genres.length ? flac.genres : wav.genres.length ? wav.genres : v1.genres,
     releaseDate: v2.releaseDate ?? flac.releaseDate ?? wav.releaseDate ?? v1.releaseDate,
     label: v2.label ?? flac.label ?? wav.label,
