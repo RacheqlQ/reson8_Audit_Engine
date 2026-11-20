@@ -59,7 +59,7 @@ describe("Phase 5 market placement strategy", () => {
       name: "Afrobeats Select",
       matchStatus: "membership_unverified",
     });
-    expect(plan.playlistTargets[0].limitations.join(" ")).toMatch(/does not establish curator interest/i);
+    expect(plan.playlistTargets[0].limitations.join(" ")).toMatch(/not curator interest/i);
   });
 
   it("does not invent territory priorities when verified audience geography is absent", () => {
@@ -120,7 +120,7 @@ describe("Phase 5 market placement strategy", () => {
       expect(segment.score).toBeGreaterThanOrEqual(0);
       expect(segment.score).toBeLessThanOrEqual(100);
     }
-    expect(plan.shortFormHooks.limitations.join(" ")).toMatch(/edit candidates, not confirmed musical hooks/i);
+    expect(plan.shortFormHooks.limitations.join(" ")).toMatch(/Candidates are edit suggestions, not confirmed musical hooks/i);
   });
 
   it("withholds timestamped hook claims when no uploaded master is present", () => {
