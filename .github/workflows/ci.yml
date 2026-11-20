@@ -77,7 +77,9 @@ jobs:
 
       - name: Run test suite
         if: always()
-        run: npm test
+        run: |
+          mkdir -p artifacts
+          npm test -- --reporter=default --reporter=json --outputFile=artifacts/vitest-results.json
 
       - name: Build
         if: always()
