@@ -33,6 +33,7 @@ describe("audit stage failure diagnostics", () => {
       errorName: "Error",
       timedOut: true,
       errorCode: "UNCLASSIFIED_STAGE_ERROR",
+      stackFingerprint: expect.stringMatching(/^stk-[a-f0-9]{8}$/),
     });
   });
 
