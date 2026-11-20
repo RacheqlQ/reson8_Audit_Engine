@@ -185,7 +185,13 @@ function drawSpotifyMark(page:PDFPage,x:number,y:number,size:number):void {
  ]) page.drawSvgPath(path,{x:x+size*0.08,y:y+size*0.08,scale,borderColor:black,borderWidth:Math.max(0.8,size/12)});
 }
 
+function normalizeRmsEnvelopeWording(value:string):string {
+ return value
+  .replace(/RMS[- ]envelope spread\\s*\\(internal proxy;\\s*not mastering dynamic range\\)\\s*\\(internal proxy;\\s*not mastering dynamic range\\)/gi,"RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)")
+  .replace(/RMS[- ]envelope spread\\s*\\(internal proxy;\\s*not mastering dynamic range\\)/gi,"RMS-envelope spread (internal proxy; not a mastering dynamic-range measure)");
+}
 function professionalEvidenceLanguage(value:string):string {
+ value=normalizeRmsEnvelopeWording(value);
  return value
   .replace(/Vocal analysis:\s*Not performed[^.]*\./gi,"")
   .replace(/vocal presence\/absence is unknown[^.]*\./gi,"")
@@ -207,6 +213,29 @@ function professionalEvidenceLanguage(value:string):string {
   .replace(/\bRECONCILED\b/g,"Cross-checked across independent sources")
   .replace(/\bINFERRED\b/g,"Analytical hypothesis")
   .replace(/\bINDUSTRY PRACTICE\b/g,"General industry guidance");
+}
+function executiveDiagnosticMessage(code:string,message:string,metricName?:string):string {
+ const known:Record<string,string>={
+  VALIDATED_MODEL_NOT_CONFIGURED:"A validated mood model is not configured; provisional signal-derived mood tags are shown separately where available.",
+  CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED:"A calibrated perceptual-energy model is not configured; provisional signal-derived energy estimates are shown separately where available.",
+  CALIBRATED_CLASSIFIER_NOT_CONFIGURED:"A calibrated key/mode probability model is not configured; tonal candidates and estimator diagnostics are shown separately.",
+  TEMPO_BELOW_REPORTING_THRESHOLD:"A tempo candidate was returned but did not meet the reporting threshold; it remains provisional.",
+  MEASUREMENT_UNAVAILABLE:"The analysis stage did not provide a reportable measurement for this field.",
+  PROVIDER_NOT_CONFIGURED:"This catalogue provider is not configured for lookup.",
+  NO_UNAMBIGUOUS_RECORD_ID:"The provider did not return one unambiguous catalogue record.",
+  PROVIDER_LOOKUP_UNAVAILABLE:"The catalogue lookup did not return a usable provider record.",
+  PROVIDER_RETRIEVAL_TIMESTAMP_MISSING:"The provider result lacked a verifiable retrieval timestamp and was not promoted to verified evidence.",
+ };
+ if(metricName==="tempo_bpm"&&code==="MEASUREMENT_UNAVAILABLE")return "No tempo value passed the reliability threshold. Any provisional candidate is reported separately in the Sonic DNA analysis.";
+ const safe=known[code]??message
+  .replace(/acousticFeatureProfile\\.predictions\\.mood/gi,"the uploaded-master provisional mood analysis")
+  .replace(/acousticFeatureProfile\\.predictions\\.energy/gi,"the uploaded-master provisional energy analysis")
+  .replace(/CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED|VALIDATED_MODEL_NOT_CONFIGURED|CALIBRATED_CLASSIFIER_NOT_CONFIGURED|MEASUREMENT_UNAVAILABLE|PROVIDER_NOT_CONFIGURED|NO_UNAMBIGUOUS_RECORD_ID|PROVIDER_LOOKUP_UNAVAILABLE|PROVIDER_RETRIEVAL_TIMESTAMP_MISSING/g,"analysis limitation");
+ return safe.replace(/\\s+/g," ").trim();
+}
+function executiveMetricLabel(name:string):string {
+ const labels:Record<string,string>={tempo_bpm:"Confirmed tempo",integrated_loudness_lufs:"Integrated loudness",loudness_range_lu:"Loudness range",true_peak_dbfs:"True peak",rms_level_dbfs:"RMS signal level",spectral_centroid_hz:"Spectral centroid",spectral_bandwidth_hz:"Spectral bandwidth",spectral_rolloff_hz:"Spectral rolloff",zero_crossing_rate:"Zero-crossing rate"};
+ return labels[name]??name.replace(/^acoustic_/,"").replace(/_median$/," median").replace(/_/g," ").replace(/\\b\\w/g,(letter)=>letter.toUpperCase());
 }
 export function metadataFieldStatus(e:Record<string,unknown>,field:string):string{
  const value=text(field==="genre"?(e.genre??e.genres):e[field]);
@@ -347,7 +376,7 @@ function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  ];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"RMS / envelope",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
- if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(a.strengths.slice(0,10),a.risks.slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
+ if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(a.strengths.map(professionalEvidenceLanguage).filter((item)=>item.trim().length>0).slice(0,10),a.risks.map(professionalEvidenceLanguage).filter((item)=>item.trim().length>0).slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
  if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:"See provider-attributed playlist shortlist in A&R positioning"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
  if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",evidenceClass:"illustrative",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
  return [];
@@ -390,14 +419,24 @@ function sections(i:AuditReportInput):Section[]{
  const playlistOutcomes=Array.isArray(playlistDiscovery.outcomes)
   ? playlistDiscovery.outcomes.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))) : [];
  const playlistMoodTags=Array.isArray(playlistDiscovery.moodTagsUsed)?playlistDiscovery.moodTagsUsed.map(text).filter(Boolean):[];
+ const acousticProfile=s?.acousticFeatureProfile&&typeof s.acousticFeatureProfile==="object"?s.acousticFeatureProfile as Record<string,unknown>:{};
+ const acousticPredictions=acousticProfile.predictions&&typeof acousticProfile.predictions==="object"?acousticProfile.predictions as Record<string,unknown>:{};
+ const provisionalMood=acousticPredictions.mood&&typeof acousticPredictions.mood==="object"?acousticPredictions.mood as Record<string,unknown>:{};
+ const provisionalEnergy=acousticPredictions.energy&&typeof acousticPredictions.energy==="object"?acousticPredictions.energy as Record<string,unknown>:{};
+ const masterMoodTags=provisionalMood.status==="provisional"&&Array.isArray(provisionalMood.labels)?provisionalMood.labels.map(text).filter(Boolean):[];
+ const masterEnergyLabel=provisionalEnergy.status==="provisional"?text(provisionalEnergy.label):"";
  const playlistMoodSource=text(playlistDiscovery.moodSource)||"source not supplied";
  const playlistMoodNotes=[
   ...(playlistMoodSource.includes("catalogue sonic profile")?["Catalogue mood descriptors are provider-supplied metadata, not an audio-derived mood measurement."]:[]),
   ...(playlistMoodSource.includes("uploaded-master provisional audio_feature_heuristics_v1")?["Uploaded-master mood tags are provisional audio_feature_heuristics_v1 outputs, not calibrated perceptual predictions."]:[])
  ];
+ const uploadedMoodNote=masterMoodTags.length?" Uploaded-master provisional mood tags: "+masterMoodTags.join(", ")+" (audio-feature heuristic; not a calibrated perceptual prediction).":"";
+ const uploadedEnergyNote=masterEnergyLabel?" Provisional uploaded-master energy estimate: "+masterEnergyLabel+" (heuristic; not a calibrated perceptual prediction).":"";
  const playlistMoodSummary=playlistMoodTags.length
-  ? "Mood search tags: "+playlistMoodTags.join(", ")+" [Source: "+playlistMoodSource+"]. "+(playlistMoodNotes.join(" ")||"Source attribution is incomplete; no calibrated mood claim is made.")
-  : "Mood alignment was not asserted because no source-attributed DSP mood tags were available, and no uploaded-master provisional mood tags were available; playlist matching is limited to the confirmed genre and adjacent lanes.";
+  ? "Mood search tags: "+playlistMoodTags.join(", ")+" [Source: "+playlistMoodSource+"]. "+(playlistMoodNotes.join(" ")||"Source attribution is incomplete; no calibrated mood claim is made.")+uploadedMoodNote+uploadedEnergyNote
+  : masterMoodTags.length||masterEnergyLabel
+   ? "No source-attributed DSP mood tags were returned for playlist search."+uploadedMoodNote+uploadedEnergyNote+" These provisional master-derived descriptors are presented as analysis context, not as validated playlist-fit or audience-response evidence."
+   : "Mood alignment was not asserted because neither source-attributed DSP mood tags nor uploaded-master provisional mood tags were available; playlist matching is limited to the confirmed genre and adjacent lanes.";
  const vocalFeatures=s?.vocalFeatures&&typeof s.vocalFeatures==="object"&&!Array.isArray(s.vocalFeatures)?s.vocalFeatures as Record<string,unknown>:null;
  const vocalStatus=String(vocalFeatures?.status??"not_recorded");
  const vocalAnalysisPerformed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
@@ -489,10 +528,11 @@ const curatorCampaignBody=[
    "SOURCE FILE: "+i.realMasterContract.source.sourceAudioPath,
    "SOURCE SHA-256: "+i.realMasterContract.source.sha256,
    "SOURCE MIME / SIZE: "+i.realMasterContract.source.mimeType+" / "+i.realMasterContract.source.byteLength+" bytes",
-   ...i.realMasterContract.directSignalMeasurements.map((m)=>m.name+": "+(m.status==="measured"?text(m.value)+" "+m.unit+"; method "+m.method+"; measured: "+m.measuredAt:"UNAVAILABLE; "+m.diagnostics.map((d)=>d.code+": "+d.message).join("; "))),
+   ...i.realMasterContract.directSignalMeasurements.map((m)=>executiveMetricLabel(m.name)+": "+(m.status==="measured"?text(m.value)+" "+m.unit+"; method "+m.method+"; measured: "+m.measuredAt:"Not reported as a confirmed measurement; "+m.diagnostics.map((d)=>executiveDiagnosticMessage(d.code,d.message,m.name)).join("; "))),
+   ...i.realMasterContract.provisionalPredictions.map((p)=>"PROVISIONAL "+(p.name==="audio_mood"?"AUDIO MOOD":"AUDIO ENERGY")+": "+p.label+" (heuristic score "+p.score+"/100; not a probability; method "+p.method+")."),
    ...i.realMasterContract.calibratedPredictions.map((p) => {
     if (p.status !== "predicted") {
-     return p.name + ": UNAVAILABLE; " + p.reasonCodes.join(", ") + " — " + p.diagnostics.map((d) => d.code + ": " + d.message).join("; ");
+     return executiveMetricLabel(p.name) + ": No calibrated model is configured. " + p.diagnostics.map((d) => executiveDiagnosticMessage(d.code,d.message)).join("; ");
     }
     const drivers = p.featureDrivers.length
      ? p.featureDrivers.map((d) => d.feature + " " + d.direction + " (" + d.contribution.toFixed(3) + ")").join(", ")
@@ -509,8 +549,8 @@ const curatorCampaignBody=[
    }),
    ...i.realMasterContract.externalRecords.map((r)=>r.status==="verified"
      ?"EXTERNAL RECORD: "+r.provider+" / "+r.recordId+"; retrieved: "+r.retrievedAt+"; fields: "+Object.keys(r.fields).join(", ")+"; field provenance: "+Object.entries(r.fieldProvenance).map(([field,p])=>field+"="+p.provider+"/"+p.recordId+"@"+p.retrievedAt).join(", ")
-     :"EXTERNAL RECORD UNAVAILABLE: "+r.provider+" — "+r.reasonCode+": "+r.diagnostic.message),
-   ...i.realMasterContract.pipelineDiagnostics.map((d)=>"PIPELINE LIMITATION: "+d.code+" — "+d.message),
+     :"EXTERNAL RECORD UNAVAILABLE: "+r.provider+" — "+executiveDiagnosticMessage(r.reasonCode,r.diagnostic.message)),
+   ...i.realMasterContract.pipelineDiagnostics.map((d)=>"PIPELINE LIMITATION: "+executiveDiagnosticMessage(d.code,d.message)),
    "Provenance rule: direct signal measurements are observed from the uploaded master; catalogue records are provider-returned and do not establish streams, listeners, revenue or demand."
   ]
  }] : []),
