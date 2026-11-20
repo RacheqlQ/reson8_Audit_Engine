@@ -44,3 +44,30 @@ describe("independent acoustic estimator pathways", () => {
     expect(estimateGoertzelKey(silence, 8000).key).toBeNull();
   });
 });
+
+
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+function transposedTriad(rootMidi: number, mode: "major" | "minor", cents = 0, seconds = 8, sampleRate = 8000): Float32Array {
+  const intervals = mode === "major" ? [0,4,7] : [0,3,7];
+  const frequencies = intervals.map(interval => 440 * Math.pow(2, (rootMidi + interval - 69 + cents / 100) / 12));
+  return chord(frequencies, seconds, sampleRate);
+}
+
+describe("key estimator transposition and tuning robustness", () => {
+  it("recovers transposed major and minor triads across all pitch classes", () => {
+    for (let root = 0; root < 12; root++) {
+      for (const mode of ["major", "minor"] as const) {
+        const midi = 60 + root;
+        const result = estimateGoertzelKey(transposedTriad(midi, mode), 8000);
+        expect(result.key, `root ${NOTE_NAMES[root]} ${mode}`).toBe(NOTE_NAMES[root]);
+        expect(result.mode, `root ${NOTE_NAMES[root]} ${mode}`).toBe(mode);
+      }
+    }
+  });
+
+  it("retains a stable pitch-class result with modest global tuning drift", () => {
+    const result = estimateGoertzelKey(transposedTriad(65, "minor", 18), 8000);
+    expect(result.key).toBe("F");
+    expect(result.mode).toBe("minor");
+  });
+});
