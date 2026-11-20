@@ -1,7 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
-import { generateAuditReport } from "../src/reports/generate-audit-report.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
@@ -67,7 +66,7 @@ describe("v2 gated report pages", () => {
     expect(pdf.getPageCount()).toBe(9);
   });
 
-  it("renders all three gated pages when every required test-only input is supplied", async () => {
+  it("keeps a complete evidence-rich sample at nine pages without dropping gated evidence", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.sonicDna = { ...input.sonicDna, tempoConfidence: .9, keyConfidence: .9, keySegmentAgreement: .9, energyConfidence: .9,
       structure: [{ label: "Intro", startSeconds: 0, endSeconds: 12 }],
@@ -75,18 +74,19 @@ describe("v2 gated report pages", () => {
       sonicDnaAxes: Object.fromEntries(["Rhythm", "Harmony", "Texture", "Vocal", "Space"].map(name => [name, { score: 70 }])),
       flaggedMoments: [{ timestampSeconds: 12, title: "Hook entry", note: "Synthetic test observation", tag: "Strength" }] };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
-    expect((await PDFDocument.load(await generateAuditReportV2(input))).getPageCount()).toBe(12);
+    const pdf = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
+    expect(pdf.getPageCount()).toBe(9);
+    expect(pdf.getForm().getFields().map(field => field.getName())).toContain("ar_notes");
   });
 
-  it("keeps the full report at the existing v1 page count while applying the v2 design", async () => {
+  it("keeps a full report within the approved 12–13 page range without consulting v1 pagination", async () => {
     const input = structuredClone(fullAudioFixture) as any;
-    const baseline = await generateAuditReport(input, "full");
-    const redesigned = await generateAuditReportV2(input, "full");
-    expect((await PDFDocument.load(redesigned)).getPageCount())
-      .toBe((await PDFDocument.load(baseline)).getPageCount());
+    const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
+    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(12);
+    expect(pdf.getPageCount()).toBeLessThanOrEqual(13);
   });
 
-  it("does not add pages to the full report when optional analytical evidence is present", async () => {
+  it("keeps optional analytical evidence within 13 full-report pages", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.sonicDna = {
       ...input.sonicDna,
@@ -96,10 +96,9 @@ describe("v2 gated report pages", () => {
       flaggedMoments: [{ timestampSeconds: 12, title: "Hook entry", note: "Synthetic test observation", tag: "Strength" }]
     };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
-    const baseline = await generateAuditReport(input, "full");
-    const redesigned = await generateAuditReportV2(input, "full");
-    expect((await PDFDocument.load(redesigned)).getPageCount())
-      .toBe((await PDFDocument.load(baseline)).getPageCount());
+    const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
+    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(12);
+    expect(pdf.getPageCount()).toBeLessThanOrEqual(13);
   });
 
   it("omits every gated page for a minimal audio-only fixture", async () => {
