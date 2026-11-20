@@ -309,4 +309,42 @@ describe("uploaded master provenance in reports", () => {
     expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-11")).toBe(true);
     expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-12")).toBe(true);
   });
+
+  it("hides internal master paths, humanizes measurement methods, and preserves independent tempo candidates", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence = { ...input.evidence, fixture: false, masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } };
+    input.sonicDna = {
+      ...input.sonicDna,
+      provenance: "uploaded_audio_master",
+      bpm: null,
+      tempoCandidateBpm: null,
+      tempoConfidence: null,
+      rhythmFeatures: { independentEstimator: { bpm: 93.8, score: 0.21 } },
+      harmonicFeatures: { topCandidates: [{ key: "F#", mode: "major", score: 0.694 }] },
+      key: null,
+      mode: null,
+      keyConfidence: null,
+    };
+    input.realMasterContract = {
+      schemaVersion: "1.0.0", auditId: "audit-real-master",
+      source: { sourceKind: "uploaded_master", sourceAudioPath: "private/jobs/job-secret/uploads/Bend Et.mp3", sha256: "b".repeat(64), mimeType: "audio/mpeg", byteLength: 2048 },
+      directSignalMeasurements: [
+        { name: "rms_level_dbfs", status: "measured", value: -12.4, unit: "dBFS", method: "pcm_rms", measuredAt: "2026-11-20T00:00:00.000Z", diagnostics: [] },
+        { name: "spectral_centroid_hz", status: "measured", value: 1800, unit: "Hz", method: "fft_spectral_centroid", measuredAt: "2026-11-20T00:00:00.000Z", diagnostics: [] },
+        { name: "sample_rate_hz", status: "measured", value: 48000, unit: "Hz", method: "unrecognized_internal_method_42", measuredAt: "2026-11-20T00:00:00.000Z", diagnostics: [] },
+      ],
+      calibratedPredictions: [], provisionalPredictions: [], externalRecords: [], strategicSynthesis: [], pipelineDiagnostics: [],
+    };
+    const report = reportText(input);
+    expect(report).toContain("SOURCE FILE: Bend Et.mp3");
+    expect(report).not.toContain("private/jobs/job-secret");
+    expect(report).not.toContain("job-secret");
+    expect(report).toContain("method: PCM RMS signal measurement");
+    expect(report).toContain("method: spectral-centroid analysis");
+    expect(report).toContain("method: signal-analysis method (technical identifier withheld)");
+    const rows = sonicDashboardRowsForReport(input.sonicDna, true);
+    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("93.8 (provisional; independent low-frequency estimator");
+    expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value).toContain("half-time 46.9 BPM; double-time 187.6 BPM");
+    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("raw estimator score 0.694 (not a calibrated probability)");
+  });
 });
