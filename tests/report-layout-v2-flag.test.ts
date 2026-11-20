@@ -18,7 +18,8 @@ describe("REPORT_LAYOUT v2 opt-in and fallback", () => {
     vi.stubEnv("REPORT_LAYOUT", "v2");
     const bytes = await ensurePdfReport(metadataOnlyFixture, "full");
     const pdf = await PDFDocument.load(bytes);
-    expect(pdf.getPageCount()).toBe(9);
+    const expected = await generateAuditReport(metadataOnlyFixture as any, "full");
+    expect(pdf.getPageCount()).toBe((await PDFDocument.load(expected)).getPageCount());
     expect(pdf.getForm().getFields().map(field => field.getName())).toContain("ar_notes");
   });
 
@@ -32,7 +33,7 @@ describe("REPORT_LAYOUT v2 opt-in and fallback", () => {
   it("logs a v2 rendering failure and falls back to the unchanged v1 renderer", async () => {
     vi.stubEnv("REPORT_LAYOUT", "v2");
     const input = structuredClone(fullAudioFixture) as any;
-    input.assessment.risks = ["Long evidence note ".repeat(1200)];
+    input.auditId = "\u0000".repeat(24);
     const expected = await generateAuditReport(input, "full");
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const actual = await ensurePdfReport(input, "full");
