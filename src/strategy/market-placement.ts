@@ -110,7 +110,9 @@ function playlistTargets(value: unknown): PlaylistTarget[] {
 }
 
 function isIsoCountryCode(value: string): boolean {
-  if (!/^[A-Z]{2}$/.test(value)) return false;\n  const name = new Intl.DisplayNames(["en"], { type: "region" }).of(value);\n  return Boolean(name && name !== value && name !== "Unknown Region");
+  if (!/^[A-Z]{2}$/.test(value)) return false;
+  const name = new Intl.DisplayNames(["en"], { type: "region" }).of(value);
+  return Boolean(name && name !== value && name !== "Unknown Region");
 }
 
 function territoryPriorities(evidence: Record<string, unknown>): TerritoryPriorities {
@@ -124,7 +126,8 @@ function territoryPriorities(evidence: Record<string, unknown>): TerritoryPriori
     && provider.length > 0
     && metric.length > 0
     && reportingPeriod.length > 0
-    && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/.test(retrievedAt)\n    && Number.isFinite(Date.parse(retrievedAt))
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(retrievedAt)
+    && Number.isFinite(Date.parse(retrievedAt))
     && rawTerritories.length > 0
     && rawTerritories.every((raw) => {
       const item = record(raw);
@@ -219,7 +222,8 @@ function positioning(sonicDna: Record<string, unknown> | null, evidence: Record<
   const rhythm = record(sonicDna?.rhythmFeatures);
   const energy = record(record(sonicDna?.acousticFeatureProfile).predictions);
   const energyPrediction = record(energy.energy);
-  const masterProvenance = clean(sonicDna?.provenance) === "uploaded_audio_master";\n  const reliableTempo = masterProvenance && bpm !== null && bpm >= 40 && bpm <= 240 && confidence !== null && confidence >= 0.5;
+  const masterProvenance = clean(sonicDna?.provenance) === "uploaded_audio_master";
+  const reliableTempo = masterProvenance && bpm !== null && bpm >= 40 && bpm <= 240 && confidence !== null && confidence >= 0.5;
   const beatGrid = clean(rhythm.beatGridStatus) === "tentative";
   const energyAvailable = energyPrediction.status === "provisional" && ["low", "moderate", "high"].includes(clean(energyPrediction.label));
   const dj: PositioningRecommendation = reliableTempo && beatGrid
