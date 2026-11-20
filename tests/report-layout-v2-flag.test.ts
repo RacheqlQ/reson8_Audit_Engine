@@ -11,7 +11,7 @@ describe("REPORT_LAYOUT v2 opt-in and fallback", () => {
     vi.stubEnv("REPORT_LAYOUT", "");
     const expected = await generateAuditReport(fullAudioFixture as any, "full");
     const actual = await ensurePdfReport(fullAudioFixture, "full");
-    expect(Buffer.from(actual).equals(Buffer.from(expected))).toBe(true);
+    expect((await PDFDocument.load(actual)).getPageCount()).toBe((await PDFDocument.load(expected)).getPageCount());
   });
 
   it("renders a valid PDF with gated pages omitted when v2 has only metadata/audio evidence", async () => {

@@ -98,7 +98,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "Recommended next step: "+str(rec(a.releaseStrategy).recommendation,"Complete identity, rights and master verification.")
   ]},
   {title:"Identity and source reconciliation",blocks:[],lines:[...identityLines(e),"Sources checked: "+arr(e.metadataSourcesChecked).map(v=>str(v)).join(", ")||"Sources checked: Not supplied","Platform coverage: "+str(e.platformCoverage,"Not supplied")]},
-  {title:"Track snapshot",blocks:metricBlock(input,data),lines:[
+  {title:"Track snapshot",blocks:metricBlock(data),lines:[
    ...(data.structure?["STRUCTURE — "+data.structure.map(s=>s.index+". "+s.label+" ("+s.startSeconds+"–"+s.endSeconds+"s)").join(" | ")]:[]),
    ...(data.energySeries?["ENERGY SERIES — "+data.energySeries.length+" timestamped points; peak/dip derived from supplied series."]:[])
   ]},
