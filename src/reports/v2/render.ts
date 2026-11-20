@@ -77,6 +77,30 @@ function header(page:PDFPage,title:string,fonts:Fonts){
 function pageBase(pdf:PDFDocument,title:string,fonts:Fonts):PDFPage{
  const p=pdf.addPage([W,H]);p.drawRectangle({x:0,y:0,width:W,height:H,color:C.paper});header(p,title,fonts);return p;
 }
+export function buildPositioningLines(input: AuditReportInput): string[] {
+ const evidence = rec(input.evidence), assessment = rec(input.assessment);
+ const lines: string[] = [];
+ const genre = str(evidence.genre, "");
+ const genreSource = str(evidence.genreSource ?? evidence.genreProvider ?? evidence.genreProvenance, "");
+ if (genre) {
+  lines.push(genreSource
+   ? "Primary lane: " + genre + " [Provider-backed · " + genreSource + "]"
+   : "Genre candidate: " + genre + " [Hypothesis · provider provenance not supplied]");
+ }
+ const hypotheses = arr(assessment.laneHypotheses).map(value => str(value, "")).filter(Boolean);
+ const adjacent = arr(assessment.adjacentLanes).map(value => str(value, "")).filter(Boolean);
+ if (hypotheses.length) lines.push("Lane hypotheses: " + hypotheses.join("; ") + " [Hypothesis]");
+ if (adjacent.length) lines.push("Adjacent lanes to verify: " + adjacent.join("; ") + " [Hypothesis]");
+ if (!lines.length) {
+  lines.push("Positioning not established — no provider-attributed genre or evidenced lane hypothesis was supplied.");
+  lines.push("Required evidence: provider-returned genre with source attribution and verified comparable artists or recordings.");
+  lines.push("Decision boundary: sonic descriptors alone do not establish audience overlap, DSP fit, commercial reach or market demand.");
+ }
+ const basis = str(assessment.positioningBasis ?? assessment.positioningRationale, "");
+ if (basis) lines.push("Positioning basis: " + basis);
+ return lines;
+}
+
 function identityLines(e:Record<string,unknown>):string[]{
  const reconciliation=rec(e.reconciliation),conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
  const fields=["artist","title","album","releaseDate","isrc","upc","label","genre"];
@@ -111,7 +135,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
    "Market evidence: "+(data.hasVerifiedCommercialEvidence?"Source-attributed commercial data supplied":"Insufficient — no verified commercial source data supplied.")
   ]},
-  {title:"A&R positioning",blocks:[],lines:["Lane hypotheses (not facts): "+arr(a.laneHypotheses).map(v=>str(v)).join("; ")||"No lane hypotheses supplied.","Adjacent lanes: "+arr(a.adjacentLanes).map(v=>str(v)+" — unverified").join("; ")||"No adjacent lanes supplied."]},
+  {title:"A&R positioning",blocks:[],lines:buildPositioningLines(input)},
   {title:"Strengths, risks and actions",blocks:[],lines:[
    "Strengths: "+arr(a.strengths).map(v=>str(v)).join("; ")||"No measured strengths supplied.",
    "Risks: "+arr(a.risks).map(v=>str(v)).join("; ")||"No evidenced risks supplied.",
