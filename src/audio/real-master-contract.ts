@@ -70,6 +70,18 @@ const PredictionSchema = z.discriminatedUnion("status", [
   }).strict(),
 ]);
 
+const ProvisionalPredictionSchema = z.object({
+  name: z.enum(["audio_mood", "audio_energy"]),
+  status: z.literal("provisional"),
+  label: z.string().min(1),
+  score: z.number().finite().min(0).max(100),
+  scoreScale: z.literal("0-100"),
+  method: z.literal("audio_feature_heuristics_v1"),
+  probability: z.null(),
+  featureDrivers: z.array(z.string().min(1)).min(1),
+  diagnostics: z.array(DiagnosticSchema).default([]),
+}).strict();
+
 const ExternalRecordSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("verified"),
@@ -107,6 +119,7 @@ export const RealMasterAuditContractSchema = z.object({
   source: RealMasterSourceSchema,
   directSignalMeasurements: z.array(MeasurementSchema),
   calibratedPredictions: z.array(PredictionSchema),
+  provisionalPredictions: z.array(ProvisionalPredictionSchema).default([]),
   externalRecords: z.array(ExternalRecordSchema),
   strategicSynthesis: z.array(StrategicSynthesisSchema),
   pipelineDiagnostics: z.array(DiagnosticSchema).default([]),
@@ -114,6 +127,7 @@ export const RealMasterAuditContractSchema = z.object({
   const refs = new Set<string>();
   contract.directSignalMeasurements.forEach((metric, index) => refs.add(`signal:${metric.name}`));
   contract.calibratedPredictions.forEach((prediction) => refs.add(`prediction:${prediction.name}`));
+  contract.provisionalPredictions.forEach((prediction) => refs.add(`provisionalPrediction:${prediction.name}`));
   contract.externalRecords.forEach((record, index) => refs.add(`external:${record.status === "verified" ? record.recordId : record.provider}`));
   contract.strategicSynthesis.forEach((claim, index) => {
     for (const ref of claim.evidenceRefs) {
@@ -131,6 +145,7 @@ export const RealMasterAuditContractSchema = z.object({
 export type RealMasterAuditContract = z.infer<typeof RealMasterAuditContractSchema>;
 export type DirectSignalMeasurement = z.infer<typeof MeasurementSchema>;
 export type CalibratedPrediction = z.infer<typeof PredictionSchema>;
+export type ProvisionalPrediction = z.infer<typeof ProvisionalPredictionSchema>;
 export type VerifiedExternalRecord = z.infer<typeof ExternalRecordSchema>;
 export type StrategicSynthesisClaim = z.infer<typeof StrategicSynthesisSchema>;
 
