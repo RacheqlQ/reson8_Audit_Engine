@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isReliableKey, isReliableTempo, hasMultipleTuningWindows, sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
+import { buildTempoDiagnosticLines } from "../src/reports/v2/render.js";
 
 const baseAssessment = {
   executiveSummary: "The recording is a 156 BPM high-energy release with a strong rhythmic lane.",
@@ -42,6 +43,33 @@ describe("Phillo evidence guardrails", () => {
     expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.9, rhythmFeatures: { status: "measured", abstentionReason: "ambiguous pulse" } })).toBe(false);
     expect(isReliableTempo({ bpm: 0, tempoConfidence: 0.9 })).toBe(false);
     expect(isReliableTempo({ bpm: null, tempoConfidence: 0.9 })).toBe(false);
+  });
+
+  it("accepts only 40–220 BPM as a reportable tempo measurement", () => {
+    expect(isReliableTempo({ bpm: 40, tempoConfidence: 0.9 })).toBe(true);
+    expect(isReliableTempo({ bpm: 220, tempoConfidence: 0.9 })).toBe(true);
+    expect(isReliableTempo({ bpm: 39.99, tempoConfidence: 0.9 })).toBe(false);
+    expect(isReliableTempo({ bpm: 220.01, tempoConfidence: 0.9 })).toBe(false);
+  });
+
+  it("filters out-of-range tempo candidates from every diagnostic estimate", () => {
+    const lines = buildTempoDiagnosticLines({
+      sonicDna: { rhythmFeatures: {
+        candidateScores: [{ bpm: 39, score: 0.9 }, { bpm: 40, score: 0.8 }, { bpm: 220, score: 0.7 }, { bpm: 221, score: 0.6 }],
+        candidateBpms: [39, 40, 220, 221],
+        alternateTempo: 240,
+        independentEstimator: { bpm: 250, score: 0.5 },
+        confidence: 0.8,
+        beatGridStatus: "tentative",
+      } },
+    } as any).join(" ");
+
+    expect(lines).toContain("40 BPM (score 0.800)");
+    expect(lines).toContain("220 BPM (score 0.700)");
+    expect(lines).not.toContain("39 BPM");
+    expect(lines).not.toContain("221 BPM");
+    expect(lines).not.toContain("Alternate half/double-time candidate");
+    expect(lines).not.toContain("Independent low-frequency envelope estimate");
   });
 
   it("does not mislabel a missing genre tempo range as a failed tempo-confidence gate", () => {
