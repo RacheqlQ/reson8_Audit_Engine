@@ -176,8 +176,10 @@ export function estimateGoertzelKey(samples: Float32Array, sampleRate: number): 
     }
   }
   const total = profile.reduce((sum, value) => sum + value, 0);
-  if (analyzedPitchCount < 2 || total < 1e-7) {
-    return unavailable("Fewer than two stable equal-tempered pitch components were detected.", analyzedPitchCount);
+  const strongestPitchClass = Math.max(...profile);
+  const activePitchClasses = profile.filter(value => value >= strongestPitchClass * 0.12 && value > 1e-7).length;
+  if (analyzedPitchCount < 2 || total < 1e-7 || activePitchClasses < 3) {
+    return unavailable("Fewer than three distinct pitch classes had sufficient relative energy to support key analysis.", analyzedPitchCount);
   }
   const normalized = profile.map(value => value / total);
   const candidates: Array<{ key: number; mode: Mode; score: number }> = [];
@@ -189,8 +191,8 @@ export function estimateGoertzelKey(samples: Float32Array, sampleRate: number): 
   candidates.sort((a, b) => b.score - a.score);
   const best = candidates[0]!;
   const second = candidates[1]!;
-  if (!Number.isFinite(best.score) || best.score <= 0) {
-    return unavailable("Pitch-class evidence did not support a stable key or mode.", analyzedPitchCount);
+  if (!Number.isFinite(best.score) || best.score < 0.15 || best.score - second.score < 0.025) {
+    return unavailable("Pitch-class profile did not provide a sufficiently distinctive key and mode.", analyzedPitchCount);
   }
   return {
     key: NOTES[best.key]!,
