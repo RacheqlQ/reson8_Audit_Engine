@@ -303,10 +303,15 @@ function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,hei
  tracked(p,status,x+w-13-statusWidth,top-19,bold,5.2,input.fixture||input.inferred?C.gold:input.unavailable?C.coral:C.teal,.25);
  const captionTop=bottom+CAPTION_H;
  line(p,x+9,captionTop,x+w-9,captionTop,C.line,.65);
- let cy=bottom+CAPTION_H-12;
- for(const [label,value] of [["SHOWS: ",input.shows],["CAN'T SHOW: ",input.cantShow]] as const){
-  const lines=wrap(label+value,font,5.7,w-24).slice(0,2);
-  for(const part of lines){text(p,part,x+12,cy,font,5.7,C.muted);cy-=7;}
+ let cy=bottom+CAPTION_H-10;
+ const captionRows:[string,string,number][]=[
+  ["EVIDENCE REFS: ",(input.evidenceRefs??[]).join(", ")||"not supplied",1],
+  ["SHOWS: ",input.shows,2],
+  ["CAN'T SHOW: ",input.cantShow,2],
+ ];
+ for(const [label,value,maxLines] of captionRows){
+  const lines=wrap(label+value,font,5.2,w-24).slice(0,maxLines);
+  for(const part of lines){text(p,part,x+12,cy,font,5.2,C.muted);cy-=6;}
  }
  return {x,top,bottom,width:w,height,contentTop:top-HEADER_H-9,contentBottom:captionTop+5};
 }
