@@ -39,7 +39,7 @@ export async function ensurePdfReport(source: Uint8Array | string | unknown, tie
   const input = parseReportInput(source);
   if (process.env.REPORT_LAYOUT?.trim().toLowerCase() === "v2") {
     try {
-      const v2 = await generateAuditReportV2(input);
+      const v2 = await generateAuditReportV2(input, tier);
       if (isPdf(v2)) return v2;
       throw new Error("Report v2 renderer did not return a PDF.");
     } catch (error) {
