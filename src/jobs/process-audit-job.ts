@@ -848,7 +848,7 @@ export async function processAuditJob(
             ["spectral_bandwidth_hz", masterDna.spectralBandwidthHz, "Hz", "fft_spectral_bandwidth"],
             ["spectral_rolloff_hz", masterDna.spectralRolloffHz, "Hz", "fft_spectral_rolloff"],
             ["zero_crossing_rate", masterDna.zeroCrossingRate, "ratio", "pcm_zero_crossing_rate"],
-            ...Object.entries(masterDna.acousticFeatureProfile.descriptors).map(([name, descriptor]) => [`acoustic_${name}_median`, descriptor.median, descriptor.unit, descriptor.method]),
+            ...Object.entries(masterDna.acousticFeatureProfile.descriptors).map(([name, descriptor]) => [`acoustic_${name}_median`, masterDna.acousticFeatureProfile.status === "measured" ? descriptor.median : null, descriptor.unit, descriptor.method]),
           ].map(([name, value, unit, method]) => typeof value === "number" && Number.isFinite(value)
             ? { name, status: "measured", value, unit, method, measuredAt: masterMeasuredAt ?? generatedAt, diagnostics: [] }
             : buildUnavailableMetric(String(name), "MEASUREMENT_UNAVAILABLE", "The configured analysis stage did not return a finite measurement for this uploaded master.", String(unit), String(method))),
