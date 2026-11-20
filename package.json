@@ -14,7 +14,8 @@
     "start": "node --env-file-if-exists=/etc/secrets/Secrets.env dist/main.js",
     "worker": "node --env-file-if-exists=/etc/secrets/Secrets.env dist/worker-main.js",
     "evaluate:genres": "npm run build && node scripts/genre-evaluation.mjs",
-    "benchmark:key": "npm run build && node scripts/benchmark-key-estimation.mjs"
+    "benchmark:key": "npm run build && node scripts/benchmark-key-estimation.mjs",
+    "sample-report:v2": "node scripts/sample-report-v2.mjs"
   },
   "dependencies": {
     "fastify": "^5.12.5",
@@ -32,4 +33,4 @@
     "vitest": "^5.0.3"
   },
   "packageManager": "npm@11.21.0"
-}
+}\n
