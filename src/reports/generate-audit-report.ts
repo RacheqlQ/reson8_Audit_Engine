@@ -487,9 +487,17 @@ function sections(i:AuditReportInput):Section[]{
   );
   sonicDnaBody.push("Track structure and section boundaries: not calculated in this pipeline version; no section-segmentation result is available to support verse, chorus, bridge or intro/outro claims.");
   const provisionalTempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
-  if(provisionalTempoCandidate!==null&&!tempoReliable)sonicDnaBody.push(
-   "Provisional tempo candidate relationships: "+provisionalTempoCandidate+" BPM candidate; half-time "+(provisionalTempoCandidate/2).toFixed(1)+" BPM; double-time "+(provisionalTempoCandidate*2).toFixed(1)+" BPM (derived arithmetic relationships only; not independently validated beat interpretations)."
-  );
+  if(provisionalTempoCandidate!==null&&!tempoReliable){
+   const tempoRelationships=[
+    {label:"half-time",bpm:provisionalTempoCandidate/2},
+    {label:"double-time",bpm:provisionalTempoCandidate*2},
+   ].filter(candidate=>candidate.bpm>=40&&candidate.bpm<=220);
+   sonicDnaBody.push(
+    "Provisional tempo candidate relationships: "+provisionalTempoCandidate+" BPM candidate"+
+    (tempoRelationships.length?"; "+tempoRelationships.map(candidate=>candidate.label+" "+candidate.bpm.toFixed(1)+" BPM").join("; "):"")+
+    " (derived arithmetic relationships only; not independently validated beat interpretations)."
+   );
+  }
   if (vocalAnalysisPerformed) {
    const vocalSegments=Array.isArray(vocalFeatures?.activitySegments)?vocalFeatures.activitySegments.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))):[];
    const segmentSummary=vocalSegments.slice(0,8).map((segment)=>metric(segment.startSeconds,2)+"–"+metric(segment.endSeconds,2)+" s").join("; ");

@@ -85,8 +85,8 @@ for(const [name,input] of variants){
   const normalizedExtracted=extracted.replace(/\s+/g," ");
   if(name==="ambiguous-audio-low-confidence"){
    const expectedEvidence=tier==="sample"
-    ?["128 (provisional","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"]
-    :["128 BPM candidate; half-time 64.0 BPM; double-time 256.0 BPM","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"];
+    ?["128 BPM (provisional","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"]
+    :["128 BPM candidate; half-time 64.0 BPM","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"];
    for(const expected of expectedEvidence){
     if(!normalizedExtracted.includes(expected))throw new Error(filename+" is missing the expected provisional audio evidence: "+expected);
    }
