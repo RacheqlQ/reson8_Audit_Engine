@@ -123,6 +123,13 @@ try{
  const unsafeInput=structuredClone(ambiguousAudioFixture);
  unsafeInput.assessment={
   ...unsafeInput.assessment,
+  limitations:[
+   ...(Array.isArray(unsafeInput.assessment.limitations)?unsafeInput.assessment.limitations:[]),
+   "Vocal analysis: Not performed - Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
+   "Vocal presence/absence is unknown and is not inferred.",
+   "Learned audio model: disabled.",
+   "Detection model status: disabled."
+  ],
   executiveSummary:[
    "The recording is a 128 BPM high-energy Afrobeats release.",
    "The track has 24000 streams, strong market demand and high commercial potential.",
@@ -130,10 +137,36 @@ try{
    "Further listening and source verification are required before any external decision."
   ].join(" ")
  };
+ unsafeInput.evidence={
+  ...unsafeInput.evidence,
+  playlistDiscovery:{
+   status:"partial",
+   outcomes:[
+    {provider:"spotify",status:"unavailable",reason:"Spotify catalog request failed with HTTP 403"},
+    {provider:"apple_music",status:"not_configured",reason:"Apple Music developer token is not configured."}
+   ]
+  }
+ };
  const unsafeBytes=await ensurePdfReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
  await writeFile(evidenceCheckPath,unsafeBytes);
  const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
  const normalizedUnsafeText=unsafeText.replace(/\s+/g," ").trim();
+ const internalStatusNotices=[
+  "Vocal analysis: Not performed",
+  "Vocal presence/absence is unknown",
+  "Learned audio model: disabled",
+  "Detection model status: disabled"
+ ];
+ for(const notice of internalStatusNotices){
+  if(normalizedUnsafeText.toLocaleLowerCase().includes(notice.toLocaleLowerCase())){
+   throw new Error("Generated PDF exposed an internal analysis status notice: "+notice);
+  }
+ }
+ for(const required of ["Spotify provider unavailable:","HTTP 403","SPOTIFY_CLIENT_ID","SPOTIFY_CLIENT_SECRET","Apple Music provider unavailable:","APPLE_MUSIC_DEVELOPER_TOKEN"]){
+  if(!normalizedUnsafeText.includes(required)){
+   throw new Error("Generated PDF is missing provider availability evidence: "+required);
+  }
+ }
  const forbiddenClaims=[
   "The recording is a 128 BPM high-energy Afrobeats release.",
   "The track has 24000 streams, strong market demand and high commercial potential.",
