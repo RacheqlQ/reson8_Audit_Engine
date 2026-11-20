@@ -9,6 +9,11 @@ export interface AudioTagMetadata {
   track: number | null;
 }
 
+function normalizeTagIsrc(value: string): string | null {
+  const normalized = value.replace(/[\s-]/g, "").toUpperCase();
+  return /^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/.test(normalized) ? normalized : null;
+}
+
 const EMPTY: AudioTagMetadata = {
   title: null, artist: null, album: null, isrc: null, genres: [], releaseDate: null, label: null, track: null,
 };
@@ -80,7 +85,7 @@ function parseId3(bytes: Uint8Array): AudioTagMetadata {
       const value = decodeText(bytes.subarray(offset + headerSize, offset + headerSize + size));
       if (value) {
         if (field === "genres") result.genres = [...new Set([...result.genres, ...value.split(/[;,/]/).map((item) => item.trim()).filter(Boolean)])];
-        else if (!result[field]) result[field] = field === "isrc" ? value.replace(/[\s-]/g, "").toUpperCase() : value;
+        else if (!result[field]) result[field] = field === "isrc" ? normalizeTagIsrc(value) : value;
       }
     }
     offset += headerSize + size;
@@ -119,7 +124,7 @@ function parseFlacComments(bytes: Uint8Array): AudioTagMetadata {
         if (key === "TITLE") result.title ??= value;
         else if (key === "ARTIST" || key === "ALBUMARTIST") result.artist ??= value;
         else if (key === "ALBUM") result.album ??= value;
-        else if (key === "ISRC") result.isrc ??= value.replace(/[\s-]/g, "").toUpperCase();
+        else if (key === "ISRC") result.isrc ??= normalizeTagIsrc(value);
         else if (key === "GENRE") result.genres = [...new Set([...result.genres, ...value.split(/[;,/]/).map((item) => item.trim()).filter(Boolean)])];
         else if (key === "DATE" || key === "YEAR" || key === "RELEASEDATE") result.releaseDate ??= value;
         else if (key === "LABEL" || key === "ORGANIZATION") result.label ??= value;
@@ -152,7 +157,7 @@ function parseWavInfo(bytes: Uint8Array): AudioTagMetadata {
           if (id === "INAM") result.title ??= value;
           else if (id === "IART") result.artist ??= value;
           else if (id === "IPRD") result.album ??= value;
-          else if (id === "ISRC") result.isrc ??= value.replace(/[\s-]/g, "").toUpperCase();
+          else if (id === "ISRC") result.isrc ??= normalizeTagIsrc(value);
           else if (id === "IGNR") result.genres = [...new Set([...result.genres, ...value.split(/[;,/]/).map((item) => item.trim()).filter(Boolean)])];
           else if (id === "ICRD") result.releaseDate ??= value;
           else if (id === "IPUB" || id === "ICOP") result.label ??= value;
