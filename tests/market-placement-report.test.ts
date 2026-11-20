@@ -5,7 +5,7 @@ import { buildMarketPlacementPlan } from "../src/strategy/market-placement.js";
 import { generateAuditReport, planAuditReportPages, type AuditReportInput } from "../src/reports/generate-audit-report.js";
 
 describe("Phase 5 report integration", () => {
-  it("renders market placement, withheld geography, timestamped edit candidates and gated rollout", () => {
+  it("renders market placement, withheld geography, timestamped edit candidates and gated rollout", async () => {
     const input = structuredClone(fullAudioFixture) as unknown as AuditReportInput;
     input.evidence.playlistDiscovery = {
       moodTagsUsed: ["driving"],
