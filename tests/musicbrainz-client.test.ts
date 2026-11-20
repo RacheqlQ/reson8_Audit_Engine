@@ -54,6 +54,32 @@ describe("MusicBrainz ISRC catalogue client", () => {
     }]);
   });
 
+
+  it("withholds recording identity when one ISRC returns multiple MusicBrainz recordings", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      recordings: [
+        { id: "recording-a", title: "Candidate A", "artist-credit": [{ name: "Artist A" }], releases: [] },
+        { id: "recording-b", title: "Candidate B", "artist-credit": [{ name: "Artist B" }], releases: [] },
+      ],
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+
+    const result = await collectIsrcCatalogMetadata("GBAYE1212345");
+
+    expect(result.metadata).toHaveLength(1);
+    expect(result.metadata[0]).toMatchObject({
+      platform: "musicbrainz",
+      evidenceStatus: "partial",
+      title: null,
+      artist: null,
+      catalogId: null,
+      isrc: "GBAYE1212345",
+    });
+    expect(result.outcomes.find((outcome) => outcome.provider === "musicbrainz")).toMatchObject({
+      status: "partial",
+      reason: expect.stringContaining("Multiple recording candidates"),
+    });
+  });
+
   it("returns an empty result for a valid ISRC with no recording match", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ recordings: [] }), { status: 200 })));
     await expect(new MusicBrainzClient().lookupIsrc("GBAYE1212345")).resolves.toEqual([]);
