@@ -181,11 +181,12 @@ export function extractAcousticFeatureProfile(samples:Float32Array,sampleRate:nu
   }
   if(Math.sqrt(signalEnergy/frames)<1e-6)return emptyProfile(sampleRate,validChannels,duration,"NO_MEASURABLE_SIGNAL");
   const possible=Math.floor((frames-WINDOW_SIZE)/HOP_SIZE)+1;
-  const count=Math.min(MAX_WINDOWS,possible),stride=possible>MAX_WINDOWS?Math.ceil((possible-1)/(MAX_WINDOWS-1)):1;
+  const count=Math.min(MAX_WINDOWS,possible);
   const rows:WindowResult[]=[],windowSummaries:AcousticFeatureProfile["windowSummaries"]=[];
   let previous:number[]|null=null;
   for(let index=0;index<count;index++){
-    const start=Math.min(index*stride*HOP_SIZE,frames-WINDOW_SIZE);
+    const windowIndex=count===1?0:Math.round(index*(possible-1)/(count-1));
+    const start=windowIndex*HOP_SIZE;
     const row=measureWindow(samples,start,sampleRate,validChannels,previous);
     rows.push(row);previous=row.magnitudes;
     windowSummaries.push({startSeconds:start/sampleRate,endSeconds:(start+WINDOW_SIZE)/sampleRate,rmsDbfs:row.rmsDbfs,spectralCentroidHz:row.centroid,spectralFlatness:row.flatness});
