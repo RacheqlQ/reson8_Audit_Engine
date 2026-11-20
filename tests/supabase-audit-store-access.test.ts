@@ -97,6 +97,7 @@ describe("audit status query efficiency", () => {
       { event_type: "audit_failed", status: "failed", created_at: "2026-11-18T10:00:04.000Z", payload: { errorCode: "capacity", retryable: true } },
       { event_type: "ar_assessment", status: "completed", created_at: "2026-11-18T10:00:03.000Z", payload: {} },
       { event_type: "catalog_ingestion", status: "completed", created_at: "2026-11-18T10:00:02.000Z", payload: { platform: "spotify", canonicalUrl: "https://open.spotify.com/track/123", status: "recognized" } },
+      { event_type: "catalog_ingestion", status: "partial", created_at: "2026-11-18T10:00:02.500Z", payload: { platform: "musicbrainz", canonicalUrl: "https://musicbrainz.org/ws/2/isrc/USABC1234567", lookupType: "isrc", isrc: "USABC1234567", status: "partial", reason: "Multiple recording candidates returned; ambiguous fields were withheld." } },
       { event_type: "catalog_links_submitted", status: "recognized", created_at: "2026-11-18T10:00:01.000Z", payload: { submittedLinks: ["https://open.spotify.com/track/123"] } },
     ];
     const reports = [{ tier: "full", version: 2, access_status: "available" }];
@@ -112,7 +113,10 @@ describe("audit status query efficiency", () => {
     expect(status).toMatchObject({
       errorCode: "capacity", errorRetryable: true, currentStepIndex: 4, full: { available: true, version: 2 },
       catalogUrlsSubmitted: ["https://open.spotify.com/track/123"],
-      catalogSources: [{ platform: "spotify", status: "recognized" }],
+      catalogSources: [
+        { platform: "spotify", status: "recognized" },
+        { platform: "musicbrainz", status: "partial", reason: "Multiple recording candidates returned; ambiguous fields were withheld." },
+      ],
     });
   });
 });
@@ -205,6 +209,31 @@ describe("DSP provider failure persistence", () => {
       status: "unavailable",
       error: "TIDAL track request failed with HTTP 503",
       evidenceClass: null,
+    });
+  });
+
+
+  it("persists ISRC provider outcomes with status, identifier and bounded reason", async () => {
+    const { store, fetchMock } = makeStore({});
+    await store.saveIsrcLookupOutcome("job-isrc", "claim-token", "USABC1234567", {
+      provider: "musicbrainz",
+      status: "partial",
+      reason: "Multiple recording candidates returned; ambiguous fields were withheld.",
+    });
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.p_operation).toBe("catalog_metadata");
+    expect(requestBody.p_payload).toMatchObject({
+      platform: "musicbrainz",
+      catalogId: "USABC1234567",
+      raw: { lookupType: "isrc", providerStatus: "partial" },
+      eventPayload: {
+        platform: "musicbrainz",
+        lookupType: "isrc",
+        isrc: "USABC1234567",
+        status: "partial",
+        evidenceClass: "PARTIAL",
+      },
     });
   });
 

@@ -43,7 +43,8 @@ function normalizeForComparison(
   if (!normalized) return null;
 
   if (field === "isrc") {
-    return normalized.replace(/[\s-]/g, "").toUpperCase();
+    const isrc = normalized.replace(/[\s-]/g, "").toUpperCase();
+    return /^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/.test(isrc) ? isrc : null;
   }
 
   return normalized.toLocaleLowerCase();

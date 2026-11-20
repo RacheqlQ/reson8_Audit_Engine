@@ -14,7 +14,7 @@ import { reconcileMetadata, type MetadataReconciliation } from "../metadata/Reco
 import { readAudioTags } from "../metadata/audio-tags.js";
 import { normalizeDspTrackLinks } from "../providers/dsp/intake.js";
 import { collectDspMetadata, type DspMetadataResult } from "../providers/dsp/registry.js";
-import { collectIsrcCatalogMetadata, type IsrcCatalogLookup } from "../providers/dsp/isrc-catalog.js";
+import { collectIsrcCatalogMetadata, type IsrcCatalogLookup, type IsrcProviderOutcome } from "../providers/dsp/isrc-catalog.js";
 import type { PlaylistDiscoveryInput, PlaylistDiscoveryResult } from "../providers/dsp/playlist-discovery.js";
 import { normalizeIsrc } from "../providers/musicbrainz/client.js";
 import { providerDecision } from "../providers/provider-policy.js";
@@ -42,6 +42,7 @@ export interface AuditProcessorDependencies {
   markProcessing(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   collectCatalogMetadata(url: string, signal?: AbortSignal): Promise<CatalogMetadata>;
   collectIsrcCatalogMetadata?(isrc: string, signal?: AbortSignal): Promise<IsrcCatalogLookup>;
+  saveIsrcLookupOutcome?(jobId: string, claimToken: string, isrc: string, outcome: IsrcProviderOutcome, signal?: AbortSignal): Promise<void>;
   discoverPlaylists?(input: PlaylistDiscoveryInput, signal?: AbortSignal): Promise<PlaylistDiscoveryResult>;
   recognizeUrl(url: string, signal?: AbortSignal): Promise<AuditRecognition>;
   downloadMaster(path: string, signal?: AbortSignal): Promise<Uint8Array>;
@@ -597,11 +598,20 @@ export async function processAuditJob(
     }
 
     let isrcLookup: IsrcCatalogLookup | null = null;
-    const isrcCandidate = (recognition.matched ? recognition.isrc : null) ?? metadataSources.find((source) => source.isrc)?.isrc ?? masterTags?.isrc ?? null;
+    const isrcCandidates = [
+      recognition.matched ? recognition.isrc : null,
+      ...metadataSources.map((source) => source.isrc),
+      masterTags?.isrc ?? null,
+    ];
     let normalizedIsrc: string | null = null;
-    if (isrcCandidate) {
-      try { normalizedIsrc = normalizeIsrc(isrcCandidate); }
-      catch { normalizedIsrc = null; }
+    for (const candidate of isrcCandidates) {
+      if (!candidate) continue;
+      try {
+        normalizedIsrc = normalizeIsrc(candidate);
+        break;
+      } catch {
+        // A malformed higher-priority claim must not suppress a valid lower-priority source.
+      }
     }
     const isrcLookupAvailable = Boolean(
       deps.collectIsrcCatalogMetadata
@@ -612,6 +622,13 @@ export async function processAuditJob(
       isrcLookup = await awaitWithStage(deps, "isrc_catalog_lookup", 30_000, (signal) =>
         (deps.collectIsrcCatalogMetadata ?? collectIsrcCatalogMetadata)(normalizedIsrc!, signal),
       );
+      for (const outcome of isrcLookup.outcomes) {
+        if (deps.saveIsrcLookupOutcome) {
+          await awaitWithStage(deps, "catalog_persist", 15_000, (signal) =>
+            deps.saveIsrcLookupOutcome!(jobId, job.claimToken, isrcLookup!.isrc, outcome, signal),
+          );
+        }
+      }
       for (const source of isrcLookup.metadata) {
         if (!metadataSources.some((existing) => existing.platform === source.platform && existing.catalogId === source.catalogId)) {
           metadataSources.push(source);

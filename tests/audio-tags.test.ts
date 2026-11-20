@@ -60,6 +60,51 @@ function wavInfo(tags: Record<string, string>): Uint8Array {
   return new Uint8Array([82,73,70,70, (body.length)&255, (body.length>>8)&255, (body.length>>16)&255, (body.length>>24)&255, ...body]);
 }
 
+function oggCommentPage(isrc: string, codec: "opus" | "vorbis" = "opus"): Uint8Array {
+  const encoder = new TextEncoder();
+  const prefix = codec === "opus" ? encoder.encode("OpusTags") : new Uint8Array([3, ...encoder.encode("vorbis")]);
+  const vendor = encoder.encode("Reson8 test fixture");
+  const comment = encoder.encode("ISRC=" + isrc);
+  const packet: number[] = [...prefix, vendor.length & 255, (vendor.length >> 8) & 255, (vendor.length >> 16) & 255, (vendor.length >> 24) & 255, ...vendor,
+    1, 0, 0, 0, comment.length & 255, (comment.length >> 8) & 255, (comment.length >> 16) & 255, (comment.length >> 24) & 255, ...comment];
+  const lacing: number[] = [];
+  let remaining = packet.length;
+  while (remaining >= 255) { lacing.push(255); remaining -= 255; }
+  lacing.push(remaining);
+  const page = new Uint8Array(27 + lacing.length + packet.length);
+  page.set(encoder.encode("OggS"), 0);
+  page[4] = 0;
+  page[5] = 2;
+  page[26] = lacing.length;
+  page.set(lacing, 27);
+  page.set(packet, 27 + lacing.length);
+  return page;
+}
+
+function mp4Atom(type: string, payload: Uint8Array): Uint8Array {
+  const bytes = new Uint8Array(8 + payload.length);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, bytes.length);
+  bytes.set(new TextEncoder().encode(type), 4);
+  bytes.set(payload, 8);
+  return bytes;
+}
+function mp4FreeformIsrc(value: string): Uint8Array {
+  const encoder = new TextEncoder();
+  const fullBox = new Uint8Array([0, 0, 0, 0]);
+  const dataPrefix = new Uint8Array([0, 0, 0, 1, 0, 0, 0, 0]);
+  const mean = mp4Atom("mean", new Uint8Array([...fullBox, ...encoder.encode("com.apple.iTunes")]));
+  const name = mp4Atom("name", new Uint8Array([...fullBox, ...encoder.encode("ISRC")]));
+  const data = mp4Atom("data", new Uint8Array([...dataPrefix, ...encoder.encode(value)]));
+  const item = mp4Atom("----", new Uint8Array([...mean, ...name, ...data]));
+  const ilst = mp4Atom("ilst", item);
+  const meta = mp4Atom("meta", new Uint8Array([...fullBox, ...ilst]));
+  const udta = mp4Atom("udta", meta);
+  const moov = mp4Atom("moov", udta);
+  const ftyp = mp4Atom("ftyp", new Uint8Array([...encoder.encode("M4A "), 0, 0, 0, 0, ...encoder.encode("M4A "), ...encoder.encode("mp42")]));
+  return new Uint8Array([...ftyp, ...moov]);
+}
+
 describe("audio metadata tag extraction", () => {
   it("extracts ID3v2 title, artist, album, ISRC, genre, date and label", () => {
     expect(readAudioTags(id3({
@@ -114,6 +159,22 @@ describe("audio metadata tag extraction", () => {
     const malformed = id3v1({ genre: 17, track: 4 });
     malformed[0] = 0;
     expect(readAudioTags(malformed)).toMatchObject({ genres: [], track: null });
+  });
+
+  it("extracts ISRCs from Ogg Opus and Vorbis comment packets", () => {
+    expect(readAudioTags(oggCommentPage("NG-ABC-26-00001", "opus")).isrc).toBe("NGABC2600001");
+    expect(readAudioTags(oggCommentPage("GB-AYE-12-12345", "vorbis")).isrc).toBe("GBAYE1212345");
+  });
+
+  it("extracts valid ISRCs and rejects malformed values in MP4/M4A freeform metadata", () => {
+    expect(readAudioTags(mp4FreeformIsrc("NG-ABC-26-00001")).isrc).toBe("NGABC2600001");
+    expect(readAudioTags(mp4FreeformIsrc("not-an-isrc")).isrc).toBeNull();
+  });
+
+  it("does not expose malformed embedded ISRC tag values as recording identifiers", () => {
+    expect(readAudioTags(id3({ isrc: "not-an-isrc" })).isrc).toBeNull();
+    expect(readAudioTags(flacComments({ ISRC: "USABC12" })).isrc).toBeNull();
+    expect(readAudioTags(wavInfo({ isrc: "US-INVALID" })).isrc).toBeNull();
   });
 
   it("returns an empty structured result for files without recognized tags", () => {

@@ -114,4 +114,23 @@ describe("MetadataEngine", () => {
     expect(identity.upc).toBe("123456789012");
   });
 
+  it("rejects malformed ISRCs instead of promoting arbitrary provider text to a recording identifier", () => {
+    const identity = MetadataEngine.normalize({
+      musicbrainz: { isrc: "not-a-real-isrc" },
+    });
+
+    expect(identity.isrc).toBeNull();
+    expect(identity.fieldProvenance.isrc).toBeNull();
+    expect(identity.sourceProviders).toEqual([]);
+  });
+
+  it("skips a malformed higher-priority ISRC and retains a valid lower-priority recording identifier", () => {
+    const identity = MetadataEngine.normalize({
+      spotify: { isrc: "invalid" },
+      id3: { isrc: "NG-ABC-26-00001" },
+    });
+
+    expect(identity.isrc).toBe("NGABC2600001");
+    expect(identity.fieldProvenance.isrc).toBe("id3");
+  });
 });

@@ -127,4 +127,17 @@ describe("Metadata reconciliation", () => {
       artist: "Otis Redding",
     });
   });
+
+  it("ignores malformed ISRC claims instead of reconciling or conflicting on them", () => {
+    const result = reconcileMetadata({
+      musicbrainz: { title: "Example Track", isrc: "not-an-isrc" },
+      tidal: { title: "Example Track", isrc: "also-invalid" },
+    });
+
+    expect(result.status).toBe("reconciled");
+    expect(result.reconciledFields).toEqual(["title"]);
+    expect(result.conflicts).toEqual([]);
+    expect(result.identity.isrc).toBeNull();
+    expect(result.identity.fieldProvenance.isrc).toBeNull();
+  });
 });
