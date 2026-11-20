@@ -1,4 +1,4 @@
-import { estimateKey } from "./key-estimation.js";
+import { estimateKey, MIN_RELIABLE_KEY_CONFIDENCE, MIN_KEY_SEGMENT_AGREEMENT, type KeyEstimate } from "./key-estimation.js";
 import { estimateGoertzelKey, estimateLowFrequencyEnvelopeTempo, type IndependentKeyEstimate, type IndependentTempoEstimate } from "./independent-estimators.js";
 import { bootstrapCategoricalConsensus, type BootstrapConsensusDiagnostics } from "./ensemble-consensus.js";
 
@@ -31,6 +31,23 @@ export interface SonicDnaFeatures {
 const EPSILON=1e-12;
 export const MAX_ANALYSIS_SAMPLES=3_000_000;
 const NOTES=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+
+export function classifyRelativeMajorMinorAmbiguity(
+ primary:Pick<KeyEstimate,"key"|"mode"|"confidence"|"segmentAgreement">,
+ independent:Pick<IndependentKeyEstimate,"key"|"mode"|"score"|"margin">,
+):boolean {
+ if(!primary.key||!primary.mode||!independent.key||!independent.mode||primary.mode===independent.mode)return false;
+ const primaryPitch=NOTES.indexOf(primary.key);
+ const independentPitch=NOTES.indexOf(independent.key);
+ if(primaryPitch<0||independentPitch<0)return false;
+ const distance=(independentPitch-primaryPitch+12)%12;
+ const relativePair=distance===3||distance===9;
+ const primaryIsStrong=typeof primary.confidence==="number"&&primary.confidence>=MIN_RELIABLE_KEY_CONFIDENCE
+  &&typeof primary.segmentAgreement==="number"&&primary.segmentAgreement>=MIN_KEY_SEGMENT_AGREEMENT;
+ const independentIsStrong=independent.score>=0.15&&typeof independent.margin==="number"&&independent.margin>=0.025;
+ return relativePair&&primaryIsStrong&&independentIsStrong;
+}
+
 function rms(s:Float32Array):number { if(!s.length)return 0; let sum=0; for(const x of s)sum+=x*x; return Math.sqrt(sum/s.length); }
 function percentile(a:number[],p:number):number { if(!a.length)return 0; const i=(a.length-1)*p,l=Math.floor(i),u=Math.ceil(i); return l===u?a[l]:a[l]+(a[u]-a[l])*(i-l); }
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));
@@ -264,20 +281,25 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  for(let s=0;s<a.length;s+=frame){const end=Math.min(a.length,s+frame);let sum=0;for(let i=s;i<end;i++)sum+=a[i]*a[i];frames.push(Math.sqrt(sum/Math.max(1,end-s)));}
  frames.sort((x,y)=>x-y);
  const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),key=estimateKey(a,rate),independentKey:IndependentKeyEstimate=estimateGoertzelKey(a,rate),independentKeyDisagrees=key.key!==null&&independentKey.key!==null&&(key.key!==independentKey.key||key.mode!==independentKey.mode);
+ const relativeMajorMinorAmbiguity=classifyRelativeMajorMinorAmbiguity(key,independentKey);
+ const resolvedKey:KeyEstimate=relativeMajorMinorAmbiguity?{
+  ...key,key:null,mode:null,
+  limitation:"Independent audio estimators support relative major/minor tonal centres; pitch-class evidence does not resolve the tonic. No key or mode is asserted.",
+ }:key;
  // Signal descriptors are reported in their own numeric fields. Do not
  // relabel RMS, zero-crossing rate, or spectral centroid as emotional mood.
  // A validated, licensed mood model is not currently integrated.
  const moodTags:string[]=[];
  const limitations:string[]=[];
- if(key.limitation)limitations.push(key.limitation);
+ if(resolvedKey.limitation)limitations.push(resolvedKey.limitation);
  if(tempo.bpm===null)limitations.push("Tempo could not be determined reliably from the supplied audio.");
  return {
   sampleRate,channels:Number.isInteger(channels)&&channels>0?channels:1,durationSeconds:prepared.durationSeconds,
   rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:tempo.method,candidateBpms:tempo.candidateBpms,candidateScores:tempo.candidateScores,onsetEnvelope:tempo.onsetEnvelope,beatTimesSeconds:tempo.beatTimesSeconds,downbeatCandidateTimesSeconds:tempo.downbeatCandidateTimesSeconds,beatGridStatus:tempo.beatGridStatus,downbeatGridAssumption:tempo.downbeatGridAssumption,abstentionReason:tempo.abstentionReason,windowConsensus:tempo.windowConsensus,independentEstimator:tempo.independentEstimator??null},
-  harmonicFeatures:{status:key.key===null?"insufficient_evidence":"measured",key:key.key,mode:key.mode,confidence:key.confidence,method:key.method,tuningCents:key.tuningCents,segmentAgreement:key.segmentAgreement,analysisWindows:key.analysisWindows,fftButterflyCount:key.fftButterflyCount,segmentChroma:key.segmentChroma,topCandidates:key.topCandidates,tuningEvidenceWindows:key.tuningEvidenceWindows,limitation:key.limitation,windowConsensus:key.windowConsensus,independentEstimator:independentKey,independentEstimatorDisagrees:independentKeyDisagrees},
+  harmonicFeatures:{status:resolvedKey.key===null?"insufficient_evidence":"measured",key:resolvedKey.key,mode:resolvedKey.mode,confidence:resolvedKey.confidence,method:resolvedKey.method,tuningCents:resolvedKey.tuningCents,segmentAgreement:resolvedKey.segmentAgreement,analysisWindows:resolvedKey.analysisWindows,fftButterflyCount:resolvedKey.fftButterflyCount,segmentChroma:resolvedKey.segmentChroma,topCandidates:resolvedKey.topCandidates,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,limitation:resolvedKey.limitation,windowConsensus:resolvedKey.windowConsensus,independentEstimator:independentKey,independentEstimatorDisagrees,relativeMajorMinorAmbiguity},
   vocalFeatures:{...vocalDiagnostics},
   bpm:tempo.bpm,tempoCandidateBpm:tempo.topCandidateBpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
-  key:key.key,mode:key.mode,keyConfidence:key.confidence,keyTuningCents:key.tuningCents,keySegmentAgreement:key.segmentAgreement,keyCandidates:key.topCandidates,tuningEvidenceWindows:key.tuningEvidenceWindows,keyAnalysisFftButterflyCount:key.fftButterflyCount,limitations,
+  key:resolvedKey.key,mode:resolvedKey.mode,keyConfidence:resolvedKey.confidence,keyTuningCents:resolvedKey.tuningCents,keySegmentAgreement:resolvedKey.segmentAgreement,keyCandidates:resolvedKey.topCandidates,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,keyAnalysisFftButterflyCount:resolvedKey.fftButterflyCount,limitations,
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
   dynamicRangeDb:20*Math.log10(p95/p10),spectralCentroidHz:centroid,spectralBandwidthHz:bandwidth,
   spectralRolloffHz:rolloff,zeroCrossingRate:crossings/Math.max(1,a.length-1),
