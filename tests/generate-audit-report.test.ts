@@ -466,8 +466,8 @@ describe("Phase 1 real-master report contract",()=>{
   const report=pages.flatMap(page=>[page.title,...page.text]).join(" ");
   expect(report).toContain("Master evidence contract and provenance");
   expect(report).toContain("SOURCE SHA-256: "+"a".repeat(64));
-  expect(report).toContain("Confirmed tempo: 96 BPM; method transient_autocorrelation");
-  expect(report).toContain("Confirmed tempo: 96 BPM; method transient_autocorrelation; measured: 2026-11-19T12:00:00.000Z");
+  expect(report).toContain("Confirmed tempo: 96 BPM; method: transient-based tempo estimator");
+  expect(report).toContain("Confirmed tempo: 96 BPM; method: transient-based tempo estimator; measured: 2026-11-19T12:00:00.000Z");
   expect(report).toContain("True peak: Not reported as a confirmed measurement; The decoder did not return a true-peak measurement.");
   expect(report).toContain("Calibrated Audio Mood: No calibrated model is configured. A validated mood model is not configured");
   expect(report).toContain("Calibrated Key Mode Probability: No calibrated model is configured. A calibrated key/mode probability model is not configured");
