@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, generateAuditReportV2 } from "../src/reports/v2/render.js";
+import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import { generateAuditReport } from "../src/reports/generate-audit-report.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
@@ -22,6 +22,28 @@ describe("v2 decision and date framing", () => {
     expect(buildReleaseFramingLine(input)).toContain("date does not establish a past release");
     input.generatedAt = "2025-12-01T00:00:00.000Z";
     expect(buildReleaseFramingLine(input)).toContain("release date is in the past");
+  });
+});
+
+describe("v2 identity reconciliation table data", () => {
+  it("keeps conflicts visible and uses only supplied field provenance", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.fixture = false;
+    input.evidence.sources = [];
+    input.evidence.fieldProvenance = { artist: "apple_music" };
+    input.evidence.reconciliation = {
+      conflicts: [{ field: "album", values: ["Fixture EP", "Alternate EP"] }],
+      reconciledFields: ["title"]
+    };
+    const rows = buildIdentityReconciliationRows(input);
+    expect(rows.find((row: any) => row.field === "Artist"))
+      .toMatchObject({ value: "Fixture Artist", status: "Source-returned", source: "Apple Music" });
+    expect(rows.find((row: any) => row.field === "Track"))
+      .toMatchObject({ value: "Fixture Track", status: "Cross-checked", source: "unavailable" });
+    expect(rows.find((row: any) => row.field === "Album"))
+      .toMatchObject({ value: "Fixture EP vs Alternate EP", status: "Conflict" });
+    expect(rows.find((row: any) => row.field === "UPC"))
+      .toMatchObject({ value: "Unavailable", status: "Unavailable" });
   });
 });
 
