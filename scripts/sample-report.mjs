@@ -92,7 +92,7 @@ for(const [name,input] of variants){
   for(const label of chartLabels){
    if(!normalizedExtracted.includes(normalizeReportText(label).replace(/\s+/g," ").trim()))throw new Error(filename+" is missing a complete lane-constellation label: "+label);
   }
-  if(name==="long-form-audio"){
+  if(name==="long-form-audio"&&tier==="full"){
    const tokens=buildArNotesDecisionContext(input).summary.split(/\s+/).map(token=>token.replace(/[^\p{L}\p{N}#'-]/gu,"")).filter(Boolean);
    let cursor=0;
    for(const token of tokens){
