@@ -247,6 +247,7 @@ describe("Sonic DNA diagnostic event persistence", () => {
       harmonicFeatures: {
         method: "fft_harmonic_chroma_ensemble",
         segmentChroma: [{ startSeconds: 0, endSeconds: 4, chroma: Array(12).fill(1 / 12) }],
+        windowConsensus: { winner: "C:major", windowCount: 8, observedAgreement: 0.875, lowerAgreementBound: 0.5, upperAgreementBound: 1, iterations: 1000, method: "deterministic_window_bootstrap" },
       },
       vocalFeatures: {},
       bpm: 100, alternateTempo: 50, tempoConfidence: 0.91,
