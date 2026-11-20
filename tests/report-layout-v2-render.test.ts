@@ -1,9 +1,29 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildPositioningLines, generateAuditReportV2 } from "../src/reports/v2/render.js";
+import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import { generateAuditReport } from "../src/reports/generate-audit-report.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
+
+describe("v2 decision and date framing", () => {
+  it("uses only the supplied release-strategy recommendation or first evidence gap", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.assessment.releaseStrategy.recommendation = "";
+    input.assessment.evidenceGaps = ["Confirm recording identifiers"];
+    expect(buildNextActionLine(input)).toBe("Recommended next step: Confirm recording identifiers");
+    input.assessment.evidenceGaps = [];
+    expect(buildNextActionLine(input)).toBe("Recommended next step: Not supplied");
+  });
+
+  it("compares release date to generatedAt rather than the current clock", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.generatedAt = "2025-01-01T00:00:00.000Z";
+    input.evidence.releaseDate = "2025-06-01";
+    expect(buildReleaseFramingLine(input)).toContain("date does not establish a past release");
+    input.generatedAt = "2025-12-01T00:00:00.000Z";
+    expect(buildReleaseFramingLine(input)).toContain("release date is in the past");
+  });
+});
 
 describe("v2 gated report pages", () => {
   it("provides a useful positioning decision panel when no lane evidence exists", () => {
