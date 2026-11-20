@@ -384,12 +384,13 @@ export async function generateAuditReportV2(input:AuditReportInput,tier:AuditRep
     const weights=drivers.length&&drivers.every(d=>d.weight!==null)?drivers.map(d=>d.label+" "+Math.round((d.weight??0)*100)+"%").join(", "):"Weighting not supplied.";
     page.drawText("Weighting: "+weights,{x:M+145,y:H-340-drivers.length*23-6,size:6.5,font:fonts.italic,color:C.muted});
    }
-   const metricTop=H-320,width=(W-2*M-16)/3;
-   spec.blocks.forEach((b,i)=>drawMetricCard(page,M+i*(width+8),metricTop,width,b,fonts));
+   const metricTop=H-(data.headlineScore!==null?420:320),width=(W-2*M-16)/3;
+   spec.blocks.forEach((block,i)=>drawMetricCard(page,M+i*(width+8),metricTop,width,block,fonts));
    const summary=spec.lines?.[2]??"Executive summary not supplied.";
-   card(page,M,H-430,W-2*M,"Executive summary",[summary.replace(/^Executive summary:\s*/,"")],fonts,{accent:C.gold});
+   const summaryTop=metricTop-115;
+   card(page,M,summaryTop,W-2*M,"Executive summary",[summary.replace(/^Executive summary:\s*/,"")],fonts,{accent:C.gold});
    const next=spec.lines?.[3]??"Recommended next step not supplied.";
-   card(page,M,H-545,W-2*M,"Recommended next step",[next.replace(/^Recommended next step:\s*/,"")],fonts,{accent:C.gold});
+   card(page,M,summaryTop-115,W-2*M,"Recommended next step",[next.replace(/^Recommended next step:\s*/,"")],fonts,{accent:C.gold});
    page.drawText("IN THIS REPORT",{x:M,y:132,size:7,font:fonts.bold,color:C.gold});
    const toc=pages.slice(1);
    toc.forEach((p,i)=>{const col=i<5?0:1,row=i<5?i:i-5,x=M+col*250,y=165-row*14;page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});drawWrapped(page,p.title,x+28,y,205,fonts.regular,7,C.ink,8);});
