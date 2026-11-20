@@ -386,6 +386,50 @@ function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
 }
 
 type FullFlowUnit = { kind: "heading"; title: string; accent: string } | { kind: "paragraph"; lines: string[]; accent: string };
+export function partitionFullReportUnits<T>(
+ units:T[],
+ heights:number[],
+ pageCount:number,
+ capacity:number,
+):T[][]|null{
+ if(!Number.isInteger(pageCount)||pageCount<1||units.length<pageCount
+  ||heights.length!==units.length||!Number.isFinite(capacity)||capacity<=0)return null;
+ if(heights.some(height=>!Number.isFinite(height)||height<=0||height>capacity))return null;
+ const canFit=(limit:number):boolean=>{
+  let pages=1,used=0;
+  for(const height of heights){
+   if(used+height>limit+1e-7){pages++;used=height;}
+   else used+=height;
+  }
+  return pages<=pageCount;
+ };
+ if(!canFit(capacity))return null;
+ let low=Math.max(...heights),high=capacity;
+ for(let iteration=0;iteration<52;iteration++){
+  const middle=(low+high)/2;
+  if(canFit(middle))high=middle;
+  else low=middle;
+ }
+ const pages:T[][]=[];
+ let page:T[]=[],used=0;
+ for(let index=0;index<units.length;index++){
+  if(page.length>0&&used+heights[index]>high+1e-6){
+   pages.push(page);page=[];used=0;
+  }
+  page.push(units[index]);used+=heights[index];
+ }
+ if(page.length)pages.push(page);
+ while(pages.length<pageCount){
+  let splitIndex=-1,largestPage=1;
+  for(let index=0;index<pages.length;index++){
+   if(pages[index].length>largestPage){largestPage=pages[index].length;splitIndex=index;}
+  }
+  if(splitIndex<0)return null;
+  const current=pages[splitIndex],midpoint=Math.floor(current.length/2);
+  pages.splice(splitIndex,1,current.slice(0,midpoint),current.slice(midpoint));
+ }
+ return pages.length===pageCount?pages:null;
+}
 type FullReportLayoutProfile = {
  bodyFontSize:number; bodyLineHeight:number; paragraphPadding:number; paragraphGap:number; maxParagraphLines:number;
  headingFontSize:number; headingLineHeight:number; headingPadding:number; headingGap:number;
