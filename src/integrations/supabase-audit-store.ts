@@ -647,19 +647,10 @@ export function createSupabaseAuditStore(
           status: job.status === "completed" || job.status === "failed" ? "unavailable" : "pending",
           reason: "Provider lookup has not completed.",
         }) : [];
-      const isrcCatalogSources = [...orderedEvents].reverse()
-        .filter((event) => event.event_type === "catalog_ingestion")
-        .flatMap((event) => {
-          const payload = event.payload as Record<string, unknown> | null;
-          if (payload?.lookupType !== "isrc" || typeof payload.platform !== "string" || typeof payload.canonicalUrl !== "string") return [];
-          return [{
-            platform: payload.platform,
-            canonicalUrl: payload.canonicalUrl,
-            status: typeof payload.status === "string" ? payload.status : "unavailable",
-            reason: typeof payload.reason === "string" ? payload.reason : "ISRC provider lookup completed without a detailed reason.",
-          }];
-        });
-      const catalogSources = [...submittedCatalogSources, ...isrcCatalogSources];
+      // Public status evidence is limited to URLs the user actually submitted.
+      // Automatic ISRC resolution remains available through field-level metadata
+      // reconciliation and internal audit events, not as a submitted source.
+      const catalogSources = submittedCatalogSources;
 
       const failureEvent = orderedEvents.find((event) => event.event_type === "audit_failed");
       const failurePayload = failureEvent?.payload as Record<string, unknown> | null;
