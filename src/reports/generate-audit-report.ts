@@ -549,8 +549,8 @@ const curatorCampaignBody=[
    "SOURCE SHA-256: "+i.realMasterContract.source.sha256,
    "SOURCE MIME / SIZE: "+i.realMasterContract.source.mimeType+" / "+i.realMasterContract.source.byteLength+" bytes",
    ...i.realMasterContract.directSignalMeasurements.map((m)=>executiveMetricLabel(m.name)+": "+(m.status==="measured"?text(m.value)+" "+m.unit+"; method "+m.method+"; measured: "+m.measuredAt:"Not reported as a confirmed measurement; "+m.diagnostics.map((d)=>executiveDiagnosticMessage(d.code,d.message,m.name)).join("; "))),
-   ...i.realMasterContract.provisionalPredictions.map((p)=>"PROVISIONAL "+(p.name==="audio_mood"?"AUDIO MOOD":"AUDIO ENERGY")+": "+p.label+" (heuristic score "+p.score+"/100; not a probability; method "+p.method+")."),
-   ...i.realMasterContract.calibratedPredictions.map((p) => {
+   ...(i.realMasterContract.provisionalPredictions??[]).map((p)=>"PROVISIONAL "+(p.name==="audio_mood"?"AUDIO MOOD":"AUDIO ENERGY")+": "+p.label+" (heuristic score "+p.score+"/100; not a probability; method "+p.method+")."),
+   ...(i.realMasterContract.calibratedPredictions??[]).map((p) => {
     if (p.status !== "predicted") {
      return executiveMetricLabel(p.name) + ": No calibrated model is configured. " + p.diagnostics.map((d) => executiveDiagnosticMessage(d.code,d.message)).join("; ");
     }
@@ -567,10 +567,10 @@ const curatorCampaignBody=[
      p.calibration.expectedCalibrationError.toFixed(3) + "; Brier " +
      p.calibration.brierScore.toFixed(3) + "; feature drivers: " + drivers + diagnostics + ")";
    }),
-   ...i.realMasterContract.externalRecords.map((r)=>r.status==="verified"
+   ...(i.realMasterContract.externalRecords??[]).map((r)=>r.status==="verified"
      ?"EXTERNAL RECORD: "+r.provider+" / "+r.recordId+"; retrieved: "+r.retrievedAt+"; fields: "+Object.keys(r.fields).join(", ")+"; field provenance: "+Object.entries(r.fieldProvenance).map(([field,p])=>field+"="+p.provider+"/"+p.recordId+"@"+p.retrievedAt).join(", ")
      :"EXTERNAL RECORD UNAVAILABLE: "+r.provider+" — "+executiveDiagnosticMessage(r.reasonCode,r.diagnostic.message)),
-   ...i.realMasterContract.pipelineDiagnostics.map((d)=>"PIPELINE LIMITATION: "+executiveDiagnosticMessage(d.code,d.message)),
+   ...(i.realMasterContract.pipelineDiagnostics??[]).map((d)=>"PIPELINE LIMITATION: "+executiveDiagnosticMessage(d.code,d.message)),
    "Provenance rule: direct signal measurements are observed from the uploaded master; catalogue records are provider-returned and do not establish streams, listeners, revenue or demand."
   ]
  }] : []),
