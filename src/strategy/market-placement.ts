@@ -51,6 +51,7 @@ export interface PositioningRecommendation {
 
 export interface MarketPlacementPlan {
   version: "market-placement-v1";
+  playlistPresence: PlaylistTarget[];
   playlistTargets: PlaylistTarget[];
   acousticSimilarity: { status: "unavailable"; reason: string };
   territoryPriorities: TerritoryPriorities;
@@ -90,7 +91,7 @@ function playlistTargets(value: unknown): PlaylistTarget[] {
     const containsIsrc = item.containsIsrc === true;
     const genreMatches = Array.isArray(item.genreMatches) ? item.genreMatches.filter((entry) => typeof entry === "string") : [];
     const moodMatches = Array.isArray(item.moodMatches) ? item.moodMatches.filter((entry) => typeof entry === "string") : [];
-    const priorityScore = Math.min(100, (containsIsrc ? 100 : 0) + (genreMatches.length ? 55 : 0) + Math.min(20, genreMatches.length * 5) + Math.min(10, moodMatches.length * 5));
+    const priorityScore = Math.min(85, (genreMatches.length ? 55 : 0) + Math.min(20, genreMatches.length * 5) + Math.min(10, moodMatches.length * 5));
     return [{
       rank: 0,
       provider,
@@ -304,12 +305,15 @@ export function buildPlaylistMoodContext(
 }
 
 export function buildMarketPlacementPlan(input: MarketPlacementInput): MarketPlacementPlan {
-  const targets = playlistTargets(input.playlistDiscovery);
+  const allPlaylistMatches = playlistTargets(input.playlistDiscovery);
+  const presence = allPlaylistMatches.filter((item) => item.matchStatus === "isrc_present").map((item, index) => ({ ...item, rank: index + 1 }));
+  const targets = allPlaylistMatches.filter((item) => item.matchStatus !== "isrc_present").map((item, index) => ({ ...item, rank: index + 1 }));
   const territories = territoryPriorities(input.evidence);
   const hooks = shortFormHooks(input.sonicDna, input.executionMode);
   const fit = positioning(input.sonicDna, input.evidence);
   return {
     version: "market-placement-v1",
+    playlistPresence: presence,
     playlistTargets: targets,
     acousticSimilarity: { status: "unavailable", reason: "The configured playlist endpoints do not expose candidate-track BPM, key, energy and acoustic feature vectors. Playlist targeting therefore uses exact ISRC presence plus provider-returned genre/mood metadata; no track-to-playlist acoustic similarity score is asserted." },
     territoryPriorities: territories,
