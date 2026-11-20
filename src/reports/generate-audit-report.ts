@@ -5,9 +5,10 @@ import { isReliableKey, isReliableTempo, hasMultipleTuningWindows, sanitizeAsses
 import { buildStrengthRiskChartRows, chartPanelHeight, chartPanelLayoutErrors, countEvidenceLayers, drawChartPanel, type ChartPanelInput } from "./charts.js";
 import { hasSubmittedMasterAudio } from "../audio/master-audio-evidence.js";
 import type { RealMasterAuditContract } from "../audio/real-master-contract.js";
+import type { MarketPlacementPlan } from "../strategy/market-placement.js";
 
 export type AuditReportTier = "sample" | "full";
-export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; executionMode?:"master"|"combined"|"dsp_link"; realMasterContract?:RealMasterAuditContract; }
+export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; executionMode?:"master"|"combined"|"dsp_link"; realMasterContract?:RealMasterAuditContract; marketPlacement?:MarketPlacementPlan; }
 export interface ReportRect { x:number;y:number;width:number;height:number;id:string; }
 export interface ReportPagePlan { title:string;text:string[]; }
 const W=595.28,H=841.89,M=48,TOP=735,BOTTOM=76,AVAILABLE=TOP-BOTTOM;
@@ -522,6 +523,38 @@ const curatorCampaignBody=[
  {title:"Curator campaign and target verification",accent:"coral",body:curatorCampaignBody},
  {title:"Label and partner fit",accent:"blue",body:[a.labelPartnerFit.partnerProfile,...a.labelPartnerFit.criteriaToDemonstrate,a.labelPartnerFit.diligenceBeforeContact,industryPractice(a.labelPartnerFit.industryPractice)]},
  {title:"30 / 60 / 90-day execution plan",accent:"violet",body:["DAYS 01–30 — "+a.executionPlan.days30,"DAYS 31–60 — "+a.executionPlan.days60,"DAYS 61–90 — "+a.executionPlan.days90]},
+ ...(i.marketPlacement?[
+ {title:"Executive market placement and DSP targeting",accent:"blue" as const,body:[
+  ...(i.marketPlacement.playlistTargets.length?i.marketPlacement.playlistTargets.map((target)=>"TARGET "+target.rank+" — "+target.provider+" — "+target.name+" — priority "+target.priorityScore+"/100 — "+target.matchStatus+" — "+target.matchBasis.join("; ")+" — retrieved "+val(target.retrievedAt)):["No provider-returned playlist candidates are available for this audit."]),
+  "Targeting rule: exact ISRC presence ranks ahead of genre/mood similarity; priority scores are ordering aids, not placement probabilities.",
+  "Playlist limitations: candidates do not establish curator interest, editorial acceptance, placement, audience size or commercial performance."
+ ]},
+ {title:"Territory prioritization",accent:"teal" as const,body:[
+  i.marketPlacement.territoryPriorities.status==="available"?"SOURCE: "+i.marketPlacement.territoryPriorities.provider+" — metric "+i.marketPlacement.territoryPriorities.metric+" — period "+i.marketPlacement.territoryPriorities.reportingPeriod+" — retrieved "+i.marketPlacement.territoryPriorities.retrievedAt:i.marketPlacement.territoryPriorities.reason,
+  ...i.marketPlacement.territoryPriorities.territories.map((territory,index)=>(index+1)+". "+territory.countryCode+" — "+territory.value+" "+i.marketPlacement!.territoryPriorities.metric),
+  "Territory rankings are not inferred from artist location, genre popularity or catalogue presence."
+ ]},
+ {title:"Timestamped short-form edit candidates",accent:"violet" as const,body:[
+  ...(i.marketPlacement.shortFormHooks.segments.length?i.marketPlacement.shortFormHooks.segments.map((segment,index)=>"EDIT CANDIDATE "+(index+1)+" — "+segment.startSeconds.toFixed(2)+"s to "+segment.endSeconds.toFixed(2)+"s — relative signal priority "+segment.score+"/100 — "+segment.signals.join(", ")):["No timestamped excerpt candidates are available: "+i.marketPlacement.shortFormHooks.limitations[0]]),
+  "Method: "+i.marketPlacement.shortFormHooks.method,
+  ...i.marketPlacement.shortFormHooks.limitations
+ ]},
+ {title:"DJ, club and sync positioning",accent:"coral" as const,body:[
+  "DJ — "+i.marketPlacement.positioning.dj.status.toUpperCase()+" — "+i.marketPlacement.positioning.dj.reason,
+  ...i.marketPlacement.positioning.dj.basis.map((item)=>"DJ evidence: "+item),
+  ...i.marketPlacement.positioning.dj.limitations,
+  "CLUB — "+i.marketPlacement.positioning.club.status.toUpperCase()+" — "+i.marketPlacement.positioning.club.reason,
+  ...i.marketPlacement.positioning.club.basis.map((item)=>"Club evidence: "+item),
+  ...i.marketPlacement.positioning.club.limitations,
+  "SYNC — "+i.marketPlacement.positioning.sync.status.toUpperCase()+" — "+i.marketPlacement.positioning.sync.reason,
+  ...i.marketPlacement.positioning.sync.basis.map((item)=>"Sync gate: "+item),
+  ...i.marketPlacement.positioning.sync.limitations
+ ]},
+ {title:"360-degree marketing rollout",accent:"blue" as const,body:[
+  ...i.marketPlacement.rollout.flatMap((phase)=>[phase.phase.replace(/_/g," ").toUpperCase(),...phase.actions,...phase.gates.map((gate)=>"GATE: "+gate)]),
+  ...i.marketPlacement.globalLimitations
+ ]}
+ ]:[]),
  {title:"Commercial evidence, measurement and decision gates",accent:"blue",body:["Catalog popularity: "+val(e.catalogPopularity),"Audience telemetry: "+val(e.audienceTelemetry),"DECISION RECORD",a.releaseStrategy.recommendation,...a.releaseStrategy.priorities.map((p,n)=>"Priority "+(n+1)+": "+p),"Evidence gaps: "+a.evidenceGaps.join(" "),"Limitations: "+a.limitations.join(" ")]}
  ];
  return output.map((section)=>({...section,body:section.body.map(professionalEvidenceLanguage).filter((paragraph)=>paragraph.trim().length>0)}));
