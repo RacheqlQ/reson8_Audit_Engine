@@ -44,8 +44,10 @@ export interface AcousticFeatureProfile {
   };
   windowSummaries:Array<{startSeconds:number;endSeconds:number;rmsDbfs:number;spectralCentroidHz:number;spectralFlatness:number}>;
   predictions:{
-    mood:{status:"unavailable";label:null;probability:null;reasonCode:"VALIDATED_MODEL_NOT_CONFIGURED"};
-    energy:{status:"unavailable";label:null;probability:null;reasonCode:"CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED"};
+    mood:{status:"provisional";labels:string[];scores:Record<"bright"|"dark"|"driving"|"calm"|"tense"|"warm",number>;method:"audio_feature_heuristics_v1";probability:null}
+      |{status:"unavailable";labels:[];scores:null;method:"audio_feature_heuristics_v1";probability:null;reasonCode:string};
+    energy:{status:"provisional";label:"low"|"moderate"|"high";score:number;method:"audio_feature_heuristics_v1";probability:null}
+      |{status:"unavailable";label:null;score:null;method:"audio_feature_heuristics_v1";probability:null;reasonCode:string};
   };
   abstentionReasons:string[];
 }
@@ -145,6 +147,47 @@ function measureWindow(samples:Float32Array,start:number,sampleRate:number,chann
   };
 }
 
+type DescriptorMap = AcousticFeatureProfile["descriptors"];
+const clamp01=(value:number):number=>Math.max(0,Math.min(1,value));
+const roundedScore=(value:number):number=>Math.round(clamp01(value)*100);
+
+/**
+ * Transparent, provisional descriptors derived only from the uploaded PCM.
+ * These are interpretable heuristic estimates, not learned-model probabilities
+ * or claims of perceptual validity. Human-labelled held-out evaluation is still
+ * required before calibration/accuracy claims can be made.
+ */
+function deriveProvisionalPredictions(descriptors:DescriptorMap):AcousticFeatureProfile["predictions"] {
+  const rms=descriptors.rmsDbfs.median;
+  const flux=descriptors.spectralFlux.p90;
+  const centroid=descriptors.spectralCentroidHz.median;
+  const flatness=descriptors.spectralFlatness.median;
+  const zcr=descriptors.zeroCrossingRate.median;
+  const low=descriptors.lowBandEnergyRatio.median;
+  const mid=descriptors.midBandEnergyRatio.median;
+  const energy01=clamp01(((rms+48)/42)*0.55+clamp01(flux/0.5)*0.25+clamp01(centroid/6000)*0.12+clamp01(zcr/0.25)*0.08);
+  const flux01=clamp01(flux/0.5);
+  const brightness=clamp01(centroid/6000);
+  const scores={
+    bright:roundedScore(brightness),
+    dark:roundedScore(1-brightness),
+    driving:roundedScore(energy01*0.55+flux01*0.45),
+    calm:roundedScore(1-(energy01*0.65+flux01*0.35)),
+    tense:roundedScore(clamp01(flatness)*0.55+flux01*0.45),
+    warm:roundedScore(clamp01(low*0.55+mid*0.45)*(1-brightness*0.35)),
+  };
+  const labels=(Object.entries(scores) as Array<[keyof typeof scores,number]>)
+    .filter(([,score])=>score>=58)
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,2)
+    .map(([label])=>label);
+  const energyScore=roundedScore(energy01);
+  return {
+    mood:{status:"provisional",labels:labels.length?labels:["neutral"],scores,method:"audio_feature_heuristics_v1",probability:null},
+    energy:{status:"provisional",label:energyScore<34?"low":energyScore<67?"moderate":"high",score:energyScore,method:"audio_feature_heuristics_v1",probability:null},
+  };
+}
+
 function emptyProfile(sampleRate:number,channels:number,duration:number,reason:string):AcousticFeatureProfile {
   const unavailable=(unit:string,method:string):AcousticDescriptor=>({median:0,p10:0,p90:0,unit,method});
   return {
@@ -158,7 +201,10 @@ function emptyProfile(sampleRate:number,channels:number,duration:number,reason:s
       lowBandEnergyRatio:unavailable("ratio","fft_band_power_ratio_20_250_hz"),midBandEnergyRatio:unavailable("ratio","fft_band_power_ratio_250_4000_hz"),highBandEnergyRatio:unavailable("ratio","fft_band_power_ratio_4000_hz_to_nyquist"),
     },
     windowSummaries:[],
-    predictions:{mood:{status:"unavailable",label:null,probability:null,reasonCode:"VALIDATED_MODEL_NOT_CONFIGURED"},energy:{status:"unavailable",label:null,probability:null,reasonCode:"CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED"}},
+    predictions:{
+      mood:{status:"unavailable",labels:[],scores:null,method:"audio_feature_heuristics_v1",probability:null,reasonCode:reason},
+      energy:{status:"unavailable",label:null,score:null,method:"audio_feature_heuristics_v1",probability:null,reasonCode:reason},
+    },
     abstentionReasons:[reason],
   };
 }
@@ -212,7 +258,13 @@ export function extractAcousticFeatureProfile(samples:Float32Array,sampleRate:nu
       lowBandEnergyRatio:descriptor("lowBandEnergyRatio","low"),midBandEnergyRatio:descriptor("midBandEnergyRatio","mid"),highBandEnergyRatio:descriptor("highBandEnergyRatio","high"),
     },
     windowSummaries,
-    predictions:{mood:{status:"unavailable",label:null,probability:null,reasonCode:"VALIDATED_MODEL_NOT_CONFIGURED"},energy:{status:"unavailable",label:null,probability:null,reasonCode:"CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED"}},
+    predictions:deriveProvisionalPredictions({
+      rmsDbfs:descriptor("rmsDbfs","rmsDbfs"),peakDbfs:descriptor("peakDbfs","peakDbfs"),crestFactorDb:descriptor("crestFactorDb","crestFactorDb"),
+      spectralCentroidHz:descriptor("spectralCentroidHz","centroid"),spectralBandwidthHz:descriptor("spectralBandwidthHz","bandwidth"),
+      spectralRolloff85Hz:descriptor("spectralRolloff85Hz","rolloff"),spectralFlatness:descriptor("spectralFlatness","flatness"),
+      spectralFlux:descriptor("spectralFlux","flux"),zeroCrossingRate:descriptor("zeroCrossingRate","zcr"),
+      lowBandEnergyRatio:descriptor("lowBandEnergyRatio","low"),midBandEnergyRatio:descriptor("midBandEnergyRatio","mid"),highBandEnergyRatio:descriptor("highBandEnergyRatio","high"),
+    }),
     abstentionReasons:[],
   };
 }
