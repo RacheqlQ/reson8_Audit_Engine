@@ -362,6 +362,21 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  if(names.length)drawWrapped(page,"Candidates: "+names.join(" · "),x+174,top-91,width-190,fonts.bold,7,C.muted,9);
  return height;
 }
+function drawCompactSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts,top:number):number{
+ if(!data.sonicAxes)return 0;
+ const axes=Object.entries(data.sonicAxes),height=128,bottom=top-height,x=M,width=W-2*M;
+ page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
+ page.drawText("SONIC PROFILE",{x:x+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
+ axes.slice(0,5).forEach(([name,axis],index)=>{
+  const y=top-39-index*17;
+  page.drawText(name,{x:x+12,y,size:6.7,font:fonts.bold,color:C.ink});
+  page.drawRectangle({x:x+145,y:y-2,width:210,height:6,color:C.line});
+  page.drawRectangle({x:x+145,y:y-2,width:210*Math.max(0,Math.min(100,axis.value))/100,height:6,color:axis.value<60?C.amber:C.teal});
+  page.drawText(String(axis.value),{x:x+365,y:y-1,size:6.7,font:fonts.bold,color:C.ink});
+ });
+ return height;
+}
 function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
  const blocks=metricBlock(data),gap=10,width=(W-2*M-gap*2)/3,top=H-92;
  const metricHeight=Math.max(...blocks.map((b,i)=>drawMetricCard(page,M+i*(width+gap),top,width,b,fonts)));
@@ -399,25 +414,10 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
   page.drawText("Dip "+dip.timeSeconds.toFixed(1)+"s",{x:dipLabelX,y:plotBottom-(sameRegion?24:13),size:6,font:fonts.bold,color:C.coral});
   y-=h+12;
  }
- if(data.sonicAxes){
-  const axes=Object.entries(data.sonicAxes),panelHeight=30+axes.length*22,top=y-8,bottom=top-panelHeight;
-  if(bottom<72)throw new Error("Sonic DNA axis evidence cannot fit safely on the nine-page sample snapshot.");
-  page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
-  page.drawText("SONIC PROFILE · SCORES / 100",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
-  axes.forEach(([name,axis],index)=>{
-   const yy=top-35-index*22;
-   page.drawText(name,{x:M+12,y:yy,size:7,font:fonts.bold,color:C.ink});
-   page.drawRectangle({x:M+100,y:yy-2,width:160,height:6,color:C.line});
-   page.drawRectangle({x:M+100,y:yy-2,width:160*axis.value/100,height:6,color:axis.value<60?C.amber:C.teal});
-   page.drawText(String(axis.value),{x:M+270,y:yy-1,size:7,font:fonts.bold,color:C.ink});
-   drawWrapped(page,axis.note??"Axis note not supplied.",M+300,yy,W-2*M-312,fonts.regular,6.2,C.muted,7);
-  });
-  y=bottom-12;
- }
  const sonic=rec(input.sonicDna);
  const rows:Array<[string,string]>=[
   ["Track length",typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?Math.floor(sonic.durationSeconds/60)+" min "+Math.round(sonic.durationSeconds%60)+" sec":""],
-  ["Recording format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):""],
+  ["Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):""],
   ["Song key",data.key.value===null?"Not determined":String(data.key.value)],
   ["Tempo",data.tempo.value===null?"Not determined":data.tempo.value+" BPM"]
  ].filter((entry):entry is [string,string]=>Boolean(entry[1]));
@@ -540,7 +540,8 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    const body=spec.lines?.filter(Boolean)??[];
    const height=card(page,M,H-92,W-2*M,spec.title,body,fonts,{accent:C.gold});
    const mapTop=H-92-height-14;
-   drawCircleOfFifths(page,input,data,fonts,mapTop);
+   const mapHeight=drawCircleOfFifths(page,input,data,fonts,mapTop);
+   if(data.sonicAxes)drawCompactSonicAxes(page,data,fonts,mapTop-mapHeight-12);
   }else if(spec.kind==="full-axes"){
    if(data.sonicAxes)drawSonicAxes(page,data,fonts);
    else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
