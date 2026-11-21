@@ -293,9 +293,12 @@ function scoreCandidate(chroma: readonly number[], key: number, mode: Mode, bass
   return profileScore + circleOfFifthsRootScore(bassChroma, key) * 0.08;
 }
 
-function diatonicScalePitchClasses(key: number, mode: Mode): Set<number> {
+function diatonicChordQualities(key: number, mode: Mode): Map<number, Mode> {
   const intervals = mode === "major" ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
-  return new Set(intervals.map(interval => (key + interval) % 12));
+  const qualities: Mode[] = mode === "major"
+    ? ["major", "minor", "minor", "major", "major", "minor", "minor"]
+    : ["minor", "minor", "major", "minor", "minor", "major", "major"];
+  return new Map(intervals.map((interval, degree) => [(key + interval) % 12, qualities[degree]!]));
 }
 
 function rankCandidates(chroma: readonly number[], bassChroma: readonly number[] = []): Candidate[] {
@@ -382,13 +385,12 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     key: NOTES[candidate.key], mode: candidate.mode, score: Number(candidate.score.toFixed(6)),
   }));
   const windowConsensus = bootstrapCategoricalConsensus(segmentWinners.map((winner) => `${NOTES[winner.key]}:${winner.mode}`));
-  const supportedScale = diatonicScalePitchClasses(best.key, best.mode);
-  // A progression can move through different diatonic chord roots while staying
-  // in one song key. Count scale membership, not identical per-window chord labels.
-  const agreement = segmentProfiles.filter(profile => {
-    const scaleEnergy = profile.reduce((sum, value, pitch) => sum + (supportedScale.has(pitch) ? value : 0), 0);
-    return scaleEnergy >= 0.7;
-  }).length / segmentProfiles.length;
+  const supportedChords = diatonicChordQualities(best.key, best.mode);
+  // Recognize diatonic chord progressions (e.g. C–F–G–C) while rejecting
+  // incompatible sections whose chord roots or major/minor quality do not fit.
+  const agreement = segmentWinners.filter(winner =>
+    supportedChords.get(winner.key) === winner.mode
+  ).length / segmentWinners.length;
   const margin = best.score - second.score;
   const confidence = clamp((margin * 2.5 + 0.08) * (0.35 + 0.65 * agreement));
   const tuningCents = tuningValues.length ? weightedMedian(tuningValues) : 0;
