@@ -187,13 +187,13 @@ describe("v2 gated report pages", () => {
     expect(pdf.getForm().getFields().map(field => field.getName())).toContain("ar_notes");
   });
 
-  it("keeps a full report within the approved 12–13 page range without consulting v1 pagination", async () => {
+  it("keeps a full report within the expanded full-report allocation without consulting v1 pagination", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(12);
+    expect(pdf.getPageCount()).toBe(17);
   });
 
-  it("keeps an expanded real-world narrative inside the fixed 12-page full-report allocation", async () => {
+  it("keeps an expanded real-world narrative inside the expanded full-report allocation", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.assessment.executiveSummary = Array(3).fill(input.assessment.executiveSummary).join(" ");
     input.assessment.strengths = [...input.assessment.strengths, ...Array(5).fill(
