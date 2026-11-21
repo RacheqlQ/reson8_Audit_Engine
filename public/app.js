@@ -157,7 +157,7 @@ async function submitAudit(){
     if(!response.ok)throw new Error(payload.message||"Audit intake failed");
     const submittedName=hasMaster?selectedFile.name.replace(/\.[^.]+$/,""):catalogPlatform.textContent+" "+(new URL(urls[0]).pathname.split("/").filter(Boolean).at(-1)||"catalog");
     const displayName=submittedName.replace(/[\s]+/g," ").trim().slice(0,100)||"Untitled audit";
-    jobId.textContent=payload.jobId||"—";resultName.textContent=displayName+" — AUDIT ACCEPTED";serverHash.textContent=payload.sha256||"—";reportAccessToken=payload.reportAccessToken||null;currentAuditPayload={jobId:payload.jobId,status:"queued",currentStepIndex:0,displayName};resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
+    jobId.textContent=payload.jobId||"—";document.getElementById("unlockAuditId").textContent=payload.jobId||"—";resultName.textContent=displayName+" — AUDIT ACCEPTED";serverHash.textContent=payload.sha256||"—";reportAccessToken=payload.reportAccessToken||null;currentAuditPayload={jobId:payload.jobId,status:"queued",currentStepIndex:0,displayName};resultPanel.classList.remove("hidden");reportActions.classList.add("hidden");auditStatus.textContent="QUEUED";auditStatus.className="queued";
     resultMessage.textContent=hasMaster&&hasCatalog?"Accepted. Master Sonic DNA and DSP catalog evidence will be reconciled into one report.":hasMaster?"Accepted. Master Sonic DNA analysis is processing.":"Accepted. DSP catalog analysis is processing.";
     if(reportAccessToken){
       revealAccessTokenButton.disabled=false;
@@ -192,9 +192,11 @@ function revealAccessToken(){
   renderAccessToken();
 }
 async function unlockFullReport(){
-  const pastedKey=fullReportAccessKey.value.trim();
+  const pastedKey=fullReportAccessKey.value;
   const accessToken=pastedKey||reportAccessToken;
   if(!accessToken){tokenSaveMessage.textContent="Paste this audit's private key before unlocking.";return;}
+  if(!/^[0-9a-fA-F]{64}$/.test(accessToken.trim())){tokenSaveMessage.textContent="Key must be 64 hexadecimal characters";return;}
+  if(!currentAuditPayload?.jobId||document.getElementById("unlockAuditId").textContent!==currentAuditPayload.jobId){tokenSaveMessage.textContent="The displayed audit ID does not match the current submission.";return;}
   await downloadReport("full",accessToken);
 }
 async function downloadReport(tier,accessToken=reportAccessToken){
@@ -202,6 +204,7 @@ async function downloadReport(tier,accessToken=reportAccessToken){
   reportDownloadMessage.textContent="Retrieving "+tier+" PDF…";
   try{
     const response=await fetch("/v1/audits/"+encodeURIComponent(currentAuditPayload.jobId)+"/reports/"+tier,{headers:{"x-reson8-report-token":accessToken}});
+    if(response.status===404&&tier==="full"){reportDownloadMessage.textContent="Invalid key or report not found for this audit";return;}
     const blob=await readPdfResponse(response);
     const name=(currentAuditPayload?.displayName||currentAuditPayload?.jobName||"audit").replace(/[^A-Za-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,80)||"audit";
     triggerPdfDownload(blob,"reson8-"+name+"-"+tier+".pdf");
