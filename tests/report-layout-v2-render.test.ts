@@ -239,7 +239,7 @@ describe("v2 cover key and playback presentation", () => {
     const confirmed = structuredClone(fullAudioFixture) as any;
     expect(buildRecordingOverviewKeyLabel(adaptReportV2(confirmed))).toBe("A minor");
     const unavailable = structuredClone(metadataOnlyFixture) as any;
-    expect(buildRecordingOverviewKeyLabel(adaptReportV2(unavailable))).toBe("Not determined");
+    expect(buildRecordingOverviewKeyLabel(adaptReportV2(unavailable))).toBe("Unavailable");
   });
   it("shows the strongest reportable tonal centre on the cover without calling it confirmed", () => {
     const input = structuredClone(ambiguousAudioFixture) as any;
