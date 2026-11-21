@@ -195,9 +195,10 @@ async function unlockFullReport(){
   const pastedKey=fullReportAccessKey.value;
   const accessToken=pastedKey||reportAccessToken;
   if(!accessToken){tokenSaveMessage.textContent="Paste this audit's private key before unlocking.";return;}
-  if(!/^[0-9a-fA-F]{64}$/.test(accessToken.trim())){tokenSaveMessage.textContent="Key must be 64 hexadecimal characters";return;}
+  const normalizedKey=accessToken.replace(/[\\s\\u200B-\\u200D\\uFEFF]/g,"").replace(/^["']+|["']+$/g,"").toLowerCase();
+  if(!/^[0-9a-f]{64}$/.test(normalizedKey)){tokenSaveMessage.textContent="Key must be 64 hexadecimal characters";return;}
   if(!currentAuditPayload?.jobId||document.getElementById("unlockAuditId").textContent!==currentAuditPayload.jobId){tokenSaveMessage.textContent="The displayed audit ID does not match the current submission.";return;}
-  await downloadReport("full",accessToken);
+  await downloadReport("full",normalizedKey);
 }
 async function downloadReport(tier,accessToken=reportAccessToken){
   if(!accessToken){reportDownloadMessage.textContent="This audit's private access token is unavailable. Submit a new audit to receive a fresh token.";return;}
