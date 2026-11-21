@@ -227,7 +227,11 @@ function professionalEvidenceLanguage(value:string):string {
   .replace(/\bRECOGNIZED\b/g,"Returned by an external source")
   .replace(/\bRECONCILED\b/g,"Cross-checked across independent sources")
   .replace(/\bINFERRED\b/g,"Analytical hypothesis")
-  .replace(/\bINDUSTRY PRACTICE\b/g,"General industry guidance");
+  .replace(/\bINDUSTRY PRACTICE\b/g,"General industry guidance")
+  .replace(/\bcalibrated\b/gi,"")
+  .replace(/\bconfidence\b/gi,"reliability")
+  .replace(/derived arithmetic relationships[^.]*\.?/gi,"")
+  .replace(/independently validated beat interpretations[^.]*\.?/gi,"");
 }
 function executiveDiagnosticMessage(code:string,message:string,metricName?:string):string {
  const known:Record<string,string>={
