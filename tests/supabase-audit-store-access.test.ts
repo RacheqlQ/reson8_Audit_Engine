@@ -347,3 +347,21 @@ describe("Sonic DNA diagnostic event persistence", () => {
     expect(JSON.stringify(requestBody.p_payload.eventPayload)).not.toContain("audioBytes");
   });
 });
+
+describe("full-report availability projection", () => {
+  it("does not advertise a full report whose persisted access status is unavailable", async () => {
+    process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
+    process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
+    const job = { id: "job-locked", status: "completed", error_code: null, error_message: null, catalog_metadata: {} };
+    const events: unknown[] = [];
+    const reports = [{ tier: "full", version: 3, access_status: "restricted" }];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes("/audit_jobs?") ? job : url.includes("/audit_events?") ? events : reports;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const status = await createSupabaseAuditStore().getAuditStatus("job-locked");
+    expect(status.full).toEqual({ available: false, version: 3 });
+  });
+});
