@@ -11,8 +11,16 @@ describe("v2 read-only evidence adapters", () => {
     expect(data.notYetMeasured.join(" ")).not.toMatch(/128\s*BPM|64\s*BPM/i);
     expect(data.key.value).toBeNull();
     expect(data.key.confidence).toBe("Low");
+    expect(data.notYetMeasured.join(" ")).not.toMatch(/C major|A minor/i);
     expect(data.comparables).toBeNull();
     expect(data.sonicAxes).toBeNull();
+  });
+
+  it("shows harmonic candidates only above the public candidate-confidence floor", () => {
+    const input = structuredClone(ambiguousAudioFixture) as any;
+    input.sonicDna.keyConfidence = 0.25;
+    const data = adaptReportV2(input);
+    expect(data.notYetMeasured.join(" ")).toContain("C major");
   });
 
   it("returns null for gated evidence absent from an audio-only fixture", () => {
