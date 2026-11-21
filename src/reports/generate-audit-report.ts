@@ -229,6 +229,7 @@ function professionalEvidenceLanguage(value:string):string {
   .replace(/\bINFERRED\b/g,"Analytical hypothesis")
   .replace(/\bINDUSTRY PRACTICE\b/g,"General industry guidance")
   .replace(/\bcalibrated\b/gi,"")
+  .replace(/No validated model prediction is available\.?/gi,"")
   .replace(/\bconfidence\b/gi,"reliability")
   .replace(/derived arithmetic relationships[^.]*\.?/gi,"")
   .replace(/independently validated beat interpretations[^.]*\.?/gi,"");
