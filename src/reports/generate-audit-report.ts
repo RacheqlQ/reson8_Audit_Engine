@@ -361,7 +361,7 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
   {label:"TONAL RESOLUTION STATE",value:hasAudio&&typeof tonalResolution.status==="string"?tonalResolution.status:null},
   {label:"CIRCLE OF FIFTHS TONIC",value:hasAudio&&tonalResolution.status!=="UNAVAILABLE"&&typeof tonalResolution.tonic==="string"?text(tonalResolution.tonic)+" "+text(tonalResolution.mode)+" ("+text(tonalResolution.status).toLowerCase()+")":null},
   {label:"TONAL RESOLUTION DIAGNOSTICS",value:hasAudio&&tonalReasonText?tonalReasonText:null},
-  {label:"TONAL WINDOW CONSENSUS",value:hasAudio&&typeof tonalResolution.windowAgreement==="number"?"Window agreement "+(tonalResolution.windowAgreement*100).toFixed(0)+"%; bootstrap share "+(typeof tonalResolution.bootstrapShare==="number"?(tonalResolution.bootstrapShare*100).toFixed(0)+"%":"not available"):""},
+  {label:"TONAL WINDOW CONSENSUS",value:hasAudio&&typeof tonalResolution.windowAgreement==="number"?"Window agreement "+(tonalResolution.windowAgreement*100).toFixed(0)+"%; bootstrap share "+(typeof tonalResolution.bootstrapShare==="number"?(tonalResolution.bootstrapShare*100).toFixed(0)+"%":"not available"):null},
   {label:"KEY WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(harmonic.windowConsensus,harmonic.independentEstimator):null},
   {label:"KEY CANDIDATE REASON",value:hasAudio&&!keyReliable?(tonalReasonText||"A single song key could not be confirmed from the supplied recording."):null},
  ...(tuningOffsetReportable?[{label:"TUNING OFFSET CANDIDATE CENTS",value:metric(s?.keyTuningCents,0)+" (multiple tonal windows; provisional)"}]:[]),
