@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readPdfResponse, triggerPdfDownload } from "../public/report-download.js";
+import { normalizeReportAccessKey, readPdfResponse, triggerPdfDownload } from "../public/report-download.js";
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
 describe("browser PDF download contract", () => {
+  it("preserves every valid hexadecimal character when normalizing a pasted report key", () => {
+    const key = "0123456789abcdef".repeat(4);
+    expect(normalizeReportAccessKey(key)).toBe(key);
+    expect(normalizeReportAccessKey("  \n\t\u200B" + key.toUpperCase() + "  ")).toBe(key);
+  });
+
   it("rejects authorization error JSON without producing a downloadable Blob", async () => {
     const response = new Response(
       JSON.stringify({ error: "OPERATOR_AUTH_REQUIRED", message: "Operator access required." }),
