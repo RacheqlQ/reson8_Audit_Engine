@@ -204,7 +204,7 @@ export function resolveTonalCentre(input: readonly TonalWindow[]): TonalResoluti
     && Number.isFinite(window.salience) && window.salience>=MIN_MEAN_SALIENCE
   );
   const meanSalience=valid.length?valid.reduce((sum,w)=>sum+clamp(w.salience),0)/valid.length:0;
-  if(valid.length<MIN_WINDOWS || meanSalience<MIN_MEAN_SALIENCE)
+  if(valid.length===0 || meanSalience<MIN_MEAN_SALIENCE)
     return unavailable("INSUFFICIENT_TONAL_EVIDENCE",valid.length,meanSalience);
 
   const ranked=rankWindows(valid);
@@ -228,7 +228,7 @@ export function resolveTonalCentre(input: readonly TonalWindow[]): TonalResoluti
   const rankedPair=ranked.find(candidate=>candidate.mode!==best.mode
     && ((candidate.tonic-best.tonic+12)%12===3 || (candidate.tonic-best.tonic+12)%12===9));
   const reasons:TonalReasonCode[]=[];
-  if(windowAgreement<MIN_WINDOW_AGREEMENT) reasons.push("LOW_WINDOW_CONSENSUS");
+  if(valid.length<MIN_WINDOWS || windowAgreement<MIN_WINDOW_AGREEMENT) reasons.push("LOW_WINDOW_CONSENSUS");
   if(bootstrapShare<MIN_BOOTSTRAP_SHARE) reasons.push("LOW_BOOTSTRAP_CONSENSUS");
   if(margin<MIN_RUNNER_UP_MARGIN) reasons.push("LOW_RUNNER_UP_MARGIN");
   if(rankedPair && Math.abs(best.score-rankedPair.score)/Math.max(EPSILON,Math.abs(best.score))<0.04)
