@@ -40,7 +40,9 @@ describe("Phase 2 estimator window consensus", () => {
         winner: "C:major",
       },
     });
-    expect(result.key).toBe("C");
+    expect(result.key).toBeNull();
+    expect(result.tonalResolution?.status).toBe("PROVISIONAL");
+    expect(result.tonalResolution?.tonic).toBe("C");
   });
 
 
