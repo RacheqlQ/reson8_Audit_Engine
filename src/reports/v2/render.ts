@@ -204,8 +204,9 @@ export function buildEvidenceLedgerSummary(labels: Array<{ label: string }>): st
 
 export function buildNextActionLine(input: AuditReportInput): string {
  const assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)), recommendation=str(rec(assessment.releaseStrategy).recommendation,"");
- const firstGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(Boolean)??"";
- return "Recommended next step: "+(recommendation||firstGap||"Confirm the recording identifier and release-version mapping, complete rights and master-clearance checks, then run a measured post-release curator and creator reactivation.");
+ const firstGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(value=>value&&!/^(?:not supplied|not provided|not available)$/i.test(value))??"";
+ const usableRecommendation=/^(?:not supplied|not provided|not available)$/i.test(recommendation)?"":recommendation;
+ return "Recommended next step: "+(usableRecommendation||firstGap||"Confirm the recording identifier and release-version mapping, complete rights and master-clearance checks, then run a measured post-release curator and creator reactivation.");
 }
 
 export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
@@ -399,8 +400,14 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
  ];
  if(tier==="full"){
   const promotion=rec(a.promotionPlan),partner=rec(a.labelPartnerFit),execution=rec(a.executionPlan);
-  const paragraph=(label:string,value:unknown,fallback="Not supplied in the assessment."):Block=>({label,value:str(value,fallback)});
-  const list=(label:string,value:unknown[],fallback="Not supplied in the assessment."):Block=>({label,value:value.map(item=>str(item,"")).filter(Boolean).join("\n\n")||fallback});
+  const paragraph=(label:string,value:unknown,fallback="Not supplied in the assessment."):Block=>{
+   const rendered=str(value,fallback);
+   return {label,value:/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(rendered)?fallback:rendered};
+  };
+  const list=(label:string,value:unknown[],fallback="Not supplied in the assessment."):Block=>{
+   const items=value.map(item=>str(item,"")).filter(item=>item&&!/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(item));
+   return {label,value:items.join("\n\n")||fallback};
+  };
   const executionFallback=(phase:string)=>"Post-release action: "+phase+". Confirm completion with dated source records; do not substitute estimated streams, sales, revenue, audience reach or conversion for unavailable reporting.";
   // The five full-report narrative sections follow the seven core analytical pages.
   pages.push(
