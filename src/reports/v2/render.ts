@@ -441,11 +441,12 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    const block=paragraph(label,value,fallback);
    if(!isPostRelease)return block;
    const anchor="Post-release action relative to the audit date; original release date "+releaseStatus.date+" was determined by "+releaseStatus.source+". ";
-   return {label:label+" · post-release",value:anchor+block.value};
+   return {label:/post-release/i.test(label)?label:label+" · post-release (audit-relative)",value:anchor+block.value};
   };
   const historicalPhase=(label:string,value:unknown,fallback:string):Block=>{
    const block=paragraph(label,value,fallback);
-   return isPostRelease?{label:label+" (historical; already passed)",value:"Historical context only; this is not an upcoming campaign action. "+block.value}:block;
+   const historicalLabel=/historical; already passed/i.test(label)?label:label+" (historical; already passed)";
+   return isPostRelease?{label:historicalLabel,value:"Historical context only; this is not an upcoming campaign action. "+block.value}:block;
   };
   const days90Text=str(execution.days90,"");
   const days90Plan=/not supplied|not provided|fixture timeline|not a confirmed release calendar/i.test(days90Text)?buildDays6190Plan(input):days90Text;
