@@ -85,11 +85,18 @@ export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):str
  return "Not determined";
 }
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
- const provenance="Measured from the uploaded recording";
+ const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna);
+ const signed=(value:unknown)=>finite(value)?(value>0?"+":"")+value.toFixed(1):null;
+ const loudness=[
+  finite(audio.loudnessLufs)?signed(audio.loudnessLufs)+" LUFS":null,
+  finite(audio.loudnessRangeLu)?"LRA "+audio.loudnessRangeLu.toFixed(1)+" LU":null,
+  finite(audio.truePeakDbfs)?"True peak "+signed(audio.truePeakDbfs)+" dBFS":null,
+  finite(audio.rmsLevelDbfs)?"RMS "+signed(audio.rmsLevelDbfs)+" dBFS":null
+ ].filter((value):value is string=>Boolean(value));
  return [
-  {label:"TEMPO",value:data.tempo.value===null?"Not determined":data.tempo.value+" BPM",confidence:undefined,provenance},
-  {label:"SONG KEY",value:buildCoverKeyLabel(input,data),confidence:undefined,provenance},
-  {label:"PLAYBACK LEVEL",value:data.energy.value===null?"Not measured":String(data.energy.value),confidence:undefined,provenance}
+  {label:"TEMPO",value:data.tempo.value===null?"Not determined":data.tempo.value+" BPM",provenance},
+  {label:"SONG KEY",value:buildCoverKeyLabel(input,data),provenance},
+  {label:"LOUDNESS / SIGNAL",value:loudness.length?loudness.join(" · "):data.energy.value===null?"Not measured":String(data.energy.value),provenance}
  ];
 }
 function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
@@ -366,19 +373,12 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...buildPlaylistProviderStatusLines(input),
    ...(e.label||e.partner?["Supplied label / partner: "+str(e.label??e.partner)]:[])
   ]},
-  {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>str(v,"")).filter(v=>v&&!/^not supplied$/i.test(v)).map(v=>"[ ] "+v).concat([notesContext.verdict,notesContext.summary,...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),"Use the notes area to record the A&R review."])},
-  {title:"Evidence and limitations",kind:"limitations",blocks:[],lines:[
-   ...sanitizePublicReportLines(data.notYetMeasured),
-   ...publicReportLimitations(a.limitations),
-   "Only details supported by the supplied recording or named music platforms are presented as confirmed.",
-   "A listening review is still required before final release or mastering decisions."
-  ]}
  ];
  if(tier==="full"){
   const promotion=rec(a.promotionPlan),partner=rec(a.labelPartnerFit),execution=rec(a.executionPlan);
   const paragraph=(label:string,value:unknown):Block=>({label,value:str(value,"Not supplied in the assessment.")});
   const list=(label:string,value:unknown[]):Block=>({label,value:value.map(item=>str(item,"")).filter(Boolean).join("\n\n")||"Not supplied in the assessment."});
-  // The five narrative sections always begin immediately after the nine-page sample.
+  // The five full-report narrative sections follow the seven core analytical pages.
   pages.push(
    {title:"Production and arrangement guidance",blocks:[paragraph("Production and arrangement guidance",a.productionArrangementGuidance),list("Human listening checks",arr(a.listeningChecks))],kind:"narrative"},
    {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod)],kind:"narrative"},
@@ -397,8 +397,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   );
   // Deep-dive pages are evidence-gated; do not emit pages that contain only missing-data placeholders.
   if(data.sonicAxes) pages.push({title:"Sonic DNA dashboard",blocks:[],kind:"full-axes"});
-  if(data.tempo.value!==null||data.key.value!==null||data.energy.value!==null||data.energySeries)
-   pages.push({title:"Tempo and energy spectrum",blocks:[],kind:"tempo-energy"});
+
   const assessment=rec(input.assessment),release=rec(assessment.releaseStrategy),contract=rec(input.realMasterContract);
   const timeline=Array.isArray(release.executionTimeline)?release.executionTimeline:Array.isArray(assessment.executionTimeline)?assessment.executionTimeline:[];
   const hasScore=data.headlineScore!==null||(data.scoreDrivers?.length??0)>0;
@@ -406,6 +405,14 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   if(hasScore||timeline.length>0||hasPlaybackMeasurements)
    pages.push({title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"});
  }
+ const notesContext=buildArNotesDecisionContext(input);
+ pages.push({title:"A&R notes",blocks:[],lines:[
+  ...arr(a.humanListeningChecklist).map(value=>str(value,"")).filter(value=>value&&!/^not supplied$/i.test(value)).map(value=>"[ ] "+value),
+  notesContext.verdict,
+  notesContext.summary,
+  ...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),
+  "Record the A&R decision, owner, follow-up date and evidence still required."
+ ],kind:"ar-notes"});
  return pages;
 }
 
@@ -637,16 +644,23 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
  const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
  const pages=buildReportSections(input,data,tier).map(spec=>({...spec,lines:sanitizePublicReportLines(spec.lines??[]),blocks:spec.blocks.map(block=>({...block,value:sanitizePublicReportLine(block.value),provenance:sanitizePublicReportLine(block.provenance??"")||"From uploaded recording",confidence:undefined}))})),total=pages.length;
- if((tier==="sample"&&pages.length!==9)||(tier==="full"&&pages.length<14))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
+ if((tier==="sample"&&pages.length!==8)||(tier==="full"&&pages.length<13))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,tier==="full"&&index===0?"Full A&R report":spec.title,fonts);
   let chartCursor=H-380;
   if(spec.kind==="identity"){
    chartCursor=drawIdentityReconciliation(page,input,fonts);
   }else if(spec.kind==="snapshot"){
-   drawSnapshot(page,data,fonts,input);  }else if(spec.kind==="limitations"){
-   const body=spec.lines?.filter(Boolean)??[];
-   card(page,M,H-92,W-2*M,spec.title,body,fonts,{accent:C.gold});
+   drawSnapshot(page,data,fonts,input);
+  }else if(spec.kind==="ar-notes"){
+   const lines=spec.lines??[];
+   const decision=lines.slice(-5);
+   const checklist=lines.slice(0,Math.max(0,lines.length-5));
+   let y=H-100;
+   if(checklist.length){const h=card(page,M,y,W-2*M,"Human listening review",checklist,fonts,{accent:C.gold});y-=h+14;}
+   const context=card(page,M,y,W-2*M,"A&R decision context",decision,fonts,{accent:C.teal});
+   page.drawText("WORKING NOTES · EDITABLE IN THE PDF", {x:M,y:y-context-24,size:7,font:fonts.bold,color:C.gold});
+   page.drawText("Record the decision, owner, evidence request and next review date.",{x:M,y:y-context-38,size:6.5,font:fonts.italic,color:C.muted});
   }else if(spec.kind==="full-axes"){
    if(data.sonicAxes)drawSonicAxes(page,data,fonts);
    else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
@@ -724,8 +738,13 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     next.replace(/^Recommended next step:\s*/,"")
    ],fonts,{accent:C.gold});
    page.drawText("IN THIS REPORT",{x:M,y:160,size:7,font:fonts.bold,color:C.gold});
-   const toc=pages.slice(1);
-   toc.forEach((p,i)=>{const col=i<4?0:1,row=i<4?i:i-4,x=M+col*250,y=142-row*14;page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});drawWrapped(page,p.title,x+28,y,205,fonts.regular,7,C.ink,8);});
+   const toc=pages.slice(1),rowsPerColumn=Math.ceil(toc.length/2);
+   toc.forEach((p,i)=>{
+    const col=i<rowsPerColumn?0:1,row=i<rowsPerColumn?i:i-rowsPerColumn;
+    const x=M+col*250,y=142-row*14;
+    page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});
+    drawWrapped(page,p.title,x+28,y,205,fonts.regular,6.6,C.ink,7.4);
+   });
   }else if(spec.kind==="axes"||spec.kind==="comparables"||spec.kind==="moments"){
    let y=H-92;for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:spec.kind==="moments"?(b.label.includes("Risk")?C.coral:C.teal):C.gold,provenance:b.provenance});y-=h+8;}
   }else{
@@ -760,8 +779,8 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
  }
  const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
- const notesPage=pdf.getPages()[tier==="full"?7:Math.max(0,pages.length-2)]??pdf.getPages()[0];
- notes.addToPage(notesPage,{x:M,y:78,width:W-2*M,height:38,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
+ const notesPage=pdf.getPages()[pdf.getPageCount()-1]??pdf.getPages()[0];
+ notes.addToPage(notesPage,{x:M,y:76,width:W-2*M,height:54,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
  notes.setFontSize(8);notes.updateAppearances(fonts.regular);
  return pdf.save();
 }
