@@ -430,10 +430,11 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   const isPostRelease=releaseStatus.verdict==="DETERMINED"&&releaseStatus.context==="POST-RELEASE";
   const paragraph=(label:string,value:unknown,fallback="Not supplied in the assessment."):Block=>{
    const rendered=str(value,fallback);
-   return {label,value:/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(rendered)?fallback:rendered};
+   const candidate=/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(rendered)?fallback:sanitizePublicReportLine(rendered);
+   return {label,value:candidate||fallback};
   };
   const list=(label:string,value:unknown[],fallback="Not supplied in the assessment."):Block=>{
-   const items=value.map(item=>str(item,"")).filter(item=>item&&!/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(item));
+   const items=value.map(item=>sanitizePublicReportLine(str(item,""))).filter(Boolean);
    return {label,value:items.join("\n\n")||fallback};
   };
   const executionFallback=(phase:string)=>"Post-release action: "+phase+". Confirm completion with dated source records; do not substitute estimated streams, sales, revenue, audience reach or conversion for unavailable reporting.";
