@@ -349,7 +349,7 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
  const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates).map(value=>rec(value)):[];
  const enharmonic:Record<string,string>={Db:"C#",Eb:"D#",Gb:"F#",Ab:"G#",Bb:"A#"};
- const noteOf=(value:string)=>{const match=value.trim().match(/^([A-G](?:#|b)?)/i);if(!match)return "";const note=match[1].toUpperCase();return enharmonic[note]??note;};
+ const noteOf=(value:string)=>{const match=value.trim().match(/^([A-G](?:#|b)?)/i);if(!match)return "";const note=match[1][0].toUpperCase()+match[1].slice(1);return enharmonic[note]??note;};
  const candidateNotes=new Set(candidates.map(item=>noteOf(str(item.key,""))).filter(Boolean));
  const confirmed=data.key.value===null?"":noteOf(String(data.key.value));
  order.forEach((note,index)=>{
