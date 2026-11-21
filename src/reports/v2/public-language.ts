@@ -44,7 +44,7 @@ export function sanitizePublicReportLine(value: string): string {
     .replace(/\bgenre candidate\b/gi, "Genre direction")
     .replace(/\bN\/D\b/gi, "Not available")
     .replace(/\bhypothesis\b/gi, "working direction")
-    .replace(/\bnot cleared\b/gi, "pending checks")
+    .replace(/\bnot cleared\b/gi, "pending rights checks")
     .replace(/\bharmonic\b/gi, "tonal")
     .replace(/\bprovisional\b/gi, "possible")
     .replace(/\bsegments?\b/gi, "sections")
