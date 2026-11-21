@@ -323,7 +323,11 @@ function emptyEstimate(limitation: string): KeyEstimate {
   };
 }
 
-export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstimate {
+export function estimateKey(
+  samples: Float32Array,
+  sampleRate: number,
+  downbeatCandidateTimesSeconds: readonly number[] = [],
+): KeyEstimate {
   if (sampleRate <= 0 || samples.length < sampleRate * 2 || rms(samples) < 1e-5) {
     return emptyEstimate("Insufficient pitched audio or signal energy for reliable key estimation.");
   }
@@ -358,6 +362,8 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     const frameHop = Math.max(FRAME_SIZE / 2, Math.floor(sampleRate * 0.5));
     const chromaAggregate = Array(12).fill(0);
     const bassAggregate = Array(12).fill(0);
+    const downbeatBassAggregate = Array(12).fill(0);
+    let downbeatFrameCount = 0;
     let frameWeightTotal = 0;
     let salienceTotal = 0;
     let energyTotal = 0;
@@ -387,6 +393,16 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
         chromaAggregate[pitch] += normalizedFrame[pitch]! * frameWeight;
         bassAggregate[pitch] += normalizedBassFrame[pitch]! * frameWeight;
       }
+      // Tempo-derived beat-four positions are candidates, not verified downbeats.
+      // Use them only as a soft bass anchor when several strong candidate frames
+      // agree on one low-frequency root; otherwise leave the anchor unset.
+      const frameTime = frameStart / sampleRate;
+      if (downbeatCandidateTimesSeconds.some(time => Number.isFinite(time) && Math.abs(frameTime - time) <= 0.15)) {
+        downbeatFrameCount += 1;
+        for (let pitch = 0; pitch < 12; pitch++) {
+          downbeatBassAggregate[pitch] += normalizedBassFrame[pitch]! * frameWeight;
+        }
+      }
       frameWeightTotal += frameWeight;
       salienceTotal += salience * frameWeight;
       energyTotal += frameEnergy * frameWeight;
@@ -406,7 +422,11 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     const normalizedBass = bassTotal > EPSILON ? bassAggregate.map(value => value / bassTotal) : Array(12).fill(0);
     const salience = salienceTotal / frameWeightTotal;
     const windowEnergy = energyTotal / frameWeightTotal;
-    const downbeatRoot = normalizedBass.reduce((best, value, index, values) => value > values[best]! ? index : best, 0);
+    const downbeatBassTotal = downbeatBassAggregate.reduce((sum, value) => sum + value, 0);
+    const downbeatRootIndex = downbeatBassAggregate.reduce((best, value, index, values) => value > values[best]! ? index : best, 0);
+    const downbeatRoot = downbeatFrameCount >= 2 && downbeatBassTotal > EPSILON
+      && downbeatBassAggregate[downbeatRootIndex]! / downbeatBassTotal >= 0.45
+      ? downbeatRootIndex : null;
     const best = rankCandidates(normalized, normalizedBass)[0];
     segmentProfiles.push(normalized);
     if (best) segmentWinners.push(best);
