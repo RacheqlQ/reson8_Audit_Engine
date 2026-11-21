@@ -347,7 +347,7 @@ describe("Phillo evidence guardrails", () => {
     expect(Object.values(result.scorecard).every((dimension) => dimension.score === null)).toBe(true);
     expect(Object.values(result.scorecard).every((dimension) => /^Not scored:/i.test(dimension.rationale))).toBe(true);
     expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("Key confidence");
-    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("destination-specific integrated-loudness");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("No destination-specific loudness or peak targets were supplied");
   });
 
   it("removes specific key and mode assertions from narrative when key confidence is below the reporting gate", () => {
