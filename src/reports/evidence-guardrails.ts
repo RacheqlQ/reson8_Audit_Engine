@@ -435,6 +435,9 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     };
   }
   if (zeroConfidence) {
+    if (typeof mutable.executiveSummary === "string") {
+      mutable.executiveSummary = "The supplied evidence is insufficient; track-specific conclusions are withheld pending source reconciliation and human review.";
+    }
     if (typeof mutable.creativeIdentity === "string") {
       mutable.creativeIdentity = "Creative identity is unconfirmed because the supplied evidence is insufficient. Do not assign a genre, mood, vocal identity or audience position until source reconciliation and a human listening review are complete.";
     }
