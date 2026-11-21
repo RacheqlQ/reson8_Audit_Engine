@@ -67,7 +67,7 @@ export const MIN_KEY_SEGMENT_AGREEMENT = 0.8;
 // Internal candidate-retention floors are deliberately lower than reportability gates.
 // Candidates remain provisional until they pass the stricter evidence guardrails.
 const MIN_KEY_CANDIDATE_CONFIDENCE = 0.12;
-const MIN_KEY_CANDIDATE_SEGMENT_AGREEMENT = 0.6;
+const MIN_KEY_CANDIDATE_SEGMENT_AGREEMENT = 0.7;
 
 type Mode = "major" | "minor";
 interface Candidate { key: number; mode: Mode; score: number; }
