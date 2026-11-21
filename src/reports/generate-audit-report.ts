@@ -6,9 +6,10 @@ import { buildStrengthRiskChartRows, chartPanelHeight, chartPanelLayoutErrors, c
 import { hasSubmittedMasterAudio } from "../audio/master-audio-evidence.js";
 import type { RealMasterAuditContract } from "../audio/real-master-contract.js";
 import type { MarketPlacementPlan } from "../strategy/market-placement.js";
+import type { TonalResolution } from "../audio/tonal-resolution.js";
 
 export type AuditReportTier = "sample" | "full";
-export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; executionMode?:"master"|"combined"|"dsp_link"; realMasterContract?:RealMasterAuditContract; marketPlacement?:MarketPlacementPlan; }
+export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; executionMode?:"master"|"combined"|"dsp_link"; realMasterContract?:RealMasterAuditContract; marketPlacement?:MarketPlacementPlan; tonalResolution?:TonalResolution|null; }
 export interface ReportRect { x:number;y:number;width:number;height:number;id:string; }
 export interface ReportPagePlan { title:string;text:string[]; }
 const W=595.28,H=841.89,M=48,TOP=735,BOTTOM=76,AVAILABLE=TOP-BOTTOM;
