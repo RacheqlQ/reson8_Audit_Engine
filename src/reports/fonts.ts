@@ -1,4 +1,6 @@
-import { StandardFonts, type PDFFont, type PDFDocument } from "@cantoo/pdf-lib";
+import { readFile } from "node:fs/promises";
+import fontkit from "@pdf-lib/fontkit";
+import type { PDFFont, PDFDocument } from "@cantoo/pdf-lib";
 
 export interface ReportFonts {
   regular: PDFFont;
@@ -7,12 +9,22 @@ export interface ReportFonts {
   boldItalic: PDFFont;
 }
 
+const FONT_ROOT = "../../node_modules/@fontsource/ibm-plex-sans/files/";
+const fontBytes = (file: string) => readFile(new URL(FONT_ROOT + file, import.meta.url));
+
 export async function loadReportFonts(pdf: PDFDocument): Promise<ReportFonts> {
-  const [regular,bold,italic,boldItalic]=await Promise.all([
-    pdf.embedFont(StandardFonts.Helvetica),
-    pdf.embedFont(StandardFonts.HelveticaBold),
-    pdf.embedFont(StandardFonts.HelveticaOblique),
-    pdf.embedFont(StandardFonts.HelveticaBoldOblique),
+  pdf.registerFontkit(fontkit);
+  const [regularBytes, boldBytes, italicBytes, boldItalicBytes] = await Promise.all([
+    fontBytes("ibm-plex-sans-latin-400-normal.woff2"),
+    fontBytes("ibm-plex-sans-latin-700-normal.woff2"),
+    fontBytes("ibm-plex-sans-latin-400-italic.woff2"),
+    fontBytes("ibm-plex-sans-latin-700-italic.woff2"),
   ]);
-  return {regular,bold,italic,boldItalic};
+  const [regular, bold, italic, boldItalic] = await Promise.all([
+    pdf.embedFont(regularBytes),
+    pdf.embedFont(boldBytes),
+    pdf.embedFont(italicBytes),
+    pdf.embedFont(boldItalicBytes),
+  ]);
+  return { regular, bold, italic, boldItalic };
 }
