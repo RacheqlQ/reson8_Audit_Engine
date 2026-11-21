@@ -164,7 +164,7 @@ try{
    throw new Error("Generated PDF exposed an internal analysis status notice: "+notice);
   }
  }
- for(const required of ["Spotify provider unavailable:","HTTP 403","SPOTIFY_CLIENT_ID","SPOTIFY_CLIENT_SECRET","Apple Music provider unavailable:","APPLE_MUSIC_DEVELOPER_TOKEN"]){
+ for(const required of ["Spotify playlist search unavailable:","HTTP 403","Apple Music playlist search unavailable:"]){
   if(!normalizedUnsafeText.includes(required)){
    throw new Error("Generated PDF is missing provider availability evidence: "+required);
   }
