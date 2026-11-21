@@ -29,7 +29,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(chartLayoutIssuesForReport(fullAudioFixture as any)).toEqual([]);
  });
  it("does not attach measured status to unavailable metadata-only charts",()=>{
-  expect(chartPanelDisplayStatus({fixture:true,unavailable:true,evidenceClass:"measured"})).toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO");
+  expect(chartPanelDisplayStatus({fixture:true,unavailable:true,evidenceClass:"measured"})).toBe("SAMPLE DATA · AUDIO REQUIRED");
   expect(chartPanelDisplayStatus({evidenceClass:"illustrative"})).toBe("ILLUSTRATIVE");
  });
  it("retains the DSP coverage panel when provider lookup outcomes are unavailable",()=>{
