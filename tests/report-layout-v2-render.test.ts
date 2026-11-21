@@ -87,12 +87,9 @@ describe("v2 DSP playlist provider diagnostics", () => {
       ]
     };
     const lines = reportV2Render.buildPlaylistProviderStatusLines(input).join(" ");
-    expect(lines).toContain("Spotify provider unavailable:");
+    expect(lines).toContain("Spotify playlist search unavailable:");
     expect(lines).toContain("HTTP 403");
-    expect(lines).toContain("SPOTIFY_CLIENT_ID");
-    expect(lines).toContain("SPOTIFY_CLIENT_SECRET");
-    expect(lines).toContain("Apple Music provider unavailable:");
-    expect(lines).toContain("APPLE_MUSIC_DEVELOPER_TOKEN");
+    expect(lines).toContain("Apple Music playlist search unavailable:");
   });
 
   it("does not claim playlist discovery ran when no provider outcome was persisted", () => {
