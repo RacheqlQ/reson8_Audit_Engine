@@ -68,6 +68,7 @@ describe("DSP key estimator — robustness and abstention", () => {
     combined.set(first);
     combined.set(second, first.length);
     const result = estimateKey(combined, RATE);
+    console.info("[key-debug:incompatible-major-sections]", JSON.stringify({key:result.key,mode:result.mode,agreement:result.segmentAgreement,segments:result.segmentChroma.map(item=>({key:item.winningKey,mode:item.winningMode})),top:result.topCandidates.slice(0,3)}));
     expect(result.key).toBeNull();
     expect(result.mode).toBeNull();
     expect(result.segmentAgreement).toBeLessThan(0.6);
