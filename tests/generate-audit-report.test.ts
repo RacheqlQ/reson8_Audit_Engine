@@ -149,7 +149,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).toContain("Apple Music — recognized");
   expect(report).toContain("YouTube Music — unavailable");
   expect(report).toContain("Conflict details: artist: Tems vs Wrong Artist");
-  expect(report).toContain("Assessment confidence: a model-generated evidence-quality indicator");
+  expect(report).not.toContain("Assessment confidence");
   expect(chartLayoutIssuesForReport(input)).toEqual([]);
  });
  it("keeps automatic ISRC lookup attempts out of submitted DSP coverage and the evidence chain",()=>{
