@@ -7,6 +7,8 @@ import { buildStrengthRiskChartRows,chartPanelDisplayStatus,chartPanelHeight,con
 const fixtures=[fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture] as unknown as AuditReportInput[];
 const allFixtures=[...fixtures,ambiguousAudioFixture as unknown as AuditReportInput];
 const reportTiers=["sample","full"] as const;
+// Embedded typography makes multi-fixture PDF rendering slower than pure unit tests.
+vi.setConfig({ testTimeout: 30_000 });
 describe("A4 report layout and fixture coverage",()=>{
  it("defines exactly five generic fixtures across two report tiers",()=>{
   expect(allFixtures).toHaveLength(5);
