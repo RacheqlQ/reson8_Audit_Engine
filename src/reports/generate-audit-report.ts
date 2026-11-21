@@ -486,14 +486,14 @@ function sections(i:AuditReportInput):Section[]{
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
   sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confirmed measurements from provisional findings and unavailable results. Only supported measurements are presented as confirmed.");
-  if (true) sonicDnaBody.push(
+  sonicDnaBody.push(
    masterMoodTags.length || masterEnergyLabel
     ? "Mood and energy: these are provisional listening directions from the uploaded recording, not confirmed descriptions."
     : "No supported mood or energy description is available from this recording."
   );
   sonicDnaBody.push("Track structure and section boundaries: not calculated in this pipeline version; no section-segmentation result is available to support verse, chorus, bridge or intro/outro claims.");
   const provisionalTempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
-  if(provisionalTempoCandidate!==null&&!tempoReliable){
+  if(provisionalTempoCandidate!==null&&!tempoReliable&&typeof s?.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)&&s.tempoConfidence>0){
    const tempoRelationships=[
     {label:"half-time",bpm:provisionalTempoCandidate/2},
     {label:"double-time",bpm:provisionalTempoCandidate*2},
