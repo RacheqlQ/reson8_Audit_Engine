@@ -234,7 +234,7 @@ describe("v2 gated report pages", () => {
 
   it("omits every gated page for a minimal audio-only fixture", async () => {
     const input = { ...metadataOnlyFixture, evidence: { fixture: true, auditType: "AUDIO-ONLY", artist: null, title: null }, sonicDna: { provenance: "fixture", bpm: null, key: null, mode: null, tempoConfidence: 0, keyConfidence: 0 } };
-    expect((await PDFDocument.load(await generateAuditReportV2(input as any))).getPageCount()).toBe(9);
+    expect((await PDFDocument.load(await generateAuditReportV2(input as any))).getPageCount()).toBe(8);
   });
 });
 
