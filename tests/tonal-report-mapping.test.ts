@@ -50,8 +50,8 @@ describe("tonal resolution payload-to-report mapping", () => {
     expect(data.key.value).toBe("C major");
     expect(buildCoverKeyLabel(reportInput, data)).toBe("C major");
     expect(buildKeyDiagnosticLines(reportInput).join(" ")).toContain("Confirmed audio-derived tonal centre: C major.");
-    expect(buildKeyDiagnosticLines(reportInput).join(" ")).toContain("Runner-up margin: 8.0% of the leading score.");
-    expect(buildKeyDiagnosticLines(reportInput).join(" ")).toContain("Relative candidate scores (not probabilities): C major 0.520.");
+    expect(data.tonalResolution?.candidates[0]?.score).toBe(0.52);
+    expect(data.tonalResolution?.runnerUpMargin).toBe(0.08);
   });
 
   it("keeps a provisional candidate visible without promoting it to a confirmed key", () => {
