@@ -333,7 +333,20 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  const alternateTempoRelation=tempoRatio!==null&&Math.abs(tempoRatio-0.5)<=0.03?"half-time":tempoRatio!==null&&Math.abs(tempoRatio-2)<=0.06?"double-time":"related pulse";
  const beatTimes=Array.isArray(rhythm.beatTimesSeconds)?rhythm.beatTimesSeconds:[];
  const harmonic=s?.harmonicFeatures&&typeof s.harmonicFeatures==="object"?s.harmonicFeatures as Record<string,unknown>:{};
- const keyCandidates=hasReportableKeyCandidates(s)&&Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")).slice(0,3).map((item)=>[text(item.key),text(item.mode)].filter(Boolean).join(" ")).join("; "):"";
+ const tonalResolution=harmonic.tonalResolution&&typeof harmonic.tonalResolution==="object"?harmonic.tonalResolution as Record<string,unknown>:
+  s?.tonalResolution&&typeof s.tonalResolution==="object"?s.tonalResolution as Record<string,unknown>:{};
+ const tonalCandidates=Array.isArray(tonalResolution.candidates)?tonalResolution.candidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
+ const legacyCandidates=Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
+ const keyCandidates=hasReportableKeyCandidates(s)?(tonalCandidates.length?tonalCandidates.slice(0,3).map(item=>[text(item.tonic),text(item.mode)].filter(Boolean).join(" ")):legacyCandidates.slice(0,3).map(item=>[text(item.key),text(item.mode)].filter(Boolean).join(" "))).join("; "):"";
+ const tonalReasonCodes=Array.isArray(tonalResolution.reasonCodes)?tonalResolution.reasonCodes.filter((item):item is string=>typeof item==="string"):[];
+ const tonalReasonText=tonalReasonCodes.map(code=>({
+  RELATIVE_MAJOR_MINOR_AMBIGUITY:"Relative major/minor readings remain close.",
+  LOW_WINDOW_CONSENSUS:"The analyzed windows do not consistently support one tonic.",
+  LOW_BOOTSTRAP_CONSENSUS:"Resampled window rankings are not stable enough for confirmation.",
+  LOW_RUNNER_UP_MARGIN:"The leading candidate is too close to the next candidate.",
+  ADJACENT_FIFTHS_AMBIGUITY:"Adjacent Circle of Fifths candidates remain close.",
+  INSUFFICIENT_TONAL_EVIDENCE:"The master did not contain enough stable harmonic evidence."
+ } as Record<string,string>)[code]??"Tonal evidence remains provisional.").join(" ");
  return [
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
   {label:"TEMPO ALTERNATE INTERPRETATION",value:tempoReliable&&alternateTempo!==null&&primaryTempo!==null&&alternateTempo!==primaryTempo?String(alternateTempo)+" BPM ("+alternateTempoRelation+" interpretation; alternate metrical level)":null},
@@ -344,8 +357,12 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
   {label:"BEAT TIMING",value:!hasAudio?null:beatTimes.length?"A tentative beat guide is available; confirm by listening.":"Not established"},
   {label:"KEY / MODE",value:keyReliable?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
   {label:"KEY / MODE CANDIDATES",value:hasAudio&&!keyReliable&&keyCandidates?keyCandidates:null},
+  {label:"TONAL RESOLUTION STATE",value:hasAudio&&typeof tonalResolution.status==="string"?tonalResolution.status:null},
+  {label:"CIRCLE OF FIFTHS TONIC",value:hasAudio&&tonalResolution.status!=="UNAVAILABLE"&&typeof tonalResolution.tonic==="string"?text(tonalResolution.tonic)+" "+text(tonalResolution.mode)+" ("+text(tonalResolution.status).toLowerCase()+")":null},
+  {label:"TONAL RESOLUTION DIAGNOSTICS",value:hasAudio&&tonalReasonText?tonalReasonText:null},
+  {label:"TONAL WINDOW CONSENSUS",value:hasAudio&&typeof tonalResolution.windowAgreement==="number"?"Window agreement "+(tonalResolution.windowAgreement*100).toFixed(0)+"%; bootstrap share "+(typeof tonalResolution.bootstrapShare==="number"?(tonalResolution.bootstrapShare*100).toFixed(0)+"%":"not available"):""},
   {label:"KEY WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(harmonic.windowConsensus,harmonic.independentEstimator):null},
-  {label:"KEY CANDIDATE REASON",value:hasAudio&&!keyReliable?"A single song key could not be confirmed from the supplied recording.":null},
+  {label:"KEY CANDIDATE REASON",value:hasAudio&&!keyReliable?(tonalReasonText||"A single song key could not be confirmed from the supplied recording."):null},
  ...(tuningOffsetReportable?[{label:"TUNING OFFSET CANDIDATE CENTS",value:metric(s?.keyTuningCents,0)+" (multiple tonal windows; provisional)"}]:[]),
   {label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},
   {label:"LOUDNESS RANGE LRA",value:hasAudio?metric(s?.loudnessRangeLu,1):null},
