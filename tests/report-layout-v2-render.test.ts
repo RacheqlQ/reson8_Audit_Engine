@@ -361,3 +361,18 @@ describe("public PDF measurement formatting", () => {
     expect(sanitizePublicReportLine("INSUFFICIENT EVIDENCE")).toBe("PROPOSED REVIEW");
   });
 });
+
+
+describe("v2 strengths and risks count integrity", () => {
+  it("counts only substantive documented items and keeps the rendered lists in sync", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.assessment.strengths = ["Clear hook potential", "Not supplied in the assessment."];
+    input.assessment.risks = ["Release identity conflict", "Rights clearance pending", "Not supplied"];
+    expect(reportV2Render.buildStrengthRiskSummary(input)).toEqual({
+      strengths: ["Clear hook potential"],
+      risks: ["Release identity conflict", "Rights clearance pending"],
+      strengthCount: 1,
+      riskCount: 2,
+    });
+  });
+});
