@@ -327,9 +327,13 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  const sourceName=(value:unknown)=>({apple_music:"Apple Music",id3:"Audio file tags",audd:"AudD",musicbrainz:"MusicBrainz",spotify:"Spotify",tidal:"TIDAL",deezer:"Deezer"} as Record<string,string>)[str(value,"").toLowerCase()]??str(value,"");
  const checked=arr(e.metadataSourcesChecked).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
  const providers=arr(e.sourceProviders).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
+ const catalogSources=arr(e.catalogSources).map(value=>rec(value));
+ const recognizedCount=catalogSources.filter(item=>item.status==="recognized").length;
+ const platformCoverage=str(e.platformCoverage,"");
+ const coverage=platformCoverage|| (recognizedCount>0?recognizedCount+" provider record(s) recognized; total platform coverage was not enumerated.":"No provider coverage result was recorded.");
  const summaryHeight=card(page,M,summaryTop,width,"Provider lookup and reconciliation context",[
   "Sources checked: "+checked,
-  "Provider responses: "+providers,  "Platform coverage: "+str(e.platformCoverage,"Not supplied"),
+  "Provider responses: "+providers,  "Platform coverage: "+coverage,
   "Recording identity conflicts remain blocking; album, UPC, label and date differences are shown as release variants."
  ],fonts,{accent:C.gold});
  return summaryTop-summaryHeight-14;
@@ -658,7 +662,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   }else if(spec.kind==="ar-notes"){
    const lines=spec.lines??[];
    const decision=lines.slice(-6);
-   const checklist=lines.slice(0,Math.max(0,lines.length-5));
+   const checklist=lines.slice(0,Math.max(0,lines.length-6));
    let y=H-100;
    if(checklist.length){const h=card(page,M,y,W-2*M,"Human listening review",checklist,fonts,{accent:C.gold});y-=h+14;}
    const context=card(page,M,y,W-2*M,"A&R decision context",decision,fonts,{accent:C.teal});
