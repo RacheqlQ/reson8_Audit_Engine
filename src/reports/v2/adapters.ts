@@ -206,14 +206,12 @@ export function buildDecisionDimensions(input: AuditReportInput): DecisionDimens
     || (Array.isArray(marketPlacement?.playlistPresence) && marketPlacement.playlistPresence.length)
     || (Array.isArray(marketPlacement?.playlistTargets) && marketPlacement.playlistTargets.length)
   );
-  const marketStatus = hasCommercial
-    ? "PERFORMANCE VERIFIED"
-    : hasCatalogueContext ? "CATALOGUE CONTEXT ONLY" : "NOT ESTABLISHED";
+  const marketStatus = hasCommercial ? "PERFORMANCE VERIFIED" : "PROPOSED";
   const marketBasis = hasCommercial
     ? "At least one non-negative commercial metric has a verified source and reporting period."
     : hasCatalogueContext
-      ? "Source-attributed catalogue or playlist context is present; audience demand and commercial performance are not established."
-      : "No verified commercial-performance record or source-attributed market comparison is available.";
+      ? "PROPOSED A&R/commercial thesis: source-attributed catalogue context informs positioning, but audience demand, campaign results and commercial performance are not asserted."
+      : "PROPOSED A&R/commercial thesis: use the reconciled identity and measured recording profile to test a differentiated market position; no historical streams, sales, revenue, chart activity or audience demand are claimed.";
 
   const readinessGates = [
     ["rightsClearanceVerified", "rights clearance"],
