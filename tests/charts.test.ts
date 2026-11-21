@@ -34,7 +34,7 @@ describe("native PDF chart helpers", () => {
       expect(chartPanelStatus({ evidenceClass })).toBe(label);
       const display = chartPanelDisplayStatus({ fixture: true, evidenceClass });
       expect(display).toContain("SAMPLE DATA · AUDIO REQUIRED");
-      expect(display).toContain(label);
+      expect(display).toBe("SAMPLE DATA · AUDIO REQUIRED");
     }
     expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" }))
       .toBe("SAMPLE DATA · AUDIO REQUIRED");
