@@ -424,8 +424,8 @@ describe("Phase 2 window-consensus report diagnostics", () => {
   },true);
   expect(rows.find(row=>row.label==="TEMPO READINGS ACROSS SECTIONS")?.value).toContain("broadly consistent across the analyzed sections");
   expect(rows.find(row=>row.label==="TEMPO READINGS ACROSS SECTIONS")?.value).not.toMatch(/confidence|probability|bootstrap|window count/i);
-  expect(rows.find(row=>row.label==="KEY READINGS ACROSS SECTIONS")?.value).toContain("broadly consistent across the analyzed sections");
-  expect(rows.find(row=>row.label==="KEY READINGS ACROSS SECTIONS")?.value).not.toMatch(/bootstrap|confidence|score/i);
+  expect(rows.find(row=>row.label==="KEY READINGS ACROSS SECTIONS")).toBeUndefined();
+  expect(rows.find(row=>row.label==="KEY / MODE CANDIDATES")?.value).toBeNull();
  });
  it("states unavailable when window evidence is absent or tied",()=>{
   const rows=sonicDashboardRowsForReport({
@@ -434,7 +434,7 @@ describe("Phase 2 window-consensus report diagnostics", () => {
    harmonicFeatures:{windowConsensus:{winner:null,windowCount:4,observedAgreement:null,lowerAgreementBound:null,upperAgreementBound:null}},
   },true);
   expect(rows.find(row=>row.label==="TEMPO READINGS ACROSS SECTIONS")?.value).toBeNull();
-  expect(rows.find(row=>row.label==="KEY READINGS ACROSS SECTIONS")?.value).toContain("No consistent reading was available");
+  expect(rows.find(row=>row.label==="KEY READINGS ACROSS SECTIONS")).toBeUndefined();
  });
 });
 
@@ -471,7 +471,7 @@ describe("Sonic DNA provisional candidate reporting", () => {
     const reportInput=structuredClone(fullAudioFixture) as AuditReportInput;
     reportInput.sonicDna={...reportInput.sonicDna,provenance:"uploaded_audio_master",tempoCandidateBpm:165,tempoConfidence:0.28};
     const reportText=planAuditReportPages(reportInput,"full").flatMap((page)=>[page.title,...page.text]).join(" ");
-    expect(reportText).toContain("165 BPM (provisional; confirm by listening)");
+    expect(reportText).toContain("Provisional tempo candidate relationships: 165 BPM candidate");
     expect(reportText).toContain("half-time 82.5 BPM");
     expect(reportText).not.toContain("double-time 330.0 BPM");
     expect(reportText).not.toMatch(/derived arithmetic relationships|independently validated beat interpretations|confidence|Goertzel|FFT/i);
@@ -508,11 +508,11 @@ describe("Phase 1 real-master report contract",()=>{
   expect(report).toContain("Confirmed tempo: 96 BPM; method: transient-based tempo estimator");
   expect(report).toContain("Confirmed tempo: 96 BPM; method: transient-based tempo estimator; measured: 2026-11-19T12:00:00.000Z");
   expect(report).toContain("True peak: Not reported as a confirmed measurement; The decoder did not return a true-peak measurement.");
-  expect(report).toContain("Calibrated Audio Mood: No calibrated model is configured. A validated mood model is not configured");
-  expect(report).toContain("Calibrated Key Mode Probability: No calibrated model is configured. A calibrated key/mode probability model is not configured");
-  expect(report).toContain("Calibrated Energy Classification: high (84.0% calibrated; model energy-model-v2; calibration isotonic / energy-calibration-v1");
-  expect(report).toContain("validation held-out-validation-2026 (n=240); ECE 0.042; Brier 0.116");
-  expect(report).toContain("feature drivers: rms_energy supports (0.620), spectral_flux opposes (-0.180)");
+  expect(report).toContain("Calibrated Audio Mood: No validated model prediction is available.");
+  expect(report).not.toMatch(/calibrated key\/mode probability|CALIBRATED_CLASSIFIER_NOT_CONFIGURED/i);
+  expect(report).not.toMatch(/84\.0% calibrated|energy-model-v2|isotonic|Brier|ECE/i);
+  expect(report).not.toMatch(/held-out-validation-2026|ECE 0\.042|Brier 0\.116/i);
+  expect(report).not.toMatch(/rms_energy|spectral_flux|feature drivers/i);
   expect(report).toContain("EXTERNAL RECORD: musicbrainz / recording-mbid; retrieved: 2026-11-19T12:05:00.000Z");
   expect(report).toContain("field provenance: isrc=musicbrainz/recording-mbid@2026-11-19T12:05:00.000Z");
   expect(report).toContain("Provenance rule: direct signal measurements are observed from the uploaded master");
