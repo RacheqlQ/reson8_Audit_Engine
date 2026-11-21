@@ -120,6 +120,20 @@ function normalize(values: readonly number[] | undefined): number[] {
 }
 function clamp(value:number,min=0,max=1):number { return Math.max(min,Math.min(max,value)); }
 
+/** Measures a leading-tone-to-tonic arrival across adjacent audio windows. */
+export function cadenceResolutionWeight(previous: TonalWindow, current: TonalWindow, tonic: string | number): number {
+  const root = pitchIndex(tonic);
+  if (root < 0) return 0;
+  const priorChroma = normalize(previous.chroma);
+  const finalChroma = normalize(current.chroma);
+  const finalBass = normalize(current.bassChroma);
+  const leadingToneShare = priorChroma[(root + 11) % 12]!;
+  const tonicArrivalShare = finalBass[root]! * 0.7 + finalChroma[root]! * 0.3;
+  const leadingToneStrength = clamp((leadingToneShare - 0.07) / 0.10);
+  const tonicArrivalStrength = clamp((tonicArrivalShare - 1 / 12) / 0.55);
+  return Number((leadingToneStrength * tonicArrivalStrength).toFixed(6));
+}
+
 function scoreKey(window: TonalWindow, tonic: number, mode: TonalMode): number {
   const chroma = normalize(window.chroma);
   const bass = normalize(window.bassChroma);
