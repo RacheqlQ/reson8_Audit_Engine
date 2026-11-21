@@ -67,6 +67,8 @@ const MIN_BOOTSTRAP_SHARE = 0.8;
 const MIN_WINDOW_AGREEMENT = 0.7;
 const MIN_RUNNER_UP_MARGIN = 0.025;
 const BOOTSTRAP_ITERATIONS = 256;
+const RELATIVE_PAIR_AMBIGUITY_MARGIN = 0.04;
+const ADJACENT_FIFTHS_AMBIGUITY_MARGIN = 0.04;
 const EPSILON = 1e-12;
 
 function pitchIndex(value: string | number): number {
@@ -211,7 +213,7 @@ function unavailable(reason:TonalReasonCode, validWindowCount:number, meanSalien
     thresholds:{
       minWindows:MIN_WINDOWS,minMeanSalience:MIN_MEAN_SALIENCE,minBootstrapShare:MIN_BOOTSTRAP_SHARE,
       minWindowAgreement:MIN_WINDOW_AGREEMENT,minRunnerUpMargin:MIN_RUNNER_UP_MARGIN,
-      relativePairAmbiguityMargin:0.04,adjacentFifthsAmbiguityMargin:0.04,bootstrapIterations:BOOTSTRAP_ITERATIONS,
+      relativePairAmbiguityMargin:RELATIVE_PAIR_AMBIGUITY_MARGIN,adjacentFifthsAmbiguityMargin:ADJACENT_FIFTHS_AMBIGUITY_MARGIN,bootstrapIterations:BOOTSTRAP_ITERATIONS,
     },
   };
 }
@@ -252,10 +254,10 @@ export function resolveTonalCentre(input: readonly TonalWindow[]): TonalResoluti
   if(valid.length<MIN_WINDOWS || windowAgreement<MIN_WINDOW_AGREEMENT) reasons.push("LOW_WINDOW_CONSENSUS");
   if(bootstrapShare<MIN_BOOTSTRAP_SHARE) reasons.push("LOW_BOOTSTRAP_CONSENSUS");
   if(margin<MIN_RUNNER_UP_MARGIN) reasons.push("LOW_RUNNER_UP_MARGIN");
-  if(rankedPair && Math.abs(best.score-rankedPair.score)/Math.max(EPSILON,Math.abs(best.score))<0.04)
+  if(rankedPair && Math.abs(best.score-rankedPair.score)/Math.max(EPSILON,Math.abs(best.score))<RELATIVE_PAIR_AMBIGUITY_MARGIN)
     reasons.push("RELATIVE_MAJOR_MINOR_AMBIGUITY");
   else if(fifthsDistance(best.tonic,second.tonic)===1
-    && Math.abs(best.score-second.score)/Math.max(EPSILON,Math.abs(best.score))<0.04)
+    && Math.abs(best.score-second.score)/Math.max(EPSILON,Math.abs(best.score))<ADJACENT_FIFTHS_AMBIGUITY_MARGIN)
     reasons.push("ADJACENT_FIFTHS_AMBIGUITY");
 
   const candidates=ranked.slice(0,5).map(candidate=>{
