@@ -375,6 +375,7 @@ describe("public PDF measurement formatting", () => {
     expect(sanitizePublicReportLine("INSUFFICIENT EVIDENCE")).toBe("PROPOSED REVIEW");
     expect(sanitizePublicReportLine("low-confidence audio evidence")).toBe("audio evidence");
     expect(sanitizePublicReportLine("Keep lane positioning unconfirmed until sources are checked.")).toContain("proposed search direction");
+    expect(sanitizePublicReportLine("Rights are not cleared for outreach.")).toContain("pending rights checks");
   });
 });
 
