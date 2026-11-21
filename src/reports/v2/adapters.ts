@@ -220,7 +220,7 @@ export function buildDecisionDimensions(input: AuditReportInput): DecisionDimens
     ["masterApprovalVerified", "final master approval"],
   ] as const;
   const missingGates = readinessGates.filter(([key]) => evidence?.[key] !== true).map(([, label]) => label);
-  const releaseStatus = missingGates.length ? "NOT CLEARED" : "GATES VERIFIED";
+  const releaseStatus = missingGates.length ? "PENDING RIGHTS CHECKS" : "GATES VERIFIED";
   const releaseBasis = missingGates.length
     ? "Not source-verified: " + missingGates.join(", ") + "."
     : "All four required release gates are explicitly marked verified in the supplied evidence.";
