@@ -98,7 +98,7 @@ for(const [name,input] of variants){
    }
   }
   if(name==="combined-master-and-dsp"&&tier==="full"){
-   const requiredCharts=["Evidence layers","DSP platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"];
+   const requiredCharts=["Evidence layers","Music platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"];
    const fullText=normalizedExtracted.toLocaleLowerCase();
    for(const chart of requiredCharts){
     if(!fullText.includes(chart.toLocaleLowerCase()))throw new Error(filename+" is missing a sample-parity chart: "+chart);
