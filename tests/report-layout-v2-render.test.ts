@@ -301,7 +301,7 @@ describe("v2 report structure and release framing regressions", () => {
     expect(plan).toMatch(/curator|playlist/i);
     expect(plan).toMatch(/creator|UGC/i);
     expect(plan).toMatch(/ISRC|UPC|metadata/i);
-    expect(plan).toMatch(/90-day review/i);
+    expect(plan).toMatch(/day-90 performance review/i);
     expect(plan).not.toMatch(/not supplied/i);
   });
 
