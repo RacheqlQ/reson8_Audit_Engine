@@ -546,10 +546,18 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    if(data.sonicAxes)drawSonicAxes(page,data,fonts);
    else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
   }else if(spec.kind==="tempo-energy"){
-   const tempoLines=buildTempoDiagnosticLines(input);
-   card(page,M,H-105,W-2*M,"Tempo",sanitizePublicReportLines(tempoLines),fonts,{accent:data.tempo.value===null?C.amber:C.teal});
-   const keyLines=buildKeyDiagnosticLines(input);
-   card(page,M,H-245,W-2*M,"Song key",sanitizePublicReportLines(keyLines),fonts,{accent:data.key.value===null?C.amber:C.teal});
+   const tempoLines=[data.tempo.value===null
+    ?"Tempo not confirmed from the recording."
+    :"Measured tempo: "+data.tempo.value+" BPM."];
+   card(page,M,H-105,W-2*M,"Tempo",tempoLines,fonts,{accent:data.tempo.value===null?C.amber:C.teal});
+   const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
+   const candidates=arr(harmonic.topCandidates).map(value=>rec(value))
+    .map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" ")).filter(Boolean).slice(0,4);
+   const keyLines=[data.key.value!==null
+    ?"Confirmed song key: "+String(data.key.value)+"."
+    :candidates.length?"Song key not confirmed. Possible tonal centres: "+candidates.join(", ")+"."
+    :"Song key not determined from the recording."];
+   card(page,M,H-245,W-2*M,"Song key",keyLines,fonts,{accent:data.key.value===null?C.amber:C.teal});
    const energy=data.energy.value===null?"Playback level was not measured.":"Playback level measurements are available from the uploaded recording.";
    card(page,M,H-385,W-2*M,"Playback level", [energy],fonts,{accent:data.energy.value===null?C.amber:C.teal});
    if(data.energySeries){
