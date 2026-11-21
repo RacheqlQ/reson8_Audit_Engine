@@ -233,8 +233,9 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
   });
  });
  const tableBottom=top-headerH-rows.length*rowH,summaryTop=tableBottom-10;
- const checked=arr(e.metadataSourcesChecked).map(v=>str(v,"")).filter(Boolean).join(", ")||"Not supplied";
- const providers=arr(e.sourceProviders).map(v=>str(v,"")).filter(Boolean).join(", ")||"Not supplied";
+ const sourceName=(value:unknown)=>({apple_music:"Apple Music",id3:"Audio file tags",audd:"AudD",musicbrainz:"MusicBrainz"} as Record<string,string>)[str(value,"").toLowerCase()]??str(value,"");
+ const checked=arr(e.metadataSourcesChecked).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
+ const providers=arr(e.sourceProviders).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
  const summaryHeight=card(page,M,summaryTop,width,"Provider lookup and reconciliation context",[
   "Sources checked: "+checked,
   "Provider responses: "+providers,
