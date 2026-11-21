@@ -58,6 +58,7 @@ export function buildRecordingOverviewKeyLabel(data:ReportV2Data):string{
  const resolution=data.tonalResolution;
  if(resolution?.status==="PROVISIONAL"&&resolution.tonic&&resolution.mode)
   return "Provisional: "+resolution.tonic+" "+resolution.mode;
+ if(resolution?.status==="UNAVAILABLE")return "Unavailable";
  return "Not determined";
 }
 export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):string{
