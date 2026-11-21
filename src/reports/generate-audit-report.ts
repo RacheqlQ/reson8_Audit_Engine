@@ -464,6 +464,13 @@ function sections(i:AuditReportInput):Section[]{
   ? playlistDiscovery.candidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))) : [];
  const playlistOutcomes=Array.isArray(playlistDiscovery.outcomes)
   ? playlistDiscovery.outcomes.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))) : [];
+ const playlistOutcomeStatusLines=playlistOutcomes.flatMap((outcome)=>{
+  const key=text(outcome.provider),provider=key==="spotify"?"Spotify":key==="apple_music"?"Apple Music":key;
+  const status=text(outcome.status),reason=text(outcome.reason)||"No provider reason was supplied.";
+  if(status==="unavailable"||status==="not_configured")return [provider+" playlist search unavailable: "+reason+" The platform connection needs attention."];
+  if(status==="partial")return [provider+" playlist search partially available: "+reason];
+  return [];
+ });
  const playlistMoodTags=Array.isArray(playlistDiscovery.moodTagsUsed)?playlistDiscovery.moodTagsUsed.map(text).filter(Boolean):[];
  const acousticProfile=s?.acousticFeatureProfile&&typeof s.acousticFeatureProfile==="object"?s.acousticFeatureProfile as Record<string,unknown>:{};
  const acousticPredictions=acousticProfile.predictions&&typeof acousticProfile.predictions==="object"?acousticProfile.predictions as Record<string,unknown>:{};
@@ -569,7 +576,7 @@ const curatorCampaignBody=[
  const conflictSummary=Array.isArray(reconciliation.conflicts)?reconciliation.conflicts.map((item)=>{const conflict=item&&typeof item==="object"?item as Record<string,unknown>:{};return text(conflict.field)+": "+(Array.isArray(conflict.values)?conflict.values.map(text).join(" vs "):"Conflicting values");}).join("; "):"No conflict details supplied";
  const score=(name:string,v:{score:number|null;rationale:string})=>name+" — "+(v.score===null?"NOT SCORED":v.score+"/100")+" — "+v.rationale;
  const output:Section[]=[
- {title:"Executive assessment",accent:"blue",body:[...(e.fixture?["FIXTURE — synthetic renderer test data; not a real analysis."]:[]),a.executiveSummary,"Verdict: "+verdictLabel(a.commercialRead.marketability),"Verdict rule: "+verdictRule(a.commercialRead.marketability),"Reason: "+a.commercialRead.rationale,"Assessment confidence: a model-generated evidence-quality indicator informed by source coverage, agreement and stated limitations; it is not a calibrated probability or a commercial-success forecast.","Assessment basis: "+(e.fixture?"Synthetic renderer fixture — no real master or identity evidence.":hasMasterAudio?"Uploaded master submitted; master-derived measurements are reported separately.":"Metadata/provider evidence only; no uploaded master."),"Submitted source combination: "+sourceCombinationLabel ]},
+ {title:"Executive assessment",accent:"blue",body:[...(e.fixture?["FIXTURE — synthetic renderer test data; not a real analysis."]:[]),a.executiveSummary,"Verdict: "+verdictLabel(a.commercialRead.marketability),"Verdict rule: "+verdictRule(a.commercialRead.marketability),"Reason: "+a.commercialRead.rationale,"Assessment basis: "+(e.fixture?"Synthetic renderer fixture — no real master or identity evidence.":hasMasterAudio?"Uploaded master submitted; master-derived measurements are reported separately.":"Metadata/provider evidence only; no uploaded master."),"Submitted source combination: "+sourceCombinationLabel ]},
  {title:"Identity and source reconciliation",accent:"violet",body:[
  ...(["artist","title","album","genre","isrc","upc","label","releaseDate"] as const).map((field)=>({artist:"Artist",title:"Track",album:"Album",genre:"Genre",isrc:"ISRC",upc:"UPC",label:"Label",releaseDate:"Release date"}[field])+": "+metadataFieldStatus(e,field)+" — "+(text(field==="genre"?(e.genre??e.genres):e[field])||"No value returned by the supplied or queried sources")+" — "+metadataFieldSource(e,field)),
  "DSP provider lookup outcomes: "+providerLookupSummary,
@@ -620,6 +627,7 @@ const curatorCampaignBody=[
  {title:"Creative identity and A&R positioning",accent:"violet",body:["Provider-backed genre evidence: "+primaryGenre+(genreSources.length?"; contributing sources: "+genreSources.join(", "):""),a.creativeIdentity.replace(/automated classification model has abstained/gi,""),"Primary lane: "+a.aAndRPositioning.primaryLane,"Adjacent lanes: "+(a.aAndRPositioning.adjacentLanes.length?a.aAndRPositioning.adjacentLanes.join(", "):"Not established — no supported adjacent-lane evidence is available."),
  ...(playlistCandidateLines.length?["DSP playlist candidates aligned to the confirmed genre/adjacent lanes:",...playlistCandidateLines]:["No aligned DSP playlist candidates are currently available from the configured catalogue search APIs."]),
  playlistMoodSummary,
+ ...playlistOutcomeStatusLines,
  a.aAndRPositioning.rationale]},
  {title:"Strengths and creative leverage",accent:"teal",body:reportableAssessmentItems(a.strengths).length?reportableAssessmentItems(a.strengths):["No audio-measured strengths are asserted without an uploaded master."]},
  {title:"Risks and diligence",accent:"coral",body:reportableAssessmentItems(a.risks)},
