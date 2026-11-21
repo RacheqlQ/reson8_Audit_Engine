@@ -93,6 +93,7 @@ for(const [name,input] of variants){
    if(!normalizedExtracted.includes("Provisional audio-derived tonal centre: C major."))throw new Error(filename+" failed to retain the provisional audio-derived tonic");
    if(!normalizedExtracted.includes("Possible: C major"))throw new Error(filename+" failed to label the provisional key as a possibility");
    if(!normalizedExtracted.includes("Relative major/minor ambiguity remains."))throw new Error(filename+" omitted the relative-key ambiguity disclosure");
+   if(!normalizedExtracted.includes("Bootstrap rank share (not a calibrated probability): 52%."))throw new Error(filename+" omitted provisional bootstrap diagnostics");
   }
   if(tier==="sample"){
    for(const label of chartLabels){
@@ -100,10 +101,11 @@ for(const [name,input] of variants){
    }
   }
   if(name==="full-audio-based"&&tier==="full"){
-   if(!normalizedExtracted.includes("Confirmed audio-derived tonal centre: A minor."))throw new Error(filename+" failed to render the confirmed audio-derived tonic");
+   if(!normalizedExtracted.includes("Confirmed song key: A minor."))throw new Error(filename+" failed to render the confirmed audio-derived tonic");
+   if(!normalizedExtracted.includes("Bootstrap rank share (not a calibrated probability): 92%."))throw new Error(filename+" omitted bootstrap rank-share diagnostics");
   }
   if(name==="partial-audio-low-confidence"&&tier==="full"){
-   if(!normalizedExtracted.includes("Provisional audio-derived tonal centre: C major."))throw new Error(filename+" failed to render the provisional tonic");
+   if(!normalizedExtracted.includes("Provisional tonal centre: C major."))throw new Error(filename+" failed to render the provisional tonic");
    if(!normalizedExtracted.includes("Possible: C major"))throw new Error(filename+" failed to label the provisional tonic as a possibility");
    if(/KEY\s*\/\s*MODE\s*:\s*N\/D/i.test(normalizedExtracted))throw new Error(filename+" rendered an unexplained key/mode N/D despite candidate evidence");
   }
