@@ -205,7 +205,8 @@ function candidateId(candidate:{tonic:number;mode:TonalMode}):string { return ca
 function unavailable(reason:TonalReasonCode, validWindowCount:number, meanSalience:number):TonalResolution {
   return {
     status:"UNAVAILABLE",tonic:null,mode:null,reasonCodes:[reason],candidates:[],
-    bootstrapShare:null,windowAgreement:null,runnerUpMargin:null,validWindowCount,meanSalience,
+    bootstrapShare:null,windowAgreement:null,runnerUpMargin:null,validWindowCount,
+    downbeatAnchorWindowCount:0,cadenceWeightedWindowCount:0,meanSalience,
     method:"circle_of_fifths_audio_first_v1",
     thresholds:{
       minWindows:MIN_WINDOWS,minMeanSalience:MIN_MEAN_SALIENCE,minBootstrapShare:MIN_BOOTSTRAP_SHARE,
