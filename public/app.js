@@ -1,4 +1,4 @@
-import { normalizeReportAccessKey, readPdfResponse, triggerPdfDownload } from "./report-download.js";
+import { normalizeReportAccessKey, readPdfResponse, triggerPdfDownload } from "./report-download.js?v=20261121-3";
 import { createAuditPoller } from "./audit-polling.js?v=20261121-1";
 import { detectTrackPlatform } from "./dsp-url.js?v=20261116-2";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),resultName=document.querySelector("#resultName"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
