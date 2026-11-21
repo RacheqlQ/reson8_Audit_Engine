@@ -34,12 +34,12 @@ for(const [name,input,expected] of [
 
 const philloFullBytes=await generateAuditReportV2({...phillo,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const philloFullPdf=await PDFDocument.load(philloFullBytes);
-if(philloFullPdf.getPageCount()!==12)throw new Error("v2-phillo-stunixx-full expected 12 pages; got "+philloFullPdf.getPageCount());
+if(philloFullPdf.getPageCount()!==15)throw new Error("v2-phillo-stunixx-full expected 15 pages (9 base + 5 narrative + 1 evidence-gated deep dive); got "+philloFullPdf.getPageCount());
 await writeFile(new URL("v2-phillo-stunixx-full.pdf",out),philloFullBytes);
 process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" pages; matching Phillo full-tier fixture generated.\n");
 
 const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const fullPdf=await PDFDocument.load(fullBytes);
-if(fullPdf.getPageCount()!==12)throw new Error("v2-complete-synthetic-full expected 12 pages; got "+fullPdf.getPageCount());
+if(fullPdf.getPageCount()!==16)throw new Error("v2-complete-synthetic-full expected 16 pages (9 base + 5 narrative + 2 evidence-gated deep dives); got "+fullPdf.getPageCount());
 await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
 process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\\n");
