@@ -360,6 +360,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   const promotion=rec(a.promotionPlan),partner=rec(a.labelPartnerFit),execution=rec(a.executionPlan);
   const paragraph=(label:string,value:unknown):Block=>({label,value:str(value,"Not supplied in the assessment.")});
   const list=(label:string,value:unknown[]):Block=>({label,value:value.map(item=>str(item,"")).filter(Boolean).join("\n\n")||"Not supplied in the assessment."});
+  // The five narrative sections always begin immediately after the nine-page sample.
   pages.push(
    {title:"Production and arrangement guidance",blocks:[paragraph("Production and arrangement guidance",a.productionArrangementGuidance),list("Human listening checks",arr(a.listeningChecks))],kind:"narrative"},
    {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod)],kind:"narrative"},
@@ -374,11 +375,18 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ],kind:"narrative"},
    {title:"30 / 60 / 90-day execution plan",blocks:[
     paragraph("First 30 days",execution.days30),paragraph("Days 31–60",execution.days60),paragraph("Days 61–90",execution.days90)
-   ],kind:"narrative"},
-   {title:"Sonic DNA dashboard",blocks:[],kind:"full-axes"},
-   {title:"Tempo and energy spectrum",blocks:[],kind:"tempo-energy"},
-   {title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"}
+   ],kind:"narrative"}
   );
+  // Deep-dive pages are evidence-gated; do not emit pages that contain only missing-data placeholders.
+  if(data.sonicAxes) pages.push({title:"Sonic DNA dashboard",blocks:[],kind:"full-axes"});
+  if(data.tempo.value!==null||data.key.value!==null||data.energy.value!==null||data.energySeries)
+   pages.push({title:"Tempo and energy spectrum",blocks:[],kind:"tempo-energy"});
+  const assessment=rec(input.assessment),release=rec(assessment.releaseStrategy),contract=rec(input.realMasterContract);
+  const timeline=Array.isArray(release.executionTimeline)?release.executionTimeline:Array.isArray(assessment.executionTimeline)?assessment.executionTimeline:[];
+  const hasScore=data.headlineScore!==null||(data.scoreDrivers?.length??0)>0;
+  const hasPlaybackMeasurements=["integrated_loudness_lufs","true_peak_dbfs","rms_level_dbfs"].some(key=>typeof contract[key]==="number"&&Number.isFinite(contract[key]));
+  if(hasScore||timeline.length>0||hasPlaybackMeasurements)
+   pages.push({title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"});
  }
  return pages;
 }
@@ -611,7 +619,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
  const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
  const pages=buildReportSections(input,data,tier).map(spec=>({...spec,lines:sanitizePublicReportLines(spec.lines??[]),blocks:spec.blocks.map(block=>({...block,value:sanitizePublicReportLine(block.value),provenance:sanitizePublicReportLine(block.provenance??"")||"From uploaded recording",confidence:undefined}))})),total=pages.length;
- if((tier==="sample"&&pages.length!==9)||(tier==="full"&&pages.length!==17))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
+ if((tier==="sample"&&pages.length!==9)||(tier==="full"&&pages.length<14))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,tier==="full"&&index===0?"Full A&R report":spec.title,fonts);
   let chartCursor=H-380;
@@ -620,10 +628,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   }else if(spec.kind==="snapshot"){
    drawSnapshot(page,data,fonts,input);  }else if(spec.kind==="limitations"){
    const body=spec.lines?.filter(Boolean)??[];
-   const height=card(page,M,H-92,W-2*M,spec.title,body,fonts,{accent:C.gold});
-   const mapTop=H-92-height-14;
-   const mapHeight=drawCircleOfFifths(page,input,data,fonts,mapTop);
-   if(data.sonicAxes)drawCompactSonicAxes(page,data,fonts,mapTop-mapHeight-12);
+   card(page,M,H-92,W-2*M,spec.title,body,fonts,{accent:C.gold});
   }else if(spec.kind==="full-axes"){
    if(data.sonicAxes)drawSonicAxes(page,data,fonts);
    else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
