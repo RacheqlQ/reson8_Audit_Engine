@@ -293,6 +293,11 @@ function scoreCandidate(chroma: readonly number[], key: number, mode: Mode, bass
   return profileScore + circleOfFifthsRootScore(bassChroma, key) * 0.08;
 }
 
+function diatonicScalePitchClasses(key: number, mode: Mode): Set<number> {
+  const intervals = mode === "major" ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
+  return new Set(intervals.map(interval => (key + interval) % 12));
+}
+
 function rankCandidates(chroma: readonly number[], bassChroma: readonly number[] = []): Candidate[] {
   const candidates: Candidate[] = [];
   for (let key = 0; key < 12; key++) {
@@ -377,7 +382,10 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     key: NOTES[candidate.key], mode: candidate.mode, score: Number(candidate.score.toFixed(6)),
   }));
   const windowConsensus = bootstrapCategoricalConsensus(segmentWinners.map((winner) => `${NOTES[winner.key]}:${winner.mode}`));
-  const agreement = segmentWinners.filter((winner) => winner.key === best.key && winner.mode === best.mode).length / segmentWinners.length;
+  const supportedScale = diatonicScalePitchClasses(best.key, best.mode);
+  // A progression can move through different diatonic chord roots while staying
+  // in one song key. Count scale membership, not identical per-window chord labels.
+  const agreement = segmentWinners.filter((winner) => supportedScale.has(winner.key)).length / segmentWinners.length;
   const margin = best.score - second.score;
   const confidence = clamp((margin * 2.5 + 0.08) * (0.35 + 0.65 * agreement));
   const tuningCents = tuningValues.length ? weightedMedian(tuningValues) : 0;
