@@ -37,6 +37,7 @@ describe("DSP key estimator", () => {
     combined.set(first);
     combined.set(second, first.length);
     const result = estimateKey(combined, 8000);
+    console.info("[key-debug:incompatible-tritone-sections]", JSON.stringify({key:result.key,mode:result.mode,agreement:result.segmentAgreement,segments:result.segmentChroma.map(item=>({key:item.winningKey,mode:item.winningMode})),top:result.topCandidates.slice(0,3)}));
     expect(result.key).toBeNull();
     expect(result.mode).toBeNull();
     expect(result.limitation).toContain("varied across audio segments");
