@@ -239,6 +239,16 @@ describe("v2 gated report pages", () => {
   });
 });
 
+describe("v2 loudness metric card sizing", () => {
+  it("keeps multi-reading loudness text compact enough to match the tempo and key cards", () => {
+    const layout = reportV2Render.metricCardValueLayout("LOUDNESS / SIGNAL");
+    expect(layout.fontSize).toBeLessThanOrEqual(8.5);
+    expect(layout.lineHeight).toBeLessThanOrEqual(10);
+    expect(layout.maxLines).toBeGreaterThanOrEqual(4);
+    expect(layout.cardHeight).toBe(104);
+  });
+});
+
 describe("v2 cover key and playback presentation", () => {
   it("normalizes enharmonic candidate roots to the circle-of-fifths spelling", () => {
     expect(normalizeCircleNote("Db major")).toBe("C#");
