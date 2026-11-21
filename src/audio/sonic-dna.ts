@@ -284,7 +284,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  const frames:number[]=[],frame=Math.max(256,Math.floor(rate*0.05));
  for(let s=0;s<a.length;s+=frame){const end=Math.min(a.length,s+frame);let sum=0;for(let i=s;i<end;i++)sum+=a[i]*a[i];frames.push(Math.sqrt(sum/Math.max(1,end-s)));}
  frames.sort((x,y)=>x-y);
- const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),key=estimateKey(a,rate),independentKey:IndependentKeyEstimate=estimateGoertzelKey(a,rate),independentKeyDisagrees=key.key!==null&&independentKey.key!==null&&(key.key!==independentKey.key||key.mode!==independentKey.mode);
+ const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),key=estimateKey(a,rate,tempo.downbeatCandidateTimesSeconds),independentKey:IndependentKeyEstimate=estimateGoertzelKey(a,rate),independentKeyDisagrees=key.key!==null&&independentKey.key!==null&&(key.key!==independentKey.key||key.mode!==independentKey.mode);
  const relativeMajorMinorAmbiguity=key.tonalResolution.reasonCodes.includes("RELATIVE_MAJOR_MINOR_AMBIGUITY")
   || classifyRelativeMajorMinorAmbiguity(key,independentKey);
  // Independent disagreement is retained as a diagnostic; the deterministic
