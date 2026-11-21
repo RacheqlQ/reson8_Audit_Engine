@@ -24,7 +24,7 @@ describe("native PDF chart helpers", () => {
   it("renders fixture status and underlying evidence class independently", () => {
     const classes = [
       ["measured", "MEASURED"],
-      ["provider-recognized", "MUSIC PLATFORM RESULTS"],
+      ["provider-recognized", "PROVIDER-RECOGNIZED"],
       ["inferred", "WORKING DIRECTION"],
       ["assessment-derived", "A&R REVIEW"],
       ["illustrative", "ILLUSTRATIVE"],
