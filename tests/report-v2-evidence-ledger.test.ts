@@ -12,7 +12,7 @@ describe("v2 evidence ledger summary", () => {
     ];
 
     expect(buildEvidenceLedgerSummary(labels)).toBe(
-      "Measured: 3 · Source matches: 1 · Cross-checked: 2 · Hypotheses: 1",
+      "Measured: 3 · Music platform records: 1 · Verified matches: 2 · Suggested directions: 1",
     );
   });
 
