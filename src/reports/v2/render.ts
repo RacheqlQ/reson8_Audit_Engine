@@ -409,6 +409,8 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    return {label,value:items.join("\n\n")||fallback};
   };
   const executionFallback=(phase:string)=>"Post-release action: "+phase+". Confirm completion with dated source records; do not substitute estimated streams, sales, revenue, audience reach or conversion for unavailable reporting.";
+  const days90Text=str(execution.days90,"");
+  const days90Plan=/not supplied|not provided|fixture timeline|not a confirmed release calendar/i.test(days90Text)?buildDays6190Plan(input):days90Text;
   // The five full-report narrative sections follow the seven core analytical pages.
   pages.push(
    {title:"Production and arrangement guidance",blocks:[paragraph("Production and arrangement guidance",a.productionArrangementGuidance),list("Human listening checks",arr(a.listeningChecks))],kind:"narrative"},
@@ -425,7 +427,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    {title:"30 / 60 / 90-day execution plan",blocks:[
     paragraph("First 30 days",execution.days30,executionFallback("reconcile ISRC, UPC, artist/title spelling, EP-versus-album release mapping, rights splits and approved master; prepare a post-release positioning brief and verify the first curator/creator target list")),
     paragraph("Days 31–60",execution.days60,executionFallback("run a controlled post-release reactivation with approved short-form excerpts, follow up on curator responses, refresh visual assets and record only source-attributed platform and campaign observations")),
-    paragraph("Days 61–90",execution.days90,buildDays6190Plan(input))
+    paragraph("Days 61–90",days90Plan,buildDays6190Plan(input))
    ],kind:"narrative"}
   );
   // Deep-dive pages are evidence-gated; do not emit pages that contain only missing-data placeholders.
