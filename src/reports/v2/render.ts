@@ -458,17 +458,25 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
  return pages;
 }
 
+export function metricCardValueLayout(label:string):{fontSize:number;lineHeight:number;maxLines:number;cardHeight:number}{
+ if(label.toUpperCase()==="LOUDNESS / SIGNAL")return {fontSize:8.2,lineHeight:9,maxLines:4,cardHeight:104};
+ return {fontSize:14,lineHeight:17,maxLines:2,cardHeight:104};
+}
 function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Block,fonts:Fonts):number{
- const pad=12,valueLines=wrap(block.value,fonts.bold,14,width-pad*2);
- const provenanceLines=wrap(block.provenance??"From uploaded recording",fonts.regular,7,width-pad*2);
- const valueBottom=top-43-Math.max(0,valueLines.length-1)*17;
- const provenanceTop=valueBottom-17;
- const height=Math.max(104,top-(provenanceTop-Math.max(0,provenanceLines.length-1)*9)+pad);
+ const pad=12,layout=metricCardValueLayout(block.label),bodyWidth=width-pad*2;
+ const valueLines=layout.fontSize<10
+  ?block.value.split(" · ").flatMap(part=>wrap(part,fonts.bold,layout.fontSize,bodyWidth))
+  :wrap(block.value,fonts.bold,layout.fontSize,bodyWidth);
+ const provenanceLines=wrap(block.provenance??"From uploaded recording",fonts.regular,7,bodyWidth);
+ const valueTop=top-40;
+ const provenanceTop=valueTop-valueLines.length*layout.lineHeight-2;
+ const contentBottom=provenanceTop-Math.max(0,provenanceLines.length-1)*9-4;
+ const height=Math.max(layout.cardHeight,top-contentBottom+pad);
  const y=top-height;
  page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:y+height-3,width,height:3,color:C.gold});
  page.drawText(block.label,{x:x+pad,y:top-17,size:7,font:fonts.bold,color:C.muted});
- valueLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:top-43-index*17,size:14,font:fonts.bold,color:C.ink}));
+ valueLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:valueTop-index*layout.lineHeight,size:layout.fontSize,font:fonts.bold,color:C.ink}));
  provenanceLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:provenanceTop-index*9,size:7,font:fonts.regular,color:C.muted}));
  return height;
 }
