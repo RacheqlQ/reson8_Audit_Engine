@@ -11,7 +11,8 @@ describe("sample-report command",()=>{
   expect(script).toContain("ensurePdfReport");
   expect(script).toContain('pdf.getPageCount()!==8');
   expect(script).toContain('pdf.getPageCount()<13||pdf.getPageCount()>16');
-  expect(script).toContain("extractedPages[index+8]?.toUpperCase().includes(narrativeTitles[index].toUpperCase())");
+  expect(script).toContain("let previousNarrativePage=7");
+  expect(script).toContain("pageNumber>previousNarrativePage");
   expect(script).toContain('requiredCharts=["Evidence layers","Music platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"]');
   expect(script).toContain("generatedAt: new Date().toISOString()");
   const v2=await readFile(new URL("scripts/sample-report-v2.mjs",root),"utf8");
