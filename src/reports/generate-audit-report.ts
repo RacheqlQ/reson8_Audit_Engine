@@ -132,7 +132,7 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
  const coverCheck=checkLayout(coverRects);if(!coverCheck.ok)console.warn("[report-layout] Cover layout warnings:",coverCheck.errors);
 }
 interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string[];}
-function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"Insufficient evidence"};return m[v.toLowerCase()]??"Insufficient evidence";}
+function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"PROPOSED A&R THESIS"};return m[v.toLowerCase()]??"PROPOSED A&R THESIS";}
 export interface ArNotesDecisionContext { heading:string; verdict:string; summary:string; prompts:string[]; }
 export function paginateArNotesSummary(lines:string[]):string[][] {
  const chunks:string[][]=[];let offset=0;
@@ -175,7 +175,7 @@ export function coverVerdictLabel(input:AuditReportInput):string {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
  return verdictLabel(val(safeAssessment.commercialRead?.marketability,"undetermined"));
 }
-function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready to pitch requires verified commercial-performance evidence, a defined reporting period and a supportable release proposition.",moderate:"Develop applies when evidence supports a credible direction but important execution or positioning work remains.",low:"Needs work applies when supplied evidence identifies material gaps that should be addressed before pitching.",undetermined:"Insufficient evidence applies when source-attributed commercial or release evidence is missing; no demand or partner interest is inferred."};return m[v.toLowerCase()]??m.undetermined;}
+function verdictRule(v:string):string{const m:Record<string,string>={high:"Ready to pitch requires verified commercial-performance evidence, a defined reporting period and a supportable release proposition.",moderate:"Develop applies when evidence supports a credible direction but important execution or positioning work remains.",low:"Needs work applies when supplied evidence identifies material gaps that should be addressed before pitching.",undetermined:"A proposed A&R/commercial thesis is provided from available audio and reconciled metadata; no historical performance, demand or partner interest is inferred."};return m[v.toLowerCase()]??m.undetermined;}
 function industryPractice(v:string):string{return "General industry guidance — "+v.replace(/^(?:INDUSTRY PRACTICE\s*[—:-]\s*)+/i,"").trim();}
 
 function drawSpotifyMark(page:PDFPage,x:number,y:number,size:number):void {
