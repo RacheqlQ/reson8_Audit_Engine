@@ -56,10 +56,13 @@ function drawWrapped(page:PDFPage,value:string,x:number,y:number,width:number,fo
 export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):string{
  if(data.key.value!==null)return String(data.key.value);
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates).map(value=>rec(value)):[];
- const first=candidates.find(item=>typeof item.key==="string"&&item.key.trim());
- if(!first)return "Not determined";
- return "Possible: "+[str(first.key,""),str(first.mode,"")].filter(Boolean).join(" ");
+ const resolution=rec(harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
+ const candidates=hasReportableKeyCandidates(rec(input.sonicDna))
+  ?(arr(harmonic.topCandidates).length?arr(harmonic.topCandidates):arr(resolution.candidates)).map(value=>rec(value)):[];
+ const first=candidates.find(item=>(typeof item.key==="string"&&item.key.trim())||(typeof item.tonic==="string"&&item.tonic.trim()));
+ if(first)return "Possible: "+[str(first.key??first.tonic,""),str(first.mode,"")].filter(Boolean).join(" ");
+ if(resolution.status==="UNAVAILABLE")return "Unavailable";
+ return "Not determined";
 }
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
  const provenance="Measured from the uploaded recording";
@@ -131,17 +134,31 @@ export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
 }
 export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
+ const resolution=rec(harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
  const lines:string[]=[];
- const candidates=(hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates):[]).map(value=>rec(value)).filter(item=>typeof item.key==="string")
-  .slice(0,4).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" "));
- if(candidates.length)lines.push("Possible song keys: "+candidates.join("; ")+". These are provisional possibilities, not a confirmed key.");
- if(finite(harmonic.segmentAgreement))lines.push(harmonic.segmentAgreement>=0.7
-  ?"Song-key readings are broadly consistent across the analyzed sections."
-  :"Song-key readings vary across sections; no single key is confirmed.");
- if(harmonic.independentEstimatorDisagrees===true)lines.push("Different key readings were returned; no single key is confirmed.");
- if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("The recording may fit a relative major/minor pair; a single key is not confirmed.");
+ const rawCandidates=arr(harmonic.topCandidates).length?arr(harmonic.topCandidates):arr(resolution.candidates);
+ const candidates=(hasReportableKeyCandidates(rec(input.sonicDna))?rawCandidates:[]).map(value=>rec(value))
+  .filter(item=>typeof (item.key??item.tonic)==="string").slice(0,4)
+  .map(item=>[str(item.key??item.tonic,""),str(item.mode,"")].filter(Boolean).join(" "));
+ if(resolution.status==="CONFIRMED")lines.push("Confirmed audio-derived tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+".");
+ else if(resolution.status==="PROVISIONAL")lines.push("Provisional audio-derived tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+". It is not presented as confirmed.");
+ else if(resolution.status==="UNAVAILABLE")lines.push("Tonal centre unavailable: stable harmonic evidence was insufficient.");
+ if(candidates.length)lines.push("Ranked tonal candidates: "+candidates.join("; ")+". Candidate scores are ranking diagnostics, not calibrated probabilities.");
+ if(finite(resolution.windowAgreement))lines.push("Window agreement: "+(resolution.windowAgreement*100).toFixed(0)+"%.");
+ if(finite(resolution.bootstrapShare))lines.push("Bootstrap top-rank share: "+(resolution.bootstrapShare*100).toFixed(0)+"% of deterministic resamples; this is not a calibrated probability.");
+ const reasonCodes=arr(resolution.reasonCodes).filter((code):code is string=>typeof code==="string");
+ const reasonText=reasonCodes.map(code=>({
+  RELATIVE_MAJOR_MINOR_AMBIGUITY:"Relative major/minor ambiguity remains.",
+  LOW_WINDOW_CONSENSUS:"Tonal windows do not consistently support one candidate.",
+  LOW_BOOTSTRAP_CONSENSUS:"Bootstrap candidate ranking is unstable.",
+  LOW_RUNNER_UP_MARGIN:"The top candidate is too close to its runner-up.",
+  ADJACENT_FIFTHS_AMBIGUITY:"Adjacent fifth-related candidates remain close.",
+  INSUFFICIENT_TONAL_EVIDENCE:"Insufficient stable tonal evidence."
+ } as Record<string,string>)[code]??"A tonal disambiguation check remains unresolved.").join(" ");
+ if(reasonText)lines.push(reasonText);
+ if(harmonic.independentEstimatorDisagrees===true)lines.push("A secondary audio estimator disagreed; that disagreement is retained as a diagnostic and does not independently erase the primary candidate.");
  const limitation=str(harmonic.limitation,"");
- if(limitation&&limitation!=="Not supplied")lines.push("Song key not confirmed: "+limitation);
+ if(limitation&&limitation!=="Not supplied")lines.push("Resolution note: "+limitation);
  return lines.length?lines:["No song-key result is available from the supplied recording."];
 }
 
@@ -354,8 +371,10 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  const order=["C","G","D","A","E","B","F#","C#","G#","D#","A#","F"];
  const cx=x+93,cy=top-84,radius=48;
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates).map(value=>rec(value)):[];
- const candidateNotes=new Set(candidates.map(item=>normalizeCircleNote(str(item.key,""))).filter(Boolean));
+ const resolution=rec(harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
+ const rawCandidates=arr(harmonic.topCandidates).length?arr(harmonic.topCandidates):arr(resolution.candidates);
+ const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?rawCandidates.map(value=>rec(value)):[];
+ const candidateNotes=new Set(candidates.map(item=>normalizeCircleNote(str(item.key??item.tonic,""))).filter(Boolean));
  const confirmed=data.key.value===null?"":normalizeCircleNote(String(data.key.value));
  order.forEach((note,index)=>{
   const angle=-Math.PI/2+index*2*Math.PI/12,px=cx+Math.cos(angle)*radius,py=cy+Math.sin(angle)*radius;
@@ -365,9 +384,13 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
   const labelWidth=fonts.bold.widthOfTextAtSize(note,6.5);
   page.drawText(note,{x:px-labelWidth/2,y:py-2.2,size:6.5,font:fonts.bold,color:isConfirmed||isCandidate?C.white:C.ink});
  });
- const status=data.key.value===null
-  ?"No single root key is confirmed. Highlighted notes are possible tonal centres, not a final answer."
-  :"Confirmed song key: "+String(data.key.value)+".";
+ const status=resolution.status==="PROVISIONAL"
+  ?"Provisional tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+". Highlighted notes are candidates, not a confirmed key."
+  :resolution.status==="UNAVAILABLE"
+   ?"Tonal centre unavailable: stable harmonic evidence was insufficient."
+   :data.key.value===null
+    ?"No single root key is confirmed. Highlighted notes are possible tonal centres, not a final answer."
+    :"Confirmed song key: "+String(data.key.value)+".";
  drawWrapped(page,status,x+174,top-52,width-190,fonts.regular,8,C.ink,11);
  const names=candidates.slice(0,4).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" ")).filter(Boolean);
  if(names.length)drawWrapped(page,"Candidates: "+names.join(" · "),x+174,top-91,width-190,fonts.bold,7,C.muted,9);
