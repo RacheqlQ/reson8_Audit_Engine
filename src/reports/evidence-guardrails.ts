@@ -99,7 +99,7 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
 }
 
 const TEMPO_UNAVAILABLE_RATIONALE = "Not scored: the uploaded-master tempo estimate could not be confirmed, so a numeric tempo-to-lane comparison would not be sufficiently supported for this release.";
-const RHYTHM_UNAVAILABLE_RATIONALE = "Not scored: a provisional beat guide is available, but its timing has not been confirmed by listening.";
+const RHYTHM_UNAVAILABLE_RATIONALE = "Not scored: a provisional beat guide is available, but its timing has not been confirmed by listening across the recording, so rhythmic consistency cannot yet be assessed reliably for this release.";
 
 const GENRE_UNCONFIRMED_RATIONALE =
   "No definitive provider-backed primary genre is available because the supplied genre classification abstained or lacks a supported primary genre. Keep lane positioning unconfirmed until named source evidence supports a cautious hypothesis.";
