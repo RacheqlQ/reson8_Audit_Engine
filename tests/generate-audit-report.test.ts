@@ -423,9 +423,9 @@ describe("Phase 2 window-consensus report diagnostics", () => {
    harmonicFeatures:{windowConsensus:{winner:"C:major",windowCount:8,observedAgreement:0.875,lowerAgreementBound:0.5,upperAgreementBound:1,method:"deterministic_window_bootstrap"}},
   },true);
   expect(rows.find(row=>row.label==="TEMPO READINGS ACROSS SECTIONS")?.value).toContain("broadly consistent across the analyzed sections");
-  expect(rows.find(row=>row.label==="TEMPO WINDOW CONSENSUS")?.value).toContain("not a calibrated probability");
+  expect(rows.find(row=>row.label==="TEMPO READINGS ACROSS SECTIONS")?.value).not.toMatch(/confidence|probability|bootstrap|window count/i);
   expect(rows.find(row=>row.label==="KEY READINGS ACROSS SECTIONS")?.value).toContain("broadly consistent across the analyzed sections");
-  expect(rows.find(row=>row.label==="KEY WINDOW CONSENSUS")?.value).toContain("95% bootstrap resampling interval");
+  expect(rows.find(row=>row.label==="KEY READINGS ACROSS SECTIONS")?.value).not.toMatch(/bootstrap|confidence|score/i);
  });
  it("states unavailable when window evidence is absent or tied",()=>{
   const rows=sonicDashboardRowsForReport({
@@ -433,8 +433,8 @@ describe("Phase 2 window-consensus report diagnostics", () => {
    rhythmFeatures:{windowConsensus:{winner:null,windowCount:0,observedAgreement:null,lowerAgreementBound:null,upperAgreementBound:null}},
    harmonicFeatures:{windowConsensus:{winner:null,windowCount:4,observedAgreement:null,lowerAgreementBound:null,upperAgreementBound:null}},
   },true);
-  expect(rows.find(row=>row.label==="TEMPO WINDOW CONSENSUS")?.value).toContain("no usable analysis windows");
-  expect(rows.find(row=>row.label==="KEY WINDOW CONSENSUS")?.value).toContain("No stable majority");
+  expect(rows.find(row=>row.label==="TEMPO READINGS ACROSS SECTIONS")?.value).toBeNull();
+  expect(rows.find(row=>row.label==="KEY READINGS ACROSS SECTIONS")?.value).toContain("No consistent reading was available");
  });
 });
 
@@ -464,7 +464,7 @@ describe("Sonic DNA provisional candidate reporting", () => {
     expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 BPM (provisional; confirm by listening)");
     expect(rows.find((row) => row.label === "ALTERNATIVE PULSE READINGS")?.value)
       .toContain("half-time 82.5 BPM");
-    expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
+    expect(rows.find((row) => row.label === "ALTERNATIVE PULSE READINGS")?.value)
       .not.toContain("double-time 330.0 BPM");
     expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
       .not.toMatch(/independently validated|candidate|confidence|score/i);
@@ -474,14 +474,14 @@ describe("Sonic DNA provisional candidate reporting", () => {
     expect(reportText).toContain("165 BPM (provisional; confirm by listening)");
     expect(reportText).toContain("half-time 82.5 BPM");
     expect(reportText).not.toContain("double-time 330.0 BPM");
-    expect(reportText).toContain("derived arithmetic relationships only; not independently validated beat interpretations");
-    expect(rows.find((row) => row.label === "TEMPO DETECTION REASON")?.value).toContain("reliable result");
-    expect(rows.find((row) => row.label === "BEAT GRID STATUS")?.value).toContain("tentative (candidate; not independently validated)");
-    expect(rows.find((row) => row.label === "BEAT TIMESTAMP COUNT")?.value).toContain("512 generated timestamps");
+    expect(reportText).not.toMatch(/derived arithmetic relationships|independently validated beat interpretations|confidence|Goertzel|FFT/i);
+    expect(rows.find((row) => row.label === "TEMPO DETECTION REASON")?.value).toContain("could not be confirmed");
+    expect(rows.find((row) => row.label === "BEAT TIMING")?.value).toContain("tentative beat guide");
+    expect(rows.find((row) => row.label === "BEAT TIMESTAMP COUNT")).toBeUndefined();
     expect(rows.find((row) => row.label === "KEY / MODE")?.value).toBeNull();
     expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("C major");
-    expect(rows.find((row) => row.label === "KEY CONFIDENCE DIAGNOSTIC")?.value).toContain("not a calibrated probability");
-    expect(rows.find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS")?.value).toBe("18 (multiple tonal windows; provisional)");
+    expect(rows.find((row) => row.label === "KEY CONFIDENCE DIAGNOSTIC")).toBeUndefined();
+    expect(rows.find((row) => row.label === "TUNING OFFSET CANDIDATE CENTS")).toBeUndefined();
   });
 });
 
