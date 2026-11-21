@@ -46,6 +46,10 @@ describe("job-scoped full-report capability experience", () => {
     expect(html).toContain('id="fullReportAccessKey"');
     expect(html).toContain('id="unlockFullReportButton"');
     expect(html).toContain('id="unlockAuditId"');
+    expect(script).toContain('const unlockAuditId=document.querySelector("#unlockAuditId")');
+    expect(script).toContain('if(unlockAuditId)unlockAuditId.textContent=payload.jobId||"—"');
+    expect(script).not.toContain('document.getElementById("unlockAuditId").textContent');
+    expect(script).not.toContain('document.getElementById("unlockAuditId").textContent!==currentAuditPayload.jobId');
     expect(script).toContain("navigator.clipboard");
     expect(script).toContain('const accessToken=pastedKey||reportAccessToken;');
     expect(script).toContain('await downloadReport("full",normalizedKey)');
