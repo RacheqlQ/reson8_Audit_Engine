@@ -112,8 +112,8 @@ describe("Sonic DNA",()=>{
   expect(result.key).toBe("C");
   expect(result.mode).toBe("major");
  },20000);it("withholds a single key when sustained sections disagree tonally",()=>{
-  const first=chord([261.6256,329.6276,391.9954],6);
-  const second=chord([369.9944,466.1638,554.3653],6);
+  const first=chord([261.6256,329.6276,391.9954],18);
+  const second=chord([369.9944,466.1638,554.3653],18);
   const combined=new Float32Array(first.length+second.length);
   combined.set(first);combined.set(second,first.length);
   const result=analyzePcm(combined,8000);
@@ -221,7 +221,9 @@ describe("Sonic DNA",()=>{
   expect(rhythm.rhythmFeatures).toMatchObject({status:"measured",method:"high_frequency_transient_autocorrelation"});
   expect(rhythm.rhythmFeatures.bpm).toBeGreaterThanOrEqual(115);
   expect(rhythm.rhythmFeatures.bpm).toBeLessThanOrEqual(125);
-  expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:"C",mode:"major",method:"fft_harmonic_chroma_ensemble"});
+  expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:null,mode:null,method:"fft_harmonic_chroma_ensemble"});
+  expect(harmonic.tonalResolution?.status).toBe("PROVISIONAL");
+  expect(harmonic.tonalResolution?.tonic).toBe("C");
   expect(rhythm.vocalFeatures).toMatchObject({status:"signal_diagnostics_only",method:"autocorrelation_voiced_periodicity",voicePresence:"undetermined"});
   expect(rhythm.vocalFeatures.limitations).toEqual(expect.arrayContaining([expect.stringContaining("not proof of human vocals")]));
  });
