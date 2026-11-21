@@ -196,7 +196,7 @@ async function unlockFullReport(){
   const accessToken=pastedKey||reportAccessToken;
   if(!accessToken){tokenSaveMessage.textContent="Paste this audit's private key before unlocking.";return;}
   const normalizedKey=normalizeReportAccessKey(accessToken);
-  if(!/^[0-9a-f]{64}$/.test(normalizedKey)){tokenSaveMessage.textContent="Key must be 64 hexadecimal characters";return;}
+  if(!/^[0-9a-f]{64}$/.test(normalizedKey)){tokenSaveMessage.textContent="This entry is not the issued 64-character private key. Use Copy key or reveal and paste the exact key for this audit.";return;}
   if(!currentAuditPayload?.jobId||(unlockAuditId&&unlockAuditId.textContent!==currentAuditPayload.jobId)){tokenSaveMessage.textContent="The displayed audit ID does not match the current submission.";return;}
   await downloadReport("full",normalizedKey);
 }
