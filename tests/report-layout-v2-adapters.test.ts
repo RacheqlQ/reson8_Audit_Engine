@@ -4,19 +4,21 @@ import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { metadataOnlyFixture, fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("v2 read-only evidence adapters", () => {
-  it("withholds zero-confidence tempo and low-confidence key candidates", () => {
+  it("retains provisional tonal candidates without promoting them to a confirmed key", () => {
     const data = adaptReportV2(ambiguousAudioFixture as any);
     expect(data.tempo.value).toBeNull();
     expect(data.tempo.confidence).toBe("Low");
     expect(data.notYetMeasured.join(" ")).not.toMatch(/128\s*BPM|64\s*BPM/i);
     expect(data.key.value).toBeNull();
     expect(data.key.confidence).toBe("Low");
-    expect(data.notYetMeasured.join(" ")).not.toMatch(/C major|A minor/i);
+    expect(data.notYetMeasured.join(" ")).toMatch(/C major/i);
+    expect(data.notYetMeasured.join(" ")).toMatch(/A minor/i);
+    expect(data.notYetMeasured.join(" ")).not.toMatch(/LOW_WINDOW_CONSENSUS|RELATIVE_MAJOR_MINOR_AMBIGUITY/);
     expect(data.comparables).toBeNull();
     expect(data.sonicAxes).toBeNull();
   });
 
-  it("shows harmonic candidates only above the public candidate-confidence floor", () => {
+  it("keeps audio-derived provisional candidates visible when legacy key confidence is low", () => {
     const input = structuredClone(ambiguousAudioFixture) as any;
     input.sonicDna.keyConfidence = 0.12;
     const data = adaptReportV2(input);
