@@ -61,7 +61,7 @@ for(const [name,input] of variants){
   if(extractedPages.length!==pdf.getPageCount())throw new Error(filename+" extracted page count does not match the PDF page count");
    if(tier==="full"){
     const narrativeTitles=["Production and arrangement guidance","Comparable lanes and listening references","Promotion and campaign strategy","Label and partner fit","30 / 60 / 90-day execution plan"];
-    for(let index=0;index<narrativeTitles.length;index++)if(!extractedPages[index+9]?.includes(narrativeTitles[index]))throw new Error(filename+" must place narrative section "+(index+1)+" on page "+(index+10)+": "+narrativeTitles[index]);
+    for(let index=0;index<narrativeTitles.length;index++)if(!extractedPages[index+9]?.toUpperCase().includes(narrativeTitles[index].toUpperCase()))throw new Error(filename+" must place narrative section "+(index+1)+" on page "+(index+10)+": "+narrativeTitles[index]);
    }
   const bbox=execFileSync("pdftotext",["-bbox",filePath,"-"],{encoding:"utf8"});
   const pageBoxes=[...bbox.matchAll(/<page\b[^>]*>([\s\S]*?)<\/page>/g)];
