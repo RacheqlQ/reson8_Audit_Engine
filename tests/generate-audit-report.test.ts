@@ -37,7 +37,7 @@ describe("A4 report layout and fixture coverage",()=>{
   input.evidence.catalogSources=[];
   const panels=chartsForSection(input,"Identity and source reconciliation");
   expect(panels).toHaveLength(1);
-  expect(panels[0]).toMatchObject({title:"DSP platform coverage",unavailable:true,evidenceClass:"provider-recognized"});
+  expect(panels[0]).toMatchObject({title:"Music platform coverage",unavailable:true,evidenceClass:"provider-recognized"});
   expect(panels[0].shows).toContain("coverage is unavailable, not zero");
  });
  it("reserves enough wrapped rows for long lane constellation labels",()=>{
