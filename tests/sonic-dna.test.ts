@@ -89,14 +89,18 @@ describe("Sonic DNA",()=>{
  });
  it("detects C major from a sustained C major triad",()=>{
   const result=analyzePcm(chord([261.6256,329.6276,391.9954]),8000);
-  expect(result.key).toBe("C");
-  expect(result.mode).toBe("major");
+  expect(result.key).toBeNull();
+  expect(result.mode).toBeNull();
+  expect(result.tonalResolution?.status).toBe("PROVISIONAL");
+  expect(result.tonalResolution?.tonic).toBe("C");
   expect(result.keyConfidence).toBeGreaterThan(0);
  });
  it("detects A minor from a sustained A minor triad",()=>{
   const result=analyzePcm(chord([220,261.6256,329.6276]),8000);
-  expect(result.key).toBe("A");
-  expect(result.mode).toBe("minor");
+  expect(result.key).toBeNull();
+  expect(result.mode).toBeNull();
+  expect(result.tonalResolution?.tonic).toBe("A");
+  expect(result.tonalResolution?.mode).toBe("minor");
  });
  it("uses bass-root and neighbouring-fifth support to identify a stable C-major chord progression",()=>{
   const result=analyzePcm(progression([
@@ -115,7 +119,7 @@ describe("Sonic DNA",()=>{
   const result=analyzePcm(combined,8000);
   expect(result.key).toBeNull();
   expect(result.mode).toBeNull();
-  expect(result.limitations.some((item)=>item.includes("varied across audio segments"))).toBe(true);
+  expect(result.limitations.some((item)=>item.includes("stable window consensus"))).toBe(true);
  },15000);
  it("returns null key and tempo with limitation notes for silence",()=>{
   const result=analyzePcm(new Float32Array(48000),8000);
@@ -143,8 +147,9 @@ describe("Sonic DNA",()=>{
   expect(tempo.bpm).toBeLessThanOrEqual(125);
   expect(tempo.zeroCrossingRate).toBeGreaterThan(0);
   expect(tempo.spectralCentroidHz).toBeGreaterThan(0);
-  expect(key.key).toBe("C");
-  expect(key.mode).toBe("major");
+  expect(key.key).toBeNull();
+  expect(key.mode).toBeNull();
+  expect(key.tonalResolution?.tonic).toBe("C");
   expect(key.keyConfidence).toBeGreaterThan(0);
  });
  it("keeps six-minute 44.1 kHz analysis bounded while retaining chroma, tempo and spectral measurements",()=>{
