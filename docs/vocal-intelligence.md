@@ -57,11 +57,20 @@ adds CPU and resident-memory pressure on the Render worker. When the flag is off
 records vocal analysis as unavailable rather than inferring vocal presence or delivery.
 
 When the flag is explicitly enabled, a conservative admission check runs before loading the
-vocal worker. It compares current process RSS plus one PCM-sized working-copy allowance and a
-192 MiB reserve against the known 512 MiB service memory ceiling. If the estimate exceeds
-that budget or the readings are invalid, vocal inference is skipped and the main audit
-continues. This is a static preflight heuristic, not a measured peak-RSS guarantee; it does
-not authorize enabling the feature in production.
+vocal worker. It reads the cgroup v2 memory limit/current usage, falls back to cgroup v1,
+and then falls back to OS total/available memory if no cgroup limit is exposed. The estimate
+compares current process RSS plus two PCM-sized working allocations and a 192 MiB model/runtime
+reserve against both the effective memory ceiling and currently available headroom. It also
+records decoded duration and sample rate for preflight validation. If the estimate exceeds
+either bound or the readings are invalid, the worker returns a precise skip reason (including
+estimated additional MB, effective limit MB, and available MB) and the main audit continues.
+The inference remains chunked (20-second chunks with 2-second overlap) and is isolated in a
+worker thread in the built runtime; timeout, worker failure, or out-of-memory termination
+degrades to an unavailable/not-analysed result rather than a vocal conclusion.
+
+This is still a conservative preflight estimate, not a measured peak-RSS guarantee. CI has not
+yet measured peak RSS on the requested four-minute, 48 kHz stereo fixture, so no minimum safe
+RAM figure is claimed. It does not authorize enabling the feature in production.
 
 Do not enable this flag in production until a real-master run has recorded peak RSS, elapsed
 time, timeout behavior, and successful persistence of the final vocal result. No production
