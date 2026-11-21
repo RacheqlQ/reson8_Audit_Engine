@@ -491,19 +491,20 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
 }
 
 export function metricCardValueLayout(label:string):{fontSize:number;lineHeight:number;maxLines:number;cardHeight:number}{
- if(label.toUpperCase()==="LOUDNESS / SIGNAL")return {fontSize:8.2,lineHeight:9,maxLines:4,cardHeight:104};
+ if(label.toUpperCase()==="LOUDNESS / SIGNAL")return {fontSize:7.2,lineHeight:8.5,maxLines:4,cardHeight:104};
  return {fontSize:14,lineHeight:17,maxLines:2,cardHeight:104};
 }
 function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Block,fonts:Fonts):number{
  const pad=12,layout=metricCardValueLayout(block.label),bodyWidth=width-pad*2;
- const valueLines=layout.fontSize<10
+ const valueLines=(layout.fontSize<10
   ?block.value.split(" · ").flatMap(part=>wrap(part,fonts.bold,layout.fontSize,bodyWidth))
-  :wrap(block.value,fonts.bold,layout.fontSize,bodyWidth);
- const provenanceLines=wrap(block.provenance??"From uploaded recording",fonts.regular,7,bodyWidth);
- const valueTop=top-40;
- const provenanceTop=valueTop-valueLines.length*layout.lineHeight-2;
- const contentBottom=provenanceTop-Math.max(0,provenanceLines.length-1)*9-4;
- const height=Math.max(layout.cardHeight,top-contentBottom+pad);
+  :wrap(block.value,fonts.bold,layout.fontSize,bodyWidth)).slice(0,layout.maxLines);
+ const provenanceLines=wrap(block.provenance??"From uploaded recording",fonts.regular,7,bodyWidth).slice(0,2);
+ const valueTop=top-39;
+ const provenanceTop=top-79;
+ // Metric cards share one fixed footprint. Loudness uses a compact four-line
+ // stack, so it cannot grow taller than the adjacent tempo/key cards.
+ const height=layout.cardHeight;
  const y=top-height;
  page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:y+height-3,width,height:3,color:C.gold});
