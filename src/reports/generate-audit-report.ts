@@ -399,7 +399,7 @@ export function chartsForSection(i:AuditReportInput,title:string):ChartPanelInpu
    ?e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"))
    :[];
   const count=(status:string)=>sources.filter((item)=>item.status===status).length;
-  return [{title:"DSP platform coverage",kind:"bars",evidenceClass:"provider-recognized",unavailable:sources.length===0,rows:[
+  return [{title:"Music platform coverage",kind:"bars",evidenceClass:"provider-recognized",unavailable:sources.length===0,rows:[
    {label:"Recognized",value:count("recognized")},
    {label:"Partial",value:count("partial")},
    {label:"Unavailable",value:count("unavailable")},
