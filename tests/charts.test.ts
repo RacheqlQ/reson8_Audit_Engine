@@ -25,7 +25,7 @@ describe("native PDF chart helpers", () => {
     const classes = [
       ["measured", "MEASURED"],
       ["provider-recognized", "PROVIDER-RECOGNIZED"],
-      ["inferred", "WORKING DIRECTION"],
+      ["inferred", "HYPOTHESIS"],
       ["assessment-derived", "A&R REVIEW"],
       ["illustrative", "ILLUSTRATIVE"],
     ] as const;
