@@ -53,12 +53,20 @@ function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
 function drawWrapped(page:PDFPage,value:string,x:number,y:number,width:number,font:PDFFont,size=9,color=C.ink,lineHeight=size*1.35):number{
  const lines=wrap(value,font,size,width);lines.forEach((line,i)=>page.drawText(line,{x,y:y-i*lineHeight,size,font,color}));return lines.length*lineHeight;
 }
-function metricBlock(data:ReportV2Data):Block[]{
+export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):string{
+ if(data.key.value!==null)return String(data.key.value);
+ const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
+ const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates).map(value=>rec(value)):[];
+ const first=candidates.find(item=>typeof item.key==="string"&&item.key.trim());
+ if(!first)return "Not determined";
+ return "Possible: "+[str(first.key,""),str(first.mode,"")].filter(Boolean).join(" ");
+}
+function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
  const provenance="Measured from the uploaded recording";
  return [
   {label:"TEMPO",value:data.tempo.value===null?"Not determined":data.tempo.value+" BPM",confidence:undefined,provenance},
-  {label:"SONG KEY",value:data.key.value===null?"Not determined":String(data.key.value),confidence:undefined,provenance},
-  {label:"PLAYBACK LEVEL",value:data.energy.value===null?"Not measured":"Level measurements available",confidence:undefined,provenance}
+  {label:"SONG KEY",value:buildCoverKeyLabel(input,data),confidence:undefined,provenance},
+  {label:"PLAYBACK LEVEL",value:data.energy.value===null?"Not measured":String(data.energy.value),confidence:undefined,provenance}
  ];
 }
 function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
@@ -340,8 +348,10 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  const cx=x+93,cy=top-84,radius=48;
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
  const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates).map(value=>rec(value)):[];
- const candidateNotes=new Set(candidates.map(item=>str(item.key,"")).filter(Boolean));
- const confirmed=data.key.value===null?"":String(data.key.value).split(/\s+/)[0]??"";
+ const enharmonic:Record<string,string>={Db:"C#",Eb:"D#",Gb:"F#",Ab:"G#",Bb:"A#"};
+ const noteOf=(value:string)=>{const match=value.trim().match(/^([A-G](?:#|b)?)/i);if(!match)return "";const note=match[1].toUpperCase();return enharmonic[note]??note;};
+ const candidateNotes=new Set(candidates.map(item=>noteOf(str(item.key,""))).filter(Boolean));
+ const confirmed=data.key.value===null?"":noteOf(String(data.key.value));
  order.forEach((note,index)=>{
   const angle=-Math.PI/2+index*2*Math.PI/12,px=cx+Math.cos(angle)*radius,py=cy+Math.sin(angle)*radius;
   const isConfirmed=Boolean(confirmed&&note===confirmed),isCandidate=!isConfirmed&&candidateNotes.has(note);
@@ -374,7 +384,7 @@ function drawCompactSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts,top:num
  return height;
 }
 function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
- const blocks=metricBlock(data),gap=10,width=(W-2*M-gap*2)/3,top=H-92;
+ const blocks=metricBlock(data,input),gap=10,width=(W-2*M-gap*2)/3,top=H-92;
  const metricHeight=Math.max(...blocks.map((b,i)=>drawMetricCard(page,M+i*(width+gap),top,width,b,fonts)));
  let y=top-metricHeight-12;
  const keyMapHeight=drawCircleOfFifths(page,input,data,fonts,y);
