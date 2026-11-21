@@ -91,7 +91,7 @@ for(const [name,input] of variants){
    if(/\b14\s*\(multiple tonal windows; provisional\)/i.test(normalizedExtracted))throw new Error(filename+" exposed a raw tuning-window diagnostic instead of the human-readable limitation");
    if(/\b128\s*BPM\b/.test(normalizedExtracted))throw new Error(filename+" exposed a zero-confidence tempo candidate");
    if(!normalizedExtracted.includes("Provisional audio-derived tonal centre: C major."))throw new Error(filename+" failed to retain the provisional audio-derived tonic");
-   if(!normalizedExtracted.includes("Possible: C major"))throw new Error(filename+" failed to label the provisional key as a possibility");
+   if(!normalizedExtracted.includes("Candidates: C major"))throw new Error(filename+" failed to retain the provisional candidate list");
    if(!normalizedExtracted.includes("Relative major/minor ambiguity remains."))throw new Error(filename+" omitted the relative-key ambiguity disclosure");
    if(!normalizedExtracted.includes("Bootstrap rank share (not a calibrated probability): 52%."))throw new Error(filename+" omitted provisional bootstrap diagnostics");
   }
@@ -106,7 +106,7 @@ for(const [name,input] of variants){
   }
   if(name==="partial-audio-low-confidence"&&tier==="full"){
    if(!normalizedExtracted.includes("Provisional tonal centre: C major."))throw new Error(filename+" failed to render the provisional tonic");
-   if(!normalizedExtracted.includes("Possible: C major"))throw new Error(filename+" failed to label the provisional tonic as a possibility");
+   if(!normalizedExtracted.includes("Candidates: C major"))throw new Error(filename+" failed to retain the provisional candidate list");
    if(/KEY\s*\/\s*MODE\s*:\s*N\/D/i.test(normalizedExtracted))throw new Error(filename+" rendered an unexplained key/mode N/D despite candidate evidence");
   }
   if(name==="metadata-only"&&tier==="full"){
