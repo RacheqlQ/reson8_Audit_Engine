@@ -232,7 +232,9 @@ function professionalEvidenceLanguage(value:string):string {
   .replace(/No validated model prediction is available\.?/gi,"")
   .replace(/\bconfidence\b/gi,"reliability")
   .replace(/derived arithmetic relationships[^.]*\.?/gi,"")
-  .replace(/independently validated beat interpretations[^.]*\.?/gi,"");
+  .replace(/independently validated beat interpretations[^.]*\.?/gi,"")
+   .replace(/\bGoertzel\b/gi,"")
+   .replace(/\bFFT\b/gi,"frequency-domain analysis");
 }
 function executiveDiagnosticMessage(code:string,message:string,metricName?:string):string {
  const known:Record<string,string>={
@@ -251,7 +253,7 @@ function executiveDiagnosticMessage(code:string,message:string,metricName?:strin
   .replace(/acousticFeatureProfile\.predictions\.mood/gi,"the uploaded-master provisional mood analysis")
   .replace(/acousticFeatureProfile\.predictions\.energy/gi,"the uploaded-master provisional energy analysis")
   .replace(/CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED|VALIDATED_MODEL_NOT_CONFIGURED|CALIBRATED_CLASSIFIER_NOT_CONFIGURED|MEASUREMENT_UNAVAILABLE|PROVIDER_NOT_CONFIGURED|NO_UNAMBIGUOUS_RECORD_ID|PROVIDER_LOOKUP_UNAVAILABLE|PROVIDER_RETRIEVAL_TIMESTAMP_MISSING/g,"analysis limitation");
- return safe.replace(/\s+/g," ").trim();
+ return professionalEvidenceLanguage(safe).replace(/\s+/g," ").trim();
 }
 function safeSourceFileLabel(sourceAudioPath:string):string {
  const basename=sourceAudioPath.split(/[\\/]/).filter(Boolean).pop()??"";
@@ -586,7 +588,7 @@ const curatorCampaignBody=[
  e.isrc ? "ISRC-led catalogue read: the recording code is used to join MusicBrainz and configured DSP catalogue records; source-specific conflicts and field provenance are retained above." : "No ISRC-led catalogue join was available for this recording.",
  e.isrc ? "Marketing application: use the reconciled recording identity and provider-backed genre lanes to search current DSP playlist catalogues. Where returned, candidate playlists are listed in A&R positioning; catalogue presence is not evidence of demand or campaign results." : "Marketing targeting remains limited until a recording-level identifier is available."
 ]},
- {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>(({OBSERVED:"Measured from the uploaded master",RECOGNIZED:"Returned by an external identification source",RECONCILED:"Cross-checked across independent sources",INFERRED:"Analytical hypothesis — not independently verified","INDUSTRY PRACTICE":"General industry guidance"} as Record<string,string>)[x.label]??"Evidence item")+" — "+x.claim+" [Source: "+x.source+"]")},
+ {title:"Evidence ledger and provenance",accent:"teal",body:a.evidenceLabels.map(x=>(({OBSERVED:"Measured from the uploaded master",RECOGNIZED:"Returned by an external identification source",RECONCILED:"Cross-checked across independent sources",INFERRED:"Analytical hypothesis — not independently verified","INDUSTRY PRACTICE":"General industry guidance"} as Record<string,string>)[x.label]??"Evidence item")+" — "+professionalEvidenceLanguage(x.claim)+" [Source: "+x.source+"]")},
  {title:"Sonic DNA and technical profile",accent:"blue",body:["AUDIT EXECUTION MODE: "+(i.executionMode==="dsp_link"?"METADATA-ONLY — no uploaded master was analysed; Sonic DNA measurements are not claimed.":i.executionMode==="combined"?"COMBINED — uploaded master measurements are separate from DSP catalogue records.":i.executionMode==="master"?"UPLOADED MASTER — direct signal measurements are derived from the submitted audio.":sourceCombinationLabel),...sonicDnaBody]},
  ...(i.realMasterContract? [{
   title:"Master evidence contract and provenance",accent:"teal" as const,
