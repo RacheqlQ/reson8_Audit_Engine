@@ -50,7 +50,7 @@ describe("analysis-to-report integration contracts", () => {
     expect(report).toContain("Confirmed tempo: Not reported as a confirmed measurement");
     expect(report).toContain("A tempo candidate was returned but did not meet the reporting threshold");
     expect(report).toContain("PROVISIONAL MOOD DIRECTION: driving, tense (exploratory; confirm by listening)");
-    expect(report).not.toMatch(/No validated model prediction|Calibrated Audio Mood|Calibrated Energy Classification|energy-model-v2|isotonic|Brier|\\bECE\\b/i);
+    expect(report).not.toMatch(/No validated model prediction|Calibrated Audio Mood|Calibrated Energy Classification|energy-model-v2|isotonic|Brier|\bECE\b/i);
     expect(report).not.toContain("acousticFeatureProfile.predictions");
     expect(report).not.toContain("VALIDATED_MODEL_NOT_CONFIGURED");
     expect(report).not.toContain("TEMPO_BELOW_REPORTING_THRESHOLD");
