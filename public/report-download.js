@@ -4,7 +4,12 @@ export function normalizeReportAccessKey(input) {
     .replace(/^[\"']+|[\"']+$/g, "");
   value = value.replace(/^(?:(?:reson8)?(?:report)?(?:access)?key|bearer)[:=]?/i, "");
   value = value.replace(/^0x/i, "");
-  return value.replace(/[-:]/g, "").toLowerCase();
+  value = value.toLowerCase();
+  // Match the server: grouped keys may contain internal separators only.
+  if (/^[0-9a-f]+(?:[-:][0-9a-f]+)+$/i.test(value)) {
+    value = value.replace(/[-:]/g, "");
+  }
+  return value;
 }
 
 export async function readPdfResponse(response) {
