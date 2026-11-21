@@ -13,6 +13,7 @@ describe("report access key normalization and issuance", () => {
       createCatalogJob: async () => "unused",
       uploadMaster: async () => {}, setSourcePath: async () => {}, deleteMaster: async () => {},
     });
+    expect(issued.reportAccessToken).toMatch(/^[0-9a-f]{64}$/);
     expect(await hashReportAccessKey(normalizeReportAccessKey(issued.reportAccessToken).value)).toBe(storedHash);
   });
 
