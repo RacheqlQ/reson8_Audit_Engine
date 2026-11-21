@@ -8,6 +8,7 @@ describe("v2 read-only evidence adapters", () => {
     const data = adaptReportV2(ambiguousAudioFixture as any);
     expect(data.tempo.value).toBeNull();
     expect(data.tempo.confidence).toBe("Low");
+    expect(data.notYetMeasured.join(" ")).not.toMatch(/128\s*BPM|64\s*BPM/i);
     expect(data.key.value).toBeNull();
     expect(data.key.confidence).toBe("Low");
     expect(data.comparables).toBeNull();
