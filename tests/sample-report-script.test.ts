@@ -9,6 +9,8 @@ describe("sample-report command",()=>{
   for(const fixtureName of ["full-audio-based","combined-master-and-dsp","zero-confidence-combined","partial-audio-low-confidence","metadata-only","long-form-audio","ambiguous-audio-low-confidence"])expect(script).toContain(fixtureName);
   expect(script).toContain('["sample","full"]');
   expect(script).toContain("ensurePdfReport");
+  expect(script).toContain("overlapping text bounds");
+  expect(script).toContain("overlapX>1.5&&overlapY>2");
   expect(script).toContain('pdf.getPageCount()!==8');
   expect(script).toContain('pdf.getPageCount()<13||pdf.getPageCount()>16');
   expect(script).toContain('requiredCharts=["Evidence layers","Music platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"]');
