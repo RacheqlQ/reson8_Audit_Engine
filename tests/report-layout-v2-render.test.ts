@@ -315,3 +315,35 @@ describe("v2 report structure and release framing regressions", () => {
     expect(status.source).toContain("Apple Music");
   });
 });
+
+
+describe("v2 final-page and executive report contracts", () => {
+  it("builds an executive brief without placeholder text when metadata and audio evidence exist", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.releaseDate = "2025-08-24";
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    input.generatedAt = "2026-11-21T00:00:00.000Z";
+    input.assessment.executiveSummary = "Executive summary not supplied.";
+    const summary = reportV2Render.buildExecutiveSummary(input);
+    expect(summary).toContain("Release date DETERMINED: 2025-08-24");
+    expect(summary).toContain("post-release");
+    expect(summary).toContain("PROPOSED strategic thesis");
+    expect(summary).not.toMatch(/not supplied|not provided/i);
+  });
+
+  it("keeps the resolved release date status in the identity reconciliation row", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.releaseDate = "2025-08-24";
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    const release = buildIdentityReconciliationRows(input).find((row: any) => row.field === "Release date");
+    expect(release).toMatchObject({ value: "2025-08-24", status: "DETERMINED", source: "Apple Music" });
+  });
+
+  it("keeps the final A&R notes page and removes the limitations and unmeasured spectrum pages", () => {
+    const titles = reportV2Render.buildReportSectionTitles(fullAudioFixture as any, "full");
+    expect(titles.at(-1)).toBe("A&R notes");
+    expect(titles).not.toContain("Evidence and limitations");
+    expect(titles).not.toContain("Tempo and energy spectrum");
+    expect(titles.join(" ")).not.toMatch(/INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i);
+  });
+});
