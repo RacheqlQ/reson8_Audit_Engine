@@ -13,6 +13,7 @@ import { DEFAULT_GROQ_MODEL, GROQ_PROMPT_VERSION, type ArAssessment, type Provid
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
 import { ensurePdfReport, isPdf } from "../reports/pdf-output.js";
 import { sha256 } from "../jobs/content-hash.js";
+import { hashReportAccessKey, normalizeReportAccessKey } from "../jobs/report-access-token.js";
 import { withAbortTimeout } from "../jobs/with-abort-timeout.js";
 import { persistUploadedReport } from "../jobs/report-persistence.js";
 
@@ -600,7 +601,8 @@ export function createSupabaseAuditStore(
       await fencedStep(jobId, claimToken, "complete", {}, signal);
     },
     async verifyAuditAccessToken(jobId, token) {
-      if (typeof token !== "string" || !/^[a-f0-9]{64}$/.test(token)) return false;
+      const normalized = normalizeReportAccessKey(token);
+      if (!normalized.valid) return false;
       const { data, error } = await admin.from("audit_jobs")
         .select("report_access_token_hash")
         .eq("id", jobId)
@@ -608,10 +610,34 @@ export function createSupabaseAuditStore(
       if (error) throw new Error(`Unable to verify audit access token: ${error.message}`);
       const expected = typeof data?.report_access_token_hash === "string" ? data.report_access_token_hash : "";
       if (!/^[a-f0-9]{64}$/i.test(expected)) return false;
-      const suppliedHash = await sha256(new TextEncoder().encode(token));
+      const suppliedHash = await hashReportAccessKey(normalized.value);
       const expectedBytes = Buffer.from(expected, "hex");
       const suppliedBytes = Buffer.from(suppliedHash, "hex");
       return expectedBytes.length === suppliedBytes.length && timingSafeEqual(expectedBytes, suppliedBytes);
+    },
+    async diagnoseAuditReportAccess(jobId, tier, token) {
+      const normalized = typeof token === "string" ? normalizeReportAccessKey(token) : null;
+      const { data: job, error: jobError } = await admin.from("audit_jobs")
+        .select("id,report_access_token_hash").eq("id", jobId).maybeSingle();
+      if (jobError) throw new Error("Unable to diagnose audit report access");
+      if (!job) return { reason: "audit_not_found", normalized };
+      if (!token) return { reason: "token_missing", normalized };
+      if (!normalized?.valid) return { reason: "token_malformed", normalized };
+      const expected = typeof job.report_access_token_hash === "string" ? job.report_access_token_hash : "";
+      const suppliedHash = await hashReportAccessKey(normalized.value);
+      const expectedBytes = Buffer.from(expected, "hex");
+      const suppliedBytes = Buffer.from(suppliedHash, "hex");
+      if (!/^[a-f0-9]{64}$/i.test(expected) || expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
+        return { reason: "token_hash_mismatch", normalized };
+      }
+      const { data: reports, error: reportError } = await admin.from("audit_reports")
+        .select("storage_path,access_status").eq("audit_job_id", jobId).eq("tier", tier)
+        .order("version", { ascending: false }).limit(1);
+      if (reportError) throw new Error("Unable to diagnose audit report availability");
+      if (!reports?.length || reports[0]?.access_status !== "available") return { reason: "report_not_available", normalized };
+      const { data: object, error: storageError } = await admin.storage.from("audit-reports").download(reports[0].storage_path);
+      if (storageError || !object) return { reason: "storage_object_missing", normalized };
+      return { reason: null, normalized };
     },
     async getAuditStatus(jobId) {
       const statusStartedAt = Date.now();
