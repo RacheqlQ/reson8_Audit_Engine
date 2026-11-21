@@ -377,7 +377,7 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
       let entropy = 0;
       for (const value of normalizedFrame) if (value > EPSILON) entropy -= value * Math.log(value);
       const tonalConcentration = clamp(1 - entropy / Math.log(12));
-      const harmonicClarity = clamp(result.peaks.length / 8, 0.15, 1);
+      const harmonicClarity = Math.max(0.15, clamp(result.peaks.length / 8));
       const salience = clamp(tonalConcentration * harmonicClarity);
       // Percussive/noisy frames below the same salience floor used by the
       // resolver do not contribute chroma votes or bass-root anchors.
@@ -460,14 +460,26 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     mode: candidate.mode,
     score: candidate.score,
   }));
+  const reasonDescriptions: Record<string, string> = {
+    INSUFFICIENT_TONAL_EVIDENCE: "Stable harmonic evidence is insufficient.",
+    LOW_WINDOW_CONSENSUS: "The analyzed windows do not consistently support one tonal centre.",
+    LOW_BOOTSTRAP_CONSENSUS: "Resampled candidate rankings are not stable enough for confirmation.",
+    LOW_RUNNER_UP_MARGIN: "The leading candidate is too close to its runner-up.",
+    RELATIVE_MAJOR_MINOR_AMBIGUITY: "Relative major and minor readings remain close.",
+    ADJACENT_FIFTHS_AMBIGUITY: "Adjacent Circle of Fifths candidates remain close.",
+  };
   const limitation = tonalResolution.status === "CONFIRMED"
     ? null
     : tonalResolution.status === "UNAVAILABLE"
       ? "Insufficient tonal evidence; no tonic or mode can be asserted."
-      : "Tonal centre is provisional: " + tonalResolution.reasonCodes.join(", ") + ".";
+      : "The tonal centre remains provisional. " + tonalResolution.reasonCodes
+        .map(code => reasonDescriptions[code] ?? "A tonal disambiguation check remains unresolved.")
+        .join(" ");
   return {
-    key: tonalResolution.status === "UNAVAILABLE" ? null : tonalResolution.tonic,
-    mode: tonalResolution.status === "UNAVAILABLE" ? null : tonalResolution.mode,
+    // Only confirmed results populate the legacy key/mode fields. Provisional
+    // candidates remain available through tonalResolution and topCandidates.
+    key: tonalResolution.status === "CONFIRMED" ? tonalResolution.tonic : null,
+    mode: tonalResolution.status === "CONFIRMED" ? tonalResolution.mode : null,
     confidence,
     tuningCents,
     segmentAgreement: agreement,
