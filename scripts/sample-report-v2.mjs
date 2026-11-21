@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { generateAuditReportV2 } from "../dist/reports/v2/render.js";
 import { ambiguousAudioFixture } from "./fixtures/ambiguous-audio.mjs";
@@ -8,7 +9,7 @@ const out=new URL("../artifacts/",import.meta.url);
 await mkdir(out,{recursive:true});
 const phillo=structuredClone(ambiguousAudioFixture);
 phillo.auditId="fixture-phillo-stunixx-low-confidence";
-phillo.evidence={...phillo.evidence,artist:"Stunixx",title:"Phillo",album:null,isrc:null,upc:null,label:null,genre:null,reconciliation:{conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]}};
+phillo.evidence={...phillo.evidence,artist:"Stunixx",title:"Phillo",album:null,isrc:null,upc:null,label:null,genre:null,releaseDate:"2025-08-24",fieldProvenance:{...phillo.evidence.fieldProvenance,releaseDate:"apple_music"},reconciliation:{conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]}};
 phillo.assessment={...phillo.assessment,executiveSummary:"Synthetic reference fixture for the Phillo / Stunixx sample. Identity conflicts and low-confidence audio evidence are deliberately preserved for layout regression testing."};
 const complete=structuredClone(fullAudioFixture);
 complete.auditId="fixture-v2-complete-synthetic-only";
@@ -19,27 +20,41 @@ minimal.auditId="fixture-v2-minimal-audio-only";
 minimal.evidence={fixture:true,auditType:"AUDIO-ONLY TEST FIXTURE",artist:null,title:null,album:null,isrc:null,upc:null,label:null,metadataSourcesChecked:[]};
 minimal.sonicDna={provenance:"fixture-only uploaded audio",bpm:null,key:null,mode:null,tempoConfidence:0,keyConfidence:0};
 for(const [name,input,expected] of [
- ["v2-phillo-stunixx-reference",phillo,9],
- ["v2-complete-synthetic-fixture",complete,9],
- ["v2-minimal-audio-only",minimal,9],
+ ["v2-phillo-stunixx-reference",phillo,8],
+ ["v2-complete-synthetic-fixture",complete,8],
+ ["v2-minimal-audio-only",minimal,8],
 ]){
  const bytes=await generateAuditReportV2({...input,generatedAt:"2026-11-20T00:00:00.000Z"});
  const pdf=await PDFDocument.load(bytes);
  if(pdf.getPageCount()!==expected)throw new Error(name+" expected "+expected+" pages; got "+pdf.getPageCount());
  const file=new URL(name+".pdf",out);
  await writeFile(file,bytes);
- process.stdout.write(name+": "+pdf.getPageCount()+" pages; gated-page count verified.\n");
+ const extracted=execFileSync("pdftotext",["-layout",file.pathname,"-"],{encoding:"utf8"});
+ const extractedPages=extracted.split("\f").filter(page=>page.trim().length>0);
+ if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i.test(extracted))throw new Error(name+" contains a forbidden dead-end verdict or limitations section");
+ if(!extractedPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error(name+" must finish with an A&R NOTES page");
+ process.stdout.write(name+": "+pdf.getPageCount()+" pages; final A&R notes and verdict checks passed.\n");
 }
 
 
 const philloFullBytes=await generateAuditReportV2({...phillo,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const philloFullPdf=await PDFDocument.load(philloFullBytes);
-if(philloFullPdf.getPageCount()!==15)throw new Error("v2-phillo-stunixx-full expected 15 pages (9 base + 5 narrative + 1 evidence-gated deep dive); got "+philloFullPdf.getPageCount());
-await writeFile(new URL("v2-phillo-stunixx-full.pdf",out),philloFullBytes);
-process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" pages; matching Phillo full-tier fixture generated.\n");
+if(philloFullPdf.getPageCount()!==13)throw new Error("v2-phillo-stunixx-full expected 13 pages (7 core + 5 narrative + final A&R notes); got "+philloFullPdf.getPageCount());
+const philloFullFile=new URL("v2-phillo-stunixx-full.pdf",out);
+await writeFile(philloFullFile,philloFullBytes);
+const philloFullText=execFileSync("pdftotext",["-layout",philloFullFile.pathname,"-"],{encoding:"utf8"});
+const philloFullPages=philloFullText.split("\f").filter(page=>page.trim().length>0);
+if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED|NOT CLEARED/i.test(philloFullText))throw new Error("Phillo full fixture contains a forbidden dead-end verdict or limitations section");
+if(/No definitive platform-backed primary genre|Keep lane positioning unconfirmed/i.test(philloFullText))throw new Error("Phillo full fixture contains dead-end lane positioning copy");
+if(!philloFullPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error("Phillo full fixture must finish with A&R NOTES");
+const normalizedPhilloText=philloFullText.replace(/\s+/g," ").toUpperCase().replace(/[–—]/g,"-");
+if(!normalizedPhilloText.includes("DAYS 61")||normalizedPhilloText.includes("DAYS 61-90 NOT SUPPLIED")||!normalizedPhilloText.includes("CURATOR")||!normalizedPhilloText.includes("CREATOR")||!normalizedPhilloText.includes("ISRC")||!normalizedPhilloText.includes("PERFORMANCE REVIEW"))throw new Error("Phillo full fixture is missing its complete post-release Days 61-90 plan");
+if(!normalizedPhilloText.includes("RELEASE DATE DETERMINED")||!normalizedPhilloText.includes("PRE-RELEASE STAGE (HISTORICAL; ALREADY PASSED)")||!normalizedPhilloText.includes("RELEASE WINDOW (HISTORICAL; ALREADY PASSED)")||!normalizedPhilloText.includes("POST-RELEASE GROWTH AND REACTIVATION"))throw new Error("Phillo fixture does not preserve determined post-release campaign framing");
+if(normalizedPhilloText.includes("LOW- AUDIO EVIDENCE")||normalizedPhilloText.includes("HISTORICAL; ALREADY PASSED) (HISTORICAL")||normalizedPhilloText.includes("AUDIT-RELATIVE) · POST-RELEASE")||normalizedPhilloText.includes("KEEP LANE POSITIONING UNCONFIRMED"))throw new Error("Phillo fixture contains duplicated labels, dead-end lane wording or garbled confidence text");
+process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" pages; post-release execution and final A&R notes verified.\n");
 
 const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const fullPdf=await PDFDocument.load(fullBytes);
-if(fullPdf.getPageCount()!==16)throw new Error("v2-complete-synthetic-full expected 16 pages (9 base + 5 narrative + 2 evidence-gated deep dives); got "+fullPdf.getPageCount());
+if(fullPdf.getPageCount()!==14)throw new Error("v2-complete-synthetic-full expected 14 pages (7 core + 5 narrative + 1 evidence-gated deep dive + final A&R notes); got "+fullPdf.getPageCount());
 await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
-process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\\n");
+process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\n");

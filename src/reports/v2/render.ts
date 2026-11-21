@@ -85,11 +85,18 @@ export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):str
  return "Not determined";
 }
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
- const provenance="Measured from the uploaded recording";
+ const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna);
+ const signed=(value:unknown)=>finite(value)?(value>0?"+":"")+value.toFixed(1):null;
+ const loudness=[
+  finite(audio.loudnessLufs)?signed(audio.loudnessLufs)+" LUFS":null,
+  finite(audio.loudnessRangeLu)?"LRA "+audio.loudnessRangeLu.toFixed(1)+" LU":null,
+  finite(audio.truePeakDbfs)?"True peak "+signed(audio.truePeakDbfs)+" dBFS":null,
+  finite(audio.rmsLevelDbfs)?"RMS "+signed(audio.rmsLevelDbfs)+" dBFS":null
+ ].filter((value):value is string=>Boolean(value));
  return [
-  {label:"TEMPO",value:data.tempo.value===null?"Not determined":data.tempo.value+" BPM",confidence:undefined,provenance},
-  {label:"SONG KEY",value:buildCoverKeyLabel(input,data),confidence:undefined,provenance},
-  {label:"PLAYBACK LEVEL",value:data.energy.value===null?"Not measured":String(data.energy.value),confidence:undefined,provenance}
+  {label:"TEMPO",value:data.tempo.value===null?"Not determined":data.tempo.value+" BPM",provenance},
+  {label:"SONG KEY",value:buildCoverKeyLabel(input,data),provenance},
+  {label:"LOUDNESS / SIGNAL",value:loudness.length?loudness.join(" · "):data.energy.value===null?"Not measured":String(data.energy.value),provenance}
  ];
 }
 function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
@@ -197,16 +204,53 @@ export function buildEvidenceLedgerSummary(labels: Array<{ label: string }>): st
 
 export function buildNextActionLine(input: AuditReportInput): string {
  const assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)), recommendation=str(rec(assessment.releaseStrategy).recommendation,"");
- const firstGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(Boolean)??"";
- return "Recommended next step: "+(recommendation||firstGap||"Not supplied");
+ const firstGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(value=>value&&!/^(?:not supplied|not provided|not available)$/i.test(value))??"";
+ const usableRecommendation=/^(?:not supplied|not provided|not available)$/i.test(recommendation)?"":recommendation;
+ return "Recommended next step: "+(usableRecommendation||firstGap||"Confirm the recording identifier and release-version mapping, complete rights and master-clearance checks, then run a measured post-release curator and creator reactivation.");
 }
 
-export function buildReleaseFramingLine(input: AuditReportInput): string {
- const release=Date.parse(String(rec(input.evidence).releaseDate??""));
+export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "UPCOMING" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
+ const evidence=rec(input.evidence),raw=str(evidence.releaseDate,"");
+ const valid=/^\d{4}-\d{2}-\d{2}$/.test(raw)&&Number.isFinite(Date.parse(raw+"T00:00:00Z"));
+ const source=metadataFieldSource(evidence,"releaseDate").replace("Field source: ","");
+ const status=metadataFieldStatus(evidence,"releaseDate");
+ const attributed=source!=="unavailable"&&(status.startsWith("Cross-checked")||status.startsWith("Available")||status.startsWith("Returned")||Boolean(rec(evidence.fieldProvenance).releaseDate));
+ const verdict=valid&&attributed?"DETERMINED":"UNVERIFIED";
  const generated=Date.parse(String(input.generatedAt??""));
- return Number.isFinite(release)&&Number.isFinite(generated)&&release<generated
-  ? "Post-release framing: release date is in the past."
-  : "Release framing: date does not establish a past release.";
+ const release=valid?Date.parse(raw+"T00:00:00Z"):NaN;
+ return {verdict,context:verdict!=="DETERMINED"?"RELEASE DATE NOT RECONCILED":Number.isFinite(generated)&&release<generated?"POST-RELEASE":"UPCOMING",date:valid?raw:"Date not reconciled",source:attributed?source:"Source not reconciled"};
+}
+export function buildReleaseFramingLine(input: AuditReportInput): string {
+ const status=buildReleaseDateStatus(input);
+ return status.verdict==="DETERMINED"
+  ? "Release date verdict: DETERMINED — "+status.date+" · "+status.source+" · "+status.context+". Campaign guidance is framed as post-release."
+  : "Release date is not source-reconciled; campaign timing must be confirmed before scheduling.";
+}
+export function buildDays6190Plan(input: AuditReportInput): string {
+ const release=buildReleaseDateStatus(input);
+ const anchor=release.verdict==="DETERMINED"?"the determined "+release.date+" release":"the confirmed release date once reconciled";
+ return "Post-release catalog momentum, anchored to "+anchor+": review the prior release window and current catalog identity without assuming performance outcomes; refresh the curator and DSP pitch pack, then follow up only with contacts who accepted or requested material; expand approved creator/UGC excerpts and visual treatments around human-verified hook windows; lock artist, title, version, ISRC, UPC, EP-versus-album mapping, rights splits and master ownership against distributor and provider records; complete the day-90 performance review by comparing source-attributed platform reports and campaign activity with the pre-review baseline, documenting unavailable metrics rather than estimating streams, revenue, reach or conversion.";
+}
+export function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=adaptReportV2(input)):string{
+ const evidence=rec(input.evidence),assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),evidence);
+ const supplied=str(assessment.executiveSummary,"");
+ const release=buildReleaseDateStatus(input);
+ const releaseClause=release.verdict==="DETERMINED"
+  ?"Release date DETERMINED: "+release.date+" ("+release.source+"); this is a post-release catalogue and reactivation opportunity."
+  :"Release-date reconciliation remains a diligence item; timing is not assumed.";
+ if(supplied&&!/not supplied|not provided|not available|insufficient evidence/i.test(supplied))
+  return releaseClause+" "+supplied;
+ const artist=str(evidence.artist,"the submitting artist"),title=str(evidence.title,"the submitted recording"),album=str(evidence.album,"");
+ const genre=str(evidence.genre,"");
+ const audioDetails=[
+  data.tempo.value!==null?"measured tempo "+data.tempo.value+" BPM":null,
+  data.key.value!==null?"audio-derived key "+data.key.value:null,
+  typeof rec(input.sonicDna).loudnessLufs==="number"?"integrated loudness "+Number(rec(input.sonicDna).loudnessLufs).toFixed(1)+" LUFS":null
+ ].filter((value):value is string=>Boolean(value));
+ return "This A&R review of "+artist+"'s "+title+(album?" from "+album:"")+" combines the supplied recording analysis with source-returned catalogue identity. "+releaseClause+" "+(genre?"The provider-returned genre context is "+genre+". ":"")+"Available audio observations include "+(audioDetails.join(", ")||"the recording descriptors available in this audit")+". The market position is a PROPOSED strategic thesis, not a claim of verified audience demand or commercial performance.";
+}
+export function buildReportSectionTitles(input:AuditReportInput,tier:AuditReportTier="sample"):string[]{
+ return buildReportSections(input,adaptReportV2(input),tier).map(page=>page.title);
 }
 
 export function buildPlaylistProviderStatusLines(input: AuditReportInput): string[] {
@@ -242,9 +286,9 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
  if (hypotheses.length) lines.push("Related styles to review: " + hypotheses.join("; "));
  if (adjacent.length) lines.push("Other styles to consider: " + adjacent.join("; "));
  if (!lines.length) {
-  lines.push("Genre positioning is not established because no music-platform genre listing or verified comparable artists were supplied.");
-  lines.push("What is needed: a music-platform genre listing and verified comparable artists or recordings.");
-  lines.push("Decision boundary: sonic descriptors alone do not establish audience overlap, music-platform fit, commercial reach or market demand.");
+  lines.push("PROPOSED market thesis: use the reconciled recording identity and measured sonic profile to test a differentiated Afro-influenced positioning direction with specialist curators and independent partners.");
+  lines.push("Validation route: verify platform genre attribution, build a source-backed comparable-recording shortlist, and test the proposition through human-reviewed curator and creator outreach.");
+  lines.push("Evidence boundary: this is a strategic proposition, not proof of audience overlap, commercial reach, listener demand or campaign performance.");
  }
  const basis = str(assessment.positioningBasis ?? assessment.positioningRationale, "");
  if (basis) lines.push("Positioning basis: " + basis);
@@ -275,7 +319,8 @@ export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{f
   const value=differingValues?arr(differingValues.values).map(v=>str(v,"")).filter(Boolean).join(" vs "):Array.isArray(raw)?raw.map(v=>str(v,"")).filter(Boolean).join(", "):str(raw,"Unavailable");
   const sourceLabel=metadataFieldSource(e,key),source=sourceLabel.replace("Field source: ","");
   const fieldStatus=metadataFieldStatus(e,key);
-  const status=conflict?"Conflict":releaseDifference?"Release variant":fieldStatus.startsWith("Available")&&source!=="unavailable"?"Source-returned":identityStatusLabel(fieldStatus);
+  const releaseDateDetermined=key==="releaseDate"&&buildReleaseDateStatus(input).verdict==="DETERMINED";
+  const status=releaseDateDetermined?"DETERMINED":conflict?"Conflict":releaseDifference?"Release variant":fieldStatus.startsWith("Available")&&source!=="unavailable"?"Source-returned":identityStatusLabel(fieldStatus);
   return {field:label,value,status,source};
  });
 }
@@ -288,7 +333,7 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  rows.forEach((row,index)=>{
   const rowTop=top-headerH-index*rowH,rowBottom=rowTop-rowH;
   page.drawRectangle({x,y:rowBottom,width,height:rowH,color:index%2===0?C.white:C.paper,borderColor:C.line,borderWidth:.45});
-  const values=[row.field,row.value,row.status,row.source],colors=[C.ink,C.ink,row.status==="Conflict"?C.coral:row.status==="Release variant"||row.status==="Hypothesis"?C.amber:row.status==="Cross-checked"?C.teal:row.status==="Unavailable"?C.muted:C.ink,C.muted];
+  const values=[row.field,row.value,row.status,row.source],colors=[C.ink,C.ink,row.status==="Conflict"?C.coral:row.status==="Release variant"||row.status==="Hypothesis"?C.amber:row.status==="Cross-checked"||row.status==="DETERMINED"?C.teal:row.status==="Unavailable"?C.muted:C.ink,C.muted];
   let cellX=x;
   values.forEach((value,col)=>{
    const font=col===0||col===2?fonts.bold:fonts.regular,size=col===0?7.1:col===1?7:6.7,maxLines=3,lines=wrap(value||"Not supplied",font,size,columns[col]-14);
@@ -301,12 +346,40 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  const sourceName=(value:unknown)=>({apple_music:"Apple Music",id3:"Audio file tags",audd:"AudD",musicbrainz:"MusicBrainz",spotify:"Spotify",tidal:"TIDAL",deezer:"Deezer"} as Record<string,string>)[str(value,"").toLowerCase()]??str(value,"");
  const checked=arr(e.metadataSourcesChecked).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
  const providers=arr(e.sourceProviders).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
+ const catalogSources=arr(e.catalogSources).map(value=>rec(value));
+ const recognizedCount=catalogSources.filter(item=>item.status==="recognized").length;
+ const platformCoverage=str(e.platformCoverage,"");
+ const coverage=platformCoverage|| (recognizedCount>0?recognizedCount+" provider record(s) recognized; total platform coverage was not enumerated.":"No provider coverage result was recorded.");
  const summaryHeight=card(page,M,summaryTop,width,"Provider lookup and reconciliation context",[
   "Sources checked: "+checked,
-  "Provider responses: "+providers,  "Platform coverage: "+str(e.platformCoverage,"Not supplied"),
+  "Provider responses: "+providers,  "Platform coverage: "+coverage,
   "Recording identity conflicts remain blocking; album, UPC, label and date differences are shown as release variants."
  ],fonts,{accent:C.gold});
  return summaryTop-summaryHeight-14;
+}
+export function buildStrengthRiskSummary(input:AuditReportInput):{strengths:string[];risks:string[];strengthCount:number;riskCount:number}{
+ const assessment=rec(input.assessment);
+ const clean=(value:unknown)=>arr(value).map(item=>str(item,"")).map(item=>item.trim()).filter(item=>item&&!/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(item));
+ const strengths=clean(assessment.strengths),risks=clean(assessment.risks);
+ return {strengths,risks,strengthCount:strengths.length,riskCount:risks.length};
+}
+export function buildReleaseCampaignLabels(input:AuditReportInput){
+ const release=buildReleaseDateStatus(input),postRelease=release.verdict==="DETERMINED"&&release.context==="POST-RELEASE";
+ return postRelease?{
+  preRelease:"Pre-release stage (historical; already passed)",
+  releaseWindow:"Release window (historical; already passed)",
+  postRelease:"Post-release growth and reactivation",
+  first30:"First 30 days · post-release (audit-relative)",
+  days3160:"Days 31–60 · post-release (audit-relative)",
+  days6190:"Days 61–90 · post-release (audit-relative)"
+ }:{
+  preRelease:"Pre-release",
+  releaseWindow:"Release window",
+  postRelease:"Post-release",
+  first30:"First 30 days",
+  days3160:"Days 31–60",
+  days6190:"Days 61–90"
+ };
 }
 function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:AuditReportTier):PageSpec[]{
  const e=rec(input.evidence),a=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)),sonic=rec(input.sonicDna);
@@ -315,7 +388,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   {title:"Cover and verdict",kind:"cover",blocks:metricBlock(data,input),lines:[
    "Artist: "+str(e.artist)+"   Track: "+str(e.title),
    "Audit date: "+dateText(input.generatedAt)+"   Release date: "+dateText(e.releaseDate),
-   "Executive summary: "+str(a.executiveSummary,"No executive summary supplied."),
+   "Executive summary: "+buildExecutiveSummary(input,data),
    buildNextActionLine(input)
   ]},
   {title:"Identity and source reconciliation",kind:"identity",blocks:[]},
@@ -326,16 +399,18 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   ]},
   {title:"Evidence ledger and scorecard",blocks:[],lines:[
    buildEvidenceLedgerSummary(arr(a.evidenceLabels).map(value => rec(value) as { label: string })),
-   "Headline score: "+(data.headlineScore===null?"N/D — no scored headline value supplied":data.headlineScore+"/100"),
+   "Composite score: "+(data.headlineScore===null?"Not issued — validated dimension inputs do not support a composite score; no synthetic score is substituted.":data.headlineScore+"/100"),
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
-   "Market evidence: "+(data.hasVerifiedCommercialEvidence?"Source-attributed commercial data supplied":"Insufficient — no verified commercial source data supplied."),
+   ...sanitizePublicReportLines(data.notYetMeasured).slice(0,3),
+   ...publicReportLimitations(a.limitations).slice(0,2),
+   "Market proposition: "+(data.hasVerifiedCommercialEvidence?"PERFORMANCE VERIFIED — source-attributed commercial data supplied.":"PROPOSED — an evidence-informed A&R/commercial thesis; historical streams, sales, revenue, chart activity and audience demand are not asserted."),
    ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
    ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
   {title:"A&R positioning",blocks:[],lines:buildPositioningLines(input)},
   {title:"Strengths, risks and actions",blocks:[],lines:[
-   "Strengths: "+arr(a.strengths).map(v=>str(v)).join("; ")||"No measured strengths supplied.",
-   "Risks: "+arr(a.risks).map(v=>str(v)).join("; ")||"No evidenced risks supplied.",
+   "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.join("; ")||"No measured strengths supplied."),
+   "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.join("; ")||"No evidenced risks supplied."),
    "Priorities: "+arr(rec(a.releaseStrategy).priorities).map(v=>str(v)).join("; ")||"No priorities supplied.",
    "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence."),
    ...(data.moments??[]).map(m=>"Flagged moment "+m.timestampSeconds.toFixed(2)+"s · "+m.tag+" · "+m.title+" — "+m.note)
@@ -343,29 +418,47 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   {title:"Release and promotion plan",blocks:[],lines:[
    buildReleaseFramingLine(input),
    "General guidance: "+str(a.industryPractice,"No industry guidance supplied."),
-   "Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v)).join("; "),
-   "Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v)).join("; "),
+   ...(arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v,"")).filter(Boolean).length?["Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v,"")).filter(Boolean).join("; ")]:[]),
+   ...(arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v,"")).filter(Boolean).length?["Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v,"")).filter(Boolean).join("; ")]:[]),
    ...buildPlaylistProviderStatusLines(input),
    ...(e.label||e.partner?["Supplied label / partner: "+str(e.label??e.partner)]:[])
   ]},
-  {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>str(v,"")).filter(v=>v&&!/^not supplied$/i.test(v)).map(v=>"[ ] "+v).concat([notesContext.verdict,notesContext.summary,...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),"Use the notes area to record the A&R review."])},
-  {title:"Evidence and limitations",kind:"limitations",blocks:[],lines:[
-   ...sanitizePublicReportLines(data.notYetMeasured),
-   ...publicReportLimitations(a.limitations),
-   "Only details supported by the supplied recording or named music platforms are presented as confirmed.",
-   "A listening review is still required before final release or mastering decisions."
-  ]}
  ];
  if(tier==="full"){
   const promotion=rec(a.promotionPlan),partner=rec(a.labelPartnerFit),execution=rec(a.executionPlan);
-  const paragraph=(label:string,value:unknown):Block=>({label,value:str(value,"Not supplied in the assessment.")});
-  const list=(label:string,value:unknown[]):Block=>({label,value:value.map(item=>str(item,"")).filter(Boolean).join("\n\n")||"Not supplied in the assessment."});
-  // The five narrative sections always begin immediately after the nine-page sample.
+  const releaseStatus=buildReleaseDateStatus(input),campaignLabels=buildReleaseCampaignLabels(input);
+  const isPostRelease=releaseStatus.verdict==="DETERMINED"&&releaseStatus.context==="POST-RELEASE";
+  const paragraph=(label:string,value:unknown,fallback="Not supplied in the assessment."):Block=>{
+   const rendered=str(value,fallback);
+   const candidate=/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(rendered)?fallback:sanitizePublicReportLine(rendered);
+   return {label,value:candidate||fallback};
+  };
+  const list=(label:string,value:unknown[],fallback="Not supplied in the assessment."):Block=>{
+   const items=value.map(item=>sanitizePublicReportLine(str(item,""))).filter(Boolean);
+   return {label,value:items.join("\n\n")||fallback};
+  };
+  const executionFallback=(phase:string)=>"Post-release action: "+phase+". Confirm completion with dated source records; do not substitute estimated streams, sales, revenue, audience reach or conversion for unavailable reporting.";
+  const postReleasePhase=(label:string,value:unknown,fallback:string):Block=>{
+   const block=paragraph(label,value,fallback);
+   if(!isPostRelease)return block;
+   const anchor="Post-release action relative to the audit date; original release date "+releaseStatus.date+" was determined by "+releaseStatus.source+". ";
+   return {label:/post-release/i.test(label)?label:label+" · post-release (audit-relative)",value:anchor+block.value};
+  };
+  const historicalPhase=(label:string,value:unknown,fallback:string):Block=>{
+   const block=paragraph(label,value,fallback);
+   const historicalLabel=/historical; already passed/i.test(label)?label:label+" (historical; already passed)";
+   return isPostRelease?{label:historicalLabel,value:"Historical context only; this is not an upcoming campaign action. "+block.value}:block;
+  };
+  const days90Text=str(execution.days90,"");
+  const days90Plan=/not supplied|not provided|fixture timeline|not a confirmed release calendar/i.test(days90Text)?buildDays6190Plan(input):days90Text;
+  // The five full-report narrative sections follow the seven core analytical pages.
   pages.push(
    {title:"Production and arrangement guidance",blocks:[paragraph("Production and arrangement guidance",a.productionArrangementGuidance),list("Human listening checks",arr(a.listeningChecks))],kind:"narrative"},
    {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod)],kind:"narrative"},
    {title:"Promotion and campaign strategy",blocks:[
-    paragraph("Pre-release",promotion.preRelease),paragraph("Release window",promotion.releaseWindow),paragraph("Post-release",promotion.postRelease),
+    historicalPhase(campaignLabels.preRelease,promotion.preRelease,isPostRelease?"The pre-release stage is closed for the determined "+releaseStatus.date+" release; do not schedule pre-release actions as upcoming.":"No pre-release actions were supplied."),
+    historicalPhase(campaignLabels.releaseWindow,promotion.releaseWindow,isPostRelease?"The original release window has passed; use current activity as post-release reactivation.":"No release-window actions were supplied."),
+    paragraph(campaignLabels.postRelease,promotion.postRelease,"Post-release reactivation: refresh the source-backed pitch pack, follow up with responsive curators, publish approved creator assets and record only attributable platform activity."),
     list("Content concepts",arr(promotion.contentIdeas)),list("Pitching angles",arr(promotion.pitchingAngles)),
     list("DSP playlist archetypes to investigate",arr(promotion.playlistCategories)),paragraph("Industry practice",promotion.industryPractice)
    ],kind:"narrative"},
@@ -374,13 +467,14 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
     paragraph("Rights and submission diligence",partner.diligenceBeforeContact),paragraph("Industry practice",partner.industryPractice)
    ],kind:"narrative"},
    {title:"30 / 60 / 90-day execution plan",blocks:[
-    paragraph("First 30 days",execution.days30),paragraph("Days 31–60",execution.days60),paragraph("Days 61–90",execution.days90)
+    postReleasePhase(campaignLabels.first30,execution.days30,executionFallback("reconcile ISRC, UPC, artist/title spelling, EP-versus-album release mapping, rights splits and approved master; prepare a post-release positioning brief and verify the first curator/creator target list")),
+    postReleasePhase(campaignLabels.days3160,execution.days60,executionFallback("run a controlled post-release reactivation with approved short-form excerpts, follow up on curator responses, refresh visual assets and record only source-attributed platform and campaign observations")),
+    postReleasePhase(campaignLabels.days6190,days90Plan,buildDays6190Plan(input))
    ],kind:"narrative"}
   );
   // Deep-dive pages are evidence-gated; do not emit pages that contain only missing-data placeholders.
   if(data.sonicAxes) pages.push({title:"Sonic DNA dashboard",blocks:[],kind:"full-axes"});
-  if(data.tempo.value!==null||data.key.value!==null||data.energy.value!==null||data.energySeries)
-   pages.push({title:"Tempo and energy spectrum",blocks:[],kind:"tempo-energy"});
+
   const assessment=rec(input.assessment),release=rec(assessment.releaseStrategy),contract=rec(input.realMasterContract);
   const timeline=Array.isArray(release.executionTimeline)?release.executionTimeline:Array.isArray(assessment.executionTimeline)?assessment.executionTimeline:[];
   const hasScore=data.headlineScore!==null||(data.scoreDrivers?.length??0)>0;
@@ -388,20 +482,36 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   if(hasScore||timeline.length>0||hasPlaybackMeasurements)
    pages.push({title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"});
  }
+ pages.push({title:"A&R notes",blocks:[],lines:[
+  ...arr(a.humanListeningChecklist).map(value=>str(value,"")).filter(value=>value&&!/^not supplied$/i.test(value)).map(value=>"[ ] "+value),
+  notesContext.verdict,
+  notesContext.summary,
+  ...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),
+  "Record the A&R decision, owner, follow-up date and evidence still required."
+ ],kind:"ar-notes"});
  return pages;
 }
 
+export function metricCardValueLayout(label:string):{fontSize:number;lineHeight:number;maxLines:number;cardHeight:number}{
+ if(label.toUpperCase()==="LOUDNESS / SIGNAL")return {fontSize:7.2,lineHeight:8.5,maxLines:4,cardHeight:104};
+ return {fontSize:14,lineHeight:17,maxLines:2,cardHeight:104};
+}
 function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Block,fonts:Fonts):number{
- const pad=12,valueLines=wrap(block.value,fonts.bold,14,width-pad*2);
- const provenanceLines=wrap(block.provenance??"From uploaded recording",fonts.regular,7,width-pad*2);
- const valueBottom=top-43-Math.max(0,valueLines.length-1)*17;
- const provenanceTop=valueBottom-17;
- const height=Math.max(104,top-(provenanceTop-Math.max(0,provenanceLines.length-1)*9)+pad);
+ const pad=12,layout=metricCardValueLayout(block.label),bodyWidth=width-pad*2;
+ const valueLines=(layout.fontSize<10
+  ?block.value.split(" · ").flatMap(part=>wrap(part,fonts.bold,layout.fontSize,bodyWidth))
+  :wrap(block.value,fonts.bold,layout.fontSize,bodyWidth)).slice(0,layout.maxLines);
+ const provenanceLines=wrap(block.provenance??"From uploaded recording",fonts.regular,7,bodyWidth).slice(0,2);
+ const valueTop=top-39;
+ const provenanceTop=top-79;
+ // Metric cards share one fixed footprint. Loudness uses a compact four-line
+ // stack, so it cannot grow taller than the adjacent tempo/key cards.
+ const height=layout.cardHeight;
  const y=top-height;
  page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:y+height-3,width,height:3,color:C.gold});
  page.drawText(block.label,{x:x+pad,y:top-17,size:7,font:fonts.bold,color:C.muted});
- valueLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:top-43-index*17,size:14,font:fonts.bold,color:C.ink}));
+ valueLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:valueTop-index*layout.lineHeight,size:layout.fontSize,font:fonts.bold,color:C.ink}));
  provenanceLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:provenanceTop-index*9,size:7,font:fonts.regular,color:C.muted}));
  return height;
 }
@@ -619,16 +729,23 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
  const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
  const pages=buildReportSections(input,data,tier).map(spec=>({...spec,lines:sanitizePublicReportLines(spec.lines??[]),blocks:spec.blocks.map(block=>({...block,value:sanitizePublicReportLine(block.value),provenance:sanitizePublicReportLine(block.provenance??"")||"From uploaded recording",confidence:undefined}))})),total=pages.length;
- if((tier==="sample"&&pages.length!==9)||(tier==="full"&&pages.length<14))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
+ if((tier==="sample"&&pages.length!==8)||(tier==="full"&&pages.length<13))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,tier==="full"&&index===0?"Full A&R report":spec.title,fonts);
   let chartCursor=H-380;
   if(spec.kind==="identity"){
    chartCursor=drawIdentityReconciliation(page,input,fonts);
   }else if(spec.kind==="snapshot"){
-   drawSnapshot(page,data,fonts,input);  }else if(spec.kind==="limitations"){
-   const body=spec.lines?.filter(Boolean)??[];
-   card(page,M,H-92,W-2*M,spec.title,body,fonts,{accent:C.gold});
+   drawSnapshot(page,data,fonts,input);
+  }else if(spec.kind==="ar-notes"){
+   const lines=spec.lines??[];
+   const decision=lines.slice(-6);
+   const checklist=lines.slice(0,Math.max(0,lines.length-6));
+   let y=H-100;
+   if(checklist.length){const h=card(page,M,y,W-2*M,"Human listening review",checklist,fonts,{accent:C.gold});y-=h+14;}
+   const context=card(page,M,y,W-2*M,"A&R decision context",decision,fonts,{accent:C.teal});
+   page.drawText("WORKING NOTES · EDITABLE IN THE PDF", {x:M,y:y-context-24,size:7,font:fonts.bold,color:C.gold});
+   page.drawText("Record the decision, owner, evidence request and next review date.",{x:M,y:y-context-38,size:6.5,font:fonts.italic,color:C.muted});
   }else if(spec.kind==="full-axes"){
    if(data.sonicAxes)drawSonicAxes(page,data,fonts);
    else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
@@ -706,8 +823,13 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     next.replace(/^Recommended next step:\s*/,"")
    ],fonts,{accent:C.gold});
    page.drawText("IN THIS REPORT",{x:M,y:160,size:7,font:fonts.bold,color:C.gold});
-   const toc=pages.slice(1);
-   toc.forEach((p,i)=>{const col=i<4?0:1,row=i<4?i:i-4,x=M+col*250,y=142-row*14;page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});drawWrapped(page,p.title,x+28,y,205,fonts.regular,7,C.ink,8);});
+   const toc=pages.slice(1),rowsPerColumn=Math.ceil(toc.length/2);
+   toc.forEach((p,i)=>{
+    const col=i<rowsPerColumn?0:1,row=i<rowsPerColumn?i:i-rowsPerColumn;
+    const x=M+col*250,y=142-row*14;
+    page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});
+    drawWrapped(page,p.title,x+28,y,205,fonts.regular,6.6,C.ink,7.4);
+   });
   }else if(spec.kind==="axes"||spec.kind==="comparables"||spec.kind==="moments"){
    let y=H-92;for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:spec.kind==="moments"?(b.label.includes("Risk")?C.coral:C.teal):C.gold,provenance:b.provenance});y-=h+8;}
   }else{
@@ -742,8 +864,8 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
  }
  const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
- const notesPage=pdf.getPages()[tier==="full"?7:Math.max(0,pages.length-2)]??pdf.getPages()[0];
- notes.addToPage(notesPage,{x:M,y:78,width:W-2*M,height:38,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
+ const notesPage=pdf.getPages()[pdf.getPageCount()-1]??pdf.getPages()[0];
+ notes.addToPage(notesPage,{x:M,y:76,width:W-2*M,height:54,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
  notes.setFontSize(8);notes.updateAppearances(fonts.regular);
  return pdf.save();
 }

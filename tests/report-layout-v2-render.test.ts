@@ -4,6 +4,7 @@ import { buildCoverKeyLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
+import { sanitizePublicReportLine } from "../src/reports/v2/public-language.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
@@ -14,16 +15,17 @@ describe("v2 decision and date framing", () => {
     input.assessment.evidenceGaps = ["Confirm recording identifiers"];
     expect(buildNextActionLine(input)).toBe("Recommended next step: Confirm recording identifiers");
     input.assessment.evidenceGaps = [];
-    expect(buildNextActionLine(input)).toBe("Recommended next step: Not supplied");
+    expect(buildNextActionLine(input)).toContain("Confirm the recording identifier and release-version mapping");
   });
 
   it("compares release date to generatedAt rather than the current clock", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.generatedAt = "2025-01-01T00:00:00.000Z";
     input.evidence.releaseDate = "2025-06-01";
-    expect(buildReleaseFramingLine(input)).toContain("date does not establish a past release");
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    expect(buildReleaseFramingLine(input)).toContain("UPCOMING");
     input.generatedAt = "2025-12-01T00:00:00.000Z";
-    expect(buildReleaseFramingLine(input)).toContain("release date is in the past");
+    expect(buildReleaseFramingLine(input)).toContain("POST-RELEASE");
   });
 });
 
@@ -161,8 +163,8 @@ describe("v2 gated report pages", () => {
     input.assessment.adjacentLanes = [];
     input.evidence.genre = null;
     const lines = buildPositioningLines(input);
-    expect(lines.join(" ")).toContain("Genre positioning is not established");
-    expect(lines.join(" ")).toContain("music-platform genre listing");
+    expect(lines.join(" ")).toContain("PROPOSED market thesis");
+    expect(lines.join(" ")).toContain("Validation route");
     expect(lines.every((line: string) => line.trim().length > 0)).toBe(true);
   });
 
@@ -171,7 +173,7 @@ describe("v2 gated report pages", () => {
     input.evidence = { ...input.evidence, artist: "Stunixx", title: "Phillo", album: null, isrc: null, upc: null, label: null,
       reconciliation: { conflicts: [{ field: "album", values: ["Hole-Hearted - EP", "Hole-Hearted"] }] } };
     const pdf = await PDFDocument.load(await generateAuditReportV2(input));
-    expect(pdf.getPageCount()).toBe(9);
+    expect(pdf.getPageCount()).toBe(8);
   });
 
   it("keeps a complete evidence-rich sample at nine pages without dropping gated evidence", async () => {
@@ -183,14 +185,14 @@ describe("v2 gated report pages", () => {
       flaggedMoments: [{ timestampSeconds: 12, title: "Hook entry", note: "Synthetic test observation", tag: "Strength" }] };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
-    expect(pdf.getPageCount()).toBe(9);
+    expect(pdf.getPageCount()).toBe(8);
     expect(pdf.getForm().getFields().map(field => field.getName())).toContain("ar_notes");
   });
 
   it("keeps the five narrative pages and only evidence-supported deep dives", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(15);
+    expect(pdf.getPageCount()).toBe(13);
   });
 
   it("keeps the five narrative pages after page 9 and omits unsupported analytical stub pages", async () => {
@@ -201,7 +203,7 @@ describe("v2 gated report pages", () => {
     input.assessment = { ...input.assessment, headlineScore: null, scoreDrivers: [], executionTimeline: [] };
     input.realMasterContract = null;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(14);
+    expect(pdf.getPageCount()).toBe(13);
   });
 
   it("keeps expanded narrative content on its five allocated pages", async () => {
@@ -214,7 +216,7 @@ describe("v2 gated report pages", () => {
       "A release decision still requires rights clearance, delivery confirmation, approved final master and source-attributed commercial reporting."
     )];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(15);
+    expect(pdf.getPageCount()).toBe(13);
   });
 
   it("adds only the analytical pages supported by optional evidence", async () => {
@@ -228,12 +230,26 @@ describe("v2 gated report pages", () => {
     };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(16);
+    expect(pdf.getPageCount()).toBe(14);
   });
 
   it("omits every gated page for a minimal audio-only fixture", async () => {
     const input = { ...metadataOnlyFixture, evidence: { fixture: true, auditType: "AUDIO-ONLY", artist: null, title: null }, sonicDna: { provenance: "fixture", bpm: null, key: null, mode: null, tempoConfidence: 0, keyConfidence: 0 } };
-    expect((await PDFDocument.load(await generateAuditReportV2(input as any))).getPageCount()).toBe(9);
+    expect((await PDFDocument.load(await generateAuditReportV2(input as any))).getPageCount()).toBe(8);
+  });
+});
+
+describe("v2 loudness metric card sizing", () => {
+  it("keeps multi-reading loudness text compact enough to match the tempo and key cards", () => {
+    const loudness = reportV2Render.metricCardValueLayout("LOUDNESS / SIGNAL");
+    const tempo = reportV2Render.metricCardValueLayout("TEMPO");
+    const key = reportV2Render.metricCardValueLayout("SONG KEY");
+    expect(loudness.fontSize).toBe(7.2);
+    expect(loudness.fontSize).toBeLessThan(tempo.fontSize);
+    expect(loudness.lineHeight).toBe(8.5);
+    expect(loudness.maxLines).toBe(4);
+    expect(loudness.cardHeight).toBe(tempo.cardHeight);
+    expect(loudness.cardHeight).toBe(key.cardHeight);
   });
 });
 
@@ -276,3 +292,121 @@ describe("v2 cover key and playback presentation", () => {
     const metadataOnlyInput = { ...unavailable, tonalResolution: undefined };
     expect(buildCoverKeyLabel(metadataOnlyInput, unavailableData)).toBe("Unavailable");
   });
+
+
+describe("v2 report structure and release framing regressions", () => {
+  it("omits evidence-and-limitations and places A&R notes last in both report tiers", () => {
+    const sample = reportV2Render.buildReportSectionTitles(fullAudioFixture as any, "sample");
+    const full = reportV2Render.buildReportSectionTitles(fullAudioFixture as any, "full");
+    expect(sample).not.toContain("Evidence and limitations");
+    expect(full).not.toContain("Evidence and limitations");
+    expect(sample.at(-1)).toBe("A&R notes");
+    expect(full.at(-1)).toBe("A&R notes");
+    expect(full).not.toContain("Tempo and energy spectrum");
+  });
+
+  it("always supplies a post-release Days 61-90 plan when the assessment omits it", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.releaseDate = "2025-08-24";
+    input.generatedAt = "2026-11-21T00:00:00.000Z";
+    input.assessment.executionPlan = { days30: "Review", days60: "Re-activate", days90: "" };
+    const plan = reportV2Render.buildDays6190Plan(input);
+    expect(plan).toMatch(/post-release/i);
+    expect(plan).toMatch(/curator|playlist/i);
+    expect(plan).toMatch(/creator|UGC/i);
+    expect(plan).toMatch(/ISRC|UPC|metadata/i);
+    expect(plan).toMatch(/day-90 performance review/i);
+    expect(plan).not.toMatch(/not supplied/i);
+  });
+
+  it("marks a source-attributed valid release date as determined and post-release", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.releaseDate = "2025-08-24";
+    input.generatedAt = "2026-11-21T00:00:00.000Z";
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    const status = reportV2Render.buildReleaseDateStatus(input);
+    expect(status.verdict).toBe("DETERMINED");
+    expect(status.context).toBe("POST-RELEASE");
+    expect(status.source).toContain("Apple Music");
+  });
+});
+
+
+describe("v2 final-page and executive report contracts", () => {
+  it("builds an executive brief without placeholder text when metadata and audio evidence exist", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.releaseDate = "2025-08-24";
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    input.generatedAt = "2026-11-21T00:00:00.000Z";
+    input.assessment.executiveSummary = "Executive summary not supplied.";
+    const summary = reportV2Render.buildExecutiveSummary(input);
+    expect(summary).toContain("Release date DETERMINED: 2025-08-24");
+    expect(summary).toContain("post-release");
+    expect(summary).toContain("PROPOSED strategic thesis");
+    expect(summary).not.toMatch(/not supplied|not provided/i);
+  });
+
+  it("keeps the resolved release date status in the identity reconciliation row", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.releaseDate = "2025-08-24";
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    const release = buildIdentityReconciliationRows(input).find((row: any) => row.field === "Release date");
+    expect(release).toMatchObject({ value: "2025-08-24", status: "DETERMINED", source: "Apple Music" });
+  });
+
+  it("keeps the final A&R notes page and removes the limitations and unmeasured spectrum pages", () => {
+    const titles = reportV2Render.buildReportSectionTitles(fullAudioFixture as any, "full");
+    expect(titles.at(-1)).toBe("A&R notes");
+    expect(titles).not.toContain("Evidence and limitations");
+    expect(titles).not.toContain("Tempo and energy spectrum");
+    expect(titles.join(" ")).not.toMatch(/INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i);
+  });
+});
+
+
+describe("public PDF measurement formatting", () => {
+  it("preserves loudness units and labels while removing dead-end market verdicts", () => {
+    const metrics = sanitizePublicReportLine("Integrated loudness -11.4 LUFS · Loudness range 5.0 LU · True peak +0.8 dBFS · RMS signal level -13.2 dBFS");
+    expect(metrics).toContain("Integrated loudness -11.4 LUFS");
+    expect(metrics).toContain("True peak +0.8 dBFS");
+    expect(metrics).toContain("RMS signal level -13.2 dBFS");
+    expect(metrics).not.toMatch(/overall playback level|peak level/i);
+    expect(sanitizePublicReportLine("Market evidence: Insufficient — no verified commercial record.")).toContain("Market proposition: PROPOSED");
+    expect(sanitizePublicReportLine("INSUFFICIENT EVIDENCE")).toBe("PROPOSED REVIEW");
+    expect(sanitizePublicReportLine("low-confidence audio evidence")).toBe("audio evidence");
+    expect(sanitizePublicReportLine("Keep lane positioning unconfirmed until sources are checked.")).toContain("proposed search direction");
+    expect(sanitizePublicReportLine("Rights are not cleared for outreach.")).toContain("pending rights checks");
+  });
+});
+
+
+describe("v2 strengths and risks count integrity", () => {
+  it("counts only substantive documented items and keeps the rendered lists in sync", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.assessment.strengths = ["Clear hook potential", "Not supplied in the assessment."];
+    input.assessment.risks = ["Release identity conflict", "Rights clearance pending", "Not supplied"];
+    expect(reportV2Render.buildStrengthRiskSummary(input)).toEqual({
+      strengths: ["Clear hook potential"],
+      risks: ["Release identity conflict", "Rights clearance pending"],
+      strengthCount: 1,
+      riskCount: 2,
+    });
+  });
+});
+
+
+describe("post-release campaign framing", () => {
+  it("marks pre-release and release-window actions as historical when the date is determined in the past", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.releaseDate = "2025-08-24";
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    input.generatedAt = "2026-11-21T00:00:00.000Z";
+    const labels = reportV2Render.buildReleaseCampaignLabels(input);
+    expect(labels.preRelease).toMatch(/historical; already passed/i);
+    expect(labels.releaseWindow).toMatch(/historical; already passed/i);
+    expect(labels.postRelease).toMatch(/post-release growth/i);
+    expect(labels.first30).toMatch(/post-release/i);
+    expect(labels.days3160).toMatch(/post-release/i);
+    expect(labels.days6190).toMatch(/post-release/i);
+  });
+});

@@ -218,7 +218,7 @@ describe("A4 report layout and fixture coverage",()=>{
  it("builds the A&R Notes decision-context structure used by the generated PDF",()=>{
   const context=buildArNotesDecisionContext(ambiguousAudioFixture as any);
   expect(context.heading).toBe("DECISION CONTEXT");
-  expect(context.verdict).toBe("INSUFFICIENT EVIDENCE");
+  expect(context.verdict).toBe("PROPOSED A&R THESIS");
   expect(context.summary).not.toContain("zero-confidence tempo candidate");
   expect(context.summary).not.toMatch(/\b(?:128\s*BPM|Afrobeats|streams?)\b/i);
   expect(context.prompts).toHaveLength(3);
@@ -263,7 +263,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(context.prompts).toHaveLength(3);
  });
  it("uses the evidence-sanitized commercial verdict on the PDF cover",()=>{
-  expect(coverVerdictLabel(ambiguousAudioFixture as any)).toBe("Insufficient evidence");
+  expect(coverVerdictLabel(ambiguousAudioFixture as any)).toBe("PROPOSED A&R THESIS");
  });
  it("renders the generic ambiguous-audio regression fixture with tempo, key, genre and commercial claims withheld",()=>{
   const pages=planAuditReportPages(ambiguousAudioFixture as any,"full");
@@ -274,7 +274,7 @@ describe("A4 report layout and fixture coverage",()=>{
   expect(report).not.toMatch(/Tempo confidence score|Key confidence estimator score|Tempo: Detected|Key \/ mode: C major/);
   expect(report).toContain("album: Sample Release - EP vs Sample Release");
   expect(report).toContain("Unconfirmed — insufficient provider-backed genre evidence");
-  expect(report).toContain("Verdict: Insufficient evidence");
+  expect(report).toContain("Verdict: PROPOSED A&R THESIS");
   expect(report).toContain("Tempo and lane fit — NOT SCORED");
   expect(report).toContain("Rhythmic consistency — NOT SCORED");
   expect(report).toMatch(/Metadata completeness — \d+\/100/);

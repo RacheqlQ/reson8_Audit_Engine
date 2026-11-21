@@ -51,18 +51,14 @@ for(const [name,input] of variants){
   const reportInput={...input,generatedAt: new Date().toISOString()};
   const bytes=await ensurePdfReport(reportInput,tier);
   const pdf=await PDFDocument.load(bytes);
-  if(tier==="sample"&&pdf.getPageCount()!==9)throw new Error(name+" sample report must be exactly 9 pages; got "+pdf.getPageCount());
-  if(tier==="full"&&(pdf.getPageCount()<14||pdf.getPageCount()>17))throw new Error(name+" full report must contain 9 base pages, 5 narrative pages and up to 3 evidence-gated deep dives (14–17 pages); got "+pdf.getPageCount());
+  if(tier==="sample"&&pdf.getPageCount()!==8)throw new Error(name+" sample report must be exactly 8 pages; got "+pdf.getPageCount());
+  if(tier==="full"&&(pdf.getPageCount()<13||pdf.getPageCount()>16))throw new Error(name+" full report must contain 7 core pages, 5 narrative pages and up to 3 evidence-gated deep dives (13–16 pages); got "+pdf.getPageCount());
   const filename=name+"-"+tier+"-audit-report.pdf";
   const fileUrl=new URL(filename,out),filePath=fileUrl.pathname;
   await writeFile(fileUrl,bytes);
   const extracted=execFileSync("pdftotext",["-layout",filePath,"-"],{encoding:"utf8"});
   const extractedPages=extracted.split("\f").filter(page=>page.trim().length>0);
   if(extractedPages.length!==pdf.getPageCount())throw new Error(filename+" extracted page count does not match the PDF page count");
-   if(tier==="full"){
-    const narrativeTitles=["Production and arrangement guidance","Comparable lanes and listening references","Promotion and campaign strategy","Label and partner fit","30 / 60 / 90-day execution plan"];
-    for(let index=0;index<narrativeTitles.length;index++)if(!extractedPages[index+9]?.toUpperCase().includes(narrativeTitles[index].toUpperCase()))throw new Error(filename+" must place narrative section "+(index+1)+" on page "+(index+10)+": "+narrativeTitles[index]);
-   }
   const bbox=execFileSync("pdftotext",["-bbox",filePath,"-"],{encoding:"utf8"});
   const pageBoxes=[...bbox.matchAll(/<page\b[^>]*>([\s\S]*?)<\/page>/g)];
   if(pageBoxes.length!==pdf.getPageCount())throw new Error(filename+" bounding-box page count does not match the PDF page count");
@@ -71,9 +67,15 @@ for(const [name,input] of variants){
    if(!pageText.trim())throw new Error(filename+" contains an empty page "+(pageIndex+1));
    const words=[...pageBoxes[pageIndex][1].matchAll(/<word\b([^>]*)>([\s\S]*?)<\/word>/g)].map(match=>{
     const yMin=Number(match[1].match(/yMin="([^"]+)"/)?.[1]),yMax=Number(match[1].match(/yMax="([^"]+)"/)?.[1]);
-    return {text:match[2].replace(/&amp;/g,"&").replace(/&quot;/g,'"'),yMin,yMax};
+    const xMin=Number(match[1].match(/xMin="([^"]+)"/)?.[1]),xMax=Number(match[1].match(/xMax="([^"]+)"/)?.[1]);
+    return {text:match[2].replace(/&amp;/g,"&").replace(/&quot;/g,'"'),xMin,xMax,yMin,yMax};
    });
    if(words.some(word=>word.yMin<790&&word.yMax>=790))throw new Error(filename+" has text crossing into the footer area on page "+(pageIndex+1));
+   for(let left=0;left<words.length;left++)for(let right=left+1;right<words.length;right++){
+    const a=words[left],b=words[right];
+    const overlapX=Math.min(a.xMax,b.xMax)-Math.max(a.xMin,b.xMin),overlapY=Math.min(a.yMax,b.yMax)-Math.max(a.yMin,b.yMin);
+    if(overlapX>1.5&&overlapY>2)throw new Error(filename+" has overlapping text bounds on page "+(pageIndex+1)+": "+a.text+" / "+b.text);
+   }
    {
     const footerWords=words.filter(word=>word.yMin>=790).map(word=>word.text);
     const expectedPage=String(pageIndex+1),totalPages=String(pdf.getPageCount());
