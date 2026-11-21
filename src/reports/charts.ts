@@ -206,7 +206,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
    const px=x+82+i*166;
    if(i<2)result.push({x:px+30,y:lineY-1,width:136,height:2,id:"shape-chain-link-"+i});
    result.push({x:px-25,y:lineY-25,width:50,height:50,id:"shape-chain-node-"+i});
-   result.push({x:px-31,y:lineY-8,width:62,height:12,id:"label-chain-title-"+i});
+   result.push({x:px-44,y:lineY-8,width:84,height:12,id:"label-chain-title-"+i});
    result.push({x:px-54,y:lineY-52,width:112,height:18,id:"label-chain-value-"+i});
   });
  }
