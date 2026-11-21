@@ -446,7 +446,7 @@ export function estimateKey(
       salience,
       energy: windowEnergy,
       downbeatRoot: normalizedBass[downbeatRoot]! >= 0.2 ? downbeatRoot : null,
-      cadenceWeight: window === boundedStarts.length - 1 ? 0.65 : 0.15,
+      cadenceWeight: window === boundedStarts.length - 1 ? 0.65 : 0,
     });
     if (tuningWindowWeight > EPSILON) {
       tuningValues.push({ value: tuningWindowOffset / tuningWindowWeight, weight: tuningWindowWeight });
