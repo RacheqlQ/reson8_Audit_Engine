@@ -257,7 +257,7 @@ describe("v2 cover key and playback presentation", () => {
       tonalResolution: undefined,
       sonicDna: { ...ambiguous.sonicDna, tonalResolution: undefined, harmonicFeatures: undefined },
     };
-    expect(adapted.key.value).toBe("Not determined");
+    expect(adapted.key.value).toBeNull();
     expect(buildCoverKeyLabel(legacyInput, adapted)).toBe("Possible: C major");
 
     const unavailable = structuredClone(metadataOnlyFixture) as any;
