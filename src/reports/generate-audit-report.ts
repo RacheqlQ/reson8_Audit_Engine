@@ -316,6 +316,7 @@ function windowConsensusSummary(value:unknown,_independent?:unknown):string|null
 export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAudio:boolean):Array<{label:string;value:string|null}> {
  const tempoReliable=hasAudio&&isReliableTempo(s);
  const keyReliable=hasAudio&&isReliableKey(s);
+ const tuningOffsetReportable=hasAudio&&hasMultipleTuningWindows(s)&&typeof s?.keySegmentAgreement==="number"&&Number.isFinite(s.keySegmentAgreement)&&s.keySegmentAgreement<=0.2;
  const rhythm=s?.rhythmFeatures&&typeof s.rhythmFeatures==="object"?s.rhythmFeatures as Record<string,unknown>:{};
  const independentEstimator=rhythm.independentEstimator&&typeof rhythm.independentEstimator==="object"?rhythm.independentEstimator as Record<string,unknown>:{};
  const independentTempoCandidate=typeof independentEstimator.bpm==="number"&&Number.isFinite(independentEstimator.bpm)?independentEstimator.bpm:null;
