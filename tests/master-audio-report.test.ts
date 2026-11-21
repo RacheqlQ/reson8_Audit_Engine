@@ -312,7 +312,7 @@ describe("uploaded master provenance in reports", () => {
     expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-12")).toBe(true);
   });
 
-  it("hides internal master paths and withholds independent tempo candidates without explicit confidence", () => {
+  it("hides internal master paths while retaining provisional tonal candidates without explicit confidence", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.evidence = { ...input.evidence, fixture: false, masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } };
     input.sonicDna = {
