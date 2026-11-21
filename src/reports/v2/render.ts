@@ -300,7 +300,8 @@ export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{f
   const value=differingValues?arr(differingValues.values).map(v=>str(v,"")).filter(Boolean).join(" vs "):Array.isArray(raw)?raw.map(v=>str(v,"")).filter(Boolean).join(", "):str(raw,"Unavailable");
   const sourceLabel=metadataFieldSource(e,key),source=sourceLabel.replace("Field source: ","");
   const fieldStatus=metadataFieldStatus(e,key);
-  const status=conflict?"Conflict":releaseDifference?"Release variant":fieldStatus.startsWith("Available")&&source!=="unavailable"?"Source-returned":identityStatusLabel(fieldStatus);
+  const releaseDateDetermined=key==="releaseDate"&&buildReleaseDateStatus(input).verdict==="DETERMINED";
+  const status=releaseDateDetermined?"DETERMINED":conflict?"Conflict":releaseDifference?"Release variant":fieldStatus.startsWith("Available")&&source!=="unavailable"?"Source-returned":identityStatusLabel(fieldStatus);
   return {field:label,value,status,source};
  });
 }
@@ -313,7 +314,7 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  rows.forEach((row,index)=>{
   const rowTop=top-headerH-index*rowH,rowBottom=rowTop-rowH;
   page.drawRectangle({x,y:rowBottom,width,height:rowH,color:index%2===0?C.white:C.paper,borderColor:C.line,borderWidth:.45});
-  const values=[row.field,row.value,row.status,row.source],colors=[C.ink,C.ink,row.status==="Conflict"?C.coral:row.status==="Release variant"||row.status==="Hypothesis"?C.amber:row.status==="Cross-checked"?C.teal:row.status==="Unavailable"?C.muted:C.ink,C.muted];
+  const values=[row.field,row.value,row.status,row.source],colors=[C.ink,C.ink,row.status==="Conflict"?C.coral:row.status==="Release variant"||row.status==="Hypothesis"?C.amber:row.status==="Cross-checked"||row.status==="DETERMINED"?C.teal:row.status==="Unavailable"?C.muted:C.ink,C.muted];
   let cellX=x;
   values.forEach((value,col)=>{
    const font=col===0||col===2?fonts.bold:fonts.regular,size=col===0?7.1:col===1?7:6.7,maxLines=3,lines=wrap(value||"Not supplied",font,size,columns[col]-14);
