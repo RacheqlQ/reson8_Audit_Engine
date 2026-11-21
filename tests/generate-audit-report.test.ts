@@ -474,7 +474,7 @@ describe("Sonic DNA provisional candidate reporting", () => {
     expect(reportText).toContain("Possible tempo readings: 165 BPM");
     expect(reportText).toContain("half-time 82.5 BPM");
     expect(reportText).not.toContain("double-time 330.0 BPM");
-    expect(reportText).not.toMatch(/derived arithmetic relationships|independently validated beat interpretations|confidence|Goertzel|FFT|energy-model-v2|isotonic|Brier|\\bECE\\b/i);
+    expect(reportText).not.toMatch(/derived arithmetic relationships|independently validated beat interpretations|confidence|Goertzel|FFT|energy-model-v2|isotonic|Brier|\bECE\b/i);
     expect(rows.find((row) => row.label === "TEMPO DETECTION REASON")?.value).toContain("could not be confirmed");
     expect(rows.find((row) => row.label === "BEAT TIMING")?.value).toContain("tentative beat guide");
     expect(rows.find((row) => row.label === "BEAT TIMESTAMP COUNT")).toBeUndefined();
@@ -508,9 +508,9 @@ describe("Phase 1 real-master report contract",()=>{
   expect(report).toContain("Confirmed tempo: 96 BPM; method: transient-based tempo estimator");
   expect(report).toContain("Confirmed tempo: 96 BPM; method: transient-based tempo estimator; measured: 2026-11-19T12:00:00.000Z");
   expect(report).toContain("True peak: Not reported as a confirmed measurement; The decoder did not return a true-peak measurement.");
-  expect(report).not.toMatch(/Calibrated Audio Mood|Calibrated Energy Classification|calibrated model|energy-model-v2|isotonic|Brier|\\bECE\\b/i);
+  expect(report).not.toMatch(/Calibrated Audio Mood|Calibrated Energy Classification|calibrated model|energy-model-v2|isotonic|Brier|\bECE\b/i);
   expect(report).not.toMatch(/calibrated key\/mode probability|CALIBRATED_CLASSIFIER_NOT_CONFIGURED/i);
-  expect(report).not.toMatch(/84\.0% calibrated|energy-model-v2|isotonic|Brier|\\bECE\\b/i);
+  expect(report).not.toMatch(/84\.0% calibrated|energy-model-v2|isotonic|Brier|\bECE\b/i);
   expect(report).not.toMatch(/held-out-validation-2026|ECE 0\.042|Brier 0\.116/i);
   expect(report).not.toMatch(/rms_energy|spectral_flux|feature drivers/i);
   expect(report).toContain("EXTERNAL RECORD: musicbrainz / recording-mbid; retrieved: 2026-11-19T12:05:00.000Z");
