@@ -294,20 +294,16 @@ export function metadataFieldSource(e:Record<string,unknown>,field:string):strin
  const labels:Record<string,string>={spotify:"Spotify",musicbrainz:"MusicBrainz",tidal:"TIDAL",apple_music:"Apple Music",deezer:"Deezer",youtube_music:"YouTube Music",audiomack:"Audiomack",audd:"AudD recognition",id3:"Embedded audio tags",filename:"Uploaded filename"};
  return typeof provider==="string"&&labels[provider]? "Field source: "+labels[provider] : "Field source: unavailable";
 }
-function windowConsensusSummary(value:unknown,independent?:unknown):string|null {
+function windowConsensusSummary(value:unknown,_independent?:unknown):string|null {
  if(!value||typeof value!=="object"||Array.isArray(value))return null;
  const record=value as Record<string,unknown>;
  const count=typeof record.windowCount==="number"&&Number.isInteger(record.windowCount)?record.windowCount:0;
- const independentRecord=independent&&typeof independent==="object"&&!Array.isArray(independent)?independent as Record<string,unknown>:null;
- const independentText=independentRecord?(typeof independentRecord.bpm==="number"?"Independent low-frequency model: "+independentRecord.bpm.toFixed(1)+" BPM (raw periodicity score "+String(independentRecord.score??"n/a")+")":typeof independentRecord.key==="string"?"Independent Goertzel model: "+independentRecord.key+" "+String(independentRecord.mode??"")+" (raw score "+String(independentRecord.score??"n/a")+")":null):null;
- if(count<1)return "Unavailable — no usable analysis windows."+(independentText?" "+independentText:"");
- const winner=typeof record.winner==="string"&&record.winner.trim()?record.winner:"No stable majority";
- const agreement=typeof record.observedAgreement==="number"&&Number.isFinite(record.observedAgreement)
-  ?"; observed agreement "+record.observedAgreement.toFixed(2):"";
- const lower=typeof record.lowerAgreementBound==="number"&&Number.isFinite(record.lowerAgreementBound)?record.lowerAgreementBound:null;
- const upper=typeof record.upperAgreementBound==="number"&&Number.isFinite(record.upperAgreementBound)?record.upperAgreementBound:null;
- const interval=lower!==null&&upper!==null?"; 95% bootstrap resampling interval "+lower.toFixed(2)+"–"+upper.toFixed(2):"";
- return winner+" across "+count+" windows"+agreement+interval+" (stability diagnostic; not a calibrated probability)."+(independentText?" "+independentText:"");
+ if(count<1)return null;
+ const agreement=typeof record.observedAgreement==="number"&&Number.isFinite(record.observedAgreement)?record.observedAgreement:null;
+ if(agreement===null)return "Readings were compared across multiple sections.";
+ return agreement>=0.7
+  ?"Readings are broadly consistent across the analyzed sections."
+  :"Readings vary across the analyzed sections; no single result is confirmed.";
 }
 
 export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAudio:boolean):Array<{label:string;value:string|null}> {
@@ -318,36 +314,31 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  const independentTempoCandidate=typeof independentEstimator.bpm==="number"&&Number.isFinite(independentEstimator.bpm)?independentEstimator.bpm:null;
  const directTempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
  const tempoCandidate=directTempoCandidate??independentTempoCandidate;
- const tempoCandidateSource=directTempoCandidate!==null?"primary tempo estimator":"independent low-frequency estimator";
  const plausibleTempoRelationships=tempoCandidate===null?[]:[
   {label:"half-time",bpm:tempoCandidate/2},
   {label:"double-time",bpm:tempoCandidate*2},
  ].filter(candidate=>candidate.bpm>=40&&candidate.bpm<=220);
- const tempoConfidence=typeof s?.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)?s.tempoConfidence:null;
  const alternateTempo=typeof s?.alternateTempo==="number"&&Number.isFinite(s.alternateTempo)&&s.alternateTempo>=40&&s.alternateTempo<=240?s.alternateTempo:null;
  const primaryTempo=typeof s?.bpm==="number"&&Number.isFinite(s.bpm)?s.bpm:null;
  const tempoRatio=primaryTempo!==null&&alternateTempo!==null?alternateTempo/primaryTempo:null;
  const alternateTempoRelation=tempoRatio!==null&&Math.abs(tempoRatio-0.5)<=0.03?"half-time":tempoRatio!==null&&Math.abs(tempoRatio-2)<=0.06?"double-time":"related pulse";
- const tempoScores=Array.isArray(rhythm.candidateScores)?rhythm.candidateScores.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")):[];
- const leadingTempoScore=tempoScores.find((item)=>item.bpm===tempoCandidate);
- const tempoReason=text(rhythm.abstentionReason);
  const beatTimes=Array.isArray(rhythm.beatTimesSeconds)?rhythm.beatTimesSeconds:[];
  const harmonic=s?.harmonicFeatures&&typeof s.harmonicFeatures==="object"?s.harmonicFeatures as Record<string,unknown>:{};
- const keyCandidates=Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")).slice(0,3).map((item)=>[text(item.key),text(item.mode),typeof item.score==="number"?"raw estimator score "+item.score.toFixed(3)+" (not a calibrated probability)":""].filter(Boolean).join(" ")).join("; "):"";
+ const keyCandidates=Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")).slice(0,3).map((item)=>[text(item.key),text(item.mode)].filter(Boolean).join(" ")).join("; "):"";
  return [
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
   {label:"TEMPO ALTERNATE INTERPRETATION",value:tempoReliable&&alternateTempo!==null&&primaryTempo!==null&&alternateTempo!==primaryTempo?String(alternateTempo)+" BPM ("+alternateTempoRelation+" interpretation; alternate metrical level)":null},
-  {label:"TEMPO CANDIDATE BPM",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" (provisional; "+tempoCandidateSource+"; prominence diagnostic "+(tempoConfidence===null?"not available":tempoConfidence.toFixed(2))+(leadingTempoScore&&typeof leadingTempoScore.score==="number"?"; candidate score "+leadingTempoScore.score.toFixed(3):"")+")":null},
-  {label:"PROVISIONAL HALF / DOUBLE-TIME RELATIONS",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" BPM candidate"+(plausibleTempoRelationships.length?"; "+plausibleTempoRelationships.map(candidate=>candidate.label+" "+candidate.bpm.toFixed(1)+" BPM").join("; "):"")+" (derived arithmetic relationships only; not independently validated beat interpretations)":null},
-  {label:"TEMPO DETECTION REASON",value:hasAudio&&!tempoReliable?(tempoReason||"No tempo candidate passed the reliability gate."):null},
-  {label:"TEMPO WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(rhythm.windowConsensus,rhythm.independentEstimator):null},
-  {label:"BEAT GRID STATUS",value:!hasAudio?null:beatTimes.length?String(rhythm.beatGridStatus||"provisional")+" (candidate; not independently validated)":"Not established"},
+  {label:"TEMPO CANDIDATE BPM",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" BPM (provisional; confirm by listening)":null},
+  {label:"ALTERNATIVE PULSE READINGS",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?plausibleTempoRelationships.map(candidate=>candidate.label+" "+candidate.bpm.toFixed(1)+" BPM").join("; ")||null:null},
+  {label:"TEMPO DETECTION REASON",value:hasAudio&&!tempoReliable?"A single tempo could not be confirmed from the supplied recording.":null},
+  {label:"TEMPO READINGS ACROSS SECTIONS",value:hasAudio?windowConsensusSummary(rhythm.windowConsensus):null},
+  {label:"BEAT TIMING",value:!hasAudio?null:beatTimes.length?"A tentative beat guide is available; confirm by listening.":"Not established"},
   {label:"BEAT TIMESTAMP COUNT",value:!hasAudio?null:beatTimes.length?String(beatTimes.length)+" generated timestamps; count is not a reliability measure":"No beat timestamps generated"},
   {label:"KEY / MODE",value:keyReliable?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
   {label:"KEY / MODE CANDIDATES",value:hasAudio&&!keyReliable&&keyCandidates?keyCandidates:null},
   {label:"KEY WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(harmonic.windowConsensus,harmonic.independentEstimator):null},
   {label:"KEY CONFIDENCE DIAGNOSTIC",value:hasAudio&&!keyReliable&&typeof s?.keyConfidence==="number"?(s.keyConfidence.toFixed(2)+" raw estimator score; not a calibrated probability; segment agreement "+(typeof s.keySegmentAgreement==="number"?s.keySegmentAgreement.toFixed(2):"not available")):null},
-  {label:"KEY CANDIDATE REASON",value:hasAudio&&!keyReliable?text(harmonic.limitation)||"Key and mode did not pass the reliability gate.":null},
+  {label:"KEY CANDIDATE REASON",value:hasAudio&&!keyReliable?"A single song key could not be confirmed from the supplied recording.":null},
   {label:"TUNING OFFSET CANDIDATE CENTS",value:hasAudio&&hasMultipleTuningWindows(s)?metric(s?.keyTuningCents,0)+" (multiple tonal windows; provisional)":null},
   {label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},
   {label:"LOUDNESS RANGE LRA",value:hasAudio?metric(s?.loudnessRangeLu,1):null},
@@ -495,11 +486,11 @@ function sections(i:AuditReportInput):Section[]{
  const vocalAnalysisPerformed=Boolean(vocalFeatures&&["analyzed","measured","completed"].includes(vocalStatus));
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
-  sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confidence-qualified measurements from provisional candidates and unavailable results. Only measurements that pass their metric-specific reliability gate are presented as confirmed.");
+  sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confirmed measurements from provisional findings and unavailable results. Only supported measurements are presented as confirmed.");
   if (e.fixture !== true) sonicDnaBody.push(
    masterMoodTags.length || masterEnergyLabel
-    ? "Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs. These estimates are derived from the uploaded signal, are not probabilities, and have not been validated against a rights-cleared human-labelled held-out dataset."
-    : "No provisional master-derived mood or energy labels were produced by this run, and no calibrated perceptual-classifier output is asserted."
+    ? "Mood and energy: these are provisional listening directions from the uploaded recording, not confirmed descriptions."
+    : "No supported mood or energy description is available from this recording."
   );
   sonicDnaBody.push("Track structure and section boundaries: not calculated in this pipeline version; no section-segmentation result is available to support verse, chorus, bridge or intro/outro claims.");
   const provisionalTempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
