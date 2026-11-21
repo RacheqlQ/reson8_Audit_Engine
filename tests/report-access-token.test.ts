@@ -44,6 +44,7 @@ describe("report access key normalization and issuance", () => {
     expect(normalizeReportAccessKey("0x" + key).valid).toBe(true);
     expect(normalizeReportAccessKey(key.match(/.{1,8}/g)!.join("-")).value).toBe(key);
     expect(normalizeReportAccessKey(key + "0").valid).toBe(false);
+    expect(normalizeReportAccessKey(key + "g").valid).toBe(false);
   });
 
   it("normalizes invisible bidirectional clipboard marks while preserving strict 64-hex validation", () => {
