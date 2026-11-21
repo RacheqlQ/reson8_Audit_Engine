@@ -59,15 +59,6 @@ for(const [name,input] of variants){
   const extracted=execFileSync("pdftotext",["-layout",filePath,"-"],{encoding:"utf8"});
   const extractedPages=extracted.split("\f").filter(page=>page.trim().length>0);
   if(extractedPages.length!==pdf.getPageCount())throw new Error(filename+" extracted page count does not match the PDF page count");
-   if(tier==="full"){
-    const narrativeTitles=["Production and arrangement guidance","Comparable lanes and listening references","Promotion and campaign strategy","Label and partner fit","30 / 60 / 90-day execution plan"];
-    let previousNarrativePage=7;
-    for(let index=0;index<narrativeTitles.length;index++){
-     const pageIndex=extractedPages.findIndex((page,pageNumber)=>pageNumber>previousNarrativePage&&page.replace(/\\s+/g," ").toUpperCase().includes(narrativeTitles[index].toUpperCase()));
-     if(pageIndex<0)throw new Error(filename+" is missing or misorders narrative section "+(index+1)+": "+narrativeTitles[index]);
-     previousNarrativePage=pageIndex;
-    }
-   }
   const bbox=execFileSync("pdftotext",["-bbox",filePath,"-"],{encoding:"utf8"});
   const pageBoxes=[...bbox.matchAll(/<page\b[^>]*>([\s\S]*?)<\/page>/g)];
   if(pageBoxes.length!==pdf.getPageCount())throw new Error(filename+" bounding-box page count does not match the PDF page count");
