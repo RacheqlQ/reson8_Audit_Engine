@@ -1,4 +1,4 @@
-import { hasMultipleTuningWindows, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
+import { hasMultipleTuningWindows, hasReportableKeyCandidates, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 import { hasSubmittedMasterAudio } from "../../audio/master-audio-evidence.js";
 import type { AuditReportInput } from "../generate-audit-report.js";
 
@@ -282,7 +282,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       notYetMeasured.push("Tempo candidate " + candidate + " BPM abstained: outside the plausible 40–220 BPM reporting range.");
     }
   }
-  if (!keyReliable) {
+  if (!keyReliable && hasReportableKeyCandidates(audio)) {
     const harmonic = record(audio?.harmonicFeatures);
     const candidates = Array.isArray(harmonic?.topCandidates) ? harmonic.topCandidates.map(record).filter(Boolean) : [];
     const labels = candidates.map(item => [nonEmpty(item?.key), nonEmpty(item?.mode)].filter(Boolean).join(" ")).filter(Boolean);
