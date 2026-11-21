@@ -162,8 +162,8 @@ describe("v2 gated report pages", () => {
     input.assessment.adjacentLanes = [];
     input.evidence.genre = null;
     const lines = buildPositioningLines(input);
-    expect(lines.join(" ")).toContain("Positioning not established");
-    expect(lines.join(" ")).toContain("provider-attributed genre");
+    expect(lines.join(" ")).toContain("Genre positioning is not established");
+    expect(lines.join(" ")).toContain("music-platform genre listing");
     expect(lines.every((line: string) => line.trim().length > 0)).toBe(true);
   });
 
