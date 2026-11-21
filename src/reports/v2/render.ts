@@ -201,7 +201,7 @@ export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{f
  const e=rec(input.evidence),reconciliation=rec(e.reconciliation);
  const conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
  const releaseDifferences=arr(reconciliation.releaseContextDifferences).map(v=>rec(v));
- const fields:[string,string][]=[["artist","Artist"],["title","Track"],["album","Album"],["genre","Genre"],["releaseDate","Release date"],["isrc","ISRC"],["upc","UPC"],["label","Label"]];
+ const fields:[string,string][]=[["artist","Artist"],["title","Track"],["album","Album"],["genre","Genre"],["releaseDate","Release date"],["isrc","Recording code"],["upc","Release code"],["label","Label"]];
  return fields.map(([key,label])=>{
   const conflict=conflicts.find(item=>item.field===key);
   const releaseDifference=releaseDifferences.find(item=>item.field===key);
@@ -216,7 +216,7 @@ export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{f
 }
 function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fonts):number{
  const e=rec(input.evidence),rows=buildIdentityReconciliationRows(input),x=M,width=W-2*M,top=H-100,headerH=22,rowH=36;
- const columns=[78,164,128,141],labels=["FIELD","VALUE","STATUS","SOURCE"];
+ const columns=[78,164,128,141],labels=["ITEM","DETAIL","RESULT","SOURCE"];
  page.drawRectangle({x,y:top-headerH,width,height:headerH,color:C.charcoal});
  let cx=x;
  labels.forEach((label,index)=>{page.drawText(label,{x:cx+8,y:top-15,size:6.6,font:fonts.bold,color:C.white});cx+=columns[index];});
@@ -246,7 +246,6 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
 function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:AuditReportTier):PageSpec[]{
  const e=rec(input.evidence),a=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)),sonic=rec(input.sonicDna);
  const notesContext=buildArNotesDecisionContext(input);
- const technicalProfile:string[]=[];
  const pages:PageSpec[]=[
   {title:"Cover and verdict",kind:"cover",blocks:metricBlock(data),lines:[
    "Artist: "+str(e.artist)+"   Track: "+str(e.title),
@@ -284,7 +283,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...buildPlaylistProviderStatusLines(input),
    ...(e.label||e.partner?["Supplied label / partner: "+str(e.label??e.partner)]:[])
   ]},
-  {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>"[ ] "+str(v)).concat([notesContext.verdict,notesContext.summary,...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),"Editable notes field: use the PDF form field named ar_notes."])},
+  {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>str(v,"")).filter(v=>v&&!/^not supplied$/i.test(v)).map(v=>"[ ] "+v).concat([notesContext.verdict,notesContext.summary,...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),"Use the notes area to record the A&R review."])},
   {title:"Evidence and limitations",blocks:[],lines:[
    ...sanitizePublicReportLines(data.notYetMeasured),
    ...publicReportLimitations(a.limitations),
@@ -353,7 +352,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
   const height=116;card(page,M,y,W-2*M,"Structure",[],fonts,{height,accent:C.gold});
   const left=M+14,barY=y-63,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));
   const palette=[C.teal,C.gold,C.amber,C.coral];
-  page.drawText("TRACK TIMELINE · ELAPSED SECONDS",{x:left,y:barY+25,size:6,font:fonts.bold,color:C.muted});
+  page.drawText("TRACK STRUCTURE · ELAPSED TIME",{x:left,y:barY+25,size:6,font:fonts.bold,color:C.muted});
   data.structure.forEach((s,i)=>{const x=left+(s.startSeconds/total)*barW,w=barW*(s.endSeconds-s.startSeconds)/total;page.drawRectangle({x,y:barY,width:w,height:18,color:palette[i%palette.length]});page.drawText(String(s.index),{x:x+w/2-2,y:barY+5,size:6,font:fonts.bold,color:C.white});});
   page.drawText("0s",{x:left,y:barY-12,size:6,font:fonts.regular,color:C.muted});
   page.drawText(total.toFixed(0)+"s",{x:left+barW-18,y:barY-12,size:6,font:fonts.regular,color:C.muted});
@@ -362,9 +361,9 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
  }
  if(data.energySeries){
   const h=178,topY=y;page.drawRectangle({x:M,y:topY-h,width:W-2*M,height:h,color:C.white,borderColor:C.line,borderWidth:.7});
-  page.drawText("ENERGY OVER TIME",{x:M+12,y:topY-16,size:7,font:fonts.bold,color:C.gold});
-  page.drawText("Y: source energy units",{x:M+12,y:topY-29,size:6,font:fonts.italic,color:C.muted});
-  page.drawText("X: elapsed time (seconds)",{x:W-M-126,y:topY-h+8,size:6,font:fonts.italic,color:C.muted});
+  page.drawText("ENERGY THROUGH THE TRACK",{x:M+12,y:topY-16,size:7,font:fonts.bold,color:C.gold});
+  page.drawText("Relative level",{x:M+12,y:topY-29,size:6,font:fonts.italic,color:C.muted});
+  page.drawText("Track time",{x:W-M-126,y:topY-h+8,size:6,font:fonts.italic,color:C.muted});
   const left=M+28,right=W-M-16,plotTop=topY-42,plotBottom=topY-h+32;
   const vals=data.energySeries.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),span=max-min||1;
   for(let g=0;g<=4;g++){const gy=plotBottom+(plotTop-plotBottom)*g/4;page.drawLine({start:{x:left,y:gy},end:{x:right,y:gy},color:C.line,thickness:.5});}
@@ -384,7 +383,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
   const axes=Object.entries(data.sonicAxes),panelHeight=30+axes.length*22,top=y-8,bottom=top-panelHeight;
   if(bottom<72)throw new Error("Sonic DNA axis evidence cannot fit safely on the nine-page sample snapshot.");
   page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
-  page.drawText("SONIC DNA AXES · SUPPLIED SCORES / 100",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
+  page.drawText("SONIC PROFILE · SCORES / 100",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
   axes.forEach(([name,axis],index)=>{
    const yy=top-35-index*22;
    page.drawText(name,{x:M+12,y:yy,size:7,font:fonts.bold,color:C.ink});
@@ -590,7 +589,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    let y=H-92;for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:spec.kind==="moments"?(b.label.includes("Risk")?C.coral:C.teal):C.gold,provenance:b.provenance});y-=h+8;}
   }else{
    let y=H-92;
-   if(spec.blocks.length){for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:b.confidence==="Low"?C.coral:C.teal,provenance:b.provenance});y-=h+8;}}
+   if(spec.blocks.length){for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:C.gold,provenance:b.provenance});y-=h+8;}}
    if(spec.lines?.length){
     const body=spec.lines.filter(Boolean),h=card(page,M,y,W-2*M,spec.title,body,fonts,{accent:C.gold});
     if(h>y-95)throw new Error("Report v2 page content exceeds available A4 space: "+spec.title);
