@@ -13,7 +13,7 @@ export function normalizeReportAccessKey(input: string): NormalizedReportAccessK
   const withoutWhitespace = input.replace(/[\s\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "");
   const whitespaceRemoved = suppliedLength - withoutWhitespace.length;
   let value = withoutWhitespace.replace(/^[\"']+|[\"']+$/g, "");
-  value = value.replace(/^(?:(?:reson8)?(?:report)?(?:access)?key|bearer)[:=]?/i, "").replace(/^0x/i, "");
+  value = value.replace(/^(?:(?:reson8)?(?:full[-_]?report|report)?(?:access)?key|bearer)[:=]?/i, "").replace(/^0x/i, "");
   value = value.toLowerCase();
   // Accept separators only when they split hexadecimal groups. A leading or
   // trailing dash/colon is not decoration and must remain invalid.
