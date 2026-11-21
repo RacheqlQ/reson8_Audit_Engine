@@ -67,9 +67,15 @@ for(const [name,input] of variants){
    if(!pageText.trim())throw new Error(filename+" contains an empty page "+(pageIndex+1));
    const words=[...pageBoxes[pageIndex][1].matchAll(/<word\b([^>]*)>([\s\S]*?)<\/word>/g)].map(match=>{
     const yMin=Number(match[1].match(/yMin="([^"]+)"/)?.[1]),yMax=Number(match[1].match(/yMax="([^"]+)"/)?.[1]);
-    return {text:match[2].replace(/&amp;/g,"&").replace(/&quot;/g,'"'),yMin,yMax};
+    const xMin=Number(match[1].match(/xMin="([^"]+)"/)?.[1]),xMax=Number(match[1].match(/xMax="([^"]+)"/)?.[1]);
+    return {text:match[2].replace(/&amp;/g,"&").replace(/&quot;/g,'"'),xMin,xMax,yMin,yMax};
    });
    if(words.some(word=>word.yMin<790&&word.yMax>=790))throw new Error(filename+" has text crossing into the footer area on page "+(pageIndex+1));
+   for(let left=0;left<words.length;left++)for(let right=left+1;right<words.length;right++){
+    const a=words[left],b=words[right];
+    const overlapX=Math.min(a.xMax,b.xMax)-Math.max(a.xMin,b.xMin),overlapY=Math.min(a.yMax,b.yMax)-Math.max(a.yMin,b.yMin);
+    if(overlapX>1.5&&overlapY>2)throw new Error(filename+" has overlapping text bounds on page "+(pageIndex+1)+": "+a.text+" / "+b.text);
+   }
    {
     const footerWords=words.filter(word=>word.yMin>=790).map(word=>word.text);
     const expectedPage=String(pageIndex+1),totalPages=String(pdf.getPageCount());
