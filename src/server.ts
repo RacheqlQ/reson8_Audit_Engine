@@ -28,6 +28,7 @@ export interface AuditStore {
   }>;
   getAuditReportPayload?(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<unknown | null>;
   verifyAuditAccessToken?(jobId: string, token: string): Promise<boolean>;
+  diagnoseAuditReportAccess?(jobId: string, tier: "sample" | "full", token: string | undefined): Promise<{ reason: string | null; normalized: { suppliedLength: number; whitespaceRemoved: number; nonHexRemoved: number } | null }>;
 }
 
 const PUBLIC_RATE_LIMIT = Number(process.env.PUBLIC_AUDIT_RATE_LIMIT_PER_HOUR ?? 30);
@@ -200,12 +201,43 @@ export function buildServer(store: AuditStore = createSupabaseAuditStore()) {
     if (tier !== "sample" && tier !== "full") return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
 
     const reportToken = request.headers["x-reson8-report-token"];
-    if (!reportToken || !store.verifyAuditAccessToken) {
+    if (!store.verifyAuditAccessToken) {
       return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
     }
     try {
-      const authorized = await store.verifyAuditAccessToken(request.params.jobId, reportToken);
-      if (!authorized) return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
+      const diagnostic = store.diagnoseAuditReportAccess
+        ? await store.diagnoseAuditReportAccess(request.params.jobId, tier, reportToken)
+        : null;
+      const authorized = Boolean(reportToken) && await store.verifyAuditAccessToken(request.params.jobId, reportToken!);
+      if (!authorized) {
+        const normalized = diagnostic?.normalized;
+        request.log.warn({
+          event: "report_access_denied",
+          auditId: request.params.jobId,
+          reason: diagnostic?.reason ?? (!reportToken ? "token_missing" : "token_hash_mismatch"),
+          requestId: request.id,
+          suppliedKeyLength: normalized?.suppliedLength ?? reportToken?.length ?? 0,
+          whitespaceRemoved: normalized?.whitespaceRemoved ?? 0,
+          nonHexCharactersRemoved: normalized?.nonHexRemoved ?? 0,
+          hashAlgorithm: "sha256",
+          secretOrPepperConfigured: Boolean(process.env.REPORT_ACCESS_TOKEN_SECRET || process.env.REPORT_TOKEN_SECRET || process.env.REPORT_ACCESS_PEPPER || process.env.REPORT_TOKEN_PEPPER),
+        }, "report access denied");
+        return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
+      }
+      if (diagnostic?.reason) {
+        request.log.warn({
+          event: "report_access_denied",
+          auditId: request.params.jobId,
+          reason: diagnostic.reason,
+          requestId: request.id,
+          suppliedKeyLength: diagnostic.normalized?.suppliedLength ?? reportToken!.length,
+          whitespaceRemoved: diagnostic.normalized?.whitespaceRemoved ?? 0,
+          nonHexCharactersRemoved: diagnostic.normalized?.nonHexRemoved ?? 0,
+          hashAlgorithm: "sha256",
+          secretOrPepperConfigured: Boolean(process.env.REPORT_ACCESS_TOKEN_SECRET || process.env.REPORT_TOKEN_SECRET || process.env.REPORT_ACCESS_PEPPER || process.env.REPORT_TOKEN_PEPPER),
+        }, "report access denied");
+        return reply.code(404).send({ error: "REPORT_NOT_FOUND", message: "Report not found" });
+      }
     } catch (error) {
       request.log.error({ err: error }, "audit report access verification failed");
       return reply.code(500).send({ error: "REPORT_ACCESS_VERIFICATION_FAILED", message: "Unable to verify report access" });

@@ -338,19 +338,25 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
  return pages;
 }
 
-function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Block,fonts:Fonts){
- const y=top-94;page.drawRectangle({x,y,width,height:94,color:C.white,borderColor:C.line,borderWidth:.7});
- page.drawText(block.label,{x:x+12,y:top-17,size:7,font:fonts.bold,color:C.muted});
- drawWrapped(page,block.value,x+12,top-43,width-24,fonts.bold,15,C.ink,18);
+function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Block,fonts:Fonts):number{
+ const pad=12,valueLines=wrap(block.value,fonts.bold,15,width-pad*2);
  const tag=block.confidence??"Low",tagColor=tag==="High"?C.teal:tag==="Medium"?C.amber:C.coral;
- page.drawRectangle({x:x+12,y:top-65,width:tag.length*5+34,height:14,color:C.paper});
- page.drawText(tag+" confidence",{x:x+17,y:top-61,size:6.5,font:fonts.bold,color:tagColor});
- drawWrapped(page,block.provenance??"Provenance not supplied",x+12,top-78,width-24,fonts.regular,6.5,C.muted,8);
+ const tagY=top-47-valueLines.length*18;
+ const provenanceLines=wrap(block.provenance??"Provenance not supplied",fonts.regular,6.5,width-pad*2);
+ const provenanceBottom=tagY-12-Math.max(0,provenanceLines.length-1)*8;
+ const height=Math.max(110,top-provenanceBottom+10),y=top-height;
+ page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawText(block.label,{x:x+pad,y:top-17,size:7,font:fonts.bold,color:C.muted});
+ valueLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:top-43-index*18,size:15,font:fonts.bold,color:C.ink}));
+ page.drawRectangle({x:x+pad,y:tagY-3,width:tag.length*5+34,height:14,color:C.paper});
+ page.drawText(tag+" confidence",{x:x+pad+5,y:tagY+1,size:6.5,font:fonts.bold,color:tagColor});
+ provenanceLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:tagY-12-index*8,size:6.5,font:fonts.regular,color:C.muted}));
+ return height;
 }
 function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
  const blocks=metricBlock(data),gap=10,width=(W-2*M-gap*2)/3,top=H-92;
- blocks.forEach((b,i)=>drawMetricCard(page,M+i*(width+gap),top,width,b,fonts));
- let y=top-112;
+ const metricHeight=Math.max(...blocks.map((b,i)=>drawMetricCard(page,M+i*(width+gap),top,width,b,fonts)));
+ let y=top-metricHeight-12;
  if(data.structure){
   const height=116;card(page,M,y,W-2*M,"Structure",[],fonts,{height,accent:C.gold});
   const left=M+14,barY=y-63,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));
@@ -592,9 +598,9 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     page.drawText("Weighting: "+weights,{x:M+145,y:H-340-drivers.length*23-6,size:6.5,font:fonts.italic,color:C.muted});
    }
    const metricTop=H-(data.headlineScore!==null?420:320),width=(W-2*M-16)/3;
-   spec.blocks.forEach((block,i)=>drawMetricCard(page,M+i*(width+8),metricTop,width,block,fonts));
+   const metricHeight=Math.max(...spec.blocks.map((block,i)=>drawMetricCard(page,M+i*(width+8),metricTop,width,block,fonts)));
    const summary=spec.lines?.[2]??"Executive summary not supplied.";
-   const summaryTop=metricTop-115;
+   const summaryTop=metricTop-Math.max(130,metricHeight+20);
    card(page,M,summaryTop,W-2*M,"Executive summary",[summary.replace(/^Executive summary:\s*/,"")],fonts,{accent:C.gold});
    const next=spec.lines?.[3]??"Recommended next step not supplied.";
    card(page,M,summaryTop-115,W-2*M,"Recommended next step",[next.replace(/^Recommended next step:\s*/,"")],fonts,{accent:C.gold});

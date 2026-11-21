@@ -13,6 +13,7 @@ export function createAuditPoller({
   let stopped = true;
   let startedAt = 0;
   let longRunningNoticeSent = false;
+  let consecutiveNotFound = 0;
   function stop() {
     stopped = true;
     if (timer !== null) { clearTimer(timer); timer = null; }
@@ -25,6 +26,7 @@ export function createAuditPoller({
     }
     startedAt = now();
     longRunningNoticeSent = false;
+    consecutiveNotFound = 0;
     stopped = false;
     async function check() {
       if (stopped) return;
@@ -34,7 +36,18 @@ export function createAuditPoller({
         });
         const payload = await response.json().catch(() => ({}));
         if (stopped) return;
-        if ([401, 403, 404].includes(response.status)) {
+        if (response.status === 404) {
+          consecutiveNotFound += 1;
+          if (consecutiveNotFound >= 3) {
+            stop();
+            onMessage("Invalid key or report not found for this audit");
+            return;
+          }
+          timer = setTimer(check, retryDelayMs);
+          return;
+        }
+        consecutiveNotFound = 0;
+        if ([401, 403].includes(response.status)) {
           stop();
           onMessage("This audit access credential was rejected or is no longer valid. The job ID cannot restore access. If you saved the one-time credential, keep it private and use it while this page is open; otherwise submit a new audit.");
           return;
