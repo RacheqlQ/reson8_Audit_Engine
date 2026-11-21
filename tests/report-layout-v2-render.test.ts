@@ -386,3 +386,20 @@ describe("v2 strengths and risks count integrity", () => {
     });
   });
 });
+
+
+describe("post-release campaign framing", () => {
+  it("marks pre-release and release-window actions as historical when the date is determined in the past", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.releaseDate = "2025-08-24";
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    input.generatedAt = "2026-11-21T00:00:00.000Z";
+    const labels = reportV2Render.buildReleaseCampaignLabels(input);
+    expect(labels.preRelease).toMatch(/historical; already passed/i);
+    expect(labels.releaseWindow).toMatch(/historical; already passed/i);
+    expect(labels.postRelease).toMatch(/post-release growth/i);
+    expect(labels.first30).toMatch(/post-release/i);
+    expect(labels.days3160).toMatch(/post-release/i);
+    expect(labels.days6190).toMatch(/post-release/i);
+  });
+});
