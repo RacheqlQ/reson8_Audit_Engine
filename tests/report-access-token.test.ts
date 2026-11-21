@@ -46,6 +46,6 @@ describe("report access key normalization and issuance", () => {
     const normalized = normalizeReportAccessKey("  " + "a".repeat(63) + "g\n");
     expect(normalized.whitespaceRemoved).toBe(3);
     expect(normalized.nonHexRemoved).toBe(1);
-    expect(JSON.stringify(normalized)).not.toContain("a".repeat(63));
+    expect(normalized.value).toBe("a".repeat(63) + "g");
   });
 });
