@@ -53,6 +53,10 @@ describe("deterministic tonal resolution geometry", () => {
     expect(result.mode).toBe("major");
     expect(result.bootstrapShare).toBeGreaterThanOrEqual(0.8);
     expect(result.windowAgreement).toBeGreaterThanOrEqual(0.7);
+    expect(result.downbeatAnchorWindowCount).toBe(8);
+    expect(result.cadenceWeightedWindowCount).toBe(1);
+    expect(result.thresholds.bootstrapIterations).toBe(256);
+    expect(result.thresholds.relativePairAmbiguityMargin).toBe(0.04);
   });
 
   it("retains a relative major/minor ambiguity as provisional rather than inventing a winner", () => {
