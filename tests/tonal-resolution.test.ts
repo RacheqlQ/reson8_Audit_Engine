@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fifthsDistance,
+  cadenceResolutionWeight,
   relativeMinorOfMajor,
   relativeMajorOfMinor,
   parallelMajor,
@@ -44,6 +45,19 @@ describe("deterministic tonal resolution geometry", () => {
     expect(relativeMajorOfMinor("A")).toBe("C");
     expect(parallelMajor("A")).toBe("A");
     expect(parallelMinor("C")).toBe("C");
+  });
+
+  it("weights an outro cadence only when a leading tone resolves into the tonic bass", () => {
+    const previous = windows(0, "major", 1)[0]!;
+    const current = windows(0, "major", 1)[0]!;
+    const resolved = cadenceResolutionWeight(previous, current, "C");
+    const unresolved = cadenceResolutionWeight(
+      { ...previous, chroma: majorScale(0).map((value, index) => index === 11 ? 0.01 : value) },
+      { ...current, bassChroma: Array(12).fill(1) },
+      "C",
+    );
+    expect(resolved).toBeGreaterThan(0);
+    expect(unresolved).toBe(0);
   });
 
   it("confirms a stable audio-derived C major tonic with bass anchors", () => {
