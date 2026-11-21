@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { generateAuditReportV2 } from "../dist/reports/v2/render.js";
 import { ambiguousAudioFixture } from "./fixtures/ambiguous-audio.mjs";
@@ -28,15 +29,26 @@ for(const [name,input,expected] of [
  if(pdf.getPageCount()!==expected)throw new Error(name+" expected "+expected+" pages; got "+pdf.getPageCount());
  const file=new URL(name+".pdf",out);
  await writeFile(file,bytes);
- process.stdout.write(name+": "+pdf.getPageCount()+" pages; gated-page count verified.\n");
+ const extracted=execFileSync("pdftotext",["-layout",file.pathname,"-"],{encoding:"utf8"});
+ const extractedPages=extracted.split("\\f").filter(page=>page.trim().length>0);
+ if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i.test(extracted))throw new Error(name+" contains a forbidden dead-end verdict or limitations section");
+ if(!extractedPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error(name+" must finish with an A&R NOTES page");
+ process.stdout.write(name+": "+pdf.getPageCount()+" pages; final A&R notes and verdict checks passed.\\n");
 }
 
 
 const philloFullBytes=await generateAuditReportV2({...phillo,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const philloFullPdf=await PDFDocument.load(philloFullBytes);
-if(philloFullPdf.getPageCount()!==15)throw new Error("v2-phillo-stunixx-full expected 15 pages (9 base + 5 narrative + 1 evidence-gated deep dive); got "+philloFullPdf.getPageCount());
-await writeFile(new URL("v2-phillo-stunixx-full.pdf",out),philloFullBytes);
-process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" pages; matching Phillo full-tier fixture generated.\n");
+if(philloFullPdf.getPageCount()!==15)throw new Error("v2-phillo-stunixx-full expected 15 pages including five narrative pages, an evidence-gated deep dive and final A&R notes; got "+philloFullPdf.getPageCount());
+const philloFullFile=new URL("v2-phillo-stunixx-full.pdf",out);
+await writeFile(philloFullFile,philloFullBytes);
+const philloFullText=execFileSync("pdftotext",["-layout",philloFullFile.pathname,"-"],{encoding:"utf8"});
+const philloFullPages=philloFullText.split("\\f").filter(page=>page.trim().length>0);
+if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i.test(philloFullText))throw new Error("Phillo full fixture contains a forbidden dead-end verdict or limitations section");
+if(!philloFullPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error("Phillo full fixture must finish with A&R NOTES");
+const executionPage=philloFullPages.find(page=>page.toUpperCase().includes("30 / 60 / 90-DAY EXECUTION PLAN"));
+if(!executionPage||!executionPage.toUpperCase().includes("DAYS 61-90"))throw new Error("Phillo full fixture is missing its Days 61-90 plan");
+process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" pages; post-release execution and final A&R notes verified.\\n");
 
 const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const fullPdf=await PDFDocument.load(fullBytes);
