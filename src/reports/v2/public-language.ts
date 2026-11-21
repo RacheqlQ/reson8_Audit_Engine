@@ -10,7 +10,11 @@ function candidateNames(value: string): string[] {
 
 export function sanitizePublicReportLine(value: string): string {
   const line = value.trim();
-  if (!line || INTERNAL_LINE.test(line) || /\bconfidence\b/i.test(line)) return "";
+  if (!line || INTERNAL_LINE.test(line) || /\bconfidence.{0,30}\d/i.test(line) || /\bconfidence score\b/i.test(line)) return "";
+
+  if (/^playlist discovery not run:/i.test(line)) return "Playlist research was not available because a recording code was not supplied.";
+  if (/^required environment variables?:/i.test(line)) return "";
+  if (/^.*provider unavailable:/i.test(line)) return "A music-platform search could not be completed.";
 
   const keyFinding = line.match(/^Not yet measured:\s*(.+?)\s*\(provisional harmonic candidate; alternatives:\s*(.*?);\s*no single key asserted\)\.?$/i);
   if (keyFinding) {
@@ -33,6 +37,9 @@ export function sanitizePublicReportLine(value: string): string {
     .replace(/\bprovider(?:-recognized)?\b/gi, "platform")
     .replace(/\bmetadata\b/gi, "release details")
     .replace(/\bsource-attributed\b/gi, "source-backed")
+    .replace(/\bprovenance\b/gi, "source")
+    .replace(/\bgenre candidate\b/gi, "Genre direction")
+    .replace(/\bN\/D\b/gi, "Not available")
     .replace(/\bhypothesis\b/gi, "working direction")
     .replace(/\bnot established\b/gi, "not confirmed")
     .replace(/\bnot cleared\b/gi, "pending checks")
