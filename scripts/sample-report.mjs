@@ -148,6 +148,8 @@ try{
    ]
   }
  };
+ const unsafeDecisionContext=buildArNotesDecisionContext(unsafeInput);
+ process.stdout.write("A&R Notes sanitized decision context: "+JSON.stringify(unsafeDecisionContext.summary)+"\n");
  const unsafeBytes=await ensurePdfReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
  await writeFile(evidenceCheckPath,unsafeBytes);
  const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
