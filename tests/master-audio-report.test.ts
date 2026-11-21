@@ -310,7 +310,7 @@ describe("uploaded master provenance in reports", () => {
     expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-12")).toBe(true);
   });
 
-  it("hides internal master paths, humanizes measurement methods, and preserves independent tempo candidates", () => {
+  it("hides internal master paths and withholds independent tempo candidates without explicit confidence", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.evidence = { ...input.evidence, fixture: false, masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } };
     input.sonicDna = {
@@ -343,8 +343,8 @@ describe("uploaded master provenance in reports", () => {
     expect(report).toContain("method: spectral-centroid analysis");
     expect(report).toContain("method: signal-analysis method (technical identifier withheld)");
     const rows = sonicDashboardRowsForReport(input.sonicDna, true);
-    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("93.8 BPM (provisional; confirm by listening)");
-    expect(rows.find((row) => row.label === "ALTERNATIVE PULSE READINGS")?.value).toContain("half-time 46.9 BPM; double-time 187.6 BPM");
+    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toBeNull();
+    expect(rows.find((row) => row.label === "ALTERNATIVE PULSE READINGS")?.value).toBeNull();
     expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("F# major");
   });
 });
