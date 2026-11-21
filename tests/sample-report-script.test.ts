@@ -11,7 +11,7 @@ describe("sample-report command",()=>{
   expect(script).toContain("ensurePdfReport");
   expect(script).toContain('pdf.getPageCount()!==9');
   expect(script).toContain('pdf.getPageCount()!==12');
-  expect(script).toContain('requiredCharts=["Evidence layers","DSP platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"]');
+  expect(script).toContain('requiredCharts=["Evidence layers","Music platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"]');
   expect(script).toContain("generatedAt: new Date().toISOString()");
   expect(script).not.toContain("fetch(");
   const ambiguous=await readFile(new URL("scripts/fixtures/ambiguous-audio.mjs",root),"utf8");
