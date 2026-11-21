@@ -119,6 +119,7 @@ const evidenceCheckPath=new URL("evidence-sanitization-regression.pdf",out).path
 const chartCheckPath=new URL("constellation-long-label-regression.pdf",out).pathname;
 try{
  const unsafeInput=structuredClone(ambiguousAudioFixture);
+ if(unsafeInput.sonicDna&&typeof unsafeInput.sonicDna==="object")unsafeInput.sonicDna.tempoConfidence=0;
  unsafeInput.assessment={
   ...unsafeInput.assessment,
   confidence:0,
