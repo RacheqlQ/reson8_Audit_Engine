@@ -55,7 +55,7 @@ function drawWrapped(page:PDFPage,value:string,x:number,y:number,width:number,fo
 }
 function isResolvedKeyLabel(value:unknown):boolean{
  if(typeof value!=="string"||!value.trim())return false;
- return !/^(?:n\\s*\\/\\s*d|not determined|unavailable|unknown)$/i.test(value.trim());
+ return !/^(?:n\s*\/\s*d|not determined|unavailable|unknown)$/i.test(value.trim());
 }
 export function buildRecordingOverviewKeyLabel(data:ReportV2Data):string{
  if(isResolvedKeyLabel(data.key.value))return String(data.key.value);
@@ -147,8 +147,7 @@ export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
 }
 export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
- const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
+ const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution); const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
  const lines:string[]=[];
  const rawCandidates=arr(resolution.candidates).length?arr(resolution.candidates):arr(harmonic.topCandidates);
  const candidates=(hasReportableKeyCandidates(tonalAudio)?rawCandidates:[]).map(value=>rec(value))
@@ -297,8 +296,7 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  const providers=arr(e.sourceProviders).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
  const summaryHeight=card(page,M,summaryTop,width,"Provider lookup and reconciliation context",[
   "Sources checked: "+checked,
-  "Provider responses: "+providers,
-  "Platform coverage: "+str(e.platformCoverage,"Not supplied"),
+  "Provider responses: "+providers,  "Platform coverage: "+str(e.platformCoverage,"Not supplied"),
   "Recording identity conflicts remain blocking; album, UPC, label and date differences are shown as release variants."
  ],fonts,{accent:C.gold});
  return summaryTop-summaryHeight-14;
@@ -447,8 +445,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
  y-=keyMapHeight+12;
  if(data.structure){
   const height=116;card(page,M,y,W-2*M,"Structure",[],fonts,{height,accent:C.gold});
-  const left=M+14,barY=y-63,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));
-  const palette=[C.teal,C.gold,C.amber,C.coral];
+  const left=M+14,barY=y-63,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));  const palette=[C.teal,C.gold,C.amber,C.coral];
   page.drawText("TRACK STRUCTURE · ELAPSED TIME",{x:left,y:barY+25,size:6,font:fonts.bold,color:C.muted});
   data.structure.forEach((s,i)=>{const x=left+(s.startSeconds/total)*barW,w=barW*(s.endSeconds-s.startSeconds)/total;page.drawRectangle({x,y:barY,width:w,height:18,color:palette[i%palette.length]});page.drawText(String(s.index),{x:x+w/2-2,y:barY+5,size:6,font:fonts.bold,color:C.white});});
   page.drawText("0s",{x:left,y:barY-12,size:6,font:fonts.regular,color:C.muted});
@@ -597,8 +594,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   if(spec.kind==="identity"){
    chartCursor=drawIdentityReconciliation(page,input,fonts);
   }else if(spec.kind==="snapshot"){
-   drawSnapshot(page,data,fonts,input);
-  }else if(spec.kind==="limitations"){
+   drawSnapshot(page,data,fonts,input);  }else if(spec.kind==="limitations"){
    const body=spec.lines?.filter(Boolean)??[];
    const height=card(page,M,H-92,W-2*M,spec.title,body,fonts,{accent:C.gold});
    const mapTop=H-92-height-14;
