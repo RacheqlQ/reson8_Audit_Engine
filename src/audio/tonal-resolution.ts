@@ -156,12 +156,16 @@ function scoreKey(window: TonalWindow, tonic: number, mode: TonalMode): number {
 }
 
 function rankWindows(windows: readonly TonalWindow[]): Array<{ tonic:number; mode:TonalMode; score:number }> {
-  const aggregate=Array(12).fill(0), bassAggregate=Array(12).fill(0);
-  let totalWeight=0, cadenceTotal=0, leadingToneTotal=0;
+  const aggregate=Array(12).fill(0), bassAggregate=Array(12).fill(0), downbeatRootWeights=Array(12).fill(0);
+  let totalWeight=0, cadenceTotal=0, leadingToneTotal=0, downbeatAnchorWeight=0;
   for(const window of windows) {
     const weight=clamp(window.salience)*Math.max(0.05,window.energy ?? 1);
     cadenceTotal += clamp(window.cadenceWeight ?? 0) * weight;
     leadingToneTotal += clamp(window.leadingToneEvidence ?? 0) * weight;
+    if(window.downbeatRoot !== undefined && window.downbeatRoot !== null){
+      const anchor=pitchIndex(window.downbeatRoot);
+      if(anchor>=0){downbeatRootWeights[anchor]+=weight;downbeatAnchorWeight+=weight;}
+    }
     const chroma=normalize(window.chroma), bass=normalize(window.bassChroma);
     for(let pitch=0;pitch<12;pitch++) {
       aggregate[pitch]+=chroma[pitch]!*weight;
@@ -170,9 +174,13 @@ function rankWindows(windows: readonly TonalWindow[]): Array<{ tonic:number; mod
     totalWeight+=weight;
   }
   if(totalWeight<=EPSILON) return [];
+  const downbeatRootIndex=downbeatRootWeights.reduce((best,value,index,values)=>value>values[best]!?index:best,0);
+  const downbeatRoot=downbeatAnchorWeight>EPSILON
+    && downbeatRootWeights[downbeatRootIndex]!/downbeatAnchorWeight>=0.45
+    ? downbeatRootIndex : null;
   const combined: TonalWindow={
     startSeconds:0,endSeconds:0,chroma:aggregate,bassChroma:bassAggregate,
-    salience:totalWeight/windows.length,energy:1,
+    salience:totalWeight/windows.length,energy:1,downbeatRoot,
     cadenceWeight:cadenceTotal/totalWeight,
     leadingToneEvidence:leadingToneTotal/totalWeight,
   };
