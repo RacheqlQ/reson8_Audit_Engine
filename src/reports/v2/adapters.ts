@@ -269,7 +269,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const comparables = comparablesFrom(evidence);
   const moments = momentsFrom(audio, evidence);
   const notYetMeasured: string[] = [];
-  if (!tempoReliable && tempoConfidence !== null && tempoConfidence > 0) {
+  if (!tempoReliable && typeof audio?.tempoConfidence === "number" && Number.isFinite(audio.tempoConfidence) && audio.tempoConfidence > 0) {
     const candidate = firstFinite(audio, ["tempoCandidateBpm", "bpm"]);
     if (candidate !== null && candidate >= 40 && candidate <= 220) {
       const alternatives = [candidate / 2, candidate * 2]
