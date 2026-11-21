@@ -199,7 +199,7 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
  if (!lines.length) {
   lines.push("Positioning not established — no provider-attributed genre or evidenced lane hypothesis was supplied.");
   lines.push("Required evidence: provider-returned genre with source attribution and verified comparable artists or recordings.");
-  lines.push("Decision boundary: sonic descriptors alone do not establish audience overlap, DSP fit, commercial reach or market demand.");
+  lines.push("Decision boundary: sonic descriptors alone do not establish audience overlap, music-platform fit, commercial reach or market demand.");
  }
  const basis = str(assessment.positioningBasis ?? assessment.positioningRationale, "");
  if (basis) lines.push("Positioning basis: " + basis);
@@ -221,7 +221,7 @@ export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{f
  const e=rec(input.evidence),reconciliation=rec(e.reconciliation);
  const conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
  const releaseDifferences=arr(reconciliation.releaseContextDifferences).map(v=>rec(v));
- const fields:[string,string][]=[["artist","Artist"],["title","Track"],["album","Album"],["genre","Genre"],["releaseDate","Release date"],["isrc","ISRC"],["upc","UPC"],["label","Label"]];
+ const fields:[string,string][]=[["artist","Artist"],["title","Track"],["album","Album"],["genre","Genre"],["releaseDate","Release date"],["isrc","Recording code"],["upc","Release code"],["label","Label"]];
  return fields.map(([key,label])=>{
   const conflict=conflicts.find(item=>item.field===key);
   const releaseDifference=releaseDifferences.find(item=>item.field===key);
