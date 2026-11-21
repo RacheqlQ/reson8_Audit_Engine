@@ -10,21 +10,27 @@ export interface ReportFonts {
 }
 
 const FONT_ROOT = "../../node_modules/@fontsource/ibm-plex-sans/files/";
-const fontBytes = (file: string) => readFile(new URL(FONT_ROOT + file, import.meta.url));
+const fontCache = new Map<string, Promise<Uint8Array>>();
+function fontBytes(file: string): Promise<Uint8Array> {
+  let cached = fontCache.get(file);
+  if (!cached) {
+    cached = readFile(new URL(FONT_ROOT + file, import.meta.url));
+    fontCache.set(file, cached);
+  }
+  return cached;
+}
 
 export async function loadReportFonts(pdf: PDFDocument): Promise<ReportFonts> {
   pdf.registerFontkit(fontkit);
-  const [regularBytes, boldBytes, italicBytes, boldItalicBytes] = await Promise.all([
+  const [regularBytes, boldBytes] = await Promise.all([
     fontBytes("ibm-plex-sans-latin-400-normal.woff2"),
     fontBytes("ibm-plex-sans-latin-700-normal.woff2"),
-    fontBytes("ibm-plex-sans-latin-400-italic.woff2"),
-    fontBytes("ibm-plex-sans-latin-700-italic.woff2"),
   ]);
-  const [regular, bold, italic, boldItalic] = await Promise.all([
+  const [regular, bold] = await Promise.all([
     pdf.embedFont(regularBytes),
     pdf.embedFont(boldBytes),
-    pdf.embedFont(italicBytes),
-    pdf.embedFont(boldItalicBytes),
   ]);
-  return { regular, bold, italic, boldItalic };
+  // Reuse the two embedded families for italic roles. This avoids parsing and
+  // embedding four near-identical font files for every generated report.
+  return { regular, bold, italic: regular, boldItalic: bold };
 }
