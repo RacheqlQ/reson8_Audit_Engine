@@ -53,6 +53,13 @@ function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
 function drawWrapped(page:PDFPage,value:string,x:number,y:number,width:number,font:PDFFont,size=9,color=C.ink,lineHeight=size*1.35):number{
  const lines=wrap(value,font,size,width);lines.forEach((line,i)=>page.drawText(line,{x,y:y-i*lineHeight,size,font,color}));return lines.length*lineHeight;
 }
+export function buildRecordingOverviewKeyLabel(data:ReportV2Data):string{
+ if(data.key.value!==null)return String(data.key.value);
+ const resolution=data.tonalResolution;
+ if(resolution?.status==="PROVISIONAL"&&resolution.tonic&&resolution.mode)
+  return "Provisional: "+resolution.tonic+" "+resolution.mode;
+ return "Not determined";
+}
 export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):string{
  if(data.key.value!==null)return String(data.key.value);
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
@@ -467,7 +474,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
  const rows:Array<[string,string]>=[
   ["Track length",typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?Math.floor(sonic.durationSeconds/60)+" min "+Math.round(sonic.durationSeconds%60)+" sec":""],
   ["Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):""],
-  ["Song key",data.key.value===null?"Not determined":String(data.key.value)],
+  ["Song key",buildRecordingOverviewKeyLabel(data)],
   ["Tempo",data.tempo.value===null?"Not determined":data.tempo.value+" BPM"]
  ].filter((entry):entry is [string,string]=>Boolean(entry[1]));
  if(rows.length){
