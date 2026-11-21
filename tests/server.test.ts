@@ -32,4 +32,28 @@ describe("anonymous capability API surface", () => {
     expect(response.statusCode).toBe(404);
     await app.close();
   });
+
+  it("returns the exact same 404 response for each private report denial reason", async () => {
+    const reasons = ["audit_not_found", "token_missing", "token_malformed", "token_hash_mismatch", "report_not_available", "storage_object_missing"];
+    const app = buildServer({
+      ...store,
+      verifyAuditAccessToken: async () => false,
+      diagnoseAuditReportAccess: async (_jobId: string, _tier: "sample" | "full", token?: string) => ({
+        reason: token ? "token_hash_mismatch" : "token_missing",
+        normalized: token ? { suppliedLength: token.length, whitespaceRemoved: 0, nonHexRemoved: 0 } : null,
+      }),
+    } as any);
+    const bodies = [];
+    for (const reason of reasons) {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/audits/job-1/reports/full",
+        ...(reason === "token_missing" ? {} : { headers: { "x-reson8-report-token": reason === "token_malformed" ? "not-a-key" : "b".repeat(64) } }),
+      });
+      expect(response.statusCode).toBe(404);
+      bodies.push(response.body);
+    }
+    expect(new Set(bodies).size).toBe(1);
+    await app.close();
+  });
 });
