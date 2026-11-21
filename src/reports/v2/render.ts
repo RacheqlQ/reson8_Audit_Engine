@@ -53,8 +53,12 @@ function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
 function drawWrapped(page:PDFPage,value:string,x:number,y:number,width:number,font:PDFFont,size=9,color=C.ink,lineHeight=size*1.35):number{
  const lines=wrap(value,font,size,width);lines.forEach((line,i)=>page.drawText(line,{x,y:y-i*lineHeight,size,font,color}));return lines.length*lineHeight;
 }
+function isResolvedKeyLabel(value:unknown):boolean{
+ if(typeof value!=="string"||!value.trim())return false;
+ return !/^(?:n\\s*\\/\\s*d|not determined|unavailable|unknown)$/i.test(value.trim());
+}
 export function buildRecordingOverviewKeyLabel(data:ReportV2Data):string{
- if(data.key.value!==null)return String(data.key.value);
+ if(isResolvedKeyLabel(data.key.value))return String(data.key.value);
  const resolution=data.tonalResolution;
  if(resolution?.status==="PROVISIONAL"&&resolution.tonic&&resolution.mode)
   return "Provisional: "+resolution.tonic+" "+resolution.mode;
@@ -62,7 +66,7 @@ export function buildRecordingOverviewKeyLabel(data:ReportV2Data):string{
  return "Not determined";
 }
 export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):string{
- if(data.key.value!==null)return String(data.key.value);
+ if(isResolvedKeyLabel(data.key.value))return String(data.key.value);
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
  const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
  const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
