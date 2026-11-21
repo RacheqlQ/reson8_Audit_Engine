@@ -59,6 +59,7 @@ describe("tonal resolution payload-to-report mapping", () => {
     expect(diagnostics).toContain("Provisional audio-derived tonal centre: C major.");
     expect(diagnostics).toContain("Tonal windows do not consistently support one candidate.");
     expect(diagnostics).not.toContain("LOW_WINDOW_CONSENSUS");
+    expect(data.notYetMeasured.join(" ")).not.toContain("LOW_WINDOW_CONSENSUS");
   });
 
   it("reports an unavailable state rather than an unexplained N/D", () => {
