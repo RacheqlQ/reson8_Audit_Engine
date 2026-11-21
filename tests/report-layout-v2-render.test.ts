@@ -42,7 +42,7 @@ describe("v2 identity reconciliation table data", () => {
       .toMatchObject({ value: "Fixture Track", status: "Cross-checked", source: "unavailable" });
     expect(rows.find((row: any) => row.field === "Album"))
       .toMatchObject({ value: "Fixture EP vs Alternate EP", status: "Conflict" });
-    expect(rows.find((row: any) => row.field === "UPC"))
+    expect(rows.find((row: any) => row.field === "Release code"))
       .toMatchObject({ value: "Unavailable", status: "Unavailable" });
   });
 });
