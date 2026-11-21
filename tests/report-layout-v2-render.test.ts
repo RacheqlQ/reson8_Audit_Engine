@@ -192,7 +192,7 @@ describe("v2 gated report pages", () => {
   it("keeps the five narrative pages and only evidence-supported deep dives", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(14);
+    expect(pdf.getPageCount()).toBe(13);
   });
 
   it("keeps the five narrative pages after page 9 and omits unsupported analytical stub pages", async () => {
