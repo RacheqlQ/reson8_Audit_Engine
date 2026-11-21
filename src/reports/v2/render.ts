@@ -66,15 +66,22 @@ export function buildRecordingOverviewKeyLabel(data:ReportV2Data):string{
  return "Not determined";
 }
 export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):string{
- if(isResolvedKeyLabel(data.key.value))return String(data.key.value);
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
+ // The adapted resolution is the report's canonical tonal state. Prefer it to
+ // legacy key strings and raw candidate guardrails so the cover cannot diverge
+ // from the recording overview or Circle of Fifths when legacy fields are stale.
+ const resolution=rec(data.tonalResolution??input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
+ const tonic=str(resolution.tonic,"");
+ const mode=str(resolution.mode,"");
+ if(resolution.status==="UNAVAILABLE")return "Unavailable";
+ if(resolution.status==="CONFIRMED"&&tonic&&mode)return tonic+" "+mode;
+ if(resolution.status==="PROVISIONAL"&&tonic&&mode)return "Possible: "+tonic+" "+mode;
+ if(isResolvedKeyLabel(data.key.value))return String(data.key.value);
  const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
  const candidates=hasReportableKeyCandidates(tonalAudio)
   ?(arr(resolution.candidates).length?arr(resolution.candidates):arr(harmonic.topCandidates)).map(value=>rec(value)):[];
  const first=candidates.find(item=>(typeof item.key==="string"&&item.key.trim())||(typeof item.tonic==="string"&&item.tonic.trim()));
  if(first)return "Possible: "+[str(first.key??first.tonic,""),str(first.mode,"")].filter(Boolean).join(" ");
- if(resolution.status==="UNAVAILABLE")return "Unavailable";
  return "Not determined";
 }
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
