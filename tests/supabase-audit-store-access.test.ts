@@ -365,3 +365,35 @@ describe("full-report availability projection", () => {
     expect(status.full).toEqual({ available: false, version: 3 });
   });
 });
+
+describe("report retrieval diagnostics", () => {
+  it("checks older available report versions when the newest storage object is missing", async () => {
+    process.env.SUPABASE_URL = "https://reson8-test.supabase.co";
+    process.env.SUPABASE_SECRET_KEY = "test-service-role-key";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/audit_jobs?")) {
+        return new Response(JSON.stringify({ id: "job-a", report_access_token_hash: hash(TOKEN_A) }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/audit_reports?")) {
+        return new Response(JSON.stringify([
+          { storage_path: "job-a/latest/full.pdf", access_status: "available", content_type: "application/pdf" },
+          { storage_path: "job-a/previous/full.pdf", access_status: "available", content_type: "application/pdf" },
+        ]), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("job-a%2Flatest%2Ffull.pdf") || url.includes("job-a/latest/full.pdf")) {
+        return new Response(JSON.stringify({ message: "object missing" }), { status: 404, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("job-a%2Fprevious%2Ffull.pdf") || url.includes("job-a/previous/full.pdf")) {
+        return new Response(Buffer.from("%PDF-1.7\\nfixture"), { status: 200, headers: { "content-type": "application/pdf" } });
+      }
+      throw new Error("Unexpected request URL: " + url);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await createSupabaseAuditStore().diagnoseAuditReportAccess("job-a", "full", TOKEN_A);
+    expect(result.reason).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});
