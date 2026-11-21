@@ -121,7 +121,7 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
  p.drawText("ASSESSMENT VERDICT",{x:M+18,y:326,size:7,font:f.bold,color:C.teal});add("cover-verdict-label",M+18,323,130,9);
  p.drawText(coverVerdictLabel(input).toUpperCase(),{x:M+18,y:292,size:15,font:f.bold,color:C.white});add("cover-verdict",M+18,289,180,22);
  p.drawText("EVIDENCE STATUS",{x:W-M-116,y:326,size:7,font:f.bold,color:C.teal});add("cover-evidence-status-label",W-M-116,323,105,9);
- p.drawText("Not a calibrated probability",{x:W-M-116,y:292,size:7,font:f.bold,color:C.white});add("cover-evidence-status-value",W-M-116,289,105,12);
+ p.drawText("Not a commercial guarantee",{x:W-M-116,y:292,size:7,font:f.bold,color:C.white});add("cover-evidence-status-value",W-M-116,289,105,12);
  const dateLines=wrap("Generated "+input.generatedAt.slice(0,10)+" • Version "+input.assessment.assessmentVersion,f.regular,8,W-2*M);
  let dateY=210;for(let n=0;n<dateLines.length;n++){p.drawText(dateLines[n],{x:M,y:dateY,size:8,font:f.regular,color:C.muted});add("cover-date-version-"+n,M,dateY-2,W-2*M,11);dateY-=12;}
  const auditLines=wrap("Audit "+input.auditId,f.regular,7,W-2*M);
@@ -337,7 +337,6 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
   {label:"KEY / MODE",value:keyReliable?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
   {label:"KEY / MODE CANDIDATES",value:hasAudio&&!keyReliable&&keyCandidates?keyCandidates:null},
   {label:"KEY WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(harmonic.windowConsensus,harmonic.independentEstimator):null},
-  {label:"KEY CONFIDENCE DIAGNOSTIC",value:hasAudio&&!keyReliable&&typeof s?.keyConfidence==="number"?(s.keyConfidence.toFixed(2)+" raw estimator score; not a calibrated probability; segment agreement "+(typeof s.keySegmentAgreement==="number"?s.keySegmentAgreement.toFixed(2):"not available")):null},
   {label:"KEY CANDIDATE REASON",value:hasAudio&&!keyReliable?"A single song key could not be confirmed from the supplied recording.":null},
   {label:"TUNING OFFSET CANDIDATE CENTS",value:hasAudio&&hasMultipleTuningWindows(s)?metric(s?.keyTuningCents,0)+" (multiple tonal windows; provisional)":null},
   {label:"INTEGRATED LOUDNESS LUFS",value:hasAudio?metric(s?.loudnessLufs,1):null},
@@ -403,7 +402,7 @@ export function chartsForSection(i:AuditReportInput,title:string):ChartPanelInpu
   {
    title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
    rows:sonicDashboardRowsForReport(s,hasAudio),
-   shows:"Confidence-qualified tempo and key/mode plus direct loudness and RMS measurements from the uploaded master.",cantShow:"Audience demand, listener response, mastering quality or commercial performance.",evidenceRefs:["sonicDna"]
+   shows:"Supported tempo and song-key findings, plus direct loudness and signal-level measurements from the uploaded master.",cantShow:"Audience demand, listener response, mastering quality or commercial performance.",evidenceRefs:["sonicDna"]
   },
   {
    title:"Signal characteristics",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
@@ -474,8 +473,8 @@ function sections(i:AuditReportInput):Section[]{
   ...(playlistMoodSource.includes("catalogue sonic profile")?["Catalogue mood descriptors are provider-supplied metadata, not an audio-derived mood measurement."]:[]),
   ...(playlistMoodSource.includes("uploaded-master provisional audio_feature_heuristics_v1")?["Uploaded-master mood tags are provisional audio_feature_heuristics_v1 outputs, not calibrated perceptual predictions."]:[])
  ];
- const uploadedMoodNote=masterMoodTags.length?" Uploaded-master provisional mood tags: "+masterMoodTags.join(", ")+" (audio-feature heuristic; not a calibrated perceptual prediction).":"";
- const uploadedEnergyNote=masterEnergyLabel?" Provisional uploaded-master energy estimate: "+masterEnergyLabel+" (heuristic; not a calibrated perceptual prediction).":"";
+ const uploadedMoodNote=masterMoodTags.length?" Uploaded-master provisional mood tags: "+masterMoodTags.join(", ")+" (provisional listening direction).":"";
+ const uploadedEnergyNote=masterEnergyLabel?" Provisional uploaded-master energy estimate: "+masterEnergyLabel+" (provisional estimate).":"";
  const playlistMoodSummary=playlistMoodTags.length
   ? "Mood search tags: "+playlistMoodTags.join(", ")+" [Source: "+playlistMoodSource+"]. "+(playlistMoodNotes.join(" ")||"Source attribution is incomplete; no calibrated mood claim is made.")+uploadedMoodNote+uploadedEnergyNote
   : masterMoodTags.length||masterEnergyLabel
