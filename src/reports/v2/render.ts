@@ -145,7 +145,9 @@ export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
  if(resolution.status==="CONFIRMED")lines.push("Confirmed audio-derived tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+".");
  else if(resolution.status==="PROVISIONAL")lines.push("Provisional audio-derived tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+". It is not presented as confirmed.");
  else if(resolution.status==="UNAVAILABLE")lines.push("Tonal centre unavailable: stable harmonic evidence was insufficient.");
- if(candidates.length)lines.push("Ranked tonal candidates: "+candidates.join("; ")+". Candidate scores are ranking diagnostics, not calibrated probabilities.");
+ if(candidates.length)lines.push("Possible song keys: "+candidates.join("; ")+".");
+ if(harmonic.independentEstimatorDisagrees===true)lines.push("Different key readings were returned; no single key is confirmed.");
+ if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("The leading candidates form a relative major/minor pair; no single key is asserted.");
  if(finite(resolution.windowAgreement))lines.push("Window agreement: "+(resolution.windowAgreement*100).toFixed(0)+"%.");
  if(finite(resolution.bootstrapShare))lines.push("Bootstrap top-rank share: "+(resolution.bootstrapShare*100).toFixed(0)+"% of deterministic resamples; this is not a calibrated probability.");
  const reasonCodes=arr(resolution.reasonCodes).filter((code):code is string=>typeof code==="string");
