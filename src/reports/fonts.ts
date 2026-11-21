@@ -23,8 +23,8 @@ function fontBytes(file: string): Promise<Uint8Array> {
 export async function loadReportFonts(pdf: PDFDocument): Promise<ReportFonts> {
   pdf.registerFontkit(fontkit);
   const [regularBytes, boldBytes] = await Promise.all([
-    fontBytes("ibm-plex-sans-latin-400-normal.woff2"),
-    fontBytes("ibm-plex-sans-latin-700-normal.woff2"),
+    fontBytes("ibm-plex-sans-latin-400-normal.woff"),
+    fontBytes("ibm-plex-sans-latin-700-normal.woff"),
   ]);
   const [regular, bold] = await Promise.all([
     pdf.embedFont(regularBytes),
