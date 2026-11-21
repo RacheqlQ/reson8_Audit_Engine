@@ -105,7 +105,7 @@ for(const [name,input] of variants){
   if(name==="partial-audio-low-confidence"&&tier==="full"){
    if(!normalizedExtracted.includes("Provisional audio-derived tonal centre: C major."))throw new Error(filename+" failed to render the provisional tonic");
    if(!normalizedExtracted.includes("Possible: C major"))throw new Error(filename+" failed to label the provisional tonic as a possibility");
-   if(/KEY\\s*\\/\\s*MODE\\s*:\\s*N\\/D/i.test(normalizedExtracted))throw new Error(filename+" rendered an unexplained key/mode N/D despite candidate evidence");
+   if(/KEY\s*\/\s*MODE\s*:\s*N\/D/i.test(normalizedExtracted))throw new Error(filename+" rendered an unexplained key/mode N/D despite candidate evidence");
   }
   if(name==="metadata-only"&&tier==="full"){
    if(!normalizedExtracted.includes("Tonal centre unavailable"))throw new Error(filename+" failed to render the unavailable tonal state");
