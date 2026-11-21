@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
-import { buildCoverKeyLabel, buildKeyDiagnosticLines } from "../src/reports/v2/render.js";
+import { buildCoverKeyLabel, buildKeyDiagnosticLines, buildRecordingOverviewKeyLabel } from "../src/reports/v2/render.js";
 import type { AuditReportInput } from "../src/reports/generate-audit-report.js";
 
 const candidate = {
@@ -72,6 +72,7 @@ describe("tonal resolution payload-to-report mapping", () => {
     const data = adaptReportV2(reportInput);
     expect(data.tonalResolution?.status).toBe("UNAVAILABLE");
     expect(buildCoverKeyLabel(reportInput, data)).toBe("Unavailable");
+    expect(buildRecordingOverviewKeyLabel(data)).toBe("Unavailable");
     expect(buildKeyDiagnosticLines(reportInput).join(" ")).toContain("Tonal centre unavailable");
   });
 });
