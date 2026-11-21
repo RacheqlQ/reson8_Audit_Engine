@@ -86,8 +86,8 @@ describe("Phillo evidence guardrails", () => {
       } },
     } as any).join(" ");
 
-    expect(lines).toContain("40 BPM (score 0.800)");
-    expect(lines).toContain("220 BPM (score 0.700)");
+    expect(lines).toContain("Possible tempo readings: 40 BPM; 220 BPM.");
+    expect(lines).not.toMatch(/score|confidence|probability|detector/i);
     expect(lines).not.toContain("39 BPM");
     expect(lines).not.toContain("221 BPM");
     expect(lines).not.toContain("Alternate half/double-time candidate");
