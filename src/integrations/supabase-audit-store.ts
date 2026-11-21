@@ -632,13 +632,20 @@ export function createSupabaseAuditStore(
         return { reason: "token_hash_mismatch", normalized };
       }
       const { data: reports, error: reportError } = await admin.from("audit_reports")
-        .select("storage_path,access_status").eq("audit_job_id", jobId).eq("tier", tier)
-        .order("version", { ascending: false }).limit(1);
+        .select("storage_path,access_status,content_type").eq("audit_job_id", jobId).eq("tier", tier)
+        .order("version", { ascending: false }).limit(20);
       if (reportError) throw new Error("Unable to diagnose audit report availability");
-      if (!reports?.length || reports[0]?.access_status !== "available") return { reason: "report_not_available", normalized };
-      const { data: object, error: storageError } = await admin.storage.from("audit-reports").download(reports[0].storage_path);
-      if (storageError || !object) return { reason: "storage_object_missing", normalized };
-      return { reason: null, normalized };
+      const availableReports = (reports ?? []).filter(report => report.access_status === "available");
+      if (!availableReports.length) return { reason: "report_not_available", normalized };
+      for (const report of availableReports) {
+        const { data: object, error: storageError } = await admin.storage.from("audit-reports").download(report.storage_path);
+        if (storageError || !object) continue;
+        const bytes = new Uint8Array(await object.arrayBuffer());
+        if (isPdf(bytes) || String(report.content_type).includes("json") || report.storage_path.endsWith(".json")) {
+          return { reason: null, normalized };
+        }
+      }
+      return { reason: "storage_object_missing", normalized };
     },
     async getAuditStatus(jobId) {
       const statusStartedAt = Date.now();
@@ -700,7 +707,7 @@ export function createSupabaseAuditStore(
           : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its ten-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
           : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
-        full: full ? { available: true, version: full.version } : { available: false }, catalogUrlsSubmitted, catalogSources,
+        full: full ? { available: full.access_status === "available", version: full.version } : { available: false }, catalogUrlsSubmitted, catalogSources,
       };
       console.info(JSON.stringify({ event: "audit_status_read_completed", durationMs: Date.now() - statusStartedAt, queryCount: 3 }));
       return result;

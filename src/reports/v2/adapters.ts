@@ -289,7 +289,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
     if (labels.length) notYetMeasured.push(labels[0] + " (provisional harmonic candidate; alternatives: " + labels.slice(1).join(", ") + "; no single key asserted).");
   }
   if (hasMultipleTuningWindows(audio)) {
-    notYetMeasured.push(audio?.keyTuningCents + " (multiple tonal windows; provisional) — " + audio?.tuningEvidenceWindows + " windows; tuning offset is not a key assertion.");
+    notYetMeasured.push("More than one tuning window was detected; a single tuning reference is not confirmed.");
   }
   if (!structure) notYetMeasured.push("Track structure — no valid section boundaries supplied.");
   if (!energySeries) notYetMeasured.push("Energy-over-time curve — no valid timestamped energy or loudness series supplied.");

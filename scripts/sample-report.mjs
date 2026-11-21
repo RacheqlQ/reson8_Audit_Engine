@@ -84,10 +84,11 @@ for(const [name,input] of variants){
   const chartLabels=[safeAssessment.aAndRPositioning.primaryLane,...safeAssessment.aAndRPositioning.adjacentLanes].filter(value=>typeof value==="string"&&value.trim());
   const normalizedExtracted=extracted.replace(/\s+/g," ");
   if(name==="ambiguous-audio-low-confidence"){
-   const expectedEvidence=["14 (multiple tonal windows; possible)"];
+   const expectedEvidence=["More than one tuning window was detected; a single tuning reference is not confirmed."];
    for(const expected of expectedEvidence){
-    if(!normalizedExtracted.includes(expected))throw new Error(filename+" is missing the expected provisional audio evidence: "+expected);
+    if(!normalizedExtracted.includes(expected))throw new Error(filename+" is missing the human-readable tuning limitation: "+expected);
    }
+   if(/\b14\s*\(multiple tonal windows; provisional\)/i.test(normalizedExtracted))throw new Error(filename+" exposed a raw tuning-window diagnostic instead of the human-readable limitation");
    if(/\b128\s*BPM\b|\bC major\b/.test(normalizedExtracted))throw new Error(filename+" exposed a zero-confidence tempo or unsupported key candidate");
   }
   if(tier==="sample"){
