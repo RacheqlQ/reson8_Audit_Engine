@@ -150,6 +150,9 @@ function commercialEvidenceExists(evidence: UnknownRecord | null): boolean {
 export function buildDecisionDimensions(input: AuditReportInput): DecisionDimension[] {
   const evidence = record(input.evidence);
   const audio = record(input.sonicDna);
+  const audioHarmonic = record(audio?.harmonicFeatures);
+  const audioResolution = record(input.tonalResolution) ?? record(audioHarmonic?.tonalResolution) ?? record(audio?.tonalResolution);
+  const audioWithResolution = audio ? { ...audio, tonalResolution: audioResolution } : null;
   const reconciliation = record(evidence?.reconciliation);
   const conflicts = Array.isArray(reconciliation?.conflicts) ? reconciliation.conflicts : [];
   const reconciledFields = Array.isArray(reconciliation?.reconciledRecordingFields)
@@ -163,7 +166,7 @@ export function buildDecisionDimensions(input: AuditReportInput): DecisionDimens
     nonEmpty(evidence?.[field]) && (nonEmpty(fieldProvenance?.[field]) !== null || sourceProviders.length > 0)
   );
   const tempoMeasured = isReliableTempo(audio as Parameters<typeof isReliableTempo>[0]);
-  const keyMeasured = isReliableKey(audio);
+  const keyMeasured = isReliableKey(audioWithResolution);
   const descriptiveMeasurements = [
     "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "rmsLevelDbfs", "rmsEnergy",
     "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate",
