@@ -230,6 +230,24 @@ export function buildDays6190Plan(input: AuditReportInput): string {
  const anchor=release.verdict==="DETERMINED"?"the determined "+release.date+" release":"the confirmed release date once reconciled";
  return "Post-release catalog momentum, anchored to "+anchor+": review the prior release window and current catalog identity without assuming performance outcomes; refresh the curator and DSP pitch pack, then follow up only with contacts who accepted or requested material; expand approved creator/UGC excerpts and visual treatments around human-verified hook windows; lock artist, title, version, ISRC, UPC, EP-versus-album mapping, rights splits and master ownership against distributor and provider records; close the 90-day review by comparing source-attributed platform reports and campaign activity with the pre-review baseline, documenting unavailable metrics rather than estimating streams, revenue, reach or conversion.";
 }
+export function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=adaptReportV2(input)):string{
+ const evidence=rec(input.evidence),assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),evidence);
+ const supplied=str(assessment.executiveSummary,"");
+ const release=buildReleaseDateStatus(input);
+ const releaseClause=release.verdict==="DETERMINED"
+  ?"Release date DETERMINED: "+release.date+" ("+release.source+"); this is a post-release catalogue and reactivation opportunity."
+  :"Release-date reconciliation remains a diligence item; timing is not assumed.";
+ if(supplied&&!/not supplied|not provided|not available|insufficient evidence/i.test(supplied))
+  return releaseClause+" "+supplied;
+ const artist=str(evidence.artist,"the submitting artist"),title=str(evidence.title,"the submitted recording"),album=str(evidence.album,"");
+ const genre=str(evidence.genre,"");
+ const audioDetails=[
+  data.tempo.value!==null?"measured tempo "+data.tempo.value+" BPM":null,
+  data.key.value!==null?"audio-derived key "+data.key.value:null,
+  typeof rec(input.sonicDna).loudnessLufs==="number"?"integrated loudness "+Number(rec(input.sonicDna).loudnessLufs).toFixed(1)+" LUFS":null
+ ].filter((value):value is string=>Boolean(value));
+ return "This A&R review of "+artist+"'s "+title+(album?" from "+album:"")+" combines the supplied recording analysis with source-returned catalogue identity. "+releaseClause+" "+(genre?"The provider-returned genre context is "+genre+". ":"")+"Available audio observations include "+(audioDetails.join(", ")||"the recording descriptors available in this audit")+". The market position is a PROPOSED strategic thesis, not a claim of verified audience demand or commercial performance.";
+}
 export function buildReportSectionTitles(input:AuditReportInput,tier:AuditReportTier="sample"):string[]{
  return buildReportSections(input,adaptReportV2(input),tier).map(page=>page.title);
 }
@@ -345,7 +363,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   {title:"Cover and verdict",kind:"cover",blocks:metricBlock(data,input),lines:[
    "Artist: "+str(e.artist)+"   Track: "+str(e.title),
    "Audit date: "+dateText(input.generatedAt)+"   Release date: "+dateText(e.releaseDate),
-   "Executive summary: "+str(a.executiveSummary,"No executive summary supplied."),
+   "Executive summary: "+buildExecutiveSummary(input,data),
    buildNextActionLine(input)
   ]},
   {title:"Identity and source reconciliation",kind:"identity",blocks:[]},
