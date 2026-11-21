@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildCoverKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
+import { buildCoverKeyLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
@@ -232,6 +232,14 @@ describe("v2 cover key and playback presentation", () => {
     expect(normalizeCircleNote("Bb")).toBe("A#");
     expect(normalizeCircleNote("F# minor")).toBe("F#");
     expect(normalizeCircleNote("unknown")).toBe("");
+  });
+  it("keeps provisional and unavailable tonal states consistent in the recording overview", () => {
+    const provisional = structuredClone(ambiguousAudioFixture) as any;
+    expect(buildRecordingOverviewKeyLabel(adaptReportV2(provisional))).toBe("Provisional: C major");
+    const confirmed = structuredClone(fullAudioFixture) as any;
+    expect(buildRecordingOverviewKeyLabel(adaptReportV2(confirmed))).toBe("A minor");
+    const unavailable = structuredClone(metadataOnlyFixture) as any;
+    expect(buildRecordingOverviewKeyLabel(adaptReportV2(unavailable))).toBe("Not determined");
   });
   it("shows the strongest reportable tonal centre on the cover without calling it confirmed", () => {
     const input = structuredClone(ambiguousAudioFixture) as any;
