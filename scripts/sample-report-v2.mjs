@@ -9,7 +9,7 @@ const out=new URL("../artifacts/",import.meta.url);
 await mkdir(out,{recursive:true});
 const phillo=structuredClone(ambiguousAudioFixture);
 phillo.auditId="fixture-phillo-stunixx-low-confidence";
-phillo.evidence={...phillo.evidence,artist:"Stunixx",title:"Phillo",album:null,isrc:null,upc:null,label:null,genre:null,reconciliation:{conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]}};
+phillo.evidence={...phillo.evidence,artist:"Stunixx",title:"Phillo",album:null,isrc:null,upc:null,label:null,genre:null,releaseDate:"2025-08-24",fieldProvenance:{...phillo.evidence.fieldProvenance,releaseDate:"apple_music"},reconciliation:{conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]}};
 phillo.assessment={...phillo.assessment,executiveSummary:"Synthetic reference fixture for the Phillo / Stunixx sample. Identity conflicts and low-confidence audio evidence are deliberately preserved for layout regression testing."};
 const complete=structuredClone(fullAudioFixture);
 complete.auditId="fixture-v2-complete-synthetic-only";
@@ -48,6 +48,7 @@ if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i.test(phillo
 if(!philloFullPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error("Phillo full fixture must finish with A&R NOTES");
 const normalizedPhilloText=philloFullText.replace(/\s+/g," ").toUpperCase().replace(/[–—]/g,"-");
 if(!normalizedPhilloText.includes("DAYS 61")||normalizedPhilloText.includes("DAYS 61-90 NOT SUPPLIED")||!normalizedPhilloText.includes("CURATOR")||!normalizedPhilloText.includes("CREATOR")||!normalizedPhilloText.includes("ISRC")||!normalizedPhilloText.includes("PERFORMANCE REVIEW"))throw new Error("Phillo full fixture is missing its complete post-release Days 61-90 plan");
+if(!normalizedPhilloText.includes("RELEASE DATE DETERMINED")||!normalizedPhilloText.includes("PRE-RELEASE STAGE (HISTORICAL; ALREADY PASSED)")||!normalizedPhilloText.includes("RELEASE WINDOW (HISTORICAL; ALREADY PASSED)")||!normalizedPhilloText.includes("POST-RELEASE GROWTH AND REACTIVATION"))throw new Error("Phillo fixture does not preserve determined post-release campaign framing");
 process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" pages; post-release execution and final A&R notes verified.\n");
 
 const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
