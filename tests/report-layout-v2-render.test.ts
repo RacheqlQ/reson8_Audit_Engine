@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildCoverKeyLabel } from "../src/reports/v2/render.js";
+import { buildCoverKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
@@ -227,6 +227,12 @@ describe("v2 gated report pages", () => {
 });
 
 describe("v2 cover key and playback presentation", () => {
+  it("normalizes enharmonic candidate roots to the circle-of-fifths spelling", () => {
+    expect(normalizeCircleNote("Db major")).toBe("C#");
+    expect(normalizeCircleNote("Bb")).toBe("A#");
+    expect(normalizeCircleNote("F# minor")).toBe("F#");
+    expect(normalizeCircleNote("unknown")).toBe("");
+  });
   it("shows the strongest reportable tonal centre on the cover without calling it confirmed", () => {
     const input = structuredClone(ambiguousAudioFixture) as any;
     input.sonicDna.keyConfidence = 0.12;
