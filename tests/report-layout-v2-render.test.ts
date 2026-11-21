@@ -21,9 +21,9 @@ describe("v2 decision and date framing", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.generatedAt = "2025-01-01T00:00:00.000Z";
     input.evidence.releaseDate = "2025-06-01";
-    expect(buildReleaseFramingLine(input)).toContain("date does not establish a past release");
+    expect(buildReleaseFramingLine(input)).toContain("Release date is not source-reconciled");
     input.generatedAt = "2025-12-01T00:00:00.000Z";
-    expect(buildReleaseFramingLine(input)).toContain("release date is in the past");
+    expect(buildReleaseFramingLine(input)).toContain("POST-RELEASE");
   });
 });
 
@@ -161,8 +161,8 @@ describe("v2 gated report pages", () => {
     input.assessment.adjacentLanes = [];
     input.evidence.genre = null;
     const lines = buildPositioningLines(input);
-    expect(lines.join(" ")).toContain("Genre positioning is not established");
-    expect(lines.join(" ")).toContain("music-platform genre listing");
+    expect(lines.join(" ")).toContain("PROPOSED market thesis");
+    expect(lines.join(" ")).toContain("Validation route");
     expect(lines.every((line: string) => line.trim().length > 0)).toBe(true);
   });
 
@@ -171,7 +171,7 @@ describe("v2 gated report pages", () => {
     input.evidence = { ...input.evidence, artist: "Stunixx", title: "Phillo", album: null, isrc: null, upc: null, label: null,
       reconciliation: { conflicts: [{ field: "album", values: ["Hole-Hearted - EP", "Hole-Hearted"] }] } };
     const pdf = await PDFDocument.load(await generateAuditReportV2(input));
-    expect(pdf.getPageCount()).toBe(9);
+    expect(pdf.getPageCount()).toBe(8);
   });
 
   it("keeps a complete evidence-rich sample at nine pages without dropping gated evidence", async () => {
@@ -183,7 +183,7 @@ describe("v2 gated report pages", () => {
       flaggedMoments: [{ timestampSeconds: 12, title: "Hook entry", note: "Synthetic test observation", tag: "Strength" }] };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
-    expect(pdf.getPageCount()).toBe(9);
+    expect(pdf.getPageCount()).toBe(8);
     expect(pdf.getForm().getFields().map(field => field.getName())).toContain("ar_notes");
   });
 
