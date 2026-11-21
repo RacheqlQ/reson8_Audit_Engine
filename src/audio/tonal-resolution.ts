@@ -283,7 +283,7 @@ export function resolveTonalCentre(input: readonly TonalWindow[]): TonalResoluti
     thresholds:{
       minWindows:MIN_WINDOWS,minMeanSalience:MIN_MEAN_SALIENCE,minBootstrapShare:MIN_BOOTSTRAP_SHARE,
       minWindowAgreement:MIN_WINDOW_AGREEMENT,minRunnerUpMargin:MIN_RUNNER_UP_MARGIN,
-      relativePairAmbiguityMargin:0.04,adjacentFifthsAmbiguityMargin:0.04,bootstrapIterations:BOOTSTRAP_ITERATIONS,
+      relativePairAmbiguityMargin:RELATIVE_PAIR_AMBIGUITY_MARGIN,adjacentFifthsAmbiguityMargin:ADJACENT_FIFTHS_AMBIGUITY_MARGIN,bootstrapIterations:BOOTSTRAP_ITERATIONS,
     },
   };
 }
