@@ -357,6 +357,12 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  ],fonts,{accent:C.gold});
  return summaryTop-summaryHeight-14;
 }
+export function buildStrengthRiskSummary(input:AuditReportInput):{strengths:string[];risks:string[];strengthCount:number;riskCount:number}{
+ const assessment=rec(input.assessment);
+ const clean=(value:unknown)=>arr(value).map(item=>str(item,"")).map(item=>item.trim()).filter(item=>item&&!/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(item));
+ const strengths=clean(assessment.strengths),risks=clean(assessment.risks);
+ return {strengths,risks,strengthCount:strengths.length,riskCount:risks.length};
+}
 function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:AuditReportTier):PageSpec[]{
  const e=rec(input.evidence),a=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)),sonic=rec(input.sonicDna);
  const notesContext=buildArNotesDecisionContext(input);
@@ -383,8 +389,8 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   ]},
   {title:"A&R positioning",blocks:[],lines:buildPositioningLines(input)},
   {title:"Strengths, risks and actions",blocks:[],lines:[
-   "Strengths: "+arr(a.strengths).map(v=>str(v)).join("; ")||"No measured strengths supplied.",
-   "Risks: "+arr(a.risks).map(v=>str(v)).join("; ")||"No evidenced risks supplied.",
+   "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.join("; ")||"No measured strengths supplied."),
+   "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.join("; ")||"No evidenced risks supplied."),
    "Priorities: "+arr(rec(a.releaseStrategy).priorities).map(v=>str(v)).join("; ")||"No priorities supplied.",
    "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence."),
    ...(data.moments??[]).map(m=>"Flagged moment "+m.timestampSeconds.toFixed(2)+"s · "+m.tag+" · "+m.title+" — "+m.note)
