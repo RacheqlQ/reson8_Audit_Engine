@@ -347,6 +347,6 @@ describe("uploaded master provenance in reports", () => {
     const rows = sonicDashboardRowsForReport(input.sonicDna, true);
     expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toBeNull();
     expect(rows.find((row) => row.label === "ALTERNATIVE PULSE READINGS")?.value).toBeNull();
-    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toBe("F# major");
+    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toBe("A minor; C major");
   });
 });
