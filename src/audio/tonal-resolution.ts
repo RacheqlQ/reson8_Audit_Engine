@@ -124,6 +124,11 @@ function scoreKey(window: TonalWindow, tonic: number, mode: TonalMode): number {
     if (scaleIndex>=0) {
       score += value * DEGREE_WEIGHTS[mode][scaleIndex]!;
       scaleMass += value;
+    } else if (mode === "minor" && degree === 11) {
+      // The raised seventh is a harmonic-minor leading tone: admit it as a
+      // weaker cadence cue rather than penalizing it like an unrelated chromatic.
+      score += value * 0.6;
+      chromaticMass += value * 0.2;
     } else {
       chromaticMass += value;
     }
@@ -145,9 +150,11 @@ function scoreKey(window: TonalWindow, tonic: number, mode: TonalMode): number {
 
 function rankWindows(windows: readonly TonalWindow[]): Array<{ tonic:number; mode:TonalMode; score:number }> {
   const aggregate=Array(12).fill(0), bassAggregate=Array(12).fill(0);
-  let totalWeight=0;
+  let totalWeight=0, cadenceTotal=0, leadingToneTotal=0;
   for(const window of windows) {
     const weight=clamp(window.salience)*Math.max(0.05,window.energy ?? 1);
+    cadenceTotal += clamp(window.cadenceWeight ?? 0) * weight;
+    leadingToneTotal += clamp(window.leadingToneEvidence ?? 0) * weight;
     const chroma=normalize(window.chroma), bass=normalize(window.bassChroma);
     for(let pitch=0;pitch<12;pitch++) {
       aggregate[pitch]+=chroma[pitch]!*weight;
@@ -159,8 +166,8 @@ function rankWindows(windows: readonly TonalWindow[]): Array<{ tonic:number; mod
   const combined: TonalWindow={
     startSeconds:0,endSeconds:0,chroma:aggregate,bassChroma:bassAggregate,
     salience:totalWeight/windows.length,energy:1,
-    cadenceWeight:Math.max(...windows.map(w=>w.cadenceWeight??0)),
-    leadingToneEvidence:Math.max(...windows.map(w=>w.leadingToneEvidence??0)),
+    cadenceWeight:cadenceTotal/totalWeight,
+    leadingToneEvidence:leadingToneTotal/totalWeight,
   };
   const candidates:Array<{tonic:number;mode:TonalMode;score:number}>=[];
   for(let tonic=0;tonic<12;tonic++) for(const mode of ["major","minor"] as const) {
@@ -175,7 +182,10 @@ function rankWindows(windows: readonly TonalWindow[]): Array<{ tonic:number; mod
 
 function seedFor(windows: readonly TonalWindow[]): number {
   let seed=2166136261;
-  for(const window of windows) for(const value of [...window.chroma,window.salience,window.startSeconds]) {
+  for(const window of windows) for(const value of [
+    ...window.chroma, ...(window.bassChroma ?? []), window.salience, window.energy ?? 1,
+    window.startSeconds, window.downbeatRoot ?? -1, window.cadenceWeight ?? 0, window.leadingToneEvidence ?? 0,
+  ]) {
     const quantized=Math.round((Number.isFinite(value)?value:0)*1e6);
     seed=Math.imul(seed^quantized,16777619);
   }
@@ -217,13 +227,14 @@ export function resolveTonalCentre(input: readonly TonalWindow[]): TonalResoluti
   });
   const windowAgreement=bestWindowVotes.reduce((a,b)=>a+b,0)/valid.length;
   const state={value:seedFor(valid)};
-  let wins=0;
+  const bootstrapWins=new Map<string,number>();
   for(let iteration=0;iteration<BOOTSTRAP_ITERATIONS;iteration++) {
     const sample:TonalWindow[]=[];
     for(let index=0;index<valid.length;index++) sample.push(valid[Math.floor(nextRandom(state)*valid.length)]!);
-    if(candidateId(rankWindows(sample)[0]!)===bestId) wins++;
+    const winnerId=candidateId(rankWindows(sample)[0]!);
+    bootstrapWins.set(winnerId,(bootstrapWins.get(winnerId)??0)+1);
   }
-  const bootstrapShare=wins/BOOTSTRAP_ITERATIONS;
+  const bootstrapShare=(bootstrapWins.get(bestId)??0)/BOOTSTRAP_ITERATIONS;
   const margin=(best.score-second.score)/Math.max(EPSILON,Math.abs(best.score));
   const rankedPair=ranked.find(candidate=>candidate.mode!==best.mode
     && ((candidate.tonic-best.tonic+12)%12===3 || (candidate.tonic-best.tonic+12)%12===9));
@@ -241,7 +252,8 @@ export function resolveTonalCentre(input: readonly TonalWindow[]): TonalResoluti
     const votes=valid.filter(window=>candidateId(rankWindows([window])[0]!)===candidateId(candidate)).length;
     return {
       tonic:noteName(candidate.tonic),pitchClass:candidate.tonic,mode:candidate.mode,
-      score:Number(candidate.score.toFixed(6)),bootstrapShare:candidateId(candidate)===bestId?bootstrapShare:0,
+      score:Number(candidate.score.toFixed(6)),
+      bootstrapShare:Number(((bootstrapWins.get(candidateId(candidate))??0)/BOOTSTRAP_ITERATIONS).toFixed(6)),
       windowAgreement:votes/valid.length,
       margin:Number(((best.score-candidate.score)/Math.max(EPSILON,Math.abs(best.score))).toFixed(6)),
     };
