@@ -1,8 +1,12 @@
 export function normalizeReportAccessKey(input) {
-  return input
-    .replace(/[\s\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "")
-    .replace(/^["']+|["']+$/g, "")
-    .toLowerCase();
+  let value = String(input ?? "")
+    .replace(/[\\s\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]/g, "")
+    .replace(/^[\"']+|[\"']+$/g, "");
+  value = value.replace(/^(?:(?:reson8)?(?:report)?(?:access)?key|bearer)[:=]?/i, "");
+  value = value.replace(/^0x/i, "");
+  const compact = value.replace(/[-:]/g, "");
+  const embedded = compact.match(/(?:^|[^0-9a-f])([0-9a-f]{64})(?![0-9a-f])/i);
+  return (embedded ? embedded[1] : compact).toLowerCase();
 }
 
 export async function readPdfResponse(response) {
