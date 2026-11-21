@@ -148,4 +148,12 @@ describe("v2 read-only evidence adapters", () => {
     expect(data.notYetMeasured.join(" ")).not.toContain("27.5 BPM");
     expect(data.notYetMeasured.join(" ")).toContain("55 BPM");
   });
+  it("keeps tuning-window diagnostics human-readable without exposing raw offsets", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = { ...input.sonicDna, keyTuningCents: 1.5739155645363212, tuningEvidenceWindows: 4 };
+    const data = adaptReportV2(input);
+    expect(data.notYetMeasured.join(" ")).toContain("More than one tuning window was detected");
+    expect(data.notYetMeasured.join(" ")).not.toContain("1.5739155645363212");
+  });
+
 });
