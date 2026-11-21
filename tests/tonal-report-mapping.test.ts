@@ -60,6 +60,10 @@ describe("tonal resolution payload-to-report mapping", () => {
     expect(data.tonalResolution?.status).toBe("PROVISIONAL");
     expect(data.key.value).toBeNull();
     expect(buildCoverKeyLabel(reportInput, data)).toBe("Possible: C major");
+    // Legacy adapter values may contain a literal placeholder; it must not mask audio-derived candidates.
+    data.key.value = "Not determined";
+    expect(buildCoverKeyLabel(reportInput, data)).toBe("Possible: C major");
+    expect(buildRecordingOverviewKeyLabel(data)).toBe("Provisional: C major");
     const diagnostics = buildKeyDiagnosticLines(reportInput).join(" ");
     expect(diagnostics).toContain("Provisional audio-derived tonal centre: C major.");
     expect(diagnostics).toContain("Tonal windows do not consistently support one candidate.");
