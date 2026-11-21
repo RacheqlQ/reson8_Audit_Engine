@@ -102,7 +102,7 @@ describe("mobile clipboard report-key normalization", () => {
     const key = "0123456789abcdef".repeat(4);
     expect(normalizeReportAccessKey("Report access key: " + key.toUpperCase())).toBe(key);
     expect(normalizeReportAccessKey("0x" + key)).toBe(key);
-    expect(normalizeReportAccessKey(key.match(/.{1,8}/g).join("-"))).toBe(key);
+    expect(normalizeReportAccessKey(key.match(/.{1,8}/g)!.join("-"))).toBe(key);
     expect(normalizeReportAccessKey(key + "0")).not.toBe(key);
   });
 
