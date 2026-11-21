@@ -1,5 +1,7 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
+import { buildCoverKeyLabel } from "../src/reports/v2/render.js";
+import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
@@ -221,5 +223,14 @@ describe("v2 gated report pages", () => {
   it("omits every gated page for a minimal audio-only fixture", async () => {
     const input = { ...metadataOnlyFixture, evidence: { fixture: true, auditType: "AUDIO-ONLY", artist: null, title: null }, sonicDna: { provenance: "fixture", bpm: null, key: null, mode: null, tempoConfidence: 0, keyConfidence: 0 } };
     expect((await PDFDocument.load(await generateAuditReportV2(input as any))).getPageCount()).toBe(9);
+  });
+});
+
+describe("v2 cover key and playback presentation", () => {
+  it("shows the strongest reportable tonal centre on the cover without calling it confirmed", () => {
+    const input = structuredClone(ambiguousAudioFixture) as any;
+    input.sonicDna.keyConfidence = 0.12;
+    const label = buildCoverKeyLabel(input, adaptReportV2(input));
+    expect(label).toBe("Possible: C major");
   });
 });
