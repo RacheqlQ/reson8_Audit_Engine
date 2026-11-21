@@ -181,8 +181,8 @@ describe("A4 report layout and fixture coverage",()=>{
   const input=structuredClone(fullAudioFixture) as AuditReportInput;
   input.evidence={...input.evidence,fixture:false,masterAudio:{evidenceClass:"OBSERVED",provenance:"uploaded_audio_master"}};
   const report=planAuditReportPages(input,"full").flatMap(page=>[page.title,...page.text]).join(" ");
-  expect(report).toContain("No provisional master-derived mood or energy labels were produced by this run");
-  expect(report).not.toContain("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs.");
+  expect(report).toContain("No supported mood or energy description is available from this recording.");
+  expect(report).not.toMatch(/confidence|calibrated|Goertzel|FFT|harmonic chroma/i);
   expect(report).not.toMatch(/Mood classification: Not performed — no validated audio mood model is configured/i);
  });
  it("uses evidence-derived dimensions and keeps artistic judgement unscored",()=>{
@@ -416,15 +416,15 @@ describe("report evidence integrity",()=>{
 
 
 describe("Phase 2 window-consensus report diagnostics", () => {
- it("renders tempo and key window stability without presenting bootstrap bounds as calibrated confidence", () => {
+ it("summarizes tempo and key consistency without exposing raw diagnostics", () => {
   const rows=sonicDashboardRowsForReport({
    provenance:"uploaded_audio_master",
    rhythmFeatures:{windowConsensus:{winner:"120",windowCount:6,observedAgreement:1,lowerAgreementBound:0.67,upperAgreementBound:1,method:"deterministic_window_bootstrap"}},
    harmonicFeatures:{windowConsensus:{winner:"C:major",windowCount:8,observedAgreement:0.875,lowerAgreementBound:0.5,upperAgreementBound:1,method:"deterministic_window_bootstrap"}},
   },true);
-  expect(rows.find(row=>row.label==="TEMPO WINDOW CONSENSUS")?.value).toContain("120 across 6 windows");
+  expect(rows.find(row=>row.label==="TEMPO READINGS ACROSS SECTIONS")?.value).toContain("broadly consistent across the analyzed sections");
   expect(rows.find(row=>row.label==="TEMPO WINDOW CONSENSUS")?.value).toContain("not a calibrated probability");
-  expect(rows.find(row=>row.label==="KEY WINDOW CONSENSUS")?.value).toContain("C:major across 8 windows");
+  expect(rows.find(row=>row.label==="KEY READINGS ACROSS SECTIONS")?.value).toContain("broadly consistent across the analyzed sections");
   expect(rows.find(row=>row.label==="KEY WINDOW CONSENSUS")?.value).toContain("95% bootstrap resampling interval");
  });
  it("states unavailable when window evidence is absent or tied",()=>{
@@ -461,17 +461,18 @@ describe("Sonic DNA provisional candidate reporting", () => {
       },
     }, true);
     expect(rows.find((row) => row.label === "TEMPO BPM")?.value).toBeNull();
-    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 (provisional");
-    expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
-      .toContain("165 BPM candidate; half-time 82.5 BPM");
+    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 BPM (provisional; confirm by listening)");
+    expect(rows.find((row) => row.label === "ALTERNATIVE PULSE READINGS")?.value)
+      .toContain("half-time 82.5 BPM");
     expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
       .not.toContain("double-time 330.0 BPM");
     expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
-      .toContain("not independently validated beat interpretations");
+      .not.toMatch(/independently validated|candidate|confidence|score/i);
     const reportInput=structuredClone(fullAudioFixture) as AuditReportInput;
     reportInput.sonicDna={...reportInput.sonicDna,provenance:"uploaded_audio_master",tempoCandidateBpm:165,tempoConfidence:0.28};
     const reportText=planAuditReportPages(reportInput,"full").flatMap((page)=>[page.title,...page.text]).join(" ");
-    expect(reportText).toContain("165 BPM candidate; half-time 82.5 BPM");
+    expect(reportText).toContain("165 BPM (provisional; confirm by listening)");
+    expect(reportText).toContain("half-time 82.5 BPM");
     expect(reportText).not.toContain("double-time 330.0 BPM");
     expect(reportText).toContain("derived arithmetic relationships only; not independently validated beat interpretations");
     expect(rows.find((row) => row.label === "TEMPO DETECTION REASON")?.value).toContain("reliable result");
