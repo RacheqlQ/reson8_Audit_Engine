@@ -379,7 +379,10 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
       const tonalConcentration = clamp(1 - entropy / Math.log(12));
       const harmonicClarity = clamp(result.peaks.length / 8, 0.15, 1);
       const salience = clamp(tonalConcentration * harmonicClarity);
-      const frameWeight = frameEnergy * Math.max(0.1, salience);
+      // Percussive/noisy frames below the same salience floor used by the
+      // resolver do not contribute chroma votes or bass-root anchors.
+      if (salience < 0.12) continue;
+      const frameWeight = frameEnergy * salience;
       for (let pitch = 0; pitch < 12; pitch++) {
         chromaAggregate[pitch] += normalizedFrame[pitch]! * frameWeight;
         bassAggregate[pitch] += normalizedBassFrame[pitch]! * frameWeight;
