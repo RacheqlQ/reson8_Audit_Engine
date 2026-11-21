@@ -58,7 +58,7 @@ describe("analysis-to-report integration contracts", () => {
 
   it("uses the same sanitized item set for A&R risk lists and summary counts", () => {
     const risks = reportableAssessmentItems([
-      "Tempo confidence remains below the reporting threshold.",
+      "Tempo reliability remains below the reporting threshold.",
       "Vocal analysis: Not performed because no validated vocal model is configured.",
     ]);
     const rows = buildStrengthRiskChartRows([], risks);
