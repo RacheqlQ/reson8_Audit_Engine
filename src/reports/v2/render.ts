@@ -3,6 +3,7 @@ import { buildArNotesDecisionContext, chartsForSection, metadataFieldStatus, met
 import { loadReportFonts } from "../fonts.js";
 import { chartEvidenceIntegrityErrors, chartPanelHeight, countEvidenceLayers, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
+import { hasReportableKeyCandidates } from "../evidence-guardrails.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
 import { sanitizePublicReportLines, sanitizePublicReportLine } from "./public-language.js";
 
