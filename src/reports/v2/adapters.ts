@@ -252,9 +252,12 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const tempoConfidence = confidence(audio?.tempoConfidence);
   const tempoReliable = isReliableTempo(audio as Parameters<typeof isReliableTempo>[0]);
   const keyConfidence = confidence(audio?.keyConfidence);
-  const keyReliable = isReliableKey(audio);
   const harmonic = record(audio?.harmonicFeatures);
-  const resolutionValue = record(harmonic?.tonalResolution) ?? record(audio?.tonalResolution);
+  // AuditReportInput is the persisted report boundary; prefer its explicit
+  // resolver payload, then fall back to the Sonic DNA compatibility fields.
+  const resolutionValue = record(input.tonalResolution) ?? record(harmonic?.tonalResolution) ?? record(audio?.tonalResolution);
+  const audioWithResolution = audio ? { ...audio, tonalResolution: resolutionValue } : null;
+  const keyReliable = isReliableKey(audioWithResolution);
   const tonalResolution = resolutionValue && (resolutionValue.status === "CONFIRMED" || resolutionValue.status === "PROVISIONAL" || resolutionValue.status === "UNAVAILABLE")
     ? resolutionValue as unknown as TonalResolution : null;
   const energyValue = firstFinite(audio, ["energy", "rmsEnergy", "loudnessLufs", "rmsLevelDbfs"]);
@@ -288,7 +291,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       notYetMeasured.push("Tempo candidate " + candidate + " BPM abstained: outside the plausible 40–220 BPM reporting range.");
     }
   }
-  if (!keyReliable && hasReportableKeyCandidates(audio)) {
+  if (!keyReliable && hasReportableKeyCandidates(audioWithResolution)) {
     const candidates = Array.isArray(tonalResolution?.candidates)
       ? tonalResolution.candidates.map(item => ({ key: item.tonic, mode: item.mode }))
       : Array.isArray(harmonic?.topCandidates) ? harmonic.topCandidates.map(record).filter(Boolean).map(item => ({ key: item?.key, mode: item?.mode })) : [];
