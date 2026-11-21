@@ -56,9 +56,10 @@ function drawWrapped(page:PDFPage,value:string,x:number,y:number,width:number,fo
 export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):string{
  if(data.key.value!==null)return String(data.key.value);
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const resolution=rec(harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
- const candidates=hasReportableKeyCandidates(rec(input.sonicDna))
-  ?(arr(harmonic.topCandidates).length?arr(harmonic.topCandidates):arr(resolution.candidates)).map(value=>rec(value)):[];
+ const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
+ const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
+ const candidates=hasReportableKeyCandidates(tonalAudio)
+  ?(arr(resolution.candidates).length?arr(resolution.candidates):arr(harmonic.topCandidates)).map(value=>rec(value)):[];
  const first=candidates.find(item=>(typeof item.key==="string"&&item.key.trim())||(typeof item.tonic==="string"&&item.tonic.trim()));
  if(first)return "Possible: "+[str(first.key??first.tonic,""),str(first.mode,"")].filter(Boolean).join(" ");
  if(resolution.status==="UNAVAILABLE")return "Unavailable";
@@ -134,10 +135,11 @@ export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
 }
 export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const resolution=rec(harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
+ const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
+ const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
  const lines:string[]=[];
- const rawCandidates=arr(harmonic.topCandidates).length?arr(harmonic.topCandidates):arr(resolution.candidates);
- const candidates=(hasReportableKeyCandidates(rec(input.sonicDna))?rawCandidates:[]).map(value=>rec(value))
+ const rawCandidates=arr(resolution.candidates).length?arr(resolution.candidates):arr(harmonic.topCandidates);
+ const candidates=(hasReportableKeyCandidates(tonalAudio)?rawCandidates:[]).map(value=>rec(value))
   .filter(item=>typeof (item.key??item.tonic)==="string").slice(0,4)
   .map(item=>[str(item.key??item.tonic,""),str(item.mode,"")].filter(Boolean).join(" "));
  if(resolution.status==="CONFIRMED")lines.push("Confirmed audio-derived tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+".");
@@ -371,9 +373,10 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  const order=["C","G","D","A","E","B","F#","C#","G#","D#","A#","F"];
  const cx=x+93,cy=top-84,radius=48;
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const resolution=rec(harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
- const rawCandidates=arr(harmonic.topCandidates).length?arr(harmonic.topCandidates):arr(resolution.candidates);
- const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?rawCandidates.map(value=>rec(value)):[];
+ const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
+ const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
+ const rawCandidates=arr(resolution.candidates).length?arr(resolution.candidates):arr(harmonic.topCandidates);
+ const candidates=hasReportableKeyCandidates(tonalAudio)?rawCandidates.map(value=>rec(value)):[];
  const candidateNotes=new Set(candidates.map(item=>normalizeCircleNote(str(item.key??item.tonic,""))).filter(Boolean));
  const confirmed=data.key.value===null?"":normalizeCircleNote(String(data.key.value));
  order.forEach((note,index)=>{
@@ -392,7 +395,7 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
     ?"No single root key is confirmed. Highlighted notes are possible tonal centres, not a final answer."
     :"Confirmed song key: "+String(data.key.value)+".";
  drawWrapped(page,status,x+174,top-52,width-190,fonts.regular,8,C.ink,11);
- const names=candidates.slice(0,4).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" ")).filter(Boolean);
+ const names=candidates.slice(0,4).map(item=>[str(item.key??item.tonic,""),str(item.mode,"")].filter(Boolean).join(" ")).filter(Boolean);
  if(names.length)drawWrapped(page,"Candidates: "+names.join(" · "),x+174,top-91,width-190,fonts.bold,7,C.muted,9);
  return height;
 }
