@@ -201,12 +201,30 @@ export function buildNextActionLine(input: AuditReportInput): string {
  return "Recommended next step: "+(recommendation||firstGap||"Not supplied");
 }
 
-export function buildReleaseFramingLine(input: AuditReportInput): string {
- const release=Date.parse(String(rec(input.evidence).releaseDate??""));
+export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
+ const evidence=rec(input.evidence),raw=str(evidence.releaseDate,"");
+ const valid=/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)&&Number.isFinite(Date.parse(raw+"T00:00:00Z"));
+ const source=metadataFieldSource(evidence,"releaseDate").replace("Field source: ","");
+ const status=metadataFieldStatus(evidence,"releaseDate");
+ const attributed=source!=="unavailable"&&(status.startsWith("Cross-checked")||status.startsWith("Available")||status.startsWith("Returned")||Boolean(rec(evidence.fieldProvenance).releaseDate));
+ const verdict=valid&&attributed?"DETERMINED":"UNVERIFIED";
  const generated=Date.parse(String(input.generatedAt??""));
- return Number.isFinite(release)&&Number.isFinite(generated)&&release<generated
-  ? "Post-release framing: release date is in the past."
-  : "Release framing: date does not establish a past release.";
+ const release=valid?Date.parse(raw+"T00:00:00Z"):NaN;
+ return {verdict,context:verdict==="DETERMINED"&&Number.isFinite(generated)&&release<generated?"POST-RELEASE":"RELEASE DATE NOT RECONCILED",date:valid?raw:"Date not reconciled",source:attributed?source:"Source not reconciled"};
+}
+export function buildReleaseFramingLine(input: AuditReportInput): string {
+ const status=buildReleaseDateStatus(input);
+ return status.verdict==="DETERMINED"
+  ? "Release date verdict: DETERMINED — "+status.date+" · "+status.source+" · "+status.context+". Campaign guidance is framed as post-release."
+  : "Release date is not source-reconciled; campaign timing must be confirmed before scheduling.";
+}
+export function buildDays6190Plan(input: AuditReportInput): string {
+ const release=buildReleaseDateStatus(input);
+ const anchor=release.verdict==="DETERMINED"?"the determined "+release.date+" release":"the confirmed release date once reconciled";
+ return "Post-release catalog momentum, anchored to "+anchor+": review the prior release window and current catalog identity without assuming performance outcomes; refresh the curator and DSP pitch pack, then follow up only with contacts who accepted or requested material; expand approved creator/UGC excerpts and visual treatments around human-verified hook windows; lock artist, title, version, ISRC, UPC, EP-versus-album mapping, rights splits and master ownership against distributor and provider records; close the 90-day review by comparing source-attributed platform reports and campaign activity with the pre-review baseline, documenting unavailable metrics rather than estimating streams, revenue, reach or conversion.";
+}
+export function buildReportSectionTitles(input:AuditReportInput,tier:AuditReportTier="sample"):string[]{
+ return buildReportSections(input,adaptReportV2(input),tier).map(page=>page.title);
 }
 
 export function buildPlaylistProviderStatusLines(input: AuditReportInput): string[] {
