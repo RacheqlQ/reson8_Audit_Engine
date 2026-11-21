@@ -152,6 +152,10 @@ try{
  await writeFile(evidenceCheckPath,unsafeBytes);
  const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
  const normalizedUnsafeText=unsafeText.replace(/\s+/g," ").trim();
+ const forbiddenPublicTerms=["assessment confidence","confidence-qualified","raw confidence score","Goertzel","fft_harmonic_chroma_ensemble","high_frequency_transient_autocorrelation"];
+ for(const term of forbiddenPublicTerms){
+  if(normalizedUnsafeText.toLocaleLowerCase().includes(term.toLocaleLowerCase()))throw new Error("Generated PDF exposed internal analysis terminology: "+term);
+ }
  const internalStatusNotices=[
   "Vocal analysis: Not performed",
   "Vocal presence/absence is unknown",
