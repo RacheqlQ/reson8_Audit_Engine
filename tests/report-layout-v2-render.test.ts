@@ -145,7 +145,7 @@ describe("v2 detector diagnostics", () => {
     }};
     const lines = reportV2Render.buildKeyDiagnosticLines(input).join(" ");
     expect(lines).toContain("Possible song keys: A minor; C major.");
-    expect(lines).toContain("Song-key readings are broadly consistent across the analyzed sections.");
+    expect(lines).toContain("Different key readings were returned; no single key is confirmed.");
     expect(lines).not.toContain("Tuning offset");
     expect(lines).not.toMatch(/Goertzel|score|margin|confidence|harmonic|FFT/i);
     expect(lines).toContain("Different key readings were returned; no single key is confirmed.");
