@@ -707,7 +707,7 @@ export function createSupabaseAuditStore(
           : job.error_message === "GROQ_ASSESSMENT_TIMEOUT" ? "AI assessment: the analysis exceeded its ten-minute time limit. Please retry later."
           : typeof job.error_message === "string" && /^(?:Catalog lookup|Audio intake|Audio recognition|Sonic DNA|AI assessment|Sample report|Full report|Audit processing):/.test(job.error_message) ? job.error_message
           : job.status === "failed" ? "Audit processing: a required stage could not be completed. Please retry the audit." : null,
-        full: full ? { available: true, version: full.version } : { available: false }, catalogUrlsSubmitted, catalogSources,
+        full: full ? { available: full.access_status === "available", version: full.version } : { available: false }, catalogUrlsSubmitted, catalogSources,
       };
       console.info(JSON.stringify({ event: "audit_status_read_completed", durationMs: Date.now() - statusStartedAt, queryCount: 3 }));
       return result;
