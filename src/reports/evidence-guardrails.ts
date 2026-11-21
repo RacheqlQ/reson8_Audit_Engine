@@ -40,6 +40,22 @@ export function hasMultipleTuningWindows(value: Record<string, unknown> | null |
     && typeof windows === "number" && Number.isInteger(windows) && windows >= 2;
 }
 
+export const MIN_REPORTABLE_KEY_CANDIDATE_CONFIDENCE = 0.2;
+
+export function hasReportableKeyCandidates(value: Record<string, unknown> | null | undefined): boolean {
+  if (!value || typeof value.keyConfidence !== "number" || !Number.isFinite(value.keyConfidence)
+    || value.keyConfidence < MIN_REPORTABLE_KEY_CANDIDATE_CONFIDENCE) return false;
+  const harmonic = value.harmonicFeatures && typeof value.harmonicFeatures === "object"
+    ? value.harmonicFeatures as Record<string, unknown> : null;
+  return Array.isArray(harmonic?.topCandidates) && harmonic.topCandidates.some((candidate) =>
+    candidate && typeof candidate === "object"
+      && typeof (candidate as Record<string, unknown>).key === "string"
+      && typeof (candidate as Record<string, unknown>).mode === "string"
+      && typeof (candidate as Record<string, unknown>).score === "number"
+      && Number.isFinite((candidate as Record<string, unknown>).score),
+  );
+}
+
 export function isReliableKey(value: Record<string, unknown> | null | undefined): boolean {
   if (!value) return false;
   const key = value.key;
