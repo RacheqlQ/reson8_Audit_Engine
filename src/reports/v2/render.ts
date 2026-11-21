@@ -149,9 +149,9 @@ export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
  if(harmonic.independentEstimatorDisagrees===true)lines.push("Different key readings were returned; no single key is confirmed.");
  if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("The leading candidates form a relative major/minor pair; no single key is asserted.");
  if(finite(resolution.windowAgreement))lines.push("Window agreement: "+(resolution.windowAgreement*100).toFixed(0)+"%.");
- if(finite(resolution.bootstrapShare))lines.push("Bootstrap top-rank share: "+(resolution.bootstrapShare*100).toFixed(0)+"% of deterministic resamples; this is not a calibrated probability.");
- if(finite(resolution.downbeatAnchorWindowCount))lines.push("Strong bass-root anchors: "+resolution.downbeatAnchorWindowCount+" of "+str(resolution.validWindowCount, "0")+" valid tonal windows.");
- if(finite(resolution.cadenceWeightedWindowCount)&&resolution.cadenceWeightedWindowCount>0)lines.push("Outro-resolution weighting was applied to "+resolution.cadenceWeightedWindowCount+" tonal window(s).");
+ if(finite(resolution.bootstrapShare))lines.push("Bootstrap rank share (not a calibrated probability): "+(resolution.bootstrapShare*100).toFixed(0)+"%.");
+ if(finite(resolution.downbeatAnchorWindowCount))lines.push("Bass-root anchors: "+resolution.downbeatAnchorWindowCount+"/"+str(resolution.validWindowCount, "0")+" windows.");
+ if(finite(resolution.cadenceWeightedWindowCount)&&resolution.cadenceWeightedWindowCount>0)lines.push("Outro weighting: "+resolution.cadenceWeightedWindowCount+" window(s).");
  const reasonCodes=arr(resolution.reasonCodes).filter((code):code is string=>typeof code==="string");
  const reasonText=reasonCodes.map(code=>({
   RELATIVE_MAJOR_MINOR_AMBIGUITY:"Relative major/minor ambiguity remains.",
@@ -401,6 +401,14 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  drawWrapped(page,status,x+174,top-52,width-190,fonts.regular,8,C.ink,11);
  const names=candidates.slice(0,4).map(item=>[str(item.key??item.tonic,""),str(item.mode,"")].filter(Boolean).join(" ")).filter(Boolean);
  if(names.length)drawWrapped(page,"Candidates: "+names.join(" · "),x+174,top-91,width-190,fonts.bold,7,C.muted,9);
+ const diagnosticLines=buildKeyDiagnosticLines(input).filter(line=>
+  /^(Window agreement|Bootstrap rank share|Runner-up margin|Bass-root anchors|Outro weighting):/.test(line)
+ );
+ let diagnosticY=top-108;
+ for(const line of diagnosticLines.slice(0,5)){
+  const used=drawWrapped(page,line,x+174,diagnosticY,width-190,fonts.regular,5.8,C.muted,6.8);
+  diagnosticY-=used;
+ }
  return height;
 }
 function drawCompactSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts,top:number):number{
