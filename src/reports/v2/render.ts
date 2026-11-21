@@ -100,41 +100,40 @@ function detectorNumber(value: unknown, digits = 3): string | null {
  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : null;
 }
 export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
- const sonic=rec(input.sonicDna), rhythm=rec(sonic.rhythmFeatures), independent=rec(rhythm.independentEstimator);
+ const rhythm=rec(rec(input.sonicDna).rhythmFeatures);
  const lines:string[]=[];
- const reportableBpm=(value:unknown):value is number=>finite(value)&&value>=40&&value<=220;
- const candidates=arr(rhythm.candidateScores).map(value=>rec(value)).filter(item=>reportableBpm(item.bpm)&&finite(item.score))
-  .slice(0,5).map(item=>String(item.bpm)+" BPM (score "+Number(item.score).toFixed(3)+")");
- if(candidates.length)lines.push("Primary detector candidates: "+candidates.join("; "));
+ const candidates=arr(rhythm.candidateScores).map(value=>rec(value))
+  .filter(item=>finite(item.bpm)&&item.bpm>=40&&item.bpm<=220)
+  .slice(0,4).map(item=>String(item.bpm)+" BPM");
+ if(candidates.length)lines.push("Possible tempo readings: "+candidates.join("; ")+". Treat these as provisional until confirmed by listening.");
  else if(Array.isArray(rhythm.candidateBpms)) {
-  const fallbackCandidates=rhythm.candidateBpms.filter(reportableBpm).slice(0,5);
-  if(fallbackCandidates.length)lines.push("Primary detector candidates: "+fallbackCandidates.map(value=>String(value)).join(", ")+" BPM");
+  const fallback= rhythm.candidateBpms.filter(value=>finite(value)&&value>=40&&value<=220).slice(0,4);
+  if(fallback.length)lines.push("Possible tempo readings: "+fallback.join("; ")+" BPM. Treat these as provisional until confirmed by listening.");
  }
- if(finite(rhythm.confidence))lines.push("Primary detector raw confidence score: "+Number(rhythm.confidence).toFixed(3)+" (not a calibrated probability).");
- if(reportableBpm(rhythm.alternateTempo))lines.push("Alternate half/double-time candidate: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
- if(reportableBpm(independent.bpm))lines.push("Independent low-frequency envelope estimate: "+Number(independent.bpm).toFixed(1)+" BPM; raw score "+(detectorNumber(independent.score)??"not supplied")+".");
+ if(finite(rhythm.alternateTempo)&&rhythm.alternateTempo>=40&&rhythm.alternateTempo<=220)lines.push("Alternative pulse reading: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
  const consensus=rec(rhythm.windowConsensus);
- if(finite(consensus.windowCount)&&consensus.windowCount>0)lines.push("Window stability: "+str(consensus.winner,"no consensus")+" across "+consensus.windowCount+" valid windows; observed agreement "+(detectorNumber(consensus.observedAgreement)??"not supplied")+".");
- lines.push("Beat grid: "+str(rhythm.beatGridStatus,"not determined")+"; "+arr(rhythm.beatTimesSeconds).length+" candidate beat timestamps; downbeat grouping is diagnostic only.");
+ if(finite(consensus.observedAgreement))lines.push(consensus.observedAgreement>=0.7
+  ?"Tempo readings are broadly consistent across the analyzed sections."
+  :"Tempo readings vary across the analyzed sections; no single tempo is confirmed.");
+ if(arr(rhythm.beatTimesSeconds).length)lines.push("A tentative beat guide is available; confirm the beat placement by listening.");
  const abstention=str(rhythm.abstentionReason,"");
- if(abstention&&abstention!=="Not supplied")lines.push("Tempo abstention: "+abstention);
- return lines.length?lines:["No persisted tempo-detector diagnostics were supplied."];
+ if(abstention&&abstention!=="Not supplied")lines.push("Tempo not confirmed: "+abstention);
+ return lines.length?lines:["No tempo result is available from the supplied recording."];
 }
 export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
- const sonic=rec(input.sonicDna), harmonic=rec(sonic.harmonicFeatures), independent=rec(harmonic.independentEstimator);
+ const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
  const lines:string[]=[];
  const candidates=arr(harmonic.topCandidates).map(value=>rec(value)).filter(item=>typeof item.key==="string")
-  .slice(0,5).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" ")+" (score "+(detectorNumber(item.score)??"not supplied")+")");
- if(candidates.length)lines.push("Primary tonal candidates: "+candidates.join("; "));
- if(finite(harmonic.confidence))lines.push("Primary key raw confidence score: "+Number(harmonic.confidence).toFixed(3)+" (not a calibrated probability).");
- if(finite(harmonic.segmentAgreement))lines.push("Segment agreement: "+Number(harmonic.segmentAgreement).toFixed(3)+" across "+(finite(harmonic.analysisWindows)?harmonic.analysisWindows:"unknown")+" analysis windows.");
- if(finite(harmonic.tuningCents))lines.push("Tuning offset: "+Number(harmonic.tuningCents).toFixed(1)+" cents; evidence windows: "+(finite(harmonic.tuningEvidenceWindows)?harmonic.tuningEvidenceWindows:"not supplied")+".");
- if(typeof independent.key==="string")lines.push("Independent Goertzel estimate: "+independent.key+(typeof independent.mode==="string"?" "+independent.mode:"")+"; raw score "+(detectorNumber(independent.score)??"not supplied")+"; margin "+(detectorNumber(independent.margin)??"not supplied")+".");
- if(harmonic.independentEstimatorDisagrees===true)lines.push("Independent estimator disagreement: yes; no forced consensus is applied.");
- if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("Relative major/minor ambiguity detected; single-key assertion withheld.");
+  .slice(0,4).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" "));
+ if(candidates.length)lines.push("Possible song keys: "+candidates.join("; ")+". These are provisional possibilities, not a confirmed key.");
+ if(finite(harmonic.segmentAgreement))lines.push(harmonic.segmentAgreement>=0.7
+  ?"Song-key readings are broadly consistent across the analyzed sections."
+  :"Song-key readings vary across sections; no single key is confirmed.");
+ if(harmonic.independentEstimatorDisagrees===true)lines.push("Different key readings were returned; no single key is confirmed.");
+ if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("The recording may fit a relative major/minor pair; a single key is not confirmed.");
  const limitation=str(harmonic.limitation,"");
- if(limitation&&limitation!=="Not supplied")lines.push("Key abstention / limitation: "+limitation);
- return lines.length?lines:["No persisted key-detector diagnostics were supplied."];
+ if(limitation&&limitation!=="Not supplied")lines.push("Song key not confirmed: "+limitation);
+ return lines.length?lines:["No song-key result is available from the supplied recording."];
 }
 
 export function buildEvidenceLedgerSummary(labels: Array<{ label: string }>): string {
