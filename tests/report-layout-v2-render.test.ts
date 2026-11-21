@@ -4,6 +4,7 @@ import { buildCoverKeyLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
+import { sanitizePublicReportLine } from "../src/reports/v2/public-language.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
@@ -345,5 +346,18 @@ describe("v2 final-page and executive report contracts", () => {
     expect(titles).not.toContain("Evidence and limitations");
     expect(titles).not.toContain("Tempo and energy spectrum");
     expect(titles.join(" ")).not.toMatch(/INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i);
+  });
+});
+
+
+describe("public PDF measurement formatting", () => {
+  it("preserves loudness units and labels while removing dead-end market verdicts", () => {
+    const metrics = sanitizePublicReportLine("Integrated loudness -11.4 LUFS · Loudness range 5.0 LU · True peak +0.8 dBFS · RMS signal level -13.2 dBFS");
+    expect(metrics).toContain("Integrated loudness -11.4 LUFS");
+    expect(metrics).toContain("True peak +0.8 dBFS");
+    expect(metrics).toContain("RMS signal level -13.2 dBFS");
+    expect(metrics).not.toMatch(/overall playback level|peak level/i);
+    expect(sanitizePublicReportLine("Market evidence: Insufficient — no verified commercial record.")).toContain("Market proposition: PROPOSED");
+    expect(sanitizePublicReportLine("INSUFFICIENT EVIDENCE")).toBe("PROPOSED REVIEW");
   });
 });
