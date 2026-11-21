@@ -41,6 +41,7 @@ describe("report access key normalization and issuance", () => {
   it("accepts a labeled or grouped copy of the issued key without truncating malformed values", () => {
     const key = "0123456789abcdef".repeat(4);
     expect(normalizeReportAccessKey("Report access key: " + key.toUpperCase()).value).toBe(key);
+    expect(normalizeReportAccessKey("Full-report access key: " + key.toUpperCase()).value).toBe(key);
     expect(normalizeReportAccessKey("0x" + key).valid).toBe(true);
     expect(normalizeReportAccessKey(key.match(/.{1,8}/g)!.join("-")).value).toBe(key);
     expect(normalizeReportAccessKey(key + "0").valid).toBe(false);
