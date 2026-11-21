@@ -286,7 +286,7 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
  if (hypotheses.length) lines.push("Related styles to review: " + hypotheses.join("; "));
  if (adjacent.length) lines.push("Other styles to consider: " + adjacent.join("; "));
  if (!lines.length) {
-  lines.push("PROPOSED market thesis: use the verified recording identity and measured sonic profile to test a differentiated Afro-influenced positioning hypothesis with specialist curators and independent partners.");
+  lines.push("PROPOSED market thesis: use the reconciled recording identity and measured sonic profile to test a differentiated Afro-influenced positioning direction with specialist curators and independent partners.");
   lines.push("Validation route: verify platform genre attribution, build a source-backed comparable-recording shortlist, and test the proposition through human-reviewed curator and creator outreach.");
   lines.push("Evidence boundary: this is a strategic proposition, not proof of audience overlap, commercial reach, listener demand or campaign performance.");
  }
@@ -399,7 +399,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   ]},
   {title:"Evidence ledger and scorecard",blocks:[],lines:[
    buildEvidenceLedgerSummary(arr(a.evidenceLabels).map(value => rec(value) as { label: string })),
-   "Headline score: "+(data.headlineScore===null?"N/D — no scored headline value supplied":data.headlineScore+"/100"),
+   "Composite score: "+(data.headlineScore===null?"Not issued — validated dimension inputs do not support a composite score; no synthetic score is substituted.":data.headlineScore+"/100"),
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
    ...sanitizePublicReportLines(data.notYetMeasured).slice(0,3),
    ...publicReportLimitations(a.limitations).slice(0,2),
