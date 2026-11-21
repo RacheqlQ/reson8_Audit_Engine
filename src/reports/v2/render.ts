@@ -194,11 +194,11 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
  }
  const hypotheses = arr(assessment.laneHypotheses).map(value => str(value, "")).filter(Boolean);
  const adjacent = arr(assessment.adjacentLanes).map(value => str(value, "")).filter(Boolean);
- if (hypotheses.length) lines.push("Lane hypotheses: " + hypotheses.join("; ") + " [Hypothesis]");
- if (adjacent.length) lines.push("Adjacent lanes to verify: " + adjacent.join("; ") + " [Hypothesis]");
+ if (hypotheses.length) lines.push("Related styles to review: " + hypotheses.join("; "));
+ if (adjacent.length) lines.push("Other styles to consider: " + adjacent.join("; "));
  if (!lines.length) {
-  lines.push("Positioning not established — no provider-attributed genre or evidenced lane hypothesis was supplied.");
-  lines.push("Required evidence: provider-returned genre with source attribution and verified comparable artists or recordings.");
+  lines.push("Genre positioning is not established because no music-platform genre listing or verified comparable artists were supplied.");
+  lines.push("What is needed: a music-platform genre listing and verified comparable artists or recordings.");
   lines.push("Decision boundary: sonic descriptors alone do not establish audience overlap, music-platform fit, commercial reach or market demand.");
  }
  const basis = str(assessment.positioningBasis ?? assessment.positioningRationale, "");
@@ -253,8 +253,8 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
   });
  });
  const tableBottom=top-headerH-rows.length*rowH,summaryTop=tableBottom-10;
- const checked=arr(e.metadataSourcesChecked).map(v=>str(v,"")).filter(Boolean).join(", ")||"Not supplied";
- const providers=arr(e.sourceProviders).map(v=>str(v,"")).filter(Boolean).join(", ")||"Not supplied";
+ const sourceName=(value:unknown)=>({apple_music:"Apple Music",id3:"Audio file tags",audd:"AudD",musicbrainz:"MusicBrainz",spotify:"Spotify",tidal:"TIDAL",deezer:"Deezer"} as Record<string,string>)[str(value,"").toLowerCase()]??str(value,"");\n const checked=arr(e.metadataSourcesChecked).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
+ const providers=arr(e.sourceProviders).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
  const summaryHeight=card(page,M,summaryTop,width,"Provider lookup and reconciliation context",[
   "Sources checked: "+checked,
   "Provider responses: "+providers,
@@ -425,7 +425,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
   const panelHeight=38+Math.ceil(rows.length/2)*23+14,top=y-8,bottom=top-panelHeight;
   if(bottom>=72){
    page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
-   page.drawText("SUPPLIED AUDIO PROFILE",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
+   page.drawText("RECORDING OVERVIEW",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
    rows.forEach(([label,value],index)=>{
     const col=index%2,row=Math.floor(index/2),x=M+12+col*250,yy=top-34-row*23;
     page.drawText(label,{x,y:yy,size:6.4,font:fonts.regular,color:C.muted});
