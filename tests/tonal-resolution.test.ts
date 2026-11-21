@@ -70,3 +70,15 @@ describe("deterministic tonal resolution geometry", () => {
     expect(result.reasonCodes).toContain("INSUFFICIENT_TONAL_EVIDENCE");
   });
 });
+
+
+describe("tonal bootstrap diagnostics", () => {
+  it("reports per-candidate bootstrap rank shares for split relative-key windows", () => {
+    const split = [...windows(0, "major", 4), ...windows(9, "minor", 4)];
+    const result = resolveTonalCentre(split);
+    expect(result.candidates[0]?.bootstrapShare).toBeGreaterThan(0);
+    expect(result.candidates.some(candidate => candidate.bootstrapShare > 0 && (
+      candidate.tonic !== result.tonic || candidate.mode !== result.mode
+    ))).toBe(true);
+  });
+});
