@@ -300,7 +300,7 @@ function windowConsensusSummary(value:unknown,_independent?:unknown):string|null
  const count=typeof record.windowCount==="number"&&Number.isInteger(record.windowCount)?record.windowCount:0;
  if(count<1)return null;
  const agreement=typeof record.observedAgreement==="number"&&Number.isFinite(record.observedAgreement)?record.observedAgreement:null;
- if(agreement===null)return "Readings were compared across multiple sections.";
+ if(agreement===null||typeof record.winner!=="string"||!record.winner.trim())return "No consistent reading was available across the analyzed sections.";
  return agreement>=0.7
   ?"Readings are broadly consistent across the analyzed sections."
   :"Readings vary across the analyzed sections; no single result is confirmed.";
