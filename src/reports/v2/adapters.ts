@@ -1,6 +1,7 @@
 import { hasMultipleTuningWindows, hasReportableKeyCandidates, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 import { hasSubmittedMasterAudio } from "../../audio/master-audio-evidence.js";
 import type { AuditReportInput } from "../generate-audit-report.js";
+import type { TonalResolution } from "../../audio/tonal-resolution.js";
 
 export type ConfidenceTag = "High" | "Medium" | "Low";
 export interface TimedPoint { timeSeconds: number; value: number; }
@@ -18,6 +19,7 @@ export interface MetricValue {
 export interface ReportV2Data {
   tempo: MetricValue;
   key: MetricValue;
+  tonalResolution: TonalResolution | null;
   energy: MetricValue;
   structure: TrackSection[] | null;
   energySeries: TimedPoint[] | null;
@@ -251,6 +253,10 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const tempoReliable = isReliableTempo(audio as Parameters<typeof isReliableTempo>[0]);
   const keyConfidence = confidence(audio?.keyConfidence);
   const keyReliable = isReliableKey(audio);
+  const harmonic = record(audio?.harmonicFeatures);
+  const resolutionValue = record(harmonic?.tonalResolution) ?? record(audio?.tonalResolution);
+  const tonalResolution = resolutionValue && (resolutionValue.status === "CONFIRMED" || resolutionValue.status === "PROVISIONAL" || resolutionValue.status === "UNAVAILABLE")
+    ? resolutionValue as unknown as TonalResolution : null;
   const energyValue = firstFinite(audio, ["energy", "rmsEnergy", "loudnessLufs", "rmsLevelDbfs"]);
   const energyConfidence = confidence(audio?.energyConfidence ?? audio?.rmsEnergyConfidence ?? audio?.loudnessConfidence);
   const energyMethod = methodOf(audio, ["energyMethod", "loudnessMethod", "method"]);
@@ -283,10 +289,15 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
     }
   }
   if (!keyReliable && hasReportableKeyCandidates(audio)) {
-    const harmonic = record(audio?.harmonicFeatures);
-    const candidates = Array.isArray(harmonic?.topCandidates) ? harmonic.topCandidates.map(record).filter(Boolean) : [];
-    const labels = candidates.map(item => [nonEmpty(item?.key), nonEmpty(item?.mode)].filter(Boolean).join(" ")).filter(Boolean);
-    if (labels.length) notYetMeasured.push(labels[0] + " (provisional harmonic candidate; alternatives: " + labels.slice(1).join(", ") + "; no single key asserted).");
+    const candidates = Array.isArray(tonalResolution?.candidates)
+      ? tonalResolution.candidates.map(item => ({ key: item.tonic, mode: item.mode }))
+      : Array.isArray(harmonic?.topCandidates) ? harmonic.topCandidates.map(record).filter(Boolean).map(item => ({ key: item?.key, mode: item?.mode })) : [];
+    const labels = candidates.map(item => [nonEmpty(item.key), nonEmpty(item.mode)].filter(Boolean).join(" ")).filter(Boolean);
+    if (labels.length) notYetMeasured.push(labels[0] + " (provisional tonal centre; alternatives: " + labels.slice(1).join(", ") + "; no confirmed tonic asserted).");
+    const reasons = tonalResolution?.reasonCodes ?? [];
+    if (reasons.length) notYetMeasured.push("Tonal resolution limitation: " + reasons.join(", ") + ".");
+  } else if (tonalResolution?.status === "UNAVAILABLE") {
+    notYetMeasured.push("Tonal resolution unavailable: insufficient stable harmonic evidence in the uploaded master.");
   }
   if (hasMultipleTuningWindows(audio)) {
     notYetMeasured.push("More than one tuning window was detected; a single tuning reference is not confirmed.");
@@ -309,6 +320,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       method: methodOf(record(audio?.harmonicFeatures), ["method"]) ?? methodOf(audio, ["keyMethod", "method"]),
       evidence: sourceLine(record(audio?.harmonicFeatures), "Uploaded-master harmonic evidence"),
     },
+    tonalResolution,
     energy: {
       value: energyDisplay,
       confidence: energyConfidence,
