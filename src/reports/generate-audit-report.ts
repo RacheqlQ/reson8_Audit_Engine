@@ -486,7 +486,7 @@ function sections(i:AuditReportInput):Section[]{
  const sonicDnaBody: string[] = [];
  if (hasAudio) {
   sonicDnaBody.push(e.fixture ? "FIXTURE VALUES — synthetic audio-profile test data" : "The Sonic DNA dashboard separates confirmed measurements from provisional findings and unavailable results. Only supported measurements are presented as confirmed.");
-  if (e.fixture !== true) sonicDnaBody.push(
+  if (true) sonicDnaBody.push(
    masterMoodTags.length || masterEnergyLabel
     ? "Mood and energy: these are provisional listening directions from the uploaded recording, not confirmed descriptions."
     : "No supported mood or energy description is available from this recording."
