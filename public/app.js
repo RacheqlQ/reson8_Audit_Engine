@@ -1,4 +1,4 @@
-import { normalizeReportAccessKey, readPdfResponse, triggerPdfDownload } from "./report-download.js?v=20261121-8";
+import { normalizeReportAccessKey, readPdfResponse, selectReportAccessKey, triggerPdfDownload } from "./report-download.js?v=20261121-9";
 import { createAuditPoller } from "./audit-polling.js?v=20261121-1";
 import { detectTrackPlatform } from "./dsp-url.js?v=20261116-2";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),resultName=document.querySelector("#resultName"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
@@ -193,7 +193,7 @@ function revealAccessToken(){
 }
 async function unlockFullReport(){
   const pastedKey=fullReportAccessKey.value;
-  const accessToken=pastedKey||reportAccessToken;
+  const accessToken=selectReportAccessKey(pastedKey,reportAccessToken);
   if(!accessToken){tokenSaveMessage.textContent="Paste this audit's private key before unlocking.";return;}
   const normalizedKey=normalizeReportAccessKey(accessToken);
   if(!/^[0-9a-f]{64}$/.test(normalizedKey)){tokenSaveMessage.textContent="This entry is not the issued 64-character private key. Use Copy key or reveal and paste the exact key for this audit.";return;}

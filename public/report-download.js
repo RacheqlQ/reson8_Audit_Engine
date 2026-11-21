@@ -12,6 +12,18 @@ export function normalizeReportAccessKey(input) {
   return value;
 }
 
+export function selectReportAccessKey(pastedInput, issuedInput) {
+  const pasted = normalizeReportAccessKey(pastedInput);
+  const issued = normalizeReportAccessKey(issuedInput);
+  const isValid = (value) => /^[0-9a-f]{64}$/.test(value);
+
+  // Prefer an explicitly pasted valid key. A malformed/stale field value must
+  // not shadow the valid capability already issued for this audit in memory.
+  if (isValid(pasted)) return pasted;
+  if (isValid(issued)) return issued;
+  return pasted || issued;
+}
+
 export async function readPdfResponse(response) {
   const contentType = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
 

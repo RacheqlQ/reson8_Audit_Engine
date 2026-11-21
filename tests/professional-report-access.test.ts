@@ -51,7 +51,7 @@ describe("job-scoped full-report capability experience", () => {
     expect(script).not.toContain('document.getElementById("unlockAuditId").textContent');
     expect(script).not.toContain('document.getElementById("unlockAuditId").textContent!==currentAuditPayload.jobId');
     expect(script).toContain("navigator.clipboard");
-    expect(script).toContain('const accessToken=pastedKey||reportAccessToken;');
+    expect(script).toContain('const accessToken=selectReportAccessKey(pastedKey,reportAccessToken);');
     expect(script).toContain('await downloadReport("full",normalizedKey)');
     expect(script).toContain('"x-reson8-report-token":accessToken');
     expect(script).not.toContain("triggerCredentialDownload(");

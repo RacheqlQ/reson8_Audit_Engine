@@ -73,7 +73,7 @@ describe("PR #39 issued access capability", () => {
   it("keeps the issued capability intact and passes manual keys only to their own request", async () => {
     const script = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
     expect(script).not.toContain("if(pastedKey)reportAccessToken=pastedKey");
-    expect(script).toContain('const accessToken=pastedKey||reportAccessToken;');
+    expect(script).toContain('const accessToken=selectReportAccessKey(pastedKey,reportAccessToken);');
     expect(script).toMatch(/await downloadReport\(["']full["'],\s*normalizedKey\)/);
     expect(script).toMatch(/async function downloadReport\(tier,\s*accessToken=reportAccessToken\)/);
     expect(script).toMatch(/"x-reson8-report-token":accessToken/);
