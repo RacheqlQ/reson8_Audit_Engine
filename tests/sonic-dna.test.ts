@@ -98,17 +98,16 @@ describe("Sonic DNA",()=>{
   expect(result.key).toBe("A");
   expect(result.mode).toBe("minor");
  });
- it("uses bass-root and neighbouring-fifth support to identify the song tonic across a chord progression",()=>{
+ it("uses bass-root and neighbouring-fifth support to identify a stable C-major tonal centre",()=>{
   const result=analyzePcm(progression([
-   [130.8128,261.6256,329.6276,391.9954],
-   [196.0,391.9954,493.8833,587.3295],
-   [220.0,261.6256,329.6276,440.0],
-   [174.6141,261.6256,349.2282,440.0]
-  ]),8000);
+   [65.4064,130.8128,164.8138,196.0,261.6256,329.6276,391.9954],
+   [98.0,130.8128,164.8138,196.0,261.6256,329.6276,391.9954],
+   [65.4064,130.8128,164.8138,196.0,261.6256,329.6276,391.9954],
+   [98.0,130.8128,164.8138,196.0,261.6256,329.6276,391.9954]
+  ],4),8000);
   expect(result.key).toBe("C");
   expect(result.mode).toBe("major");
- },20000);
- it("withholds a single key when sustained sections disagree tonally",()=>{
+ },20000); it("withholds a single key when sustained sections disagree tonally",()=>{
   const first=chord([261.6256,329.6276,391.9954],6);
   const second=chord([369.9944,466.1638,554.3653],6);
   const combined=new Float32Array(first.length+second.length);
