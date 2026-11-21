@@ -385,7 +385,10 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   const supportedScale = diatonicScalePitchClasses(best.key, best.mode);
   // A progression can move through different diatonic chord roots while staying
   // in one song key. Count scale membership, not identical per-window chord labels.
-  const agreement = segmentWinners.filter((winner) => supportedScale.has(winner.key)).length / segmentWinners.length;
+  const agreement = segmentProfiles.filter(profile => {
+    const scaleEnergy = profile.reduce((sum, value, pitch) => sum + (supportedScale.has(pitch) ? value : 0), 0);
+    return scaleEnergy >= 0.7;
+  }).length / segmentProfiles.length;
   const margin = best.score - second.score;
   const confidence = clamp((margin * 2.5 + 0.08) * (0.35 + 0.65 * agreement));
   const tuningCents = tuningValues.length ? weightedMedian(tuningValues) : 0;
