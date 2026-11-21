@@ -170,16 +170,14 @@ export function buildDecisionDimensions(input: AuditReportInput): DecisionDimens
   const audioMeasures = [
     ...(tempoMeasured ? ["tempo"] : []),
     ...(keyMeasured ? ["song key"] : []),
-    ...descriptiveMeasurements,
+    ...(descriptiveMeasurements.length ? ["recording profile"] : []),
   ];
   const audioStatus = !audioSubmitted
     ? "NOT MEASURED"
     : audioMeasures.length ? "MEASURED" : "ANALYSIS INCOMPLETE";
   const audioBasis = !audioSubmitted
-    ? "No uploaded-master provenance marker is present."
-    : audioMeasures.length
-      ? "Recording review: " + audioMeasures.join(", ") + ". These measurements do not establish artistic quality or final mastering suitability."
-      : "An uploaded master is recorded, but no supported technical measurements are available.";
+    ? "No uploaded recording was available for review."
+    : "The uploaded recording was reviewed. Only supported findings are presented; artistic quality and final mastering suitability require human review.";
 
   const identityStatus = conflicts.length
     ? "CONFLICTS OPEN"
