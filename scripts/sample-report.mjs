@@ -121,6 +121,7 @@ try{
  const unsafeInput=structuredClone(ambiguousAudioFixture);
  unsafeInput.assessment={
   ...unsafeInput.assessment,
+  confidence:0,
   limitations:[
    ...(Array.isArray(unsafeInput.assessment.limitations)?unsafeInput.assessment.limitations:[]),
    "Vocal analysis: Not performed - Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
