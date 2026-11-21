@@ -632,13 +632,20 @@ export function createSupabaseAuditStore(
         return { reason: "token_hash_mismatch", normalized };
       }
       const { data: reports, error: reportError } = await admin.from("audit_reports")
-        .select("storage_path,access_status").eq("audit_job_id", jobId).eq("tier", tier)
-        .order("version", { ascending: false }).limit(1);
+        .select("storage_path,access_status,content_type").eq("audit_job_id", jobId).eq("tier", tier)
+        .order("version", { ascending: false }).limit(20);
       if (reportError) throw new Error("Unable to diagnose audit report availability");
-      if (!reports?.length || reports[0]?.access_status !== "available") return { reason: "report_not_available", normalized };
-      const { data: object, error: storageError } = await admin.storage.from("audit-reports").download(reports[0].storage_path);
-      if (storageError || !object) return { reason: "storage_object_missing", normalized };
-      return { reason: null, normalized };
+      const availableReports = (reports ?? []).filter(report => report.access_status === "available");
+      if (!availableReports.length) return { reason: "report_not_available", normalized };
+      for (const report of availableReports) {
+        const { data: object, error: storageError } = await admin.storage.from("audit-reports").download(report.storage_path);
+        if (storageError || !object) continue;
+        const bytes = new Uint8Array(await object.arrayBuffer());
+        if (isPdf(bytes) || String(report.content_type).includes("json") || report.storage_path.endsWith(".json")) {
+          return { reason: null, normalized };
+        }
+      }
+      return { reason: "storage_object_missing", normalized };
     },
     async getAuditStatus(jobId) {
       const statusStartedAt = Date.now();
