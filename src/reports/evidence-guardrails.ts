@@ -40,7 +40,7 @@ export function hasMultipleTuningWindows(value: Record<string, unknown> | null |
     && typeof windows === "number" && Number.isInteger(windows) && windows >= 2;
 }
 
-export const MIN_REPORTABLE_KEY_CANDIDATE_CONFIDENCE = 0.2;
+export const MIN_REPORTABLE_KEY_CANDIDATE_CONFIDENCE = 0.1;
 
 export function hasReportableKeyCandidates(value: Record<string, unknown> | null | undefined): boolean {
   if (!value || typeof value.keyConfidence !== "number" || !Number.isFinite(value.keyConfidence)
