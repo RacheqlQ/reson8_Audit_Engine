@@ -27,6 +27,17 @@ function syncopatedSwingPulse(bpm:number,seconds=12,sampleRate=8000):Float32Arra
 function chord(freqs:number[],seconds=6,sampleRate=8000):Float32Array {
  return Float32Array.from({length:sampleRate*seconds},(_,i)=>freqs.reduce((sum,f)=>sum+Math.sin(2*Math.PI*f*i/sampleRate),0)/freqs.length);
 }
+function progression(chords:number[][],secondsPerChord=2,sampleRate=8000):Float32Array {
+ const segmentLength=sampleRate*secondsPerChord,output=new Float32Array(segmentLength*chords.length);
+ chords.forEach((frequencies,chordIndex)=>{
+  for(let i=0;i<segmentLength;i++){
+   let value=0;
+   for(const frequency of frequencies)value+=Math.sin(2*Math.PI*frequency*i/sampleRate);
+   output[chordIndex*segmentLength+i]=value/Math.max(1,frequencies.length)*0.28;
+  }
+ });
+ return output;
+}
 function interleaveStereo(mono:Float32Array):Float32Array {
  const stereo=new Float32Array(mono.length*2);
  for(let i=0;i<mono.length;i++){stereo[i*2]=mono[i];stereo[i*2+1]=mono[i]*0.8;}
@@ -87,6 +98,16 @@ describe("Sonic DNA",()=>{
   expect(result.key).toBe("A");
   expect(result.mode).toBe("minor");
  });
+ it("uses bass-root and neighbouring-fifth support to identify the song tonic across a chord progression",()=>{
+  const result=analyzePcm(progression([
+   [130.8128,261.6256,329.6276,391.9954],
+   [196.0,391.9954,493.8833,587.3295],
+   [220.0,261.6256,329.6276,440.0],
+   [174.6141,261.6256,349.2282,440.0]
+  ]),8000);
+  expect(result.key).toBe("C");
+  expect(result.mode).toBe("major");
+ },20000);
  it("withholds a single key when sustained sections disagree tonally",()=>{
   const first=chord([261.6256,329.6276,391.9954],6);
   const second=chord([369.9944,466.1638,554.3653],6);
