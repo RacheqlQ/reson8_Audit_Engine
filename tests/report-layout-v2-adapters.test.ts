@@ -99,7 +99,7 @@ describe("v2 read-only evidence adapters", () => {
     const input = structuredClone(metadataOnlyFixture) as any;
     const initial = buildDecisionDimensions(input);
     expect(initial.map(item => item.name)).toEqual(["Audio", "Identity", "Market", "Release readiness"]);
-    expect(initial.map(item => item.status)).toEqual(["NOT MEASURED", "UNVERIFIED", "PROPOSED", "NOT CLEARED"]);
+    expect(initial.map(item => item.status)).toEqual(["NOT MEASURED", "UNVERIFIED", "PROPOSED", "PENDING RIGHTS CHECKS"]);
 
     input.sonicDna = {
       ...input.sonicDna,
