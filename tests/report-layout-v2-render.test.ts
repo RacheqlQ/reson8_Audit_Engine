@@ -373,6 +373,8 @@ describe("public PDF measurement formatting", () => {
     expect(metrics).not.toMatch(/overall playback level|peak level/i);
     expect(sanitizePublicReportLine("Market evidence: Insufficient — no verified commercial record.")).toContain("Market proposition: PROPOSED");
     expect(sanitizePublicReportLine("INSUFFICIENT EVIDENCE")).toBe("PROPOSED REVIEW");
+    expect(sanitizePublicReportLine("low-confidence audio evidence")).toBe("audio evidence");
+    expect(sanitizePublicReportLine("Keep lane positioning unconfirmed until sources are checked.")).toContain("proposed search direction");
   });
 });
 
