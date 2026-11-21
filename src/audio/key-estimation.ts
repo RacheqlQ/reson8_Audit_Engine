@@ -33,7 +33,7 @@ export function circleOfFifthsRootScore(bassChroma: readonly number[], tonic: nu
   if (!Number.isInteger(tonic) || tonic < 0 || tonic > 11 || bassChroma.length !== 12) return 0;
   const total = bassChroma.reduce((sum, value) => sum + (Number.isFinite(value) ? Math.max(0, value) : 0), 0);
   if (total <= EPSILON) return 0;
-  const position = CIRCLE_OF_FIFTHS_PITCH_CLASSES.indexOf(tonic);
+  const position = CIRCLE_OF_FIFTHS_PITCH_CLASSES.findIndex(value => value === tonic);
   const fifth = CIRCLE_OF_FIFTHS_PITCH_CLASSES[(position + 1) % 12]!;
   const fourth = CIRCLE_OF_FIFTHS_PITCH_CLASSES[(position + 11) % 12]!;
   const at = (pitch: number) => Math.max(0, bassChroma[pitch] ?? 0) / total;
