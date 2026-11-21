@@ -248,3 +248,20 @@ describe("v2 cover key and playback presentation", () => {
     expect(label).toBe("Possible: C major");
   });
 });
+
+  it("uses the adapted tonal resolution when legacy cover inputs no longer carry the resolution payload", () => {
+    const ambiguous = structuredClone(ambiguousAudioFixture) as any;
+    const adapted = adaptReportV2(ambiguous);
+    const legacyInput = {
+      ...ambiguous,
+      tonalResolution: undefined,
+      sonicDna: { ...ambiguous.sonicDna, tonalResolution: undefined, harmonicFeatures: undefined },
+    };
+    expect(adapted.key.value).toBe("Not determined");
+    expect(buildCoverKeyLabel(legacyInput, adapted)).toBe("Possible: C major");
+
+    const unavailable = structuredClone(metadataOnlyFixture) as any;
+    const unavailableData = adaptReportV2(unavailable);
+    const metadataOnlyInput = { ...unavailable, tonalResolution: undefined };
+    expect(buildCoverKeyLabel(metadataOnlyInput, unavailableData)).toBe("Unavailable");
+  });
