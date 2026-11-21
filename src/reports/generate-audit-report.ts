@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 import type { ArAssessment } from "../providers/groq/client.js";
 import { loadReportFonts } from "./fonts.js";
-import { isReliableKey, isReliableTempo, hasMultipleTuningWindows, sanitizeAssessmentForEvidence } from "./evidence-guardrails.js";
+import { hasReportableKeyCandidates, isReliableKey, isReliableTempo, hasMultipleTuningWindows, sanitizeAssessmentForEvidence } from "./evidence-guardrails.js";
 import { buildStrengthRiskChartRows, chartPanelHeight, chartPanelLayoutErrors, countEvidenceLayers, drawChartPanel, type ChartPanelInput } from "./charts.js";
 import { hasSubmittedMasterAudio } from "../audio/master-audio-evidence.js";
 import type { RealMasterAuditContract } from "../audio/real-master-contract.js";
@@ -333,7 +333,7 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  const alternateTempoRelation=tempoRatio!==null&&Math.abs(tempoRatio-0.5)<=0.03?"half-time":tempoRatio!==null&&Math.abs(tempoRatio-2)<=0.06?"double-time":"related pulse";
  const beatTimes=Array.isArray(rhythm.beatTimesSeconds)?rhythm.beatTimesSeconds:[];
  const harmonic=s?.harmonicFeatures&&typeof s.harmonicFeatures==="object"?s.harmonicFeatures as Record<string,unknown>:{};
- const keyCandidates=Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")).slice(0,3).map((item)=>[text(item.key),text(item.mode)].filter(Boolean).join(" ")).join("; "):"";
+ const keyCandidates=hasReportableKeyCandidates(s)&&Array.isArray(harmonic.topCandidates)?harmonic.topCandidates.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object")).slice(0,3).map((item)=>[text(item.key),text(item.mode)].filter(Boolean).join(" ")).join("; "):"";
  return [
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
   {label:"TEMPO ALTERNATE INTERPRETATION",value:tempoReliable&&alternateTempo!==null&&primaryTempo!==null&&alternateTempo!==primaryTempo?String(alternateTempo)+" BPM ("+alternateTempoRelation+" interpretation; alternate metrical level)":null},
