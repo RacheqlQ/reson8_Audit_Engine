@@ -339,6 +339,13 @@ function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Bloc
  provenanceLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:provenanceTop-index*9,size:7,font:fonts.regular,color:C.muted}));
  return height;
 }
+export function normalizeCircleNote(value:string):string{
+ const enharmonic:Record<string,string>={Db:"C#",Eb:"D#",Gb:"F#",Ab:"G#",Bb:"A#"};
+ const match=value.trim().match(/^([A-G](?:#|b)?)/i);
+ if(!match)return "";
+ const note=match[1][0].toUpperCase()+match[1].slice(1);
+ return enharmonic[note]??note;
+}
 function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Data,fonts:Fonts,top:number):number{
  const x=M,width=W-2*M,height=154,bottom=top-height;
  page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
@@ -348,10 +355,8 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  const cx=x+93,cy=top-84,radius=48;
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
  const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates).map(value=>rec(value)):[];
- const enharmonic:Record<string,string>={Db:"C#",Eb:"D#",Gb:"F#",Ab:"G#",Bb:"A#"};
- const noteOf=(value:string)=>{const match=value.trim().match(/^([A-G](?:#|b)?)/i);if(!match)return "";const note=match[1][0].toUpperCase()+match[1].slice(1);return enharmonic[note]??note;};
- const candidateNotes=new Set(candidates.map(item=>noteOf(str(item.key,""))).filter(Boolean));
- const confirmed=data.key.value===null?"":noteOf(String(data.key.value));
+ const candidateNotes=new Set(candidates.map(item=>normalizeCircleNote(str(item.key,""))).filter(Boolean));
+ const confirmed=data.key.value===null?"":normalizeCircleNote(String(data.key.value));
  order.forEach((note,index)=>{
   const angle=-Math.PI/2+index*2*Math.PI/12,px=cx+Math.cos(angle)*radius,py=cy+Math.sin(angle)*radius;
   const isConfirmed=Boolean(confirmed&&note===confirmed),isCandidate=!isConfirmed&&candidateNotes.has(note);
