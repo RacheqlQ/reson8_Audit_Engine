@@ -363,6 +363,24 @@ export function buildStrengthRiskSummary(input:AuditReportInput):{strengths:stri
  const strengths=clean(assessment.strengths),risks=clean(assessment.risks);
  return {strengths,risks,strengthCount:strengths.length,riskCount:risks.length};
 }
+export function buildReleaseCampaignLabels(input:AuditReportInput){
+ const release=buildReleaseDateStatus(input),postRelease=release.verdict==="DETERMINED"&&release.context==="POST-RELEASE";
+ return postRelease?{
+  preRelease:"Pre-release stage (historical; already passed)",
+  releaseWindow:"Release window (historical; already passed)",
+  postRelease:"Post-release growth and reactivation",
+  first30:"First 30 days · post-release (audit-relative)",
+  days3160:"Days 31–60 · post-release (audit-relative)",
+  days6190:"Days 61–90 · post-release (audit-relative)"
+ }:{
+  preRelease:"Pre-release",
+  releaseWindow:"Release window",
+  postRelease:"Post-release",
+  first30:"First 30 days",
+  days3160:"Days 31–60",
+  days6190:"Days 61–90"
+ };
+}
 function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:AuditReportTier):PageSpec[]{
  const e=rec(input.evidence),a=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)),sonic=rec(input.sonicDna);
  const notesContext=buildArNotesDecisionContext(input);
@@ -408,6 +426,8 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
  ];
  if(tier==="full"){
   const promotion=rec(a.promotionPlan),partner=rec(a.labelPartnerFit),execution=rec(a.executionPlan);
+  const releaseStatus=buildReleaseDateStatus(input),campaignLabels=buildReleaseCampaignLabels(input);
+  const isPostRelease=releaseStatus.verdict==="DETERMINED"&&releaseStatus.context==="POST-RELEASE";
   const paragraph=(label:string,value:unknown,fallback="Not supplied in the assessment."):Block=>{
    const rendered=str(value,fallback);
    return {label,value:/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(rendered)?fallback:rendered};
@@ -417,6 +437,16 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    return {label,value:items.join("\n\n")||fallback};
   };
   const executionFallback=(phase:string)=>"Post-release action: "+phase+". Confirm completion with dated source records; do not substitute estimated streams, sales, revenue, audience reach or conversion for unavailable reporting.";
+  const postReleasePhase=(label:string,value:unknown,fallback:string):Block=>{
+   const block=paragraph(label,value,fallback);
+   if(!isPostRelease)return block;
+   const anchor="Post-release action relative to the audit date; original release date "+releaseStatus.date+" was determined by "+releaseStatus.source+". ";
+   return {label:label+" · post-release",value:anchor+block.value};
+  };
+  const historicalPhase=(label:string,value:unknown,fallback:string):Block=>{
+   const block=paragraph(label,value,fallback);
+   return isPostRelease?{label:label+" (historical; already passed)",value:"Historical context only; this is not an upcoming campaign action. "+block.value}:block;
+  };
   const days90Text=str(execution.days90,"");
   const days90Plan=/not supplied|not provided|fixture timeline|not a confirmed release calendar/i.test(days90Text)?buildDays6190Plan(input):days90Text;
   // The five full-report narrative sections follow the seven core analytical pages.
@@ -424,7 +454,9 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    {title:"Production and arrangement guidance",blocks:[paragraph("Production and arrangement guidance",a.productionArrangementGuidance),list("Human listening checks",arr(a.listeningChecks))],kind:"narrative"},
    {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod)],kind:"narrative"},
    {title:"Promotion and campaign strategy",blocks:[
-    paragraph("Pre-release",promotion.preRelease),paragraph("Release window",promotion.releaseWindow),paragraph("Post-release",promotion.postRelease),
+    historicalPhase(campaignLabels.preRelease,promotion.preRelease,isPostRelease?"The pre-release stage is closed for the determined "+releaseStatus.date+" release; do not schedule pre-release actions as upcoming.":"No pre-release actions were supplied."),
+    historicalPhase(campaignLabels.releaseWindow,promotion.releaseWindow,isPostRelease?"The original release window has passed; use current activity as post-release reactivation.":"No release-window actions were supplied."),
+    paragraph(campaignLabels.postRelease,promotion.postRelease,"Post-release reactivation: refresh the source-backed pitch pack, follow up with responsive curators, publish approved creator assets and record only attributable platform activity."),
     list("Content concepts",arr(promotion.contentIdeas)),list("Pitching angles",arr(promotion.pitchingAngles)),
     list("DSP playlist archetypes to investigate",arr(promotion.playlistCategories)),paragraph("Industry practice",promotion.industryPractice)
    ],kind:"narrative"},
@@ -433,9 +465,9 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
     paragraph("Rights and submission diligence",partner.diligenceBeforeContact),paragraph("Industry practice",partner.industryPractice)
    ],kind:"narrative"},
    {title:"30 / 60 / 90-day execution plan",blocks:[
-    paragraph("First 30 days",execution.days30,executionFallback("reconcile ISRC, UPC, artist/title spelling, EP-versus-album release mapping, rights splits and approved master; prepare a post-release positioning brief and verify the first curator/creator target list")),
-    paragraph("Days 31–60",execution.days60,executionFallback("run a controlled post-release reactivation with approved short-form excerpts, follow up on curator responses, refresh visual assets and record only source-attributed platform and campaign observations")),
-    paragraph("Days 61–90",days90Plan,buildDays6190Plan(input))
+    postReleasePhase(campaignLabels.first30,execution.days30,executionFallback("reconcile ISRC, UPC, artist/title spelling, EP-versus-album release mapping, rights splits and approved master; prepare a post-release positioning brief and verify the first curator/creator target list")),
+    postReleasePhase(campaignLabels.days3160,execution.days60,executionFallback("run a controlled post-release reactivation with approved short-form excerpts, follow up on curator responses, refresh visual assets and record only source-attributed platform and campaign observations")),
+    postReleasePhase(campaignLabels.days6190,days90Plan,buildDays6190Plan(input))
    ],kind:"narrative"}
   );
   // Deep-dive pages are evidence-gated; do not emit pages that contain only missing-data placeholders.
