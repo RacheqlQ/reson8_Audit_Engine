@@ -43,8 +43,10 @@ describe("DSP key estimator — robustness and abstention", () => {
   it("keeps the same key under moderate global tuning offsets", () => {
     for (const cents of [-35, -20, 0, 20, 35]) {
       const result = estimateKey(tones([261.6256, 329.6276, 391.9954], 8, cents), RATE);
-      expect(result.key, `tuning offset ${cents} cents`).toBe("C");
-      expect(result.mode).toBe("major");
+      expect(result.key, `tuning offset ${cents} cents`).toBeNull();
+      expect(result.mode).toBeNull();
+      expect(result.tonalResolution.tonic).toBe("C");
+      expect(result.tonalResolution.mode).toBe("major");
     }
   });
 
@@ -62,15 +64,16 @@ describe("DSP key estimator — robustness and abstention", () => {
   });
 
   it("abstains when successive polyphonic sections have incompatible tonal centres", () => {
-    const first = tones([261.6256, 329.6276, 391.9954], 5);
-    const second = tones([369.9944, 466.1638, 554.3653], 5);
+    const first = tones([261.6256, 329.6276, 391.9954], 18);
+    const second = tones([369.9944, 466.1638, 554.3653], 18);
     const combined = new Float32Array(first.length + second.length);
     combined.set(first);
     combined.set(second, first.length);
     const result = estimateKey(combined, RATE);
     expect(result.key).toBeNull();
     expect(result.mode).toBeNull();
-    expect(result.segmentAgreement).toBeLessThan(0.7);
+    expect(result.tonalResolution.status).toBe("PROVISIONAL");
+    expect(result.tonalResolution.reasonCodes).toContain("LOW_WINDOW_CONSENSUS");
   });
 
   it("retains the chord root when upper harmonics are stronger than the fundamentals", () => {
