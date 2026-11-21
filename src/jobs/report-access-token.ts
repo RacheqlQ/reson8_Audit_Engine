@@ -10,9 +10,13 @@ export interface NormalizedReportAccessKey {
 
 export function normalizeReportAccessKey(input: string): NormalizedReportAccessKey {
   const suppliedLength = input.length;
-  const withoutWhitespace = input.replace(/[\s\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "");
+  const withoutWhitespace = input.replace(/[\\s\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]/g, "");
   const whitespaceRemoved = suppliedLength - withoutWhitespace.length;
-  const value = withoutWhitespace.replace(/^["']+|["']+$/g, "").toLowerCase();
+  let value = withoutWhitespace.replace(/^[\"']+|[\"']+$/g, "");
+  value = value.replace(/^(?:(?:reson8)?(?:report)?(?:access)?key|bearer)[:=]?/i, "").replace(/^0x/i, "");
+  const compact = value.replace(/[-:]/g, "");
+  const embedded = compact.match(/(?:^|[^0-9a-f])([0-9a-f]{64})(?![0-9a-f])/i);
+  value = (embedded ? embedded[1] : compact).toLowerCase();
   const nonHexRemoved = (value.match(/[^0-9a-f]/g) ?? []).length;
   return {
     value,
