@@ -149,7 +149,7 @@ try{
   }
  };
  const unsafeDecisionContext=buildArNotesDecisionContext(unsafeInput);
- process.stdout.write("A&R Notes sanitized decision context: "+JSON.stringify(unsafeDecisionContext.summary)+"\n");
+ if(!unsafeDecisionContext.summary.includes("The supplied evidence is insufficient; track-specific conclusions are withheld"))throw new Error("Zero-confidence A&R Notes context did not fail closed");
  const unsafeBytes=await ensurePdfReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
  await writeFile(evidenceCheckPath,unsafeBytes);
  const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
@@ -187,8 +187,8 @@ try{
  const zeroConfidenceTempoLeak=unsafeText.match(/.{0,120}(?:\b128\s*BPM\b|half-time 64\.0 BPM).{0,120}/is);
  if(zeroConfidenceTempoLeak)throw new Error("Generated PDF exposed a zero-confidence tempo candidate or derived pulse reading: "+JSON.stringify(zeroConfidenceTempoLeak[0]));
  if(/double-time 256\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF printed an implausible double-time candidate");
- if(!normalizedUnsafeText.includes("Further listening and source verification are required")){
-  throw new Error("Generated PDF lost the supported A&R Notes decision-context sentence");
+ if(!normalizedUnsafeText.includes("The supplied evidence is insufficient; track-specific conclusions are withheld")){
+  throw new Error("Generated PDF lost the zero-confidence A&R Notes decision context");
  }
 
  const longLabels=[
