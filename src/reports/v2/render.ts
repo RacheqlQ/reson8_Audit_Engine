@@ -55,8 +55,8 @@ function drawWrapped(page:PDFPage,value:string,x:number,y:number,width:number,fo
 function metricBlock(data:ReportV2Data):Block[]{
  const provenance="Measured from the uploaded recording";
  return [
-  {label:"TEMPO",value:data.tempo.value===null?"Not determined":data.tempo.value+" BPM",confidence:null,provenance},
-  {label:"SONG KEY",value:data.key.value===null?"Not determined":String(data.key.value),confidence:null,provenance},
+  {label:"TEMPO",value:data.tempo.value===null?"Not determined":data.tempo.value+" BPM",confidence:undefined,provenance},
+  {label:"SONG KEY",value:data.key.value===null?"Not determined":String(data.key.value),confidence:undefined,provenance},
   {label:"PLAYBACK LEVEL",value:data.energy.value===null?"Not measured":"Level measurements available",confidence:null,provenance}
  ];
 }
@@ -304,7 +304,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...(e.label||e.partner?["Supplied label / partner: "+str(e.label??e.partner)]:[])
   ]},
   {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>str(v,"")).filter(v=>v&&!/^not supplied$/i.test(v)).map(v=>"[ ] "+v).concat([notesContext.verdict,notesContext.summary,...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),"Use the notes area to record the A&R review."])},
-  {title:"Evidence and limitations",blocks:[],lines:[
+  {title:"Evidence and limitations",kind:"limitations",blocks:[],lines:[
    ...sanitizePublicReportLines(data.notYetMeasured),
    ...publicReportLimitations(a.limitations),
    "Only details supported by the supplied recording or named music platforms are presented as confirmed.",
@@ -536,14 +536,19 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    chartCursor=drawIdentityReconciliation(page,input,fonts);
   }else if(spec.kind==="snapshot"){
    drawSnapshot(page,data,fonts,input);
+  }else if(spec.kind==="limitations"){
+   const body=spec.lines?.filter(Boolean)??[];
+   const height=card(page,M,H-92,W-2*M,spec.title,body,fonts,{accent:C.gold});
+   const mapTop=H-92-height-14;
+   drawCircleOfFifths(page,input,data,fonts,mapTop);
   }else if(spec.kind==="full-axes"){
    if(data.sonicAxes)drawSonicAxes(page,data,fonts);
    else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
   }else if(spec.kind==="tempo-energy"){
    const tempoLines=buildTempoDiagnosticLines(input);
-   card(page,M,H-105,W-2*M,"Tempo",tempoLines,fonts,{accent:data.tempo.value===null?C.amber:C.teal});
+   card(page,M,H-105,W-2*M,"Tempo",sanitizePublicReportLines(tempoLines),fonts,{accent:data.tempo.value===null?C.amber:C.teal});
    const keyLines=buildKeyDiagnosticLines(input);
-   card(page,M,H-245,W-2*M,"Song key",keyLines,fonts,{accent:data.key.value===null?C.amber:C.teal});
+   card(page,M,H-245,W-2*M,"Song key",sanitizePublicReportLines(keyLines),fonts,{accent:data.key.value===null?C.amber:C.teal});
    const energy=data.energy.value===null?"Playback level was not measured.":"Playback level measurements are available from the uploaded recording.";
    card(page,M,H-385,W-2*M,"Playback level", [energy],fonts,{accent:data.energy.value===null?C.amber:C.teal});
    if(data.energySeries){
