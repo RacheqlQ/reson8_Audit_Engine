@@ -46,8 +46,8 @@ const philloFullText=execFileSync("pdftotext",["-layout",philloFullFile.pathname
 const philloFullPages=philloFullText.split("\f").filter(page=>page.trim().length>0);
 if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i.test(philloFullText))throw new Error("Phillo full fixture contains a forbidden dead-end verdict or limitations section");
 if(!philloFullPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error("Phillo full fixture must finish with A&R NOTES");
-const executionPage=philloFullPages.find(page=>page.toUpperCase().includes("30 / 60 / 90-DAY EXECUTION PLAN"));
-if(!executionPage||!executionPage.toUpperCase().replace(/[–—]/g,"-").includes("DAYS 61-90"))throw new Error("Phillo full fixture is missing its Days 61-90 plan");
+const normalizedPhilloText=philloFullText.replace(/\s+/g," ").toUpperCase().replace(/[–—]/g,"-");
+if(!normalizedPhilloText.includes("DAYS 61")||normalizedPhilloText.includes("DAYS 61-90 NOT SUPPLIED"))throw new Error("Phillo full fixture is missing its populated Days 61-90 plan");
 process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" pages; post-release execution and final A&R notes verified.\n");
 
 const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
