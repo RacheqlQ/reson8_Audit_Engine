@@ -182,8 +182,9 @@ describe("uploaded master provenance in reports", () => {
     expect(report).toContain("No DSP provider lookup result was recorded");
   });
 
-  it("withholds low-confidence tempo and key candidates from the technical dashboard", () => {
+  it("withholds low-confidence tempo and legacy key candidates when no tonal resolver result exists", () => {
     const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.tonalResolution = null;
     input.sonicDna = {
       ...input.sonicDna,
       provenance: "uploaded_audio_master",
@@ -197,6 +198,7 @@ describe("uploaded master provenance in reports", () => {
       },
       key: null,
       mode: null,
+      tonalResolution: null,
       keyConfidence: 0.17,
       keySegmentAgreement: 0.75,
       harmonicFeatures: {
