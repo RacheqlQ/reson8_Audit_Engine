@@ -10,7 +10,7 @@ function candidateNames(value: string): string[] {
 
 export function sanitizePublicReportLine(value: string): string {
   const line = value.trim();
-  if (!line || INTERNAL_LINE.test(line) || /\\bconfidence\\b/i.test(line)) return "";
+  if (!line || INTERNAL_LINE.test(line) || /\bconfidence\b/i.test(line)) return "";
 
   const keyFinding = line.match(/^Not yet measured:\s*(.+?)\s*\(provisional harmonic candidate; alternatives:\s*(.*?);\s*no single key asserted\)\.?$/i);
   if (keyFinding) {
@@ -27,14 +27,25 @@ export function sanitizePublicReportLine(value: string): string {
   let result = line
     .replace(/\b(?:high|medium|low)\s+confidence\b/gi, "")
     .replace(/\bconfidence[- ]qualified\b/gi, "")
-    .replace(/\bconfidence\s*[:=]?\s*\d+(?:\.\d+)?\b/gi, "")
-    .replace(/\braw confidence score\s*[:=]?\s*\d+(?:\.\d+)?\b/gi, "")
-    .replace(/\buploaded-master tempo evidence\b/gi, "Measured from the uploaded recording")
-    .replace(/\buploaded-master harmonic evidence\b/gi, "Measured from the uploaded recording")
-    .replace(/\buploaded-master energy evidence\b/gi, "Measured from the uploaded recording")
-    .replace(/\bconfidence\b/gi, "")
+    .replace(/\buploaded-master(?: tempo| harmonic| energy)? evidence\b/gi, "Measured from the uploaded recording")
     .replace(/\b(?:fft[_ -]?harmonic[_ -]?chroma[_ -]?ensemble|goertzel[_ -]?pitch[_ -]?frequency[_ -]?bank|high[_ -]?frequency[_ -]?transient[_ -]?autocorrelation)\b/gi, "")
+    .replace(/\bDSPs?\b/gi, "music platform")
+    .replace(/\bprovider(?:-recognized)?\b/gi, "platform")
+    .replace(/\bmetadata\b/gi, "release details")
+    .replace(/\bsource-attributed\b/gi, "source-backed")
+    .replace(/\bhypothesis\b/gi, "working direction")
+    .replace(/\bnot established\b/gi, "not confirmed")
+    .replace(/\bnot cleared\b/gi, "pending checks")
+    .replace(/\bharmonic\b/gi, "tonal")
+    .replace(/\bprovisional\b/gi, "possible")
+    .replace(/\bsegments?\b/gi, "sections")
+    .replace(/\btechnical measurements\b/gi, "audio review")
+    .replace(/\bintegrated loudness\b/gi, "overall playback level")
+    .replace(/\btrue peak\b/gi, "peak level")
+    .replace(/\bRMS signal level\b/gi, "signal level")
     .replace(/\b(?:RMS|spectral centroid|spectral bandwidth|spectral rolloff|zero-crossing rate|sample rate|dBFS|LUFS)\b/gi, "")
+    .replace(/\bconfidence\b/gi, "")
+    .replace(/\buploaded-master\b/gi, "uploaded recording")
     .replace(/\s*[·•]\s*/g, " · ")
     .replace(/\s{2,}/g, " ")
     .replace(/^(?:Not yet measured|Not measured):/i, "Not available:")
