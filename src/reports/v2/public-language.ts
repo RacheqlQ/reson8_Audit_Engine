@@ -10,7 +10,7 @@ function candidateNames(value: string): string[] {
 
 export function sanitizePublicReportLine(value: string): string {
   const line = value.trim();
-  if (!line || INTERNAL_LINE.test(line)) return "";
+  if (!line || INTERNAL_LINE.test(line) || /\\bconfidence\\b/i.test(line)) return "";
 
   const keyFinding = line.match(/^Not yet measured:\s*(.+?)\s*\(provisional harmonic candidate; alternatives:\s*(.*?);\s*no single key asserted\)\.?$/i);
   if (keyFinding) {
