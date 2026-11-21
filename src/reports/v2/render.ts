@@ -140,9 +140,9 @@ export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
 export function buildEvidenceLedgerSummary(labels: Array<{ label: string }>): string {
  const counts = countEvidenceLayers(labels);
  return "Measured: " + counts.OBSERVED
-  + " · Source matches: " + counts.RECOGNIZED
-  + " · Cross-checked: " + counts.RECONCILED
-  + " · Hypotheses: " + counts.INFERRED;
+  + " · Music platform records: " + counts.RECOGNIZED
+  + " · Verified matches: " + counts.RECONCILED
+  + " · Suggested directions: " + counts.INFERRED;
 }
 
 export function buildNextActionLine(input: AuditReportInput): string {
@@ -170,12 +170,7 @@ export function buildPlaylistProviderStatusLines(input: AuditReportInput): strin
   const status=str(outcome.status,"unavailable");
   const reason=str(outcome.reason,"No provider reason was persisted.");
   if(status==="not_configured"||status==="unavailable") {
-   const required=outcome.provider==="spotify"
-    ? "Required environment variables: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET."
-    : outcome.provider==="apple_music"
-      ? "Required environment variable: APPLE_MUSIC_DEVELOPER_TOKEN."
-      : "";
-   return [provider+" provider unavailable: "+reason+" "+(required?required:"")].filter(Boolean);
+   return [provider+" playlist search unavailable: "+reason+" The platform connection needs attention."];
   }
   if(status==="partial")return [provider+" provider partially available: "+reason];
   return [];
