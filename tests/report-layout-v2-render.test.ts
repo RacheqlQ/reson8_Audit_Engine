@@ -14,14 +14,15 @@ describe("v2 decision and date framing", () => {
     input.assessment.evidenceGaps = ["Confirm recording identifiers"];
     expect(buildNextActionLine(input)).toBe("Recommended next step: Confirm recording identifiers");
     input.assessment.evidenceGaps = [];
-    expect(buildNextActionLine(input)).toBe("Recommended next step: Not supplied");
+    expect(buildNextActionLine(input)).toContain("Confirm the recording identifier and release-version mapping");
   });
 
   it("compares release date to generatedAt rather than the current clock", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.generatedAt = "2025-01-01T00:00:00.000Z";
     input.evidence.releaseDate = "2025-06-01";
-    expect(buildReleaseFramingLine(input)).toContain("Release date is not source-reconciled");
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    expect(buildReleaseFramingLine(input)).toContain("UPCOMING");
     input.generatedAt = "2025-12-01T00:00:00.000Z";
     expect(buildReleaseFramingLine(input)).toContain("POST-RELEASE");
   });
