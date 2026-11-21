@@ -49,8 +49,8 @@ describe("analysis-to-report integration contracts", () => {
     const report = reportText(input);
     expect(report).toContain("Confirmed tempo: Not reported as a confirmed measurement");
     expect(report).toContain("A tempo candidate was returned but did not meet the reporting threshold");
-    expect(report).toContain("PROVISIONAL AUDIO MOOD: driving, tense");
-    expect(report).toContain("A validated mood model is not configured");
+    expect(report).toContain("PROVISIONAL MOOD DIRECTION: driving, tense (exploratory; confirm by listening)");
+    expect(report).toContain("No validated model prediction is available.");
     expect(report).not.toContain("acousticFeatureProfile.predictions");
     expect(report).not.toContain("VALIDATED_MODEL_NOT_CONFIGURED");
     expect(report).not.toContain("TEMPO_BELOW_REPORTING_THRESHOLD");
@@ -261,7 +261,7 @@ describe("uploaded master provenance in reports", () => {
     expect(report).toContain("No source-attributed DSP mood tags were returned for playlist search.");
     expect(report).toContain("Uploaded-master provisional mood tags: driving, tense");
     expect(report).toContain("Provisional uploaded-master energy estimate: high");
-    expect(report).toContain("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs.");
+    expect(report).toContain("Mood and energy: these are provisional listening directions from the uploaded recording, not confirmed descriptions.");
     expect(report).toContain("These estimates are derived from the uploaded signal, are not probabilities");
     expect(report).not.toMatch(/model:.*disabled|Learned audio-genre model status/i);
   });
@@ -343,8 +343,8 @@ describe("uploaded master provenance in reports", () => {
     expect(report).toContain("method: spectral-centroid analysis");
     expect(report).toContain("method: signal-analysis method (technical identifier withheld)");
     const rows = sonicDashboardRowsForReport(input.sonicDna, true);
-    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("93.8 (provisional; independent low-frequency estimator");
+    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("93.8 BPM (provisional; confirm by listening)");
     expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value).toContain("half-time 46.9 BPM; double-time 187.6 BPM");
-    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("raw estimator score 0.694 (not a calibrated probability)");
+    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("F# major");
   });
 });
