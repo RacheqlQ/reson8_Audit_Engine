@@ -241,11 +241,15 @@ describe("v2 gated report pages", () => {
 
 describe("v2 loudness metric card sizing", () => {
   it("keeps multi-reading loudness text compact enough to match the tempo and key cards", () => {
-    const layout = reportV2Render.metricCardValueLayout("LOUDNESS / SIGNAL");
-    expect(layout.fontSize).toBeLessThanOrEqual(8.5);
-    expect(layout.lineHeight).toBeLessThanOrEqual(10);
-    expect(layout.maxLines).toBeGreaterThanOrEqual(4);
-    expect(layout.cardHeight).toBe(104);
+    const loudness = reportV2Render.metricCardValueLayout("LOUDNESS / SIGNAL");
+    const tempo = reportV2Render.metricCardValueLayout("TEMPO");
+    const key = reportV2Render.metricCardValueLayout("SONG KEY");
+    expect(loudness.fontSize).toBe(7.2);
+    expect(loudness.fontSize).toBeLessThan(tempo.fontSize);
+    expect(loudness.lineHeight).toBe(8.5);
+    expect(loudness.maxLines).toBe(4);
+    expect(loudness.cardHeight).toBe(tempo.cardHeight);
+    expect(loudness.cardHeight).toBe(key.cardHeight);
   });
 });
 
