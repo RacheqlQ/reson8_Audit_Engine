@@ -276,3 +276,41 @@ describe("v2 cover key and playback presentation", () => {
     const metadataOnlyInput = { ...unavailable, tonalResolution: undefined };
     expect(buildCoverKeyLabel(metadataOnlyInput, unavailableData)).toBe("Unavailable");
   });
+
+
+describe("v2 report structure and release framing regressions", () => {
+  it("omits evidence-and-limitations and places A&R notes last in both report tiers", () => {
+    const sample = reportV2Render.buildReportSectionTitles(fullAudioFixture as any, "sample");
+    const full = reportV2Render.buildReportSectionTitles(fullAudioFixture as any, "full");
+    expect(sample).not.toContain("Evidence and limitations");
+    expect(full).not.toContain("Evidence and limitations");
+    expect(sample.at(-1)).toBe("A&R notes");
+    expect(full.at(-1)).toBe("A&R notes");
+    expect(full).not.toContain("Tempo and energy spectrum");
+  });
+
+  it("always supplies a post-release Days 61-90 plan when the assessment omits it", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.releaseDate = "2025-08-24";
+    input.generatedAt = "2026-11-21T00:00:00.000Z";
+    input.assessment.executionPlan = { days30: "Review", days60: "Re-activate", days90: "" };
+    const plan = reportV2Render.buildDays6190Plan(input);
+    expect(plan).toMatch(/post-release/i);
+    expect(plan).toMatch(/curator|playlist/i);
+    expect(plan).toMatch(/creator|UGC/i);
+    expect(plan).toMatch(/ISRC|UPC|metadata/i);
+    expect(plan).toMatch(/performance review/i);
+    expect(plan).not.toMatch(/not supplied/i);
+  });
+
+  it("marks a source-attributed valid release date as determined and post-release", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.releaseDate = "2025-08-24";
+    input.generatedAt = "2026-11-21T00:00:00.000Z";
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    const status = reportV2Render.buildReleaseDateStatus(input);
+    expect(status.verdict).toBe("DETERMINED");
+    expect(status.context).toBe("POST-RELEASE");
+    expect(status.source).toContain("Apple Music");
+  });
+});
