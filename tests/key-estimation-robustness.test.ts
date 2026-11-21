@@ -75,8 +75,10 @@ describe("DSP key estimator — robustness and abstention", () => {
 
   it("retains the chord root when upper harmonics are stronger than the fundamentals", () => {
     const result = estimateKey(harmonicChord([130.8128, 164.8138, 195.9977]), RATE);
-    expect(result.key).toBe("C");
-    expect(result.mode).toBe("major");
+    expect(result.key).toBeNull();
+    expect(result.mode).toBeNull();
+    expect(result.tonalResolution.tonic).toBe("C");
+    expect(result.tonalResolution.mode).toBe("major");
   });
 
   it("does not turn one harmonic series into a global musical key via false subharmonic votes", () => {
