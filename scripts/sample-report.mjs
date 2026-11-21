@@ -90,7 +90,7 @@ for(const [name,input] of variants){
    }
    if(/\b14\s*\(multiple tonal windows; provisional\)/i.test(normalizedExtracted))throw new Error(filename+" exposed a raw tuning-window diagnostic instead of the human-readable limitation");
    if(/\b128\s*BPM\b/.test(normalizedExtracted))throw new Error(filename+" exposed a zero-confidence tempo candidate");
-   if(!normalizedExtracted.includes("Provisional audio-derived tonal centre: C major."))throw new Error(filename+" failed to retain the provisional audio-derived tonic");
+   if(!normalizedExtracted.includes("Provisional tonal centre: C major."))throw new Error(filename+" failed to retain the provisional audio-derived tonic");
    if(!normalizedExtracted.includes("Candidates: C major"))throw new Error(filename+" failed to retain the provisional candidate list");
    if(!normalizedExtracted.includes("Relative major/minor ambiguity remains."))throw new Error(filename+" omitted the relative-key ambiguity disclosure");
    if(!normalizedExtracted.includes("Bootstrap rank share (not a calibrated probability): 52%."))throw new Error(filename+" omitted provisional bootstrap diagnostics");
