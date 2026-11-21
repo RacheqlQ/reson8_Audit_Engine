@@ -193,7 +193,7 @@ describe("v2 gated report pages", () => {
     expect(pdf.getPageCount()).toBe(17);
   });
 
-  it("keeps an expanded real-world narrative inside the expanded full-report allocation", async () => {
+  it("renders the expanded narrative across the complete 17-page full-report allocation", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.assessment.executiveSummary = Array(3).fill(input.assessment.executiveSummary).join(" ");
     input.assessment.strengths = [...input.assessment.strengths, ...Array(5).fill(
@@ -203,10 +203,10 @@ describe("v2 gated report pages", () => {
       "A release decision still requires rights clearance, delivery confirmation, approved final master and source-attributed commercial reporting."
     )];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(12);
+    expect(pdf.getPageCount()).toBe(17);
   });
 
-  it("keeps optional analytical evidence within 13 full-report pages", async () => {
+  it("renders optional analytical evidence within the complete 17-page full-report allocation", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.sonicDna = {
       ...input.sonicDna,
