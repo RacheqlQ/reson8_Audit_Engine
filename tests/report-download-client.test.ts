@@ -104,6 +104,7 @@ describe("mobile clipboard report-key normalization", () => {
     expect(normalizeReportAccessKey("0x" + key)).toBe(key);
     expect(normalizeReportAccessKey(key.match(/.{1,8}/g)!.join("-"))).toBe(key);
     expect(normalizeReportAccessKey(key + "0")).not.toBe(key);
+    expect(normalizeReportAccessKey(key + "g")).not.toBe(key);
   });
 
   it("removes invisible bidirectional formatting marks without accepting non-hex key characters", () => {
