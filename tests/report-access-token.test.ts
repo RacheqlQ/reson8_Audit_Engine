@@ -38,6 +38,14 @@ describe("report access key normalization and issuance", () => {
     expect(normalizeReportAccessKey("A".repeat(64)).valid).toBe(true);
   });
 
+  it("accepts a labeled or grouped copy of the issued key without truncating malformed values", () => {
+    const key = "0123456789abcdef".repeat(4);
+    expect(normalizeReportAccessKey("Report access key: " + key.toUpperCase()).value).toBe(key);
+    expect(normalizeReportAccessKey("0x" + key).valid).toBe(true);
+    expect(normalizeReportAccessKey(key.match(/.{1,8}/g).join("-")).value).toBe(key);
+    expect(normalizeReportAccessKey(key + "0").valid).toBe(false);
+  });
+
   it("normalizes invisible bidirectional clipboard marks while preserving strict 64-hex validation", () => {
     const key = "0123456789abcdef".repeat(4);
     const normalized = normalizeReportAccessKey("\u200e\u2066" + key + "\u2069\u200f");
