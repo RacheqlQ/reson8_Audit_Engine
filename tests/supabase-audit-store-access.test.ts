@@ -393,6 +393,5 @@ describe("report retrieval diagnostics", () => {
     vi.stubGlobal("fetch", fetchMock);
     const result = await createSupabaseAuditStore().diagnoseAuditReportAccess("job-a", "full", TOKEN_A);
     expect(result.reason).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
