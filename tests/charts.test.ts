@@ -26,7 +26,7 @@ describe("native PDF chart helpers", () => {
       ["measured", "MEASURED"],
       ["provider-recognized", "PROVIDER-RECOGNIZED"],
       ["inferred", "HYPOTHESIS"],
-      ["assessment-derived", "A&R REVIEW"],
+      ["assessment-derived", "ASSESSMENT-DERIVED"],
       ["illustrative", "ILLUSTRATIVE"],
     ] as const;
     expect(chartPanelStatus({ fixture: false })).toBe("UNCLASSIFIED");
