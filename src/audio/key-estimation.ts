@@ -1,5 +1,5 @@
 import { bootstrapCategoricalConsensus, type BootstrapConsensusDiagnostics } from "./ensemble-consensus.js";
-import { resolveTonalCentre, type TonalResolution, type TonalWindow } from "./tonal-resolution.js";
+import { cadenceResolutionWeight, resolveTonalCentre, type TonalResolution, type TonalWindow } from "./tonal-resolution.js";
 
 export interface KeySegmentDiagnostic {
   startSeconds: number;
@@ -446,7 +446,7 @@ export function estimateKey(
       salience,
       energy: windowEnergy,
       downbeatRoot: downbeatRoot !== null && normalizedBass[downbeatRoot]! >= 0.2 ? downbeatRoot : null,
-      cadenceWeight: window === boundedStarts.length - 1 ? 0.65 : 0,
+      cadenceWeight: 0,
     });
     if (tuningWindowWeight > EPSILON) {
       tuningValues.push({ value: tuningWindowOffset / tuningWindowWeight, weight: tuningWindowWeight });
@@ -454,6 +454,16 @@ export function estimateKey(
   }
 
   if (!segmentProfiles.length) return emptyEstimate("No stable pitched spectral peaks were detected for key estimation.");
+  if (tonalWindows.length >= 2) {
+    const finalWindow = tonalWindows[tonalWindows.length - 1]!;
+    const precedingWindow = tonalWindows[tonalWindows.length - 2]!;
+    const finalCandidate = rankCandidates(finalWindow.chroma, finalWindow.bassChroma)[0];
+    if (finalCandidate) {
+      // Weight the outro only when the preceding window contains the candidate's
+      // leading tone and the final window shows a bass/chroma arrival on tonic.
+      finalWindow.cadenceWeight = cadenceResolutionWeight(precedingWindow, finalWindow, finalCandidate.key);
+    }
+  }
   const tonalResolution = resolveTonalCentre(tonalWindows);
   const aggregate = Array(12).fill(0);
   const aggregateBass = Array(12).fill(0);
