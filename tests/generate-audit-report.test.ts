@@ -466,7 +466,7 @@ describe("Sonic DNA provisional candidate reporting", () => {
       .toContain("half-time 82.5 BPM");
     expect(rows.find((row) => row.label === "ALTERNATIVE PULSE READINGS")?.value)
       .not.toContain("double-time 330.0 BPM");
-    expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
+    expect(rows.find((row) => row.label === "ALTERNATIVE PULSE READINGS")?.value)
       .not.toMatch(/independently validated|candidate|confidence|score/i);
     const reportInput=structuredClone(fullAudioFixture) as AuditReportInput;
     reportInput.sonicDna={...reportInput.sonicDna,provenance:"uploaded_audio_master",tempoCandidateBpm:165,tempoConfidence:0.28};
