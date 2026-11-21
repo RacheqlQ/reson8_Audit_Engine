@@ -402,7 +402,7 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  const names=candidates.slice(0,4).map(item=>[str(item.key??item.tonic,""),str(item.mode,"")].filter(Boolean).join(" ")).filter(Boolean);
  if(names.length)drawWrapped(page,"Candidates: "+names.join(" · "),x+174,top-91,width-190,fonts.bold,7,C.muted,9);
  const diagnosticLines=buildKeyDiagnosticLines(input).filter(line=>
-  /^(Window agreement|Bootstrap rank share|Runner-up margin|Bass-root anchors|Outro weighting):/.test(line)
+  /^(Window agreement:|Bootstrap rank share|Runner-up margin:|Bass-root anchors:|Bass-root anchors|Outro weighting:)/.test(line)
  );
  let diagnosticY=top-108;
  for(const line of diagnosticLines.slice(0,5)){
