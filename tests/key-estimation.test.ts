@@ -37,8 +37,8 @@ describe("DSP key estimator", () => {
   });
 
   it("abstains when synthetic sections disagree tonally", () => {
-    const first = chord([261.6256, 329.6276, 391.9954], 6);
-    const second = chord([369.9944, 466.1638, 554.3653], 6);
+    const first = chord([261.6256, 329.6276, 391.9954], 18);
+    const second = chord([369.9944, 466.1638, 554.3653], 18);
     const combined = new Float32Array(first.length + second.length);
     combined.set(first);
     combined.set(second, first.length);
