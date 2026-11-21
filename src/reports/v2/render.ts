@@ -158,12 +158,7 @@ export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
  if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("The leading candidates form a relative major/minor pair; no single key is asserted.");
  if(finite(resolution.windowAgreement))lines.push("Window agreement: "+(resolution.windowAgreement*100).toFixed(0)+"%.");
  if(finite(resolution.bootstrapShare))lines.push("Bootstrap rank share (not a calibrated probability): "+(resolution.bootstrapShare*100).toFixed(0)+"%.");
- if(finite(resolution.runnerUpMargin))lines.push("Bootstrap rank share|Relative candidate scores|Runner-up margin: "+(resolution.runnerUpMargin*100).toFixed(1)+"% of the leading score.");
- const scoreSummary=arr(resolution.candidates).slice(0,3).map(value=>{
-  const item=rec(value),name=[str(item.tonic,""),str(item.mode,"")].filter(Boolean).join(" ");
-  return name&&finite(item.score)?name+" "+item.score.toFixed(3):"";
- }).filter(Boolean);
- if(scoreSummary.length)lines.push("Relative candidate scores (not probabilities): "+scoreSummary.join("; ")+".");
+
  if(finite(resolution.downbeatAnchorWindowCount))lines.push("Bass-root anchors: "+resolution.downbeatAnchorWindowCount+"/"+str(resolution.validWindowCount, "0")+" windows.");
  if(finite(resolution.cadenceWeightedWindowCount)&&resolution.cadenceWeightedWindowCount>0)lines.push("Outro weighting: "+resolution.cadenceWeightedWindowCount+" window(s).");
  const reasonCodes=arr(resolution.reasonCodes).filter((code):code is string=>typeof code==="string");
