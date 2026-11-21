@@ -191,7 +191,7 @@ describe("v2 gated report pages", () => {
   it("keeps the five narrative pages and only evidence-supported deep dives", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(15);
+    expect(pdf.getPageCount()).toBe(13);
   });
 
   it("keeps the five narrative pages after page 9 and omits unsupported analytical stub pages", async () => {
@@ -202,7 +202,7 @@ describe("v2 gated report pages", () => {
     input.assessment = { ...input.assessment, headlineScore: null, scoreDrivers: [], executionTimeline: [] };
     input.realMasterContract = null;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(14);
+    expect(pdf.getPageCount()).toBe(13);
   });
 
   it("keeps expanded narrative content on its five allocated pages", async () => {
@@ -229,7 +229,7 @@ describe("v2 gated report pages", () => {
     };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(16);
+    expect(pdf.getPageCount()).toBe(14);
   });
 
   it("omits every gated page for a minimal audio-only fixture", async () => {
@@ -300,7 +300,7 @@ describe("v2 report structure and release framing regressions", () => {
     expect(plan).toMatch(/curator|playlist/i);
     expect(plan).toMatch(/creator|UGC/i);
     expect(plan).toMatch(/ISRC|UPC|metadata/i);
-    expect(plan).toMatch(/performance review/i);
+    expect(plan).toMatch(/90-day review/i);
     expect(plan).not.toMatch(/not supplied/i);
   });
 
