@@ -20,6 +20,10 @@ describe("public report language", () => {
       "Primary key raw confidence score: 0.061 (not a calibrated probability).",
       "Tuning offset: -1.57 cents; evidence windows: 5.",
       "Technical descriptors: RMS level -13.2 dBFS · Spectral centroid 1423 Hz.",
+      "Primary detector candidates: 96 BPM (score 0.812).",
+      "Alternate half/double-time candidate: 192 BPM.",
+      "Independent low-frequency envelope estimate: 95.8 BPM.",
+      "Primary tonal candidates: A minor (score 0.710).",
       "Verify the release title across music platforms."
     ]);
     expect(lines).toEqual(["Verify the release title across music platforms."]);
