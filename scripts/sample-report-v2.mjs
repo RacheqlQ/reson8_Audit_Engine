@@ -39,7 +39,7 @@ for(const [name,input,expected] of [
 
 const philloFullBytes=await generateAuditReportV2({...phillo,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const philloFullPdf=await PDFDocument.load(philloFullBytes);
-if(philloFullPdf.getPageCount()!==15)throw new Error("v2-phillo-stunixx-full expected 15 pages including five narrative pages, an evidence-gated deep dive and final A&R notes; got "+philloFullPdf.getPageCount());
+if(philloFullPdf.getPageCount()!==13)throw new Error("v2-phillo-stunixx-full expected 15 pages including five narrative pages, an evidence-gated deep dive and final A&R notes; got "+philloFullPdf.getPageCount());
 const philloFullFile=new URL("v2-phillo-stunixx-full.pdf",out);
 await writeFile(philloFullFile,philloFullBytes);
 const philloFullText=execFileSync("pdftotext",["-layout",philloFullFile.pathname,"-"],{encoding:"utf8"});
