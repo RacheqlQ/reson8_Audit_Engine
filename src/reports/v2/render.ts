@@ -124,7 +124,7 @@ export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
 export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
  const lines:string[]=[];
- const candidates=arr(harmonic.topCandidates).map(value=>rec(value)).filter(item=>typeof item.key==="string")
+ const candidates=(hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates):[]).map(value=>rec(value)).filter(item=>typeof item.key==="string")
   .slice(0,4).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" "));
  if(candidates.length)lines.push("Possible song keys: "+candidates.join("; ")+". These are provisional possibilities, not a confirmed key.");
  if(finite(harmonic.segmentAgreement))lines.push(harmonic.segmentAgreement>=0.7
@@ -339,7 +339,7 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  const order=["C","G","D","A","E","B","F#","C#","G#","D#","A#","F"];
  const cx=x+93,cy=top-84,radius=48;
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const candidates=arr(harmonic.topCandidates).map(value=>rec(value));
+ const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates).map(value=>rec(value)):[];
  const candidateNotes=new Set(candidates.map(item=>str(item.key,"")).filter(Boolean));
  const confirmed=data.key.value===null?"":String(data.key.value).split(/\s+/)[0]??"";
  order.forEach((note,index)=>{
@@ -547,7 +547,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     :"Measured tempo: "+data.tempo.value+" BPM."];
    card(page,M,H-105,W-2*M,"Tempo",tempoLines,fonts,{accent:data.tempo.value===null?C.amber:C.teal});
    const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
-   const candidates=arr(harmonic.topCandidates).map(value=>rec(value))
+   const candidates=(hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates):[]).map(value=>rec(value))
     .map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" ")).filter(Boolean).slice(0,4);
    const keyLines=[data.key.value!==null
     ?"Confirmed song key: "+String(data.key.value)+"."
