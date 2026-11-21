@@ -314,6 +314,7 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  const independentTempoCandidate=typeof independentEstimator.bpm==="number"&&Number.isFinite(independentEstimator.bpm)?independentEstimator.bpm:null;
  const directTempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
  const tempoCandidate=directTempoCandidate??independentTempoCandidate;
+ const tempoCandidateReportable=hasAudio&&!tempoReliable&&tempoCandidate!==null&&typeof s?.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)&&s.tempoConfidence>0;
  const plausibleTempoRelationships=tempoCandidate===null?[]:[
   {label:"half-time",bpm:tempoCandidate/2},
   {label:"double-time",bpm:tempoCandidate*2},
@@ -328,8 +329,8 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  return [
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
   {label:"TEMPO ALTERNATE INTERPRETATION",value:tempoReliable&&alternateTempo!==null&&primaryTempo!==null&&alternateTempo!==primaryTempo?String(alternateTempo)+" BPM ("+alternateTempoRelation+" interpretation; alternate metrical level)":null},
-  {label:"TEMPO CANDIDATE BPM",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" BPM (provisional; confirm by listening)":null},
-  {label:"ALTERNATIVE PULSE READINGS",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?plausibleTempoRelationships.map(candidate=>candidate.label+" "+candidate.bpm.toFixed(1)+" BPM").join("; ")||null:null},
+  {label:"TEMPO CANDIDATE BPM",value:tempoCandidateReportable?String(tempoCandidate)+" BPM (provisional; confirm by listening)":null},
+  {label:"ALTERNATIVE PULSE READINGS",value:tempoCandidateReportable?plausibleTempoRelationships.map(candidate=>candidate.label+" "+candidate.bpm.toFixed(1)+" BPM").join("; ")||null:null},
   {label:"TEMPO DETECTION REASON",value:hasAudio&&!tempoReliable?"A single tempo could not be confirmed from the supplied recording.":null},
   {label:"TEMPO READINGS ACROSS SECTIONS",value:hasAudio?windowConsensusSummary(rhythm.windowConsensus):null},
   {label:"BEAT TIMING",value:!hasAudio?null:beatTimes.length?"A tentative beat guide is available; confirm by listening.":"Not established"},
