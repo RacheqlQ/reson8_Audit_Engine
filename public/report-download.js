@@ -1,6 +1,6 @@
 export function normalizeReportAccessKey(input) {
   let value = String(input ?? "")
-    .replace(/[\\s\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]/g, "")
+    .replace(/[\s\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "")
     .replace(/^[\"']+|[\"']+$/g, "");
   value = value.replace(/^(?:(?:reson8)?(?:report)?(?:access)?key|bearer)[:=]?/i, "");
   value = value.replace(/^0x/i, "");
