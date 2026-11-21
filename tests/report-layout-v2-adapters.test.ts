@@ -117,7 +117,8 @@ describe("v2 read-only evidence adapters", () => {
     };
     const complete = buildDecisionDimensions(input);
     expect(complete.map(item => item.status)).toEqual(["MEASURED", "CROSS-CHECKED", "PERFORMANCE VERIFIED", "GATES VERIFIED"]);
-    expect(complete[0].basis).toContain("confidence-qualified tempo");
+    expect(complete[0].basis).toContain("Only supported findings are presented");
+    expect(complete[0].basis).not.toMatch(/confidence|Goertzel|harmonic/i);
     expect(complete[3].basis).toContain("All four required release gates");
 
     input.evidence.reconciliation = { reconciledFields: ["artist", "title"], conflicts: [{ field: "isrc" }] };
