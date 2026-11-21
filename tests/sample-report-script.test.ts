@@ -10,9 +10,13 @@ describe("sample-report command",()=>{
   expect(script).toContain('["sample","full"]');
   expect(script).toContain("ensurePdfReport");
   expect(script).toContain('pdf.getPageCount()!==9');
-  expect(script).toContain('pdf.getPageCount()!==12');
+  expect(script).toContain('pdf.getPageCount()<14||pdf.getPageCount()>17');
+  expect(script).toContain("extractedPages[index+9]?.toUpperCase().includes(narrativeTitles[index].toUpperCase())");
   expect(script).toContain('requiredCharts=["Evidence layers","Music platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"]');
   expect(script).toContain("generatedAt: new Date().toISOString()");
+  const v2=await readFile(new URL("scripts/sample-report-v2.mjs",root),"utf8");
+  expect(v2).toContain("philloFullPdf.getPageCount()!==15");
+  expect(v2).toContain("fullPdf.getPageCount()!==16");
   expect(script).not.toContain("fetch(");
   const ambiguous=await readFile(new URL("scripts/fixtures/ambiguous-audio.mjs",root),"utf8");
   expect(ambiguous).toContain("insufficient_evidence");

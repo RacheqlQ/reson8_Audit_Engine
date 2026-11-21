@@ -52,13 +52,17 @@ for(const [name,input] of variants){
   const bytes=await ensurePdfReport(reportInput,tier);
   const pdf=await PDFDocument.load(bytes);
   if(tier==="sample"&&pdf.getPageCount()!==9)throw new Error(name+" sample report must be exactly 9 pages; got "+pdf.getPageCount());
-  if(tier==="full"&&pdf.getPageCount()!==12)throw new Error(name+" full report must be exactly 12 pages; got "+pdf.getPageCount());
+  if(tier==="full"&&(pdf.getPageCount()<14||pdf.getPageCount()>17))throw new Error(name+" full report must contain 9 base pages, 5 narrative pages and up to 3 evidence-gated deep dives (14–17 pages); got "+pdf.getPageCount());
   const filename=name+"-"+tier+"-audit-report.pdf";
   const fileUrl=new URL(filename,out),filePath=fileUrl.pathname;
   await writeFile(fileUrl,bytes);
   const extracted=execFileSync("pdftotext",["-layout",filePath,"-"],{encoding:"utf8"});
   const extractedPages=extracted.split("\f").filter(page=>page.trim().length>0);
   if(extractedPages.length!==pdf.getPageCount())throw new Error(filename+" extracted page count does not match the PDF page count");
+   if(tier==="full"){
+    const narrativeTitles=["Production and arrangement guidance","Comparable lanes and listening references","Promotion and campaign strategy","Label and partner fit","30 / 60 / 90-day execution plan"];
+    for(let index=0;index<narrativeTitles.length;index++)if(!extractedPages[index+9]?.toUpperCase().includes(narrativeTitles[index].toUpperCase()))throw new Error(filename+" must place narrative section "+(index+1)+" on page "+(index+10)+": "+narrativeTitles[index]);
+   }
   const bbox=execFileSync("pdftotext",["-bbox",filePath,"-"],{encoding:"utf8"});
   const pageBoxes=[...bbox.matchAll(/<page\b[^>]*>([\s\S]*?)<\/page>/g)];
   if(pageBoxes.length!==pdf.getPageCount())throw new Error(filename+" bounding-box page count does not match the PDF page count");

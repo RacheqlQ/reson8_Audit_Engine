@@ -187,13 +187,24 @@ describe("v2 gated report pages", () => {
     expect(pdf.getForm().getFields().map(field => field.getName())).toContain("ar_notes");
   });
 
-  it("keeps a full report within the approved 12–13 page range without consulting v1 pagination", async () => {
+  it("keeps the five narrative pages and only evidence-supported deep dives", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(12);
+    expect(pdf.getPageCount()).toBe(15);
   });
 
-  it("keeps an expanded real-world narrative inside the fixed 12-page full-report allocation", async () => {
+  it("keeps the five narrative pages after page 9 and omits unsupported analytical stub pages", async () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = { ...input.sonicDna, sonicDnaAxes: null, sonicAxes: null, energyOverTime: null, energySeries: null,
+      bpm: null, tempoBpm: null, key: null, musicalKey: null, energy: null, rmsEnergy: null, rmsLevelDbfs: null, loudnessLufs: null, tonalResolution: null };
+    input.tonalResolution = { status: "UNAVAILABLE", tonic: null, mode: null, reasonCodes: ["INSUFFICIENT_TONAL_EVIDENCE"], candidates: [] };
+    input.assessment = { ...input.assessment, headlineScore: null, scoreDrivers: [], executionTimeline: [] };
+    input.realMasterContract = null;
+    const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
+    expect(pdf.getPageCount()).toBe(14);
+  });
+
+  it("keeps expanded narrative content on its five allocated pages", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.assessment.executiveSummary = Array(3).fill(input.assessment.executiveSummary).join(" ");
     input.assessment.strengths = [...input.assessment.strengths, ...Array(5).fill(
@@ -203,10 +214,10 @@ describe("v2 gated report pages", () => {
       "A release decision still requires rights clearance, delivery confirmation, approved final master and source-attributed commercial reporting."
     )];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(12);
+    expect(pdf.getPageCount()).toBe(15);
   });
 
-  it("keeps optional analytical evidence within 13 full-report pages", async () => {
+  it("adds only the analytical pages supported by optional evidence", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.sonicDna = {
       ...input.sonicDna,
@@ -217,7 +228,7 @@ describe("v2 gated report pages", () => {
     };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(12);
+    expect(pdf.getPageCount()).toBe(16);
   });
 
   it("omits every gated page for a minimal audio-only fixture", async () => {
