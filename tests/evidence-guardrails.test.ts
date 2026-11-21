@@ -486,3 +486,39 @@ describe("independent tuning reliability", () => {
     expect(hasMultipleTuningWindows({ keyTuningCents: 62, tuningEvidenceWindows: 4 })).toBe(false);
   });
 });
+
+
+describe("Circle of Fifths reportability contract", () => {
+  const confirmedResolution = {
+    status: "CONFIRMED", tonic: "C", mode: "major", reasonCodes: [],
+    candidates: [{ tonic: "C", pitchClass: 0, mode: "major", score: 0.5, bootstrapShare: 0.9, windowAgreement: 0.75, margin: 0.08 }],
+    bootstrapShare: 0.9, windowAgreement: 0.75, runnerUpMargin: 0.08,
+    validWindowCount: 8, meanSalience: 0.6, method: "circle_of_fifths_audio_first_v1",
+    thresholds: { minWindows: 3, minMeanSalience: 0.12, minBootstrapShare: 0.8, minWindowAgreement: 0.7, minRunnerUpMargin: 0.025 },
+  } as const;
+
+  it("honours a confirmed tonal resolution without reapplying the legacy 0.80 agreement gate", () => {
+    expect(isReliableKey({
+      key: "C", mode: "major", keyConfidence: 0.42, keySegmentAgreement: 0.75,
+      tonalResolution: confirmedResolution,
+    })).toBe(true);
+  });
+
+  it("does not let a confirmed status override a mismatched tonic or mode", () => {
+    expect(isReliableKey({
+      key: "D", mode: "major", keyConfidence: 0.99, keySegmentAgreement: 0.99,
+      tonalResolution: confirmedResolution,
+    })).toBe(false);
+    expect(isReliableKey({
+      key: "C", mode: "minor", keyConfidence: 0.99, keySegmentAgreement: 0.99,
+      tonalResolution: confirmedResolution,
+    })).toBe(false);
+  });
+
+  it("keeps provisional tonal resolutions out of the confirmed key field", () => {
+    expect(isReliableKey({
+      key: "C", mode: "major", keyConfidence: 0.99, keySegmentAgreement: 0.99,
+      tonalResolution: { ...confirmedResolution, status: "PROVISIONAL" },
+    })).toBe(false);
+  });
+});

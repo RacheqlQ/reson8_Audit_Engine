@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildCoverKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
+import { buildCoverKeyLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
@@ -145,7 +145,7 @@ describe("v2 detector diagnostics", () => {
     }};
     const lines = reportV2Render.buildKeyDiagnosticLines(input).join(" ");
     expect(lines).toContain("Possible song keys: A minor; C major.");
-    expect(lines).toContain("Song-key readings are broadly consistent across the analyzed sections.");
+    expect(lines).toContain("Different key readings were returned; no single key is confirmed.");
     expect(lines).not.toContain("Tuning offset");
     expect(lines).not.toMatch(/Goertzel|score|margin|confidence|harmonic|FFT/i);
     expect(lines).toContain("Different key readings were returned; no single key is confirmed.");
@@ -233,6 +233,14 @@ describe("v2 cover key and playback presentation", () => {
     expect(normalizeCircleNote("F# minor")).toBe("F#");
     expect(normalizeCircleNote("unknown")).toBe("");
   });
+  it("keeps provisional and unavailable tonal states consistent in the recording overview", () => {
+    const provisional = structuredClone(ambiguousAudioFixture) as any;
+    expect(buildRecordingOverviewKeyLabel(adaptReportV2(provisional))).toBe("Provisional: C major");
+    const confirmed = structuredClone(fullAudioFixture) as any;
+    expect(buildRecordingOverviewKeyLabel(adaptReportV2(confirmed))).toBe("A minor");
+    const unavailable = structuredClone(metadataOnlyFixture) as any;
+    expect(buildRecordingOverviewKeyLabel(adaptReportV2(unavailable))).toBe("Unavailable");
+  });
   it("shows the strongest reportable tonal centre on the cover without calling it confirmed", () => {
     const input = structuredClone(ambiguousAudioFixture) as any;
     input.sonicDna.keyConfidence = 0.12;
@@ -240,3 +248,20 @@ describe("v2 cover key and playback presentation", () => {
     expect(label).toBe("Possible: C major");
   });
 });
+
+  it("uses the adapted tonal resolution when legacy cover inputs no longer carry the resolution payload", () => {
+    const ambiguous = structuredClone(ambiguousAudioFixture) as any;
+    const adapted = adaptReportV2(ambiguous);
+    const legacyInput = {
+      ...ambiguous,
+      tonalResolution: undefined,
+      sonicDna: { ...ambiguous.sonicDna, tonalResolution: undefined, harmonicFeatures: undefined },
+    };
+    expect(adapted.key.value).toBeNull();
+    expect(buildCoverKeyLabel(legacyInput, adapted)).toBe("Possible: C major");
+
+    const unavailable = structuredClone(metadataOnlyFixture) as any;
+    const unavailableData = adaptReportV2(unavailable);
+    const metadataOnlyInput = { ...unavailable, tonalResolution: undefined };
+    expect(buildCoverKeyLabel(metadataOnlyInput, unavailableData)).toBe("Unavailable");
+  });

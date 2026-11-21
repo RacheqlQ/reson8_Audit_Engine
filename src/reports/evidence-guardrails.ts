@@ -43,25 +43,48 @@ export function hasMultipleTuningWindows(value: Record<string, unknown> | null |
 export const MIN_REPORTABLE_KEY_CANDIDATE_CONFIDENCE = 0.1;
 
 export function hasReportableKeyCandidates(value: Record<string, unknown> | null | undefined): boolean {
-  if (!value || typeof value.keyConfidence !== "number" || !Number.isFinite(value.keyConfidence)
-    || value.keyConfidence < MIN_REPORTABLE_KEY_CANDIDATE_CONFIDENCE) return false;
+  if (!value) return false;
   const harmonic = value.harmonicFeatures && typeof value.harmonicFeatures === "object"
     ? value.harmonicFeatures as Record<string, unknown> : null;
-  return Array.isArray(harmonic?.topCandidates) && harmonic.topCandidates.some((candidate) =>
-    candidate && typeof candidate === "object"
-      && typeof (candidate as Record<string, unknown>).key === "string"
-      && typeof (candidate as Record<string, unknown>).mode === "string"
-      && typeof (candidate as Record<string, unknown>).score === "number"
-      && Number.isFinite((candidate as Record<string, unknown>).score),
-  );
+  const resolutionValue = harmonic?.tonalResolution ?? value.tonalResolution;
+  const resolution = resolutionValue && typeof resolutionValue === "object"
+    ? resolutionValue as Record<string, unknown> : null;
+  if (resolution && (resolution.status === "CONFIRMED" || resolution.status === "PROVISIONAL")) {
+    return Array.isArray(resolution.candidates) && resolution.candidates.some(candidate => {
+      if (!candidate || typeof candidate !== "object") return false;
+      const item = candidate as Record<string, unknown>;
+      return typeof item.tonic === "string" && (item.mode === "major" || item.mode === "minor")
+        && typeof item.score === "number" && Number.isFinite(item.score);
+    });
+  }
+  if (typeof value.keyConfidence !== "number" || !Number.isFinite(value.keyConfidence)
+    || value.keyConfidence < MIN_REPORTABLE_KEY_CANDIDATE_CONFIDENCE) return false;
+  return Array.isArray(harmonic?.topCandidates) && harmonic.topCandidates.some(candidate => {
+    if (!candidate || typeof candidate !== "object") return false;
+    const item = candidate as Record<string, unknown>;
+    return typeof item.key === "string" && typeof item.mode === "string"
+      && typeof item.score === "number" && Number.isFinite(item.score);
+  });
 }
 
 export function isReliableKey(value: Record<string, unknown> | null | undefined): boolean {
   if (!value) return false;
+  const harmonic = value.harmonicFeatures && typeof value.harmonicFeatures === "object"
+    ? value.harmonicFeatures as Record<string, unknown> : null;
+  const resolutionValue = harmonic?.tonalResolution ?? value.tonalResolution;
+  const resolution = resolutionValue && typeof resolutionValue === "object"
+    ? resolutionValue as Record<string, unknown> : null;
   const key = value.key;
   const mode = value.mode;
-  const harmonic = value.harmonicFeatures;
   if (harmonic && typeof harmonic === "object" && (harmonic as Record<string, unknown>).status === "insufficient_evidence") return false;
+  if (resolution) {
+    // The explicit resolver owns the tonal confidence gate. Do not re-apply
+    // legacy 0.80 confidence/agreement floors to a result already confirmed
+    // by its bootstrap, window-consensus and runner-up-margin thresholds.
+    return resolution.status === "CONFIRMED"
+      && typeof key === "string" && key.trim() === resolution.tonic
+      && (mode === "major" || mode === "minor") && mode === resolution.mode;
+  }
   const confidence = value.keyConfidence;
   const agreement = value.keySegmentAgreement;
   return typeof key === "string" && key.trim().length > 0

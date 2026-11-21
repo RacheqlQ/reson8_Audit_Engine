@@ -1,4 +1,5 @@
 import { bootstrapCategoricalConsensus, type BootstrapConsensusDiagnostics } from "./ensemble-consensus.js";
+import { cadenceResolutionWeight, resolveTonalCentre, type TonalResolution, type TonalWindow } from "./tonal-resolution.js";
 
 export interface KeySegmentDiagnostic {
   startSeconds: number;
@@ -23,6 +24,7 @@ export interface KeyEstimate {
   tuningEvidenceWindows: number;
   limitation: string | null;
   windowConsensus: BootstrapConsensusDiagnostics;
+  tonalResolution: TonalResolution;
 }
 
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
@@ -40,8 +42,8 @@ export function circleOfFifthsRootScore(bassChroma: readonly number[], tonic: nu
   return at(tonic) * 0.6 + at(fifth) * 0.25 + at(fourth) * 0.15;
 }
 const FRAME_SIZE = 4096;
-const MAX_WINDOWS = 12;
-const MIN_FREQUENCY_HZ = 55;
+const MAX_WINDOWS = 16;
+const MIN_FREQUENCY_HZ = 35;
 const MAX_FREQUENCY_HZ = 2000;
 const EPSILON = 1e-12;
 
@@ -317,10 +319,15 @@ function emptyEstimate(limitation: string): KeyEstimate {
     segmentAgreement: null, method: "fft_harmonic_chroma_ensemble",
     analysisWindows: 0, fftButterflyCount: 0, segmentChroma: [], topCandidates: [], tuningEvidenceWindows: 0, limitation,
     windowConsensus: bootstrapCategoricalConsensus([]),
+    tonalResolution: resolveTonalCentre([]),
   };
 }
 
-export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstimate {
+export function estimateKey(
+  samples: Float32Array,
+  sampleRate: number,
+  downbeatCandidateTimesSeconds: readonly number[] = [],
+): KeyEstimate {
   if (sampleRate <= 0 || samples.length < sampleRate * 2 || rms(samples) < 1e-5) {
     return emptyEstimate("Insufficient pitched audio or signal energy for reliable key estimation.");
   }
@@ -328,90 +335,192 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     return emptyEstimate("Audio is shorter than the minimum key-analysis frame.");
   }
 
-  const hop = FRAME_SIZE / 2;
-  const possibleWindows = Math.floor((samples.length - FRAME_SIZE) / hop) + 1;
-  const windowCount = Math.min(MAX_WINDOWS, possibleWindows);
-  const aggregate = Array(12).fill(0);
-  const aggregateBass = Array(12).fill(0);
+  const durationSeconds = samples.length / sampleRate;
+  const targetWindowSeconds = durationSeconds >= 12 ? 12 : durationSeconds;
+  const windowSamples = Math.min(samples.length, Math.max(FRAME_SIZE, Math.floor(sampleRate * targetWindowSeconds)));
+  const windowHop = Math.max(FRAME_SIZE, Math.floor(windowSamples / 2));
+  const windowStarts: number[] = [];
+  if (samples.length <= windowSamples) windowStarts.push(0);
+  else {
+    for (let start = 0; start + windowSamples <= samples.length; start += windowHop) windowStarts.push(start);
+    const finalStart = samples.length - windowSamples;
+    if (windowStarts[windowStarts.length - 1] !== finalStart) windowStarts.push(finalStart);
+  }
+  const boundedStarts = windowStarts.length > MAX_WINDOWS
+    ? Array.from({ length: MAX_WINDOWS }, (_, index) => windowStarts[Math.round(index * (windowStarts.length - 1) / (MAX_WINDOWS - 1))]!)
+    : windowStarts;
   const segmentProfiles: number[][] = [];
   const segmentWinners: Candidate[] = [];
   const segmentChroma: KeySegmentDiagnostic[] = [];
+  const tonalWindows: TonalWindow[] = [];
   const tuningValues: Array<{ value: number; weight: number }> = [];
   let fftButterflyCount = 0;
 
-  for (let window = 0; window < windowCount; window++) {
-    const selectedWindow = windowCount === 1
-      ? 0
-      : Math.round(window * (possibleWindows - 1) / (windowCount - 1));
-    const start = selectedWindow * hop;
-    const result = profileForSegment(samples, start, sampleRate);
-    fftButterflyCount += result.fftButterflyCount;
-    const total = result.chroma.reduce((sum, value) => sum + value, 0);
-    if (total <= EPSILON) continue;
-    const normalized = result.chroma.map((value) => value / total);
-    const bassTotal = result.bassChroma.reduce((sum, value) => sum + value, 0);
-    const normalizedBass = bassTotal > EPSILON ? result.bassChroma.map(value => value / bassTotal) : Array(12).fill(0);
-    for (let pitch = 0; pitch < 12; pitch++) {
-      aggregate[pitch] += normalized[pitch];
-      aggregateBass[pitch] += normalizedBass[pitch];
+  for (let window = 0; window < boundedStarts.length; window++) {
+    const start = boundedStarts[window]!;
+    const end = Math.min(samples.length, start + windowSamples);
+    const frameHop = Math.max(FRAME_SIZE / 2, Math.floor(sampleRate * 0.5));
+    const chromaAggregate = Array(12).fill(0);
+    const bassAggregate = Array(12).fill(0);
+    const downbeatBassAggregate = Array(12).fill(0);
+    let downbeatFrameCount = 0;
+    let frameWeightTotal = 0;
+    let salienceTotal = 0;
+    let energyTotal = 0;
+    let tuningWindowWeight = 0;
+    let tuningWindowOffset = 0;
+
+    for (let frameStart = start; frameStart + FRAME_SIZE <= end; frameStart += frameHop) {
+      const frame = samples.subarray(frameStart, frameStart + FRAME_SIZE);
+      const frameEnergy = rms(frame);
+      if (frameEnergy < 1e-5) continue;
+      const result = profileForSegment(samples, frameStart, sampleRate);
+      fftButterflyCount += result.fftButterflyCount;
+      const chromaTotal = result.chroma.reduce((sum, value) => sum + value, 0);
+      if (chromaTotal <= EPSILON || result.peaks.length < 2) continue;
+      const normalizedFrame = result.chroma.map(value => value / chromaTotal);
+      const normalizedBassFrame = result.bassChroma.map(value => value / Math.max(EPSILON, result.bassChroma.reduce((sum, value) => sum + value, 0)));
+      let entropy = 0;
+      for (const value of normalizedFrame) if (value > EPSILON) entropy -= value * Math.log(value);
+      const tonalConcentration = clamp(1 - entropy / Math.log(12));
+      const harmonicClarity = Math.max(0.15, clamp(result.peaks.length / 8));
+      const salience = clamp(tonalConcentration * harmonicClarity);
+      // Percussive/noisy frames below the same salience floor used by the
+      // resolver do not contribute chroma votes or bass-root anchors.
+      if (salience < 0.12) continue;
+      const frameWeight = frameEnergy * salience;
+      for (let pitch = 0; pitch < 12; pitch++) {
+        chromaAggregate[pitch] += normalizedFrame[pitch]! * frameWeight;
+        bassAggregate[pitch] += normalizedBassFrame[pitch]! * frameWeight;
+      }
+      // Tempo-derived beat-four positions are candidates, not verified downbeats.
+      // Use them only as a soft bass anchor when several strong candidate frames
+      // agree on one low-frequency root; otherwise leave the anchor unset.
+      const frameTime = frameStart / sampleRate;
+      if (downbeatCandidateTimesSeconds.some(time => Number.isFinite(time) && Math.abs(frameTime - time) <= 0.15)) {
+        downbeatFrameCount += 1;
+        for (let pitch = 0; pitch < 12; pitch++) {
+          downbeatBassAggregate[pitch] += normalizedBassFrame[pitch]! * frameWeight;
+        }
+      }
+      frameWeightTotal += frameWeight;
+      salienceTotal += salience * frameWeight;
+      energyTotal += frameEnergy * frameWeight;
+      if (result.peaks.length) {
+        const offset = tuningOffset(result.peaks);
+        const weight = result.peaks.reduce((sum, peak) => sum + peak.magnitude, 0);
+        tuningWindowOffset += offset * weight;
+        tuningWindowWeight += weight;
+      }
     }
-    segmentProfiles.push(normalized);
+
+    if (frameWeightTotal <= EPSILON) continue;
+    const chromaTotal = chromaAggregate.reduce((sum, value) => sum + value, 0);
+    const bassTotal = bassAggregate.reduce((sum, value) => sum + value, 0);
+    if (chromaTotal <= EPSILON) continue;
+    const normalized = chromaAggregate.map(value => value / chromaTotal);
+    const normalizedBass = bassTotal > EPSILON ? bassAggregate.map(value => value / bassTotal) : Array(12).fill(0);
+    const salience = salienceTotal / frameWeightTotal;
+    const windowEnergy = energyTotal / frameWeightTotal;
+    const downbeatBassTotal = downbeatBassAggregate.reduce((sum, value) => sum + value, 0);
+    const downbeatRootIndex = downbeatBassAggregate.reduce((best, value, index, values) => value > values[best]! ? index : best, 0);
+    const downbeatRoot = downbeatFrameCount >= 2 && downbeatBassTotal > EPSILON
+      && downbeatBassAggregate[downbeatRootIndex]! / downbeatBassTotal >= 0.45
+      ? downbeatRootIndex : null;
     const best = rankCandidates(normalized, normalizedBass)[0];
+    segmentProfiles.push(normalized);
     if (best) segmentWinners.push(best);
     segmentChroma.push({
       startSeconds: Number((start / sampleRate).toFixed(4)),
-      endSeconds: Number(((start + FRAME_SIZE) / sampleRate).toFixed(4)),
-      chroma: normalized.map((value) => Number(value.toFixed(6))),
+      endSeconds: Number((end / sampleRate).toFixed(4)),
+      chroma: normalized.map(value => Number(value.toFixed(6))),
       winningKey: best ? NOTES[best.key] : null,
       winningMode: best?.mode ?? null,
       winningScore: best ? Number(best.score.toFixed(6)) : null,
     });
-    if (result.peaks.length) {
-      const offset = tuningOffset(result.peaks);
-      tuningValues.push({ value: offset, weight: result.peaks.reduce((sum, peak) => sum + peak.magnitude, 0) });
+    tonalWindows.push({
+      startSeconds: start / sampleRate,
+      endSeconds: end / sampleRate,
+      chroma: normalized,
+      bassChroma: normalizedBass,
+      salience,
+      energy: windowEnergy,
+      downbeatRoot: downbeatRoot !== null && normalizedBass[downbeatRoot]! >= 0.2 ? downbeatRoot : null,
+      cadenceWeight: 0,
+    });
+    if (tuningWindowWeight > EPSILON) {
+      tuningValues.push({ value: tuningWindowOffset / tuningWindowWeight, weight: tuningWindowWeight });
     }
   }
 
   if (!segmentProfiles.length) return emptyEstimate("No stable pitched spectral peaks were detected for key estimation.");
-  const aggregateTotal = aggregate.reduce((sum, value) => sum + value, 0);
-  if (aggregateTotal <= EPSILON) return emptyEstimate("No stable tonal energy was detected for key estimation.");
-  const normalizedAggregate = aggregate.map((value) => value / aggregateTotal);
-  const aggregateBassTotal = aggregateBass.reduce((sum, value) => sum + value, 0);
-  const normalizedAggregateBass = aggregateBassTotal > EPSILON ? aggregateBass.map(value => value / aggregateBassTotal) : Array(12).fill(0);
-  const ranked = rankCandidates(normalizedAggregate, normalizedAggregateBass);
+  if (tonalWindows.length >= 2) {
+    const finalWindow = tonalWindows[tonalWindows.length - 1]!;
+    const precedingWindow = tonalWindows[tonalWindows.length - 2]!;
+    const finalCandidate = rankCandidates(finalWindow.chroma, finalWindow.bassChroma)[0];
+    if (finalCandidate) {
+      // Weight the outro only when the preceding window contains the candidate's
+      // leading tone and the final window shows a bass/chroma arrival on tonic.
+      finalWindow.cadenceWeight = cadenceResolutionWeight(precedingWindow, finalWindow, finalCandidate.key);
+    }
+  }
+  const tonalResolution = resolveTonalCentre(tonalWindows);
+  const aggregate = Array(12).fill(0);
+  const aggregateBass = Array(12).fill(0);
+  for (const window of tonalWindows) {
+    const weight = Math.max(EPSILON, window.salience * Math.max(0.05, window.energy ?? 1));
+    const chroma = window.chroma;
+    const bass = window.bassChroma ?? Array(12).fill(0);
+    for (let pitch = 0; pitch < 12; pitch++) {
+      aggregate[pitch] += chroma[pitch]! * weight;
+      aggregateBass[pitch] += bass[pitch]! * weight;
+    }
+  }
+  const ranked = rankCandidates(aggregate, aggregateBass);
   const best = ranked[0];
   const second = ranked[1];
-  const topCandidates = ranked.slice(0, 5).map((candidate) => ({
-    key: NOTES[candidate.key], mode: candidate.mode, score: Number(candidate.score.toFixed(6)),
-  }));
-  const windowConsensus = bootstrapCategoricalConsensus(segmentWinners.map((winner) => `${NOTES[winner.key]}:${winner.mode}`));
-  const supportedChords = diatonicChordQualities(best.key, best.mode);
-  // Recognize diatonic chord progressions (e.g. C–F–G–C) while rejecting
-  // incompatible sections whose chord roots or major/minor quality do not fit.
-  const agreement = segmentWinners.filter(winner =>
-    supportedChords.get(winner.key) === winner.mode
-  ).length / segmentWinners.length;
-  const margin = best.score - second.score;
-  const confidence = clamp((margin * 2.5 + 0.08) * (0.35 + 0.65 * agreement));
+  const margin = best && second ? best.score - second.score : 0;
+  const agreement = tonalResolution.windowAgreement;
+  const confidence = best && second && agreement !== null
+    ? clamp((margin * 2.5 + 0.08) * (0.35 + 0.65 * agreement))
+    : null;
   const tuningCents = tuningValues.length ? weightedMedian(tuningValues) : 0;
-
-  if (agreement < MIN_KEY_CANDIDATE_SEGMENT_AGREEMENT) {
-    return {
-      key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
-      method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, windowConsensus, limitation: "Key estimates varied across audio segments; no single key is asserted.",
-    };
-  }
-  if (confidence < MIN_KEY_CANDIDATE_CONFIDENCE || margin < 0.015) {
-    return {
-      key: null, mode: null, confidence, tuningCents, segmentAgreement: agreement,
-      method: "fft_harmonic_chroma_ensemble", analysisWindows: segmentProfiles.length,
-      fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, windowConsensus, limitation: "Key and mode confidence was below threshold; no key is asserted.",
-    };
-  }
+  const topCandidates = tonalResolution.candidates.slice(0, 5).map(candidate => ({
+    key: candidate.tonic,
+    mode: candidate.mode,
+    score: candidate.score,
+  }));
+  const reasonDescriptions: Record<string, string> = {
+    INSUFFICIENT_TONAL_EVIDENCE: "Stable harmonic evidence is insufficient.",
+    LOW_WINDOW_CONSENSUS: "A stable window consensus was not reached across the analyzed audio segments.",
+    LOW_BOOTSTRAP_CONSENSUS: "Resampled candidate rankings are not stable enough for confirmation.",
+    LOW_RUNNER_UP_MARGIN: "The leading candidate is too close to its runner-up.",
+    RELATIVE_MAJOR_MINOR_AMBIGUITY: "Relative major and minor readings remain close.",
+    ADJACENT_FIFTHS_AMBIGUITY: "Adjacent Circle of Fifths candidates remain close.",
+  };
+  const limitation = tonalResolution.status === "CONFIRMED"
+    ? null
+    : tonalResolution.status === "UNAVAILABLE"
+      ? "Insufficient tonal evidence; no tonic or mode can be asserted."
+      : "The tonal centre remains provisional. " + tonalResolution.reasonCodes
+        .map(code => reasonDescriptions[code] ?? "A tonal disambiguation check remains unresolved.")
+        .join(" ");
   return {
-    key: NOTES[best.key], mode: best.mode, confidence, tuningCents,
-    segmentAgreement: agreement, method: "fft_harmonic_chroma_ensemble",
-    analysisWindows: segmentProfiles.length, fftButterflyCount, segmentChroma, topCandidates, tuningEvidenceWindows: tuningValues.length, windowConsensus, limitation: null,
+    // Only confirmed results populate the legacy key/mode fields. Provisional
+    // candidates remain available through tonalResolution and topCandidates.
+    key: tonalResolution.status === "CONFIRMED" ? tonalResolution.tonic : null,
+    mode: tonalResolution.status === "CONFIRMED" ? tonalResolution.mode : null,
+    confidence,
+    tuningCents,
+    segmentAgreement: agreement,
+    method: "fft_harmonic_chroma_ensemble",
+    analysisWindows: segmentProfiles.length,
+    fftButterflyCount,
+    segmentChroma,
+    topCandidates,
+    tuningEvidenceWindows: tuningValues.length,
+    limitation,
+    windowConsensus: bootstrapCategoricalConsensus(segmentWinners.map(winner => `${NOTES[winner.key]}:${winner.mode}`)),
+    tonalResolution,
   };
 }

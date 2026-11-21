@@ -182,8 +182,9 @@ describe("uploaded master provenance in reports", () => {
     expect(report).toContain("No DSP provider lookup result was recorded");
   });
 
-  it("withholds low-confidence tempo and key candidates from the technical dashboard", () => {
+  it("withholds low-confidence tempo and legacy key candidates when no tonal resolver result exists", () => {
     const input = structuredClone(fullAudioFixture) as AuditReportInput;
+    input.tonalResolution = null;
     input.sonicDna = {
       ...input.sonicDna,
       provenance: "uploaded_audio_master",
@@ -197,6 +198,7 @@ describe("uploaded master provenance in reports", () => {
       },
       key: null,
       mode: null,
+      tonalResolution: null,
       keyConfidence: 0.17,
       keySegmentAgreement: 0.75,
       harmonicFeatures: {
@@ -310,7 +312,7 @@ describe("uploaded master provenance in reports", () => {
     expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-12")).toBe(true);
   });
 
-  it("hides internal master paths and withholds independent tempo candidates without explicit confidence", () => {
+  it("hides internal master paths while retaining provisional tonal candidates without explicit confidence", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.evidence = { ...input.evidence, fixture: false, masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } };
     input.sonicDna = {
@@ -345,6 +347,6 @@ describe("uploaded master provenance in reports", () => {
     const rows = sonicDashboardRowsForReport(input.sonicDna, true);
     expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toBeNull();
     expect(rows.find((row) => row.label === "ALTERNATIVE PULSE READINGS")?.value).toBeNull();
-    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toBeNull();
+    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toBe("A minor; C major");
   });
 });

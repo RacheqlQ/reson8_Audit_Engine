@@ -1,8 +1,15 @@
 export function normalizeReportAccessKey(input) {
-  return input
-    .replace(/[\s\u200B-\u200D\uFEFF]/g, "")
-    .replace(/^["']+|["']+$/g, "")
-    .toLowerCase();
+  let value = String(input ?? "")
+    .replace(/[\s\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "")
+    .replace(/^[\"']+|[\"']+$/g, "");
+  value = value.replace(/^(?:(?:reson8)?(?:full[-_]?report|report)?(?:access)?key|bearer)[:=]?/i, "");
+  value = value.replace(/^0x/i, "");
+  value = value.toLowerCase();
+  // Match the server: grouped keys may contain internal separators only.
+  if (/^[0-9a-f]+(?:[-:][0-9a-f]+)+$/i.test(value)) {
+    value = value.replace(/[-:]/g, "");
+  }
+  return value;
 }
 
 export async function readPdfResponse(response) {

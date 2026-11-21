@@ -95,3 +95,22 @@ describe("browser PDF download contract", () => {
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:reson8-report");
   });
 });
+
+
+describe("mobile clipboard report-key normalization", () => {
+  it("accepts a copied key with a label, 0x prefix, or visual grouping separators", () => {
+    const key = "0123456789abcdef".repeat(4);
+    expect(normalizeReportAccessKey("Report access key: " + key.toUpperCase())).toBe(key);
+    expect(normalizeReportAccessKey("Full-report access key: " + key.toUpperCase())).toBe(key);
+    expect(normalizeReportAccessKey("0x" + key)).toBe(key);
+    expect(normalizeReportAccessKey(key.match(/.{1,8}/g)!.join("-"))).toBe(key);
+    expect(normalizeReportAccessKey(key + "0")).not.toBe(key);
+    expect(normalizeReportAccessKey(key + "g")).not.toBe(key);
+  });
+
+  it("removes invisible bidirectional formatting marks without accepting non-hex key characters", () => {
+    const key = "0123456789abcdef".repeat(4);
+    expect(normalizeReportAccessKey("\u200e\u2066" + key + "\u2069\u200f")).toBe(key);
+    expect(normalizeReportAccessKey(key + "-")).not.toBe(key);
+  });
+});

@@ -13,6 +13,7 @@ describe("report access key normalization and issuance", () => {
       createCatalogJob: async () => "unused",
       uploadMaster: async () => {}, setSourcePath: async () => {}, deleteMaster: async () => {},
     });
+    expect(issued.reportAccessToken).toMatch(/^[0-9a-f]{64}$/);
     expect(await hashReportAccessKey(normalizeReportAccessKey(issued.reportAccessToken).value)).toBe(storedHash);
   });
 
@@ -36,6 +37,24 @@ describe("report access key normalization and issuance", () => {
   it("normalizes uppercase hexadecimal keys", () => {
     expect(normalizeReportAccessKey("A".repeat(64)).value).toBe("a".repeat(64));
     expect(normalizeReportAccessKey("A".repeat(64)).valid).toBe(true);
+  });
+
+  it("accepts a labeled or grouped copy of the issued key without truncating malformed values", () => {
+    const key = "0123456789abcdef".repeat(4);
+    expect(normalizeReportAccessKey("Report access key: " + key.toUpperCase()).value).toBe(key);
+    expect(normalizeReportAccessKey("Full-report access key: " + key.toUpperCase()).value).toBe(key);
+    expect(normalizeReportAccessKey("0x" + key).valid).toBe(true);
+    expect(normalizeReportAccessKey(key.match(/.{1,8}/g)!.join("-")).value).toBe(key);
+    expect(normalizeReportAccessKey(key + "0").valid).toBe(false);
+    expect(normalizeReportAccessKey(key + "g").valid).toBe(false);
+  });
+
+  it("normalizes invisible bidirectional clipboard marks while preserving strict 64-hex validation", () => {
+    const key = "0123456789abcdef".repeat(4);
+    const normalized = normalizeReportAccessKey("\u200e\u2066" + key + "\u2069\u200f");
+    expect(normalized.value).toBe(key);
+    expect(normalized.valid).toBe(true);
+    expect(normalizeReportAccessKey(key + "-").valid).toBe(false);
   });
 
   it.each(["a".repeat(63), "g".repeat(64)])("rejects malformed keys without changing their value", (key) => {

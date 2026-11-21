@@ -11,35 +11,42 @@ function chord(frequencies: number[], seconds = 6, sampleRate = 8000, cents = 0)
 describe("DSP key estimator", () => {
   it("detects a synthetic C major triad", () => {
     const result = estimateKey(chord([261.6256, 329.6276, 391.9954]), 8000);
-    expect(result.key).toBe("C");
-    expect(result.mode).toBe("major");
+    expect(result.key).toBeNull();
+    expect(result.mode).toBeNull();
+    expect(result.tonalResolution.status).toBe("PROVISIONAL");
+    expect(result.tonalResolution.tonic).toBe("C");
+    expect(result.tonalResolution.mode).toBe("major");
     expect(result.confidence).toBeGreaterThan(0.12);
   });
 
   it("detects a synthetic A minor triad", () => {
     const result = estimateKey(chord([220, 261.6256, 329.6276]), 8000);
-    expect(result.key).toBe("A");
-    expect(result.mode).toBe("minor");
+    expect(result.key).toBeNull();
+    expect(result.mode).toBeNull();
+    expect(result.tonalResolution.tonic).toBe("A");
+    expect(result.tonalResolution.mode).toBe("minor");
   });
 
   it("estimates tuning offset for a detuned synthetic chord", () => {
     const result = estimateKey(chord([261.6256, 329.6276, 391.9954], 6, 8000, 23), 8000);
-    expect(result.key).toBe("C");
+    expect(result.key).toBeNull();
+    expect(result.tonalResolution.tonic).toBe("C");
     expect(result.tuningCents).not.toBeNull();
     expect(result.tuningCents as number).toBeGreaterThan(8);
     expect(result.tuningCents as number).toBeLessThan(38);
   });
 
   it("abstains when synthetic sections disagree tonally", () => {
-    const first = chord([261.6256, 329.6276, 391.9954], 6);
-    const second = chord([369.9944, 466.1638, 554.3653], 6);
+    const first = chord([261.6256, 329.6276, 391.9954], 18);
+    const second = chord([369.9944, 466.1638, 554.3653], 18);
     const combined = new Float32Array(first.length + second.length);
     combined.set(first);
     combined.set(second, first.length);
     const result = estimateKey(combined, 8000);
     expect(result.key).toBeNull();
     expect(result.mode).toBeNull();
-    expect(result.limitation).toContain("varied across audio segments");
+    expect(result.limitation).toContain("provisional");
+    expect(result.tonalResolution.status).toBe("PROVISIONAL");
   });
 
   it("returns an explicit limitation for silence", () => {
@@ -53,8 +60,8 @@ describe("DSP key estimator", () => {
     const samples = chord([261.6256, 329.6276, 391.9954], 68, 44100);
     const result = estimateKey(samples, 44100);
     expect(result.analysisWindows).toBeLessThanOrEqual(12);
-    expect(result.fftButterflyCount).toBe(result.analysisWindows * 24_576);
-    expect(result.fftButterflyCount).toBeLessThanOrEqual(12 * 24_576);
+    expect(result.fftButterflyCount).toBe(result.analysisWindows * 24 * 24_576);
+    expect(result.fftButterflyCount).toBeLessThanOrEqual(12 * 24 * 24_576);
     console.info("[key-estimator:synthetic-benchmark]", JSON.stringify({
       durationSeconds: 68,
       windows: result.analysisWindows,

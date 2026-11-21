@@ -1,6 +1,7 @@
 import { hasMultipleTuningWindows, hasReportableKeyCandidates, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 import { hasSubmittedMasterAudio } from "../../audio/master-audio-evidence.js";
 import type { AuditReportInput } from "../generate-audit-report.js";
+import type { TonalResolution } from "../../audio/tonal-resolution.js";
 
 export type ConfidenceTag = "High" | "Medium" | "Low";
 export interface TimedPoint { timeSeconds: number; value: number; }
@@ -18,6 +19,7 @@ export interface MetricValue {
 export interface ReportV2Data {
   tempo: MetricValue;
   key: MetricValue;
+  tonalResolution: TonalResolution | null;
   energy: MetricValue;
   structure: TrackSection[] | null;
   energySeries: TimedPoint[] | null;
@@ -148,6 +150,9 @@ function commercialEvidenceExists(evidence: UnknownRecord | null): boolean {
 export function buildDecisionDimensions(input: AuditReportInput): DecisionDimension[] {
   const evidence = record(input.evidence);
   const audio = record(input.sonicDna);
+  const audioHarmonic = record(audio?.harmonicFeatures);
+  const audioResolution = record(input.tonalResolution) ?? record(audioHarmonic?.tonalResolution) ?? record(audio?.tonalResolution);
+  const audioWithResolution = audio ? { ...audio, tonalResolution: audioResolution } : null;
   const reconciliation = record(evidence?.reconciliation);
   const conflicts = Array.isArray(reconciliation?.conflicts) ? reconciliation.conflicts : [];
   const reconciledFields = Array.isArray(reconciliation?.reconciledRecordingFields)
@@ -161,7 +166,7 @@ export function buildDecisionDimensions(input: AuditReportInput): DecisionDimens
     nonEmpty(evidence?.[field]) && (nonEmpty(fieldProvenance?.[field]) !== null || sourceProviders.length > 0)
   );
   const tempoMeasured = isReliableTempo(audio as Parameters<typeof isReliableTempo>[0]);
-  const keyMeasured = isReliableKey(audio);
+  const keyMeasured = isReliableKey(audioWithResolution);
   const descriptiveMeasurements = [
     "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "rmsLevelDbfs", "rmsEnergy",
     "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate",
@@ -250,7 +255,14 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const tempoConfidence = confidence(audio?.tempoConfidence);
   const tempoReliable = isReliableTempo(audio as Parameters<typeof isReliableTempo>[0]);
   const keyConfidence = confidence(audio?.keyConfidence);
-  const keyReliable = isReliableKey(audio);
+  const harmonic = record(audio?.harmonicFeatures);
+  // AuditReportInput is the persisted report boundary; prefer its explicit
+  // resolver payload, then fall back to the Sonic DNA compatibility fields.
+  const resolutionValue = record(input.tonalResolution) ?? record(harmonic?.tonalResolution) ?? record(audio?.tonalResolution);
+  const audioWithResolution = audio ? { ...audio, tonalResolution: resolutionValue } : null;
+  const keyReliable = isReliableKey(audioWithResolution);
+  const tonalResolution = resolutionValue && (resolutionValue.status === "CONFIRMED" || resolutionValue.status === "PROVISIONAL" || resolutionValue.status === "UNAVAILABLE")
+    ? resolutionValue as unknown as TonalResolution : null;
   const energyValue = firstFinite(audio, ["energy", "rmsEnergy", "loudnessLufs", "rmsLevelDbfs"]);
   const energyConfidence = confidence(audio?.energyConfidence ?? audio?.rmsEnergyConfidence ?? audio?.loudnessConfidence);
   const energyMethod = methodOf(audio, ["energyMethod", "loudnessMethod", "method"]);
@@ -282,11 +294,24 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       notYetMeasured.push("Tempo candidate " + candidate + " BPM abstained: outside the plausible 40–220 BPM reporting range.");
     }
   }
-  if (!keyReliable && hasReportableKeyCandidates(audio)) {
-    const harmonic = record(audio?.harmonicFeatures);
-    const candidates = Array.isArray(harmonic?.topCandidates) ? harmonic.topCandidates.map(record).filter(Boolean) : [];
-    const labels = candidates.map(item => [nonEmpty(item?.key), nonEmpty(item?.mode)].filter(Boolean).join(" ")).filter(Boolean);
-    if (labels.length) notYetMeasured.push(labels[0] + " (provisional harmonic candidate; alternatives: " + labels.slice(1).join(", ") + "; no single key asserted).");
+  if (!keyReliable && hasReportableKeyCandidates(audioWithResolution)) {
+    const candidates = Array.isArray(tonalResolution?.candidates)
+      ? tonalResolution.candidates.map(item => ({ key: item.tonic, mode: item.mode }))
+      : Array.isArray(harmonic?.topCandidates) ? harmonic.topCandidates.map(record).filter(Boolean).map(item => ({ key: item?.key, mode: item?.mode })) : [];
+    const labels = candidates.map(item => [nonEmpty(item.key), nonEmpty(item.mode)].filter(Boolean).join(" ")).filter(Boolean);
+    if (labels.length) notYetMeasured.push(labels[0] + " (provisional tonal centre; alternatives: " + labels.slice(1).join(", ") + "; no confirmed tonic asserted).");
+    const reasons = tonalResolution?.reasonCodes ?? [];
+    const reasonDescriptions = reasons.map(code => ({
+      RELATIVE_MAJOR_MINOR_AMBIGUITY: "Relative major and minor readings remain close.",
+      LOW_WINDOW_CONSENSUS: "Tonal windows do not consistently support one candidate.",
+      LOW_BOOTSTRAP_CONSENSUS: "Resampled candidate rankings are not stable enough for confirmation.",
+      LOW_RUNNER_UP_MARGIN: "The leading candidate is too close to its runner-up.",
+      ADJACENT_FIFTHS_AMBIGUITY: "Adjacent Circle of Fifths candidates remain close.",
+      INSUFFICIENT_TONAL_EVIDENCE: "Stable harmonic evidence is insufficient.",
+    } as Record<string, string>)[code] ?? "A tonal disambiguation check remains unresolved.");
+    if (reasonDescriptions.length) notYetMeasured.push("Tonal resolution limitation: " + reasonDescriptions.join(" "));
+  } else if (tonalResolution?.status === "UNAVAILABLE") {
+    notYetMeasured.push("Tonal resolution unavailable: insufficient stable harmonic evidence in the uploaded master.");
   }
   if (hasMultipleTuningWindows(audio)) {
     notYetMeasured.push("More than one tuning window was detected; a single tuning reference is not confirmed.");
@@ -309,6 +334,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       method: methodOf(record(audio?.harmonicFeatures), ["method"]) ?? methodOf(audio, ["keyMethod", "method"]),
       evidence: sourceLine(record(audio?.harmonicFeatures), "Uploaded-master harmonic evidence"),
     },
+    tonalResolution,
     energy: {
       value: energyDisplay,
       confidence: energyConfidence,

@@ -53,13 +53,36 @@ function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
 function drawWrapped(page:PDFPage,value:string,x:number,y:number,width:number,font:PDFFont,size=9,color=C.ink,lineHeight=size*1.35):number{
  const lines=wrap(value,font,size,width);lines.forEach((line,i)=>page.drawText(line,{x,y:y-i*lineHeight,size,font,color}));return lines.length*lineHeight;
 }
+function isResolvedKeyLabel(value:unknown):boolean{
+ if(typeof value!=="string"||!value.trim())return false;
+ return !/^(?:n\s*\/\s*d|not determined|unavailable|unknown)$/i.test(value.trim());
+}
+export function buildRecordingOverviewKeyLabel(data:ReportV2Data):string{
+ if(isResolvedKeyLabel(data.key.value))return String(data.key.value);
+ const resolution=data.tonalResolution;
+ if(resolution?.status==="PROVISIONAL"&&resolution.tonic&&resolution.mode)
+  return "Provisional: "+resolution.tonic+" "+resolution.mode;
+ if(resolution?.status==="UNAVAILABLE")return "Unavailable";
+ return "Not determined";
+}
 export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):string{
- if(data.key.value!==null)return String(data.key.value);
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates).map(value=>rec(value)):[];
- const first=candidates.find(item=>typeof item.key==="string"&&item.key.trim());
- if(!first)return "Not determined";
- return "Possible: "+[str(first.key,""),str(first.mode,"")].filter(Boolean).join(" ");
+ // The adapted resolution is the report's canonical tonal state. Prefer it to
+ // legacy key strings and raw candidate guardrails so the cover cannot diverge
+ // from the recording overview or Circle of Fifths when legacy fields are stale.
+ const resolution=rec(data.tonalResolution??input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
+ const tonic=str(resolution.tonic,"");
+ const mode=str(resolution.mode,"");
+ if(resolution.status==="UNAVAILABLE")return "Unavailable";
+ if(resolution.status==="CONFIRMED"&&tonic&&mode)return tonic+" "+mode;
+ if(resolution.status==="PROVISIONAL"&&tonic&&mode)return "Possible: "+tonic+" "+mode;
+ if(isResolvedKeyLabel(data.key.value))return String(data.key.value);
+ const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
+ const candidates=hasReportableKeyCandidates(tonalAudio)
+  ?(arr(resolution.candidates).length?arr(resolution.candidates):arr(harmonic.topCandidates)).map(value=>rec(value)):[];
+ const first=candidates.find(item=>(typeof item.key==="string"&&item.key.trim())||(typeof item.tonic==="string"&&item.tonic.trim()));
+ if(first)return "Possible: "+[str(first.key??first.tonic,""),str(first.mode,"")].filter(Boolean).join(" ");
+ return "Not determined";
 }
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
  const provenance="Measured from the uploaded recording";
@@ -131,17 +154,36 @@ export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
 }
 export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
+ const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution); const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
  const lines:string[]=[];
- const candidates=(hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates):[]).map(value=>rec(value)).filter(item=>typeof item.key==="string")
-  .slice(0,4).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" "));
- if(candidates.length)lines.push("Possible song keys: "+candidates.join("; ")+". These are provisional possibilities, not a confirmed key.");
- if(finite(harmonic.segmentAgreement))lines.push(harmonic.segmentAgreement>=0.7
-  ?"Song-key readings are broadly consistent across the analyzed sections."
-  :"Song-key readings vary across sections; no single key is confirmed.");
+ const rawCandidates=arr(resolution.candidates).length?arr(resolution.candidates):arr(harmonic.topCandidates);
+ const candidates=(hasReportableKeyCandidates(tonalAudio)?rawCandidates:[]).map(value=>rec(value))
+  .filter(item=>typeof (item.key??item.tonic)==="string").slice(0,4)
+  .map(item=>[str(item.key??item.tonic,""),str(item.mode,"")].filter(Boolean).join(" "));
+ if(resolution.status==="CONFIRMED")lines.push("Confirmed audio-derived tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+".");
+ else if(resolution.status==="PROVISIONAL")lines.push("Provisional audio-derived tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+". It is not presented as confirmed.");
+ else if(resolution.status==="UNAVAILABLE")lines.push("Tonal centre unavailable: stable harmonic evidence was insufficient.");
+ if(candidates.length)lines.push("Possible song keys: "+candidates.join("; ")+".");
  if(harmonic.independentEstimatorDisagrees===true)lines.push("Different key readings were returned; no single key is confirmed.");
- if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("The recording may fit a relative major/minor pair; a single key is not confirmed.");
+ if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("The leading candidates form a relative major/minor pair; no single key is asserted.");
+ if(finite(resolution.windowAgreement))lines.push("Window agreement: "+(resolution.windowAgreement*100).toFixed(0)+"%.");
+ if(finite(resolution.bootstrapShare))lines.push("Bootstrap rank share (not a calibrated probability): "+(resolution.bootstrapShare*100).toFixed(0)+"%.");
+
+ if(finite(resolution.downbeatAnchorWindowCount))lines.push("Bass-root anchors: "+resolution.downbeatAnchorWindowCount+"/"+str(resolution.validWindowCount, "0")+" windows.");
+ if(finite(resolution.cadenceWeightedWindowCount)&&resolution.cadenceWeightedWindowCount>0)lines.push("Outro weighting: "+resolution.cadenceWeightedWindowCount+" window(s).");
+ const reasonCodes=arr(resolution.reasonCodes).filter((code):code is string=>typeof code==="string");
+ const reasonText=reasonCodes.map(code=>({
+  RELATIVE_MAJOR_MINOR_AMBIGUITY:"Relative major/minor ambiguity remains.",
+  LOW_WINDOW_CONSENSUS:"Tonal windows do not consistently support one candidate.",
+  LOW_BOOTSTRAP_CONSENSUS:"Bootstrap candidate ranking is unstable.",
+  LOW_RUNNER_UP_MARGIN:"The top candidate is too close to its runner-up.",
+  ADJACENT_FIFTHS_AMBIGUITY:"Adjacent fifth-related candidates remain close.",
+  INSUFFICIENT_TONAL_EVIDENCE:"Insufficient stable tonal evidence."
+ } as Record<string,string>)[code]??"A tonal disambiguation check remains unresolved.").join(" ");
+ if(reasonText)lines.push(reasonText);
+ if(harmonic.independentEstimatorDisagrees===true)lines.push("A secondary audio estimator disagreed; that disagreement is retained as a diagnostic and does not independently erase the primary candidate.");
  const limitation=str(harmonic.limitation,"");
- if(limitation&&limitation!=="Not supplied")lines.push("Song key not confirmed: "+limitation);
+ if(limitation&&limitation!=="Not supplied")lines.push("Resolution note: "+limitation);
  return lines.length?lines:["No song-key result is available from the supplied recording."];
 }
 
@@ -261,8 +303,7 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  const providers=arr(e.sourceProviders).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
  const summaryHeight=card(page,M,summaryTop,width,"Provider lookup and reconciliation context",[
   "Sources checked: "+checked,
-  "Provider responses: "+providers,
-  "Platform coverage: "+str(e.platformCoverage,"Not supplied"),
+  "Provider responses: "+providers,  "Platform coverage: "+str(e.platformCoverage,"Not supplied"),
   "Recording identity conflicts remain blocking; album, UPC, label and date differences are shown as release variants."
  ],fonts,{accent:C.gold});
  return summaryTop-summaryHeight-14;
@@ -354,8 +395,11 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  const order=["C","G","D","A","E","B","F#","C#","G#","D#","A#","F"];
  const cx=x+93,cy=top-84,radius=48;
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const candidates=hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates).map(value=>rec(value)):[];
- const candidateNotes=new Set(candidates.map(item=>normalizeCircleNote(str(item.key,""))).filter(Boolean));
+ const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
+ const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
+ const rawCandidates=arr(resolution.candidates).length?arr(resolution.candidates):arr(harmonic.topCandidates);
+ const candidates=hasReportableKeyCandidates(tonalAudio)?rawCandidates.map(value=>rec(value)):[];
+ const candidateNotes=new Set(candidates.map(item=>normalizeCircleNote(str(item.key??item.tonic,""))).filter(Boolean));
  const confirmed=data.key.value===null?"":normalizeCircleNote(String(data.key.value));
  order.forEach((note,index)=>{
   const angle=-Math.PI/2+index*2*Math.PI/12,px=cx+Math.cos(angle)*radius,py=cy+Math.sin(angle)*radius;
@@ -365,12 +409,24 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
   const labelWidth=fonts.bold.widthOfTextAtSize(note,6.5);
   page.drawText(note,{x:px-labelWidth/2,y:py-2.2,size:6.5,font:fonts.bold,color:isConfirmed||isCandidate?C.white:C.ink});
  });
- const status=data.key.value===null
-  ?"No single root key is confirmed. Highlighted notes are possible tonal centres, not a final answer."
-  :"Confirmed song key: "+String(data.key.value)+".";
+ const status=resolution.status==="PROVISIONAL"
+  ?"Provisional tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+". Highlighted notes are candidates, not a confirmed key."
+  :resolution.status==="UNAVAILABLE"
+   ?"Tonal centre unavailable: stable harmonic evidence was insufficient."
+   :data.key.value===null
+    ?"No single root key is confirmed. Highlighted notes are possible tonal centres, not a final answer."
+    :"Confirmed song key: "+String(data.key.value)+".";
  drawWrapped(page,status,x+174,top-52,width-190,fonts.regular,8,C.ink,11);
- const names=candidates.slice(0,4).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" ")).filter(Boolean);
+ const names=candidates.slice(0,4).map(item=>[str(item.key??item.tonic,""),str(item.mode,"")].filter(Boolean).join(" ")).filter(Boolean);
  if(names.length)drawWrapped(page,"Candidates: "+names.join(" · "),x+174,top-91,width-190,fonts.bold,7,C.muted,9);
+ const diagnosticLines=buildKeyDiagnosticLines(input).filter(line=>
+  /^(Window agreement:|Bootstrap rank share|Runner-up margin:|Bass-root anchors:|Outro weighting:|Relative major\/minor ambiguity remains\.|Tonal windows do not consistently support one candidate\.|Bootstrap candidate ranking is unstable\.|The top candidate is too close to its runner-up\.|Adjacent Circle of Fifths candidates remain close\.)/.test(line)
+ );
+ let diagnosticY=top-108;
+ for(const line of diagnosticLines.slice(0,5)){
+  const used=drawWrapped(page,line,x+174,diagnosticY,width-190,fonts.regular,5.8,C.muted,6.8);
+  diagnosticY-=used;
+ }
  return height;
 }
 function drawCompactSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts,top:number):number{
@@ -396,8 +452,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
  y-=keyMapHeight+12;
  if(data.structure){
   const height=116;card(page,M,y,W-2*M,"Structure",[],fonts,{height,accent:C.gold});
-  const left=M+14,barY=y-63,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));
-  const palette=[C.teal,C.gold,C.amber,C.coral];
+  const left=M+14,barY=y-63,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));  const palette=[C.teal,C.gold,C.amber,C.coral];
   page.drawText("TRACK STRUCTURE · ELAPSED TIME",{x:left,y:barY+25,size:6,font:fonts.bold,color:C.muted});
   data.structure.forEach((s,i)=>{const x=left+(s.startSeconds/total)*barW,w=barW*(s.endSeconds-s.startSeconds)/total;page.drawRectangle({x,y:barY,width:w,height:18,color:palette[i%palette.length]});page.drawText(String(s.index),{x:x+w/2-2,y:barY+5,size:6,font:fonts.bold,color:C.white});});
   page.drawText("0s",{x:left,y:barY-12,size:6,font:fonts.regular,color:C.muted});
@@ -429,7 +484,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
  const rows:Array<[string,string]>=[
   ["Track length",typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?Math.floor(sonic.durationSeconds/60)+" min "+Math.round(sonic.durationSeconds%60)+" sec":""],
   ["Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):""],
-  ["Song key",data.key.value===null?"Not determined":String(data.key.value)],
+  ["Song key",buildRecordingOverviewKeyLabel(data)],
   ["Tempo",data.tempo.value===null?"Not determined":data.tempo.value+" BPM"]
  ].filter((entry):entry is [string,string]=>Boolean(entry[1]));
  if(rows.length){
@@ -546,8 +601,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   if(spec.kind==="identity"){
    chartCursor=drawIdentityReconciliation(page,input,fonts);
   }else if(spec.kind==="snapshot"){
-   drawSnapshot(page,data,fonts,input);
-  }else if(spec.kind==="limitations"){
+   drawSnapshot(page,data,fonts,input);  }else if(spec.kind==="limitations"){
    const body=spec.lines?.filter(Boolean)??[];
    const height=card(page,M,H-92,W-2*M,spec.title,body,fonts,{accent:C.gold});
    const mapTop=H-92-height-14;

@@ -1,4 +1,5 @@
 import { estimateKey, MIN_RELIABLE_KEY_CONFIDENCE, MIN_KEY_SEGMENT_AGREEMENT, type KeyEstimate } from "./key-estimation.js";
+import type { TonalResolution } from "./tonal-resolution.js";
 import { estimateGoertzelKey, estimateLowFrequencyEnvelopeTempo, type IndependentKeyEstimate, type IndependentTempoEstimate } from "./independent-estimators.js";
 import { bootstrapCategoricalConsensus, type BootstrapConsensusDiagnostics } from "./ensemble-consensus.js";
 
@@ -26,7 +27,7 @@ export interface TempoEstimate {
 export interface SonicDnaFeatures {
  acousticFeatureProfile:AcousticFeatureProfile;
  sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; tempoCandidateBpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
- key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; keyTuningCents:number|null; keySegmentAgreement:number|null; keyCandidates:Array<{key:string;mode:"major"|"minor";score:number}>; tuningEvidenceWindows:number; keyAnalysisFftButterflyCount:number; limitations:string[];
+ key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; keyTuningCents:number|null; keySegmentAgreement:number|null; keyCandidates:Array<{key:string;mode:"major"|"minor";score:number}>; tonalResolution:TonalResolution; tuningEvidenceWindows:number; keyAnalysisFftButterflyCount:number; limitations:string[];
  loudnessLufs:number|null; loudnessRangeLu?:number|null; truePeakDbfs?:number|null; rmsLevelDbfs:number; rmsEnergy:number; dynamicRangeDb:number; spectralCentroidHz:number; spectralBandwidthHz:number;
  spectralRolloffHz:number; zeroCrossingRate:number; moodTags:string[]; genreContext:string[]; genreClassification?: GenreFusionResult;
 }
@@ -283,12 +284,12 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  const frames:number[]=[],frame=Math.max(256,Math.floor(rate*0.05));
  for(let s=0;s<a.length;s+=frame){const end=Math.min(a.length,s+frame);let sum=0;for(let i=s;i<end;i++)sum+=a[i]*a[i];frames.push(Math.sqrt(sum/Math.max(1,end-s)));}
  frames.sort((x,y)=>x-y);
- const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),key=estimateKey(a,rate),independentKey:IndependentKeyEstimate=estimateGoertzelKey(a,rate),independentKeyDisagrees=key.key!==null&&independentKey.key!==null&&(key.key!==independentKey.key||key.mode!==independentKey.mode);
- const relativeMajorMinorAmbiguity=classifyRelativeMajorMinorAmbiguity(key,independentKey);
- const resolvedKey:KeyEstimate=relativeMajorMinorAmbiguity?{
-  ...key,key:null,mode:null,
-  limitation:"Independent audio estimators support relative major/minor tonal centres; pitch-class evidence does not resolve the tonic. No key or mode is asserted.",
- }:key;
+ const p10=Math.max(EPSILON,percentile(frames,0.1)),p95=Math.max(p10,percentile(frames,0.95)),tempo=estimateTempo(a,rate),key=estimateKey(a,rate,tempo.downbeatCandidateTimesSeconds),independentKey:IndependentKeyEstimate=estimateGoertzelKey(a,rate),independentKeyDisagrees=key.key!==null&&independentKey.key!==null&&(key.key!==independentKey.key||key.mode!==independentKey.mode);
+ const relativeMajorMinorAmbiguity=key.tonalResolution.reasonCodes.includes("RELATIVE_MAJOR_MINOR_AMBIGUITY")
+  || classifyRelativeMajorMinorAmbiguity(key,independentKey);
+ // Independent disagreement is retained as a diagnostic; the deterministic
+ // window/bass/cadence resolver decides whether a tonic is confirmed or provisional.
+ const resolvedKey:KeyEstimate=key;
  // Signal descriptors are reported in their own numeric fields. Do not
  // relabel RMS, zero-crossing rate, or spectral centroid as emotional mood.
  // A validated, licensed mood model is not currently integrated.
@@ -300,10 +301,10 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  return {
   sampleRate,channels:Number.isInteger(channels)&&channels>0?channels:1,durationSeconds:prepared.durationSeconds,
   rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:tempo.method,candidateBpms:tempo.candidateBpms,candidateScores:tempo.candidateScores,onsetEnvelope:tempo.onsetEnvelope,beatTimesSeconds:tempo.beatTimesSeconds,downbeatCandidateTimesSeconds:tempo.downbeatCandidateTimesSeconds,beatGridStatus:tempo.beatGridStatus,downbeatGridAssumption:tempo.downbeatGridAssumption,abstentionReason:tempo.abstentionReason,windowConsensus:tempo.windowConsensus,independentEstimator:tempo.independentEstimator??null},
-  harmonicFeatures:{status:resolvedKey.key===null?"insufficient_evidence":"measured",key:resolvedKey.key,mode:resolvedKey.mode,confidence:resolvedKey.confidence,method:resolvedKey.method,tuningCents:resolvedKey.tuningCents,segmentAgreement:resolvedKey.segmentAgreement,analysisWindows:resolvedKey.analysisWindows,fftButterflyCount:resolvedKey.fftButterflyCount,segmentChroma:resolvedKey.segmentChroma,topCandidates:resolvedKey.topCandidates,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,limitation:resolvedKey.limitation,windowConsensus:resolvedKey.windowConsensus,independentEstimator:independentKey,independentEstimatorDisagrees:independentKeyDisagrees,relativeMajorMinorAmbiguity},
+  harmonicFeatures:{status:resolvedKey.tonalResolution.status==="UNAVAILABLE"?"insufficient_evidence":"measured",resolutionStatus:resolvedKey.tonalResolution.status,key:resolvedKey.key,mode:resolvedKey.mode,confidence:resolvedKey.confidence,confidenceSemantics:"heuristic_score_diagnostic_not_calibrated_probability",method:resolvedKey.method,tuningCents:resolvedKey.tuningCents,segmentAgreement:resolvedKey.segmentAgreement,analysisWindows:resolvedKey.analysisWindows,fftButterflyCount:resolvedKey.fftButterflyCount,segmentChroma:resolvedKey.segmentChroma,topCandidates:resolvedKey.topCandidates,tonalResolution:resolvedKey.tonalResolution,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,limitation:resolvedKey.limitation,windowConsensus:resolvedKey.windowConsensus,independentEstimator:independentKey,independentEstimatorDisagrees:independentKeyDisagrees,relativeMajorMinorAmbiguity},
   vocalFeatures:{...vocalDiagnostics},
   bpm:tempo.bpm,tempoCandidateBpm:tempo.topCandidateBpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
-  key:resolvedKey.key,mode:resolvedKey.mode,keyConfidence:resolvedKey.confidence,keyTuningCents:resolvedKey.tuningCents,keySegmentAgreement:resolvedKey.segmentAgreement,keyCandidates:resolvedKey.topCandidates,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,keyAnalysisFftButterflyCount:resolvedKey.fftButterflyCount,limitations,
+  key:resolvedKey.key,mode:resolvedKey.mode,keyConfidence:resolvedKey.confidence,keyTuningCents:resolvedKey.tuningCents,keySegmentAgreement:resolvedKey.segmentAgreement,keyCandidates:resolvedKey.topCandidates,tonalResolution:resolvedKey.tonalResolution,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,keyAnalysisFftButterflyCount:resolvedKey.fftButterflyCount,limitations,
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
   // Legacy field name retained for storage compatibility: p95/p10 RMS envelope spread, not conventional mastering dynamic range or EBU LRA.
   dynamicRangeDb:20*Math.log10(p95/p10),spectralCentroidHz:centroid,spectralBandwidthHz:bandwidth,

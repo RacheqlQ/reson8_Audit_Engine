@@ -89,33 +89,39 @@ describe("Sonic DNA",()=>{
  });
  it("detects C major from a sustained C major triad",()=>{
   const result=analyzePcm(chord([261.6256,329.6276,391.9954]),8000);
-  expect(result.key).toBe("C");
-  expect(result.mode).toBe("major");
+  expect(result.key).toBeNull();
+  expect(result.mode).toBeNull();
+  expect(result.tonalResolution?.status).toBe("PROVISIONAL");
+  expect(result.tonalResolution?.tonic).toBe("C");
   expect(result.keyConfidence).toBeGreaterThan(0);
  });
  it("detects A minor from a sustained A minor triad",()=>{
   const result=analyzePcm(chord([220,261.6256,329.6276]),8000);
-  expect(result.key).toBe("A");
-  expect(result.mode).toBe("minor");
+  expect(result.key).toBeNull();
+  expect(result.mode).toBeNull();
+  expect(result.tonalResolution?.tonic).toBe("A");
+  expect(result.tonalResolution?.mode).toBe("minor");
  });
  it("uses bass-root and neighbouring-fifth support to identify a stable C-major chord progression",()=>{
-  const result=analyzePcm(progression([
+  const cMajorProgression=[
    [65.4064,164.8138,196.0,261.6256],
    [87.3071,110.0,130.8128,174.6141],
    [98.0,123.4708,146.8324,195.9977],
    [65.4064,164.8138,196.0,261.6256]
-  ],4),8000);
+  ];
+  const result=analyzePcm(progression([...cMajorProgression,...cMajorProgression,...cMajorProgression],4),8000);
   expect(result.key).toBe("C");
   expect(result.mode).toBe("major");
+  expect(result.tonalResolution?.status).toBe("CONFIRMED");
  },20000);it("withholds a single key when sustained sections disagree tonally",()=>{
-  const first=chord([261.6256,329.6276,391.9954],6);
-  const second=chord([369.9944,466.1638,554.3653],6);
+  const first=chord([261.6256,329.6276,391.9954],18);
+  const second=chord([369.9944,466.1638,554.3653],18);
   const combined=new Float32Array(first.length+second.length);
   combined.set(first);combined.set(second,first.length);
   const result=analyzePcm(combined,8000);
   expect(result.key).toBeNull();
   expect(result.mode).toBeNull();
-  expect(result.limitations.some((item)=>item.includes("varied across audio segments"))).toBe(true);
+  expect(result.limitations.some((item)=>item.includes("stable window consensus"))).toBe(true);
  },15000);
  it("returns null key and tempo with limitation notes for silence",()=>{
   const result=analyzePcm(new Float32Array(48000),8000);
@@ -143,8 +149,9 @@ describe("Sonic DNA",()=>{
   expect(tempo.bpm).toBeLessThanOrEqual(125);
   expect(tempo.zeroCrossingRate).toBeGreaterThan(0);
   expect(tempo.spectralCentroidHz).toBeGreaterThan(0);
-  expect(key.key).toBe("C");
-  expect(key.mode).toBe("major");
+  expect(key.key).toBeNull();
+  expect(key.mode).toBeNull();
+  expect(key.tonalResolution?.tonic).toBe("C");
   expect(key.keyConfidence).toBeGreaterThan(0);
  });
  it("keeps six-minute 44.1 kHz analysis bounded while retaining chroma, tempo and spectral measurements",()=>{
@@ -216,7 +223,9 @@ describe("Sonic DNA",()=>{
   expect(rhythm.rhythmFeatures).toMatchObject({status:"measured",method:"high_frequency_transient_autocorrelation"});
   expect(rhythm.rhythmFeatures.bpm).toBeGreaterThanOrEqual(115);
   expect(rhythm.rhythmFeatures.bpm).toBeLessThanOrEqual(125);
-  expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:"C",mode:"major",method:"fft_harmonic_chroma_ensemble"});
+  expect(harmonic.harmonicFeatures).toMatchObject({status:"measured",key:null,mode:null,method:"fft_harmonic_chroma_ensemble"});
+  expect(harmonic.tonalResolution?.status).toBe("PROVISIONAL");
+  expect(harmonic.tonalResolution?.tonic).toBe("C");
   expect(rhythm.vocalFeatures).toMatchObject({status:"signal_diagnostics_only",method:"autocorrelation_voiced_periodicity",voicePresence:"undetermined"});
   expect(rhythm.vocalFeatures.limitations).toEqual(expect.arrayContaining([expect.stringContaining("not proof of human vocals")]));
  });

@@ -490,6 +490,7 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
     tempoConfidence: dna.tempoConfidence,
     key: dna.key,
     keyCandidates: dna.keyCandidates,
+    tonalResolution: dna.tonalResolution,
     tuningEvidenceWindows: dna.tuningEvidenceWindows,
     mode: dna.mode,
     keyConfidence: dna.keyConfidence,
@@ -1027,7 +1028,7 @@ export async function processAuditJob(
       }
     }
     const marketPlacement = buildMarketPlacementPlan({ executionMode, evidence: reportEvidence, sonicDna: masterDna ? dnaEvidence(masterDna) : sonicDna, playlistDiscovery });
-    const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment, executionMode, marketPlacement, ...(realMasterContract ? { realMasterContract } : {}) };
+    const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment, executionMode, marketPlacement, tonalResolution: masterDna?.tonalResolution ?? null, ...(realMasterContract ? { realMasterContract } : {}) };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
