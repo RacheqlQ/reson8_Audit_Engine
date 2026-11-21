@@ -499,9 +499,9 @@ function sections(i:AuditReportInput):Section[]{
     {label:"double-time",bpm:provisionalTempoCandidate*2},
    ].filter(candidate=>candidate.bpm>=40&&candidate.bpm<=220);
    sonicDnaBody.push(
-    "Provisional tempo candidate relationships: "+provisionalTempoCandidate+" BPM candidate"+
+    "Possible tempo readings: "+provisionalTempoCandidate+" BPM"+
     (tempoRelationships.length?"; "+tempoRelationships.map(candidate=>candidate.label+" "+candidate.bpm.toFixed(1)+" BPM").join("; "):"")+
-    " (derived arithmetic relationships only; not independently validated beat interpretations)."
+    " (provisional; confirm by listening)."
    );
   }
   if (vocalAnalysisPerformed) {
@@ -590,9 +590,7 @@ const curatorCampaignBody=[
    "SOURCE MIME / SIZE: "+i.realMasterContract.source.mimeType+" / "+i.realMasterContract.source.byteLength+" bytes",
    ...i.realMasterContract.directSignalMeasurements.map((m)=>executiveMetricLabel(m.name)+": "+(m.status==="measured"?text(m.value)+" "+m.unit+"; method: "+executiveMethodLabel(m.method)+"; measured: "+m.measuredAt:"Not reported as a confirmed measurement; "+m.diagnostics.map((d)=>executiveDiagnosticMessage(d.code,d.message,m.name)).join("; "))),
    ...(i.realMasterContract.provisionalPredictions??[]).map((p)=>"PROVISIONAL "+(p.name==="audio_mood"?"MOOD DIRECTION":"ENERGY DIRECTION")+": "+p.label+" (exploratory; confirm by listening)."),
-   ...(i.realMasterContract.calibratedPredictions??[]).map((p)=>p.status==="predicted"
-    ? executiveMetricLabel(p.name)+": "+p.label+" (validated model output; confirm with human listening)."
-    : executiveMetricLabel(p.name)+": No validated model prediction is available."),
+   
    ...(i.realMasterContract.externalRecords??[]).map((r)=>r.status==="verified"
      ?"EXTERNAL RECORD: "+r.provider+" / "+r.recordId+"; retrieved: "+r.retrievedAt+"; fields: "+Object.keys(r.fields).join(", ")+"; field provenance: "+Object.entries(r.fieldProvenance).map(([field,p])=>field+"="+p.provider+"/"+p.recordId+"@"+p.retrievedAt).join(", ")
      :"EXTERNAL RECORD UNAVAILABLE: "+r.provider+" — "+executiveDiagnosticMessage(r.reasonCode,r.diagnostic.message)),
