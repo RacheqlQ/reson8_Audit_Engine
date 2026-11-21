@@ -95,3 +95,12 @@ describe("browser PDF download contract", () => {
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:reson8-report");
   });
 });
+
+
+describe("mobile clipboard report-key normalization", () => {
+  it("removes invisible bidirectional formatting marks without accepting non-hex key characters", () => {
+    const key = "0123456789abcdef".repeat(4);
+    expect(normalizeReportAccessKey("\u200e\u2066" + key + "\u2069\u200f")).toBe(key);
+    expect(normalizeReportAccessKey(key + "-")).not.toBe(key);
+  });
+});
