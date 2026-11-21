@@ -182,8 +182,8 @@ try{
  if(reintroducedClaim){
   throw new Error("Generated PDF reintroduced an unsupported claim: "+reintroducedClaim);
  }
- if(!/Provisional tempo candidate relationships:\s*128 BPM candidate/i.test(unsafeText)) throw new Error("Generated PDF lost the provisional tempo disclosure");
- if(!/half-time 64\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF lost the alternative pulse reading");
+ if(!/Possible tempo readings:\s*165 BPM/i.test(unsafeText)) throw new Error("Generated PDF lost the provisional tempo disclosure");
+ if(!/half-time 82\.5 BPM/i.test(unsafeText)) throw new Error("Generated PDF lost the alternative pulse reading");
  if(/double-time 256\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF printed an implausible double-time candidate");
  if(!unsafeText.includes("Further listening and source verification are required")){
   throw new Error("Generated PDF lost the supported A&R Notes decision-context sentence");
