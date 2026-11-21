@@ -10,11 +10,11 @@ export interface NormalizedReportAccessKey {
 
 export function normalizeReportAccessKey(input: string): NormalizedReportAccessKey {
   const suppliedLength = input.length;
-  let value = input.trim().replace(/^["']+|["']+$/g, "");
+  let value = input.replace(/^["']+|["']+$/g, "");
+  const beforeWhitespace = value.length;
   value = value.replace(/[\\s\\u200B-\\u200D\\uFEFF]/g, "");
-  const whitespaceRemoved = suppliedLength - value.length;
+  const whitespaceRemoved = beforeWhitespace - value.length;
   value = value.toLowerCase();
-  const beforeHexFilter = value.length;
   const nonHexRemoved = (value.match(/[^0-9a-f]/g) ?? []).length;
   return {
     value,
