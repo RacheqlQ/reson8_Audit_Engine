@@ -4,9 +4,7 @@ export function normalizeReportAccessKey(input) {
     .replace(/^[\"']+|[\"']+$/g, "");
   value = value.replace(/^(?:(?:reson8)?(?:report)?(?:access)?key|bearer)[:=]?/i, "");
   value = value.replace(/^0x/i, "");
-  const compact = value.replace(/[-:]/g, "");
-  const embedded = compact.match(/(?:^|[^0-9a-f])([0-9a-f]{64})(?![0-9a-f])/i);
-  return (embedded ? embedded[1] : compact).toLowerCase();
+  return value.replace(/[-:]/g, "").toLowerCase();
 }
 
 export async function readPdfResponse(response) {
