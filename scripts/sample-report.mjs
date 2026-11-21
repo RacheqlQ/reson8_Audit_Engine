@@ -89,12 +89,26 @@ for(const [name,input] of variants){
     if(!normalizedExtracted.includes(expected))throw new Error(filename+" is missing the human-readable tuning limitation: "+expected);
    }
    if(/\b14\s*\(multiple tonal windows; provisional\)/i.test(normalizedExtracted))throw new Error(filename+" exposed a raw tuning-window diagnostic instead of the human-readable limitation");
-   if(/\b128\s*BPM\b|\bC major\b/.test(normalizedExtracted))throw new Error(filename+" exposed a zero-confidence tempo or unsupported key candidate");
+   if(/\b128\s*BPM\b/.test(normalizedExtracted))throw new Error(filename+" exposed a zero-confidence tempo candidate");
+   if(!normalizedExtracted.includes("Provisional audio-derived tonal centre: C major."))throw new Error(filename+" failed to retain the provisional audio-derived tonic");
+   if(!normalizedExtracted.includes("Possible: C major"))throw new Error(filename+" failed to label the provisional key as a possibility");
+   if(!normalizedExtracted.includes("Relative major/minor ambiguity remains."))throw new Error(filename+" omitted the relative-key ambiguity disclosure");
   }
   if(tier==="sample"){
    for(const label of chartLabels){
     if(!normalizedExtracted.includes(normalizeReportText(label).replace(/\s+/g," ").trim()))throw new Error(filename+" is missing a complete lane-constellation label: "+label);
    }
+  }
+  if(name==="full-audio-based"&&tier==="full"){
+   if(!normalizedExtracted.includes("Confirmed audio-derived tonal centre: A minor."))throw new Error(filename+" failed to render the confirmed audio-derived tonic");
+  }
+  if(name==="partial-audio-low-confidence"&&tier==="full"){
+   if(!normalizedExtracted.includes("Provisional audio-derived tonal centre: C major."))throw new Error(filename+" failed to render the provisional tonic");
+   if(!normalizedExtracted.includes("Possible: C major"))throw new Error(filename+" failed to label the provisional tonic as a possibility");
+   if(/KEY\\s*\\/\\s*MODE\\s*:\\s*N\\/D/i.test(normalizedExtracted))throw new Error(filename+" rendered an unexplained key/mode N/D despite candidate evidence");
+  }
+  if(name==="metadata-only"&&tier==="full"){
+   if(!normalizedExtracted.includes("Tonal centre unavailable"))throw new Error(filename+" failed to render the unavailable tonal state");
   }
   if(name==="combined-master-and-dsp"&&tier==="full"){
    const requiredCharts=["Evidence layers","Music platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"];
