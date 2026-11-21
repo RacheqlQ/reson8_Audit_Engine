@@ -40,6 +40,8 @@ export interface TonalResolution {
   windowAgreement: number | null;
   runnerUpMargin: number | null;
   validWindowCount: number;
+  downbeatAnchorWindowCount: number;
+  cadenceWeightedWindowCount: number;
   meanSalience: number;
   method: "circle_of_fifths_audio_first_v1";
   thresholds: {
@@ -48,6 +50,9 @@ export interface TonalResolution {
     minBootstrapShare: number;
     minWindowAgreement: number;
     minRunnerUpMargin: number;
+    relativePairAmbiguityMargin: number;
+    adjacentFifthsAmbiguityMargin: number;
+    bootstrapIterations: number;
   };
 }
 
@@ -202,7 +207,11 @@ function unavailable(reason:TonalReasonCode, validWindowCount:number, meanSalien
     status:"UNAVAILABLE",tonic:null,mode:null,reasonCodes:[reason],candidates:[],
     bootstrapShare:null,windowAgreement:null,runnerUpMargin:null,validWindowCount,meanSalience,
     method:"circle_of_fifths_audio_first_v1",
-    thresholds:{minWindows:MIN_WINDOWS,minMeanSalience:MIN_MEAN_SALIENCE,minBootstrapShare:MIN_BOOTSTRAP_SHARE,minWindowAgreement:MIN_WINDOW_AGREEMENT,minRunnerUpMargin:MIN_RUNNER_UP_MARGIN},
+    thresholds:{
+      minWindows:MIN_WINDOWS,minMeanSalience:MIN_MEAN_SALIENCE,minBootstrapShare:MIN_BOOTSTRAP_SHARE,
+      minWindowAgreement:MIN_WINDOW_AGREEMENT,minRunnerUpMargin:MIN_RUNNER_UP_MARGIN,
+      relativePairAmbiguityMargin:0.04,adjacentFifthsAmbiguityMargin:0.04,bootstrapIterations:BOOTSTRAP_ITERATIONS,
+    },
   };
 }
 
@@ -263,8 +272,15 @@ export function resolveTonalCentre(input: readonly TonalWindow[]): TonalResoluti
     status:confirmed?"CONFIRMED":"PROVISIONAL",
     tonic:noteName(best.tonic),mode:best.mode,reasonCodes:reasons,candidates,
     bootstrapShare:Number(bootstrapShare.toFixed(6)),windowAgreement:Number(windowAgreement.toFixed(6)),
-    runnerUpMargin:Number(margin.toFixed(6)),validWindowCount:valid.length,meanSalience:Number(meanSalience.toFixed(6)),
+    runnerUpMargin:Number(margin.toFixed(6)),validWindowCount:valid.length,
+    downbeatAnchorWindowCount:valid.filter(window=>window.downbeatRoot!==undefined&&window.downbeatRoot!==null).length,
+    cadenceWeightedWindowCount:valid.filter(window=>(window.cadenceWeight??0)>0).length,
+    meanSalience:Number(meanSalience.toFixed(6)),
     method:"circle_of_fifths_audio_first_v1",
-    thresholds:{minWindows:MIN_WINDOWS,minMeanSalience:MIN_MEAN_SALIENCE,minBootstrapShare:MIN_BOOTSTRAP_SHARE,minWindowAgreement:MIN_WINDOW_AGREEMENT,minRunnerUpMargin:MIN_RUNNER_UP_MARGIN},
+    thresholds:{
+      minWindows:MIN_WINDOWS,minMeanSalience:MIN_MEAN_SALIENCE,minBootstrapShare:MIN_BOOTSTRAP_SHARE,
+      minWindowAgreement:MIN_WINDOW_AGREEMENT,minRunnerUpMargin:MIN_RUNNER_UP_MARGIN,
+      relativePairAmbiguityMargin:0.04,adjacentFifthsAmbiguityMargin:0.04,bootstrapIterations:BOOTSTRAP_ITERATIONS,
+    },
   };
 }
