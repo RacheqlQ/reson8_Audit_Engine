@@ -24,22 +24,22 @@ describe("native PDF chart helpers", () => {
   it("renders fixture status and underlying evidence class independently", () => {
     const classes = [
       ["measured", "MEASURED"],
-      ["provider-recognized", "PROVIDER-RECOGNIZED"],
-      ["inferred", "HYPOTHESIS"],
-      ["assessment-derived", "ASSESSMENT-DERIVED"],
+      ["provider-recognized", "MUSIC PLATFORM RESULTS"],
+      ["inferred", "WORKING DIRECTION"],
+      ["assessment-derived", "A&R REVIEW"],
       ["illustrative", "ILLUSTRATIVE"],
     ] as const;
     expect(chartPanelStatus({ fixture: false })).toBe("UNCLASSIFIED");
     for (const [evidenceClass, label] of classes) {
       expect(chartPanelStatus({ evidenceClass })).toBe(label);
       const display = chartPanelDisplayStatus({ fixture: true, evidenceClass });
-      expect(display).toContain("SYNTHETIC FIXTURE");
+      expect(display).toContain("SAMPLE DATA · AUDIO REQUIRED");
       expect(display).toContain(label);
     }
     expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" }))
-      .toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO");
+      .toBe("SAMPLE DATA · AUDIO REQUIRED");
     expect(chartPanelDisplayStatus({ unavailable: true, evidenceClass: "provider-recognized" }))
-      .toBe("REQUIRES AUDIO · PROVIDER-RECOGNIZED");
+      .toBe("NOT AVAILABLE");
   });
 
   it("preserves full assessment text while supplying concise chart-only item summaries", () => {
