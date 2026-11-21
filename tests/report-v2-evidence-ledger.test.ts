@@ -18,7 +18,7 @@ describe("v2 evidence ledger summary", () => {
 
   it("reports zero counts when no evidence labels are supplied", () => {
     expect(buildEvidenceLedgerSummary([])).toBe(
-      "Measured: 0 · Source matches: 0 · Cross-checked: 0 · Hypotheses: 0",
+      "Measured: 0 · Music platform records: 0 · Verified matches: 0 · Suggested directions: 0",
     );
   });
 });
