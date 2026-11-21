@@ -43,7 +43,7 @@ export function circleOfFifthsRootScore(bassChroma: readonly number[], tonic: nu
 }
 const FRAME_SIZE = 4096;
 const MAX_WINDOWS = 16;
-const MIN_FREQUENCY_HZ = 55;
+const MIN_FREQUENCY_HZ = 35;
 const MAX_FREQUENCY_HZ = 2000;
 const EPSILON = 1e-12;
 
