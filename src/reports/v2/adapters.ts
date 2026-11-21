@@ -301,7 +301,15 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
     const labels = candidates.map(item => [nonEmpty(item.key), nonEmpty(item.mode)].filter(Boolean).join(" ")).filter(Boolean);
     if (labels.length) notYetMeasured.push(labels[0] + " (provisional tonal centre; alternatives: " + labels.slice(1).join(", ") + "; no confirmed tonic asserted).");
     const reasons = tonalResolution?.reasonCodes ?? [];
-    if (reasons.length) notYetMeasured.push("Tonal resolution limitation: " + reasons.join(", ") + ".");
+    const reasonDescriptions = reasons.map(code => ({
+      RELATIVE_MAJOR_MINOR_AMBIGUITY: "Relative major and minor readings remain close.",
+      LOW_WINDOW_CONSENSUS: "Tonal windows do not consistently support one candidate.",
+      LOW_BOOTSTRAP_CONSENSUS: "Resampled candidate rankings are not stable enough for confirmation.",
+      LOW_RUNNER_UP_MARGIN: "The leading candidate is too close to its runner-up.",
+      ADJACENT_FIFTHS_AMBIGUITY: "Adjacent Circle of Fifths candidates remain close.",
+      INSUFFICIENT_TONAL_EVIDENCE: "Stable harmonic evidence is insufficient.",
+    } as Record<string, string>)[code] ?? "A tonal disambiguation check remains unresolved.");
+    if (reasonDescriptions.length) notYetMeasured.push("Tonal resolution limitation: " + reasonDescriptions.join(" "));
   } else if (tonalResolution?.status === "UNAVAILABLE") {
     notYetMeasured.push("Tonal resolution unavailable: insufficient stable harmonic evidence in the uploaded master.");
   }
