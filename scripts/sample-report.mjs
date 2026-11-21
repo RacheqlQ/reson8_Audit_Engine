@@ -63,7 +63,7 @@ for(const [name,input] of variants){
     const narrativeTitles=["Production and arrangement guidance","Comparable lanes and listening references","Promotion and campaign strategy","Label and partner fit","30 / 60 / 90-day execution plan"];
     let previousNarrativePage=7;
     for(let index=0;index<narrativeTitles.length;index++){
-     const pageIndex=extractedPages.findIndex((page,pageNumber)=>pageNumber>previousNarrativePage&&page.toUpperCase().includes(narrativeTitles[index].toUpperCase()));
+     const pageIndex=extractedPages.findIndex((page,pageNumber)=>pageNumber>previousNarrativePage&&page.replace(/\\s+/g," ").toUpperCase().includes(narrativeTitles[index].toUpperCase()));
      if(pageIndex<0)throw new Error(filename+" is missing or misorders narrative section "+(index+1)+": "+narrativeTitles[index]);
      previousNarrativePage=pageIndex;
     }
