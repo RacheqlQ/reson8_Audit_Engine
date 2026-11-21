@@ -341,7 +341,6 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
   {label:"TEMPO DETECTION REASON",value:hasAudio&&!tempoReliable?"A single tempo could not be confirmed from the supplied recording.":null},
   {label:"TEMPO READINGS ACROSS SECTIONS",value:hasAudio?windowConsensusSummary(rhythm.windowConsensus):null},
   {label:"BEAT TIMING",value:!hasAudio?null:beatTimes.length?"A tentative beat guide is available; confirm by listening.":"Not established"},
-  {label:"BEAT TIMESTAMP COUNT",value:!hasAudio?null:beatTimes.length?String(beatTimes.length)+" generated timestamps; count is not a reliability measure":"No beat timestamps generated"},
   {label:"KEY / MODE",value:keyReliable?[text(s?.key),text(s?.mode)].filter(Boolean).join(" ")||null:null},
   {label:"KEY / MODE CANDIDATES",value:hasAudio&&!keyReliable&&keyCandidates?keyCandidates:null},
   {label:"KEY WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(harmonic.windowConsensus,harmonic.independentEstimator):null},
