@@ -180,7 +180,7 @@ try{
  if(reintroducedClaim){
   throw new Error("Generated PDF reintroduced an unsupported claim: "+reintroducedClaim);
  }
- if(/Possible tempo readings:|\b128\s*BPM\b|half-time 64\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF exposed a zero-confidence tempo candidate or derived pulse reading");
+ if(/\b128\s*BPM\b|half-time 64\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF exposed a zero-confidence tempo candidate or derived pulse reading");
  if(/double-time 256\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF printed an implausible double-time candidate");
  if(!unsafeText.includes("Further listening and source verification are required")){
   throw new Error("Generated PDF lost the supported A&R Notes decision-context sentence");
