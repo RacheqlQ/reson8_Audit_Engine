@@ -100,21 +100,41 @@ function detectorNumber(value: unknown, digits = 3): string | null {
  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : null;
 }
 export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
- const value=adaptReportV2(input).tempo.value;
- return [value===null
-  ?"A single tempo could not be confirmed from the recording."
-  :"The measured tempo is "+value+" BPM."];
+ const sonic=rec(input.sonicDna), rhythm=rec(sonic.rhythmFeatures), independent=rec(rhythm.independentEstimator);
+ const lines:string[]=[];
+ const reportableBpm=(value:unknown):value is number=>finite(value)&&value>=40&&value<=220;
+ const candidates=arr(rhythm.candidateScores).map(value=>rec(value)).filter(item=>reportableBpm(item.bpm)&&finite(item.score))
+  .slice(0,5).map(item=>String(item.bpm)+" BPM (score "+Number(item.score).toFixed(3)+")");
+ if(candidates.length)lines.push("Primary detector candidates: "+candidates.join("; "));
+ else if(Array.isArray(rhythm.candidateBpms)) {
+  const fallbackCandidates=rhythm.candidateBpms.filter(reportableBpm).slice(0,5);
+  if(fallbackCandidates.length)lines.push("Primary detector candidates: "+fallbackCandidates.map(value=>String(value)).join(", ")+" BPM");
+ }
+ if(finite(rhythm.confidence))lines.push("Primary detector raw confidence score: "+Number(rhythm.confidence).toFixed(3)+" (not a calibrated probability).");
+ if(reportableBpm(rhythm.alternateTempo))lines.push("Alternate half/double-time candidate: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
+ if(reportableBpm(independent.bpm))lines.push("Independent low-frequency envelope estimate: "+Number(independent.bpm).toFixed(1)+" BPM; raw score "+(detectorNumber(independent.score)??"not supplied")+".");
+ const consensus=rec(rhythm.windowConsensus);
+ if(finite(consensus.windowCount)&&consensus.windowCount>0)lines.push("Window stability: "+str(consensus.winner,"no consensus")+" across "+consensus.windowCount+" valid windows; observed agreement "+(detectorNumber(consensus.observedAgreement)??"not supplied")+".");
+ lines.push("Beat grid: "+str(rhythm.beatGridStatus,"not determined")+"; "+arr(rhythm.beatTimesSeconds).length+" candidate beat timestamps; downbeat grouping is diagnostic only.");
+ const abstention=str(rhythm.abstentionReason,"");
+ if(abstention&&abstention!=="Not supplied")lines.push("Tempo abstention: "+abstention);
+ return lines.length?lines:["No persisted tempo-detector diagnostics were supplied."];
 }
 export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
- const data=adaptReportV2(input);
- if(data.key.value!==null)return ["Confirmed song key: "+String(data.key.value)+"."];
- const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
- const candidates=arr(harmonic.topCandidates).map(value=>rec(value))
-  .map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" "))
-  .filter(Boolean).slice(0,4);
- return [candidates.length
-  ?"Song key not confirmed. Possible tonal centres: "+candidates.join(", ")+"."
-  :"Song key not determined from the supplied recording."];
+ const sonic=rec(input.sonicDna), harmonic=rec(sonic.harmonicFeatures), independent=rec(harmonic.independentEstimator);
+ const lines:string[]=[];
+ const candidates=arr(harmonic.topCandidates).map(value=>rec(value)).filter(item=>typeof item.key==="string")
+  .slice(0,5).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" ")+" (score "+(detectorNumber(item.score)??"not supplied")+")");
+ if(candidates.length)lines.push("Primary tonal candidates: "+candidates.join("; "));
+ if(finite(harmonic.confidence))lines.push("Primary key raw confidence score: "+Number(harmonic.confidence).toFixed(3)+" (not a calibrated probability).");
+ if(finite(harmonic.segmentAgreement))lines.push("Segment agreement: "+Number(harmonic.segmentAgreement).toFixed(3)+" across "+(finite(harmonic.analysisWindows)?harmonic.analysisWindows:"unknown")+" analysis windows.");
+ if(finite(harmonic.tuningCents))lines.push("Tuning offset: "+Number(harmonic.tuningCents).toFixed(1)+" cents; evidence windows: "+(finite(harmonic.tuningEvidenceWindows)?harmonic.tuningEvidenceWindows:"not supplied")+".");
+ if(typeof independent.key==="string")lines.push("Independent Goertzel estimate: "+independent.key+(typeof independent.mode==="string"?" "+independent.mode:"")+"; raw score "+(detectorNumber(independent.score)??"not supplied")+"; margin "+(detectorNumber(independent.margin)??"not supplied")+".");
+ if(harmonic.independentEstimatorDisagrees===true)lines.push("Independent estimator disagreement: yes; no forced consensus is applied.");
+ if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("Relative major/minor ambiguity detected; single-key assertion withheld.");
+ const limitation=str(harmonic.limitation,"");
+ if(limitation&&limitation!=="Not supplied")lines.push("Key abstention / limitation: "+limitation);
+ return lines.length?lines:["No persisted key-detector diagnostics were supplied."];
 }
 
 export function buildEvidenceLedgerSummary(labels: Array<{ label: string }>): string {
@@ -201,7 +221,7 @@ export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{f
  const e=rec(input.evidence),reconciliation=rec(e.reconciliation);
  const conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
  const releaseDifferences=arr(reconciliation.releaseContextDifferences).map(v=>rec(v));
- const fields:[string,string][]=[["artist","Artist"],["title","Track"],["album","Album"],["genre","Genre"],["releaseDate","Release date"],["isrc","Recording code"],["upc","Release code"],["label","Label"]];
+ const fields:[string,string][]=[["artist","Artist"],["title","Track"],["album","Album"],["genre","Genre"],["releaseDate","Release date"],["isrc","ISRC"],["upc","UPC"],["label","Label"]];
  return fields.map(([key,label])=>{
   const conflict=conflicts.find(item=>item.field===key);
   const releaseDifference=releaseDifferences.find(item=>item.field===key);
@@ -216,7 +236,7 @@ export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{f
 }
 function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fonts):number{
  const e=rec(input.evidence),rows=buildIdentityReconciliationRows(input),x=M,width=W-2*M,top=H-100,headerH=22,rowH=36;
- const columns=[78,164,128,141],labels=["ITEM","DETAIL","RESULT","SOURCE"];
+ const columns=[78,164,128,141],labels=["FIELD","VALUE","STATUS","SOURCE"];
  page.drawRectangle({x,y:top-headerH,width,height:headerH,color:C.charcoal});
  let cx=x;
  labels.forEach((label,index)=>{page.drawText(label,{x:cx+8,y:top-15,size:6.6,font:fonts.bold,color:C.white});cx+=columns[index];});
@@ -233,9 +253,8 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
   });
  });
  const tableBottom=top-headerH-rows.length*rowH,summaryTop=tableBottom-10;
- const sourceName=(value:unknown)=>({apple_music:"Apple Music",id3:"Audio file tags",audd:"AudD",musicbrainz:"MusicBrainz"} as Record<string,string>)[str(value,"").toLowerCase()]??str(value,"");
- const checked=arr(e.metadataSourcesChecked).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
- const providers=arr(e.sourceProviders).map(sourceName).filter(Boolean).join(", ")||"Not supplied";
+ const checked=arr(e.metadataSourcesChecked).map(v=>str(v,"")).filter(Boolean).join(", ")||"Not supplied";
+ const providers=arr(e.sourceProviders).map(v=>str(v,"")).filter(Boolean).join(", ")||"Not supplied";
  const summaryHeight=card(page,M,summaryTop,width,"Provider lookup and reconciliation context",[
   "Sources checked: "+checked,
   "Provider responses: "+providers,
