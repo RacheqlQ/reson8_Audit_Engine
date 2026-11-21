@@ -462,7 +462,7 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   }));
   const reasonDescriptions: Record<string, string> = {
     INSUFFICIENT_TONAL_EVIDENCE: "Stable harmonic evidence is insufficient.",
-    LOW_WINDOW_CONSENSUS: "The analyzed windows do not consistently support one tonal centre.",
+    LOW_WINDOW_CONSENSUS: "A stable window consensus was not reached across the analyzed audio segments.",
     LOW_BOOTSTRAP_CONSENSUS: "Resampled candidate rankings are not stable enough for confirmation.",
     LOW_RUNNER_UP_MARGIN: "The leading candidate is too close to its runner-up.",
     RELATIVE_MAJOR_MINOR_AMBIGUITY: "Relative major and minor readings remain close.",
