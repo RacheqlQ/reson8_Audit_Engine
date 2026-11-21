@@ -225,7 +225,7 @@ export function resolveTonalCentre(input: readonly TonalWindow[]): TonalResoluti
     const local=rankWindows([window]);
     return local.length && candidateId(local[0]!)===bestId ? 1 : 0;
   });
-  const windowAgreement=bestWindowVotes.reduce((a,b)=>a+b,0)/valid.length;
+  const windowAgreement=bestWindowVotes.reduce<number>((a,b)=>a+b,0)/valid.length;
   const state={value:seedFor(valid)};
   const bootstrapWins=new Map<string,number>();
   for(let iteration=0;iteration<BOOTSTRAP_ITERATIONS;iteration++) {
