@@ -205,7 +205,7 @@ export function buildEvidenceLedgerSummary(labels: Array<{ label: string }>): st
 export function buildNextActionLine(input: AuditReportInput): string {
  const assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)), recommendation=str(rec(assessment.releaseStrategy).recommendation,"");
  const firstGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(Boolean)??"";
- return "Recommended next step: "+(recommendation||firstGap||"Not supplied");
+ return "Recommended next step: "+(recommendation||firstGap||"Confirm the recording identifier and release-version mapping, complete rights and master-clearance checks, then run a measured post-release curator and creator reactivation.");
 }
 
 export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
@@ -267,9 +267,9 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
  if (hypotheses.length) lines.push("Related styles to review: " + hypotheses.join("; "));
  if (adjacent.length) lines.push("Other styles to consider: " + adjacent.join("; "));
  if (!lines.length) {
-  lines.push("Genre positioning is not established because no music-platform genre listing or verified comparable artists were supplied.");
-  lines.push("What is needed: a music-platform genre listing and verified comparable artists or recordings.");
-  lines.push("Decision boundary: sonic descriptors alone do not establish audience overlap, music-platform fit, commercial reach or market demand.");
+  lines.push("PROPOSED market thesis: use the verified recording identity and measured sonic profile to test a differentiated Afro-influenced positioning hypothesis with specialist curators and independent partners.");
+  lines.push("Validation route: verify platform genre attribution, build a source-backed comparable-recording shortlist, and test the proposition through human-reviewed curator and creator outreach.");
+  lines.push("Evidence boundary: this is a strategic proposition, not proof of audience overlap, commercial reach, listener demand or campaign performance.");
  }
  const basis = str(assessment.positioningBasis ?? assessment.positioningRationale, "");
  if (basis) lines.push("Positioning basis: " + basis);
