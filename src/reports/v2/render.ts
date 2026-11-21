@@ -409,7 +409,6 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   if(hasScore||timeline.length>0||hasPlaybackMeasurements)
    pages.push({title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"});
  }
- const notesContext=buildArNotesDecisionContext(input);
  pages.push({title:"A&R notes",blocks:[],lines:[
   ...arr(a.humanListeningChecklist).map(value=>str(value,"")).filter(value=>value&&!/^not supplied$/i.test(value)).map(value=>"[ ] "+value),
   notesContext.verdict,
