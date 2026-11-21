@@ -18,7 +18,7 @@ describe("v2 read-only evidence adapters", () => {
 
   it("shows harmonic candidates only above the public candidate-confidence floor", () => {
     const input = structuredClone(ambiguousAudioFixture) as any;
-    input.sonicDna.keyConfidence = 0.25;
+    input.sonicDna.keyConfidence = 0.12;
     const data = adaptReportV2(input);
     expect(data.notYetMeasured.join(" ")).toContain("C major");
   });
