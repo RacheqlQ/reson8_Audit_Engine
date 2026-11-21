@@ -30,10 +30,10 @@ for(const [name,input,expected] of [
  const file=new URL(name+".pdf",out);
  await writeFile(file,bytes);
  const extracted=execFileSync("pdftotext",["-layout",file.pathname,"-"],{encoding:"utf8"});
- const extractedPages=extracted.split("\\f").filter(page=>page.trim().length>0);
+ const extractedPages=extracted.split("\f").filter(page=>page.trim().length>0);
  if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i.test(extracted))throw new Error(name+" contains a forbidden dead-end verdict or limitations section");
  if(!extractedPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error(name+" must finish with an A&R NOTES page");
- process.stdout.write(name+": "+pdf.getPageCount()+" pages; final A&R notes and verdict checks passed.\\n");
+ process.stdout.write(name+": "+pdf.getPageCount()+" pages; final A&R notes and verdict checks passed.\n");
 }
 
 
@@ -43,15 +43,15 @@ if(philloFullPdf.getPageCount()!==15)throw new Error("v2-phillo-stunixx-full exp
 const philloFullFile=new URL("v2-phillo-stunixx-full.pdf",out);
 await writeFile(philloFullFile,philloFullBytes);
 const philloFullText=execFileSync("pdftotext",["-layout",philloFullFile.pathname,"-"],{encoding:"utf8"});
-const philloFullPages=philloFullText.split("\\f").filter(page=>page.trim().length>0);
+const philloFullPages=philloFullText.split("\f").filter(page=>page.trim().length>0);
 if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i.test(philloFullText))throw new Error("Phillo full fixture contains a forbidden dead-end verdict or limitations section");
 if(!philloFullPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error("Phillo full fixture must finish with A&R NOTES");
 const executionPage=philloFullPages.find(page=>page.toUpperCase().includes("30 / 60 / 90-DAY EXECUTION PLAN"));
 if(!executionPage||!executionPage.toUpperCase().includes("DAYS 61-90"))throw new Error("Phillo full fixture is missing its Days 61-90 plan");
-process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" pages; post-release execution and final A&R notes verified.\\n");
+process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" pages; post-release execution and final A&R notes verified.\n");
 
 const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const fullPdf=await PDFDocument.load(fullBytes);
 if(fullPdf.getPageCount()!==16)throw new Error("v2-complete-synthetic-full expected 16 pages (9 base + 5 narrative + 2 evidence-gated deep dives); got "+fullPdf.getPageCount());
 await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
-process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\\n");
+process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\n");
