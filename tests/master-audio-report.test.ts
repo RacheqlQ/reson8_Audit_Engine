@@ -49,8 +49,8 @@ describe("analysis-to-report integration contracts", () => {
     const report = reportText(input);
     expect(report).toContain("Confirmed tempo: Not reported as a confirmed measurement");
     expect(report).toContain("A tempo candidate was returned but did not meet the reporting threshold");
-    expect(report).toContain("PROVISIONAL AUDIO MOOD: driving, tense");
-    expect(report).toContain("A validated mood model is not configured");
+    expect(report).toContain("PROVISIONAL MOOD DIRECTION: driving, tense (exploratory; confirm by listening)");
+    expect(report).not.toMatch(/No validated model prediction|Calibrated Audio Mood|Calibrated Energy Classification|energy-model-v2|isotonic|Brier|\bECE\b/i);
     expect(report).not.toContain("acousticFeatureProfile.predictions");
     expect(report).not.toContain("VALIDATED_MODEL_NOT_CONFIGURED");
     expect(report).not.toContain("TEMPO_BELOW_REPORTING_THRESHOLD");
@@ -58,11 +58,11 @@ describe("analysis-to-report integration contracts", () => {
 
   it("uses the same sanitized item set for A&R risk lists and summary counts", () => {
     const risks = reportableAssessmentItems([
-      "Tempo confidence remains below the reporting threshold.",
+      "Tempo reliability remains below the reporting threshold.",
       "Vocal analysis: Not performed because no validated vocal model is configured.",
     ]);
     const rows = buildStrengthRiskChartRows([], risks);
-    expect(risks).toEqual(["Tempo confidence remains below the reporting threshold."]);
+    expect(risks).toEqual(["Tempo reliability remains below the reporting threshold."]);
     expect(rows.find((row) => row.label === "Risks")?.value).toBe(risks.length);
     expect(strengthRiskItemsForColumn(rows, "risk")).toHaveLength(risks.length);
   });
@@ -261,8 +261,8 @@ describe("uploaded master provenance in reports", () => {
     expect(report).toContain("No source-attributed DSP mood tags were returned for playlist search.");
     expect(report).toContain("Uploaded-master provisional mood tags: driving, tense");
     expect(report).toContain("Provisional uploaded-master energy estimate: high");
-    expect(report).toContain("Mood and energy: provisional audio-feature heuristics are shown separately from calibrated model outputs.");
-    expect(report).toContain("These estimates are derived from the uploaded signal, are not probabilities");
+    expect(report).toContain("Mood and energy: these are provisional listening directions from the uploaded recording, not confirmed descriptions.");
+    expect(report).toContain("Mood and energy: these are provisional listening directions from the uploaded recording, not confirmed descriptions.");
     expect(report).not.toMatch(/model:.*disabled|Learned audio-genre model status/i);
   });
 
@@ -310,7 +310,7 @@ describe("uploaded master provenance in reports", () => {
     expect(chartRects.some((rect) => rect.id === "shape-sonic-metric-12")).toBe(true);
   });
 
-  it("hides internal master paths, humanizes measurement methods, and preserves independent tempo candidates", () => {
+  it("hides internal master paths and withholds independent tempo candidates without explicit confidence", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.evidence = { ...input.evidence, fixture: false, masterAudio: { evidenceClass: "OBSERVED", provenance: "uploaded_audio_master" } };
     input.sonicDna = {
@@ -343,8 +343,8 @@ describe("uploaded master provenance in reports", () => {
     expect(report).toContain("method: spectral-centroid analysis");
     expect(report).toContain("method: signal-analysis method (technical identifier withheld)");
     const rows = sonicDashboardRowsForReport(input.sonicDna, true);
-    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("93.8 (provisional; independent low-frequency estimator");
-    expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value).toContain("half-time 46.9 BPM; double-time 187.6 BPM");
-    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toContain("raw estimator score 0.694 (not a calibrated probability)");
+    expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toBeNull();
+    expect(rows.find((row) => row.label === "ALTERNATIVE PULSE READINGS")?.value).toBeNull();
+    expect(rows.find((row) => row.label === "KEY / MODE CANDIDATES")?.value).toBeNull();
   });
 });

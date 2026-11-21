@@ -84,13 +84,11 @@ for(const [name,input] of variants){
   const chartLabels=[safeAssessment.aAndRPositioning.primaryLane,...safeAssessment.aAndRPositioning.adjacentLanes].filter(value=>typeof value==="string"&&value.trim());
   const normalizedExtracted=extracted.replace(/\s+/g," ");
   if(name==="ambiguous-audio-low-confidence"){
-   const expectedEvidence=tier==="sample"
-    ?["128 BPM (provisional","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"]
-    :["128 BPM (provisional","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"];
+   const expectedEvidence=["14 (multiple tonal windows; possible)"];
    for(const expected of expectedEvidence){
     if(!normalizedExtracted.includes(expected))throw new Error(filename+" is missing the expected provisional audio evidence: "+expected);
    }
-   if(/TEMPO BPM\s+128(?:\.0)?\s+BPM/.test(normalizedExtracted))throw new Error(filename+" promoted a zero-confidence tempo candidate to a confirmed BPM result");
+   if(/\b128\s*BPM\b|\bC major\b/.test(normalizedExtracted))throw new Error(filename+" exposed a zero-confidence tempo or unsupported key candidate");
   }
   if(tier==="sample"){
    for(const label of chartLabels){
@@ -98,7 +96,7 @@ for(const [name,input] of variants){
    }
   }
   if(name==="combined-master-and-dsp"&&tier==="full"){
-   const requiredCharts=["Evidence layers","DSP platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"];
+   const requiredCharts=["Evidence layers","Music platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"];
    const fullText=normalizedExtracted.toLocaleLowerCase();
    for(const chart of requiredCharts){
     if(!fullText.includes(chart.toLocaleLowerCase()))throw new Error(filename+" is missing a sample-parity chart: "+chart);
@@ -121,8 +119,10 @@ const evidenceCheckPath=new URL("evidence-sanitization-regression.pdf",out).path
 const chartCheckPath=new URL("constellation-long-label-regression.pdf",out).pathname;
 try{
  const unsafeInput=structuredClone(ambiguousAudioFixture);
+ if(unsafeInput.sonicDna&&typeof unsafeInput.sonicDna==="object")unsafeInput.sonicDna.tempoConfidence=0;
  unsafeInput.assessment={
   ...unsafeInput.assessment,
+  confidence:0,
   limitations:[
    ...(Array.isArray(unsafeInput.assessment.limitations)?unsafeInput.assessment.limitations:[]),
    "Vocal analysis: Not performed - Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
@@ -148,10 +148,16 @@ try{
    ]
   }
  };
+ const unsafeDecisionContext=buildArNotesDecisionContext(unsafeInput);
+ if(!unsafeDecisionContext.summary.includes("The supplied evidence is insufficient; track-specific conclusions are withheld"))throw new Error("Zero-confidence A&R Notes context did not fail closed");
  const unsafeBytes=await ensurePdfReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
  await writeFile(evidenceCheckPath,unsafeBytes);
  const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
  const normalizedUnsafeText=unsafeText.replace(/\s+/g," ").trim();
+ const forbiddenPublicTerms=["assessment confidence","confidence-qualified","raw confidence score","Goertzel","fft_harmonic_chroma_ensemble","high_frequency_transient_autocorrelation"];
+ for(const term of forbiddenPublicTerms){
+  if(normalizedUnsafeText.toLocaleLowerCase().includes(term.toLocaleLowerCase()))throw new Error("Generated PDF exposed internal analysis terminology: "+term);
+ }
  const internalStatusNotices=[
   "Vocal analysis: Not performed",
   "Vocal presence/absence is unknown",
@@ -164,7 +170,7 @@ try{
    throw new Error("Generated PDF exposed an internal analysis status notice: "+notice);
   }
  }
- for(const required of ["Spotify provider unavailable:","HTTP 403","SPOTIFY_CLIENT_ID","SPOTIFY_CLIENT_SECRET","Apple Music provider unavailable:","APPLE_MUSIC_DEVELOPER_TOKEN"]){
+ for(const required of ["Spotify playlist search unavailable:","HTTP 403","Apple Music playlist search unavailable:"]){
   if(!normalizedUnsafeText.includes(required)){
    throw new Error("Generated PDF is missing provider availability evidence: "+required);
   }
@@ -178,10 +184,11 @@ try{
  if(reintroducedClaim){
   throw new Error("Generated PDF reintroduced an unsupported claim: "+reintroducedClaim);
  }
- if(!/128\s+BPM \(provisional tempo candidate;\s*plausible half\/double-time alternatives: 64 BPM/i.test(unsafeText)) throw new Error("Generated PDF lost or mislabelled provisional tempo relationships");
+ const zeroConfidenceTempoLeak=unsafeText.match(/.{0,120}(?:\b128\s*BPM\b|half-time 64\.0 BPM).{0,120}/is);
+ if(zeroConfidenceTempoLeak)throw new Error("Generated PDF exposed a zero-confidence tempo candidate or derived pulse reading: "+JSON.stringify(zeroConfidenceTempoLeak[0]));
  if(/double-time 256\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF printed an implausible double-time candidate");
- if(!unsafeText.includes("Further listening and source verification are required")){
-  throw new Error("Generated PDF lost the supported A&R Notes decision-context sentence");
+ if(!normalizedUnsafeText.includes("The supplied evidence is insufficient; track-specific conclusions are withheld")){
+  throw new Error("Generated PDF lost the zero-confidence A&R Notes decision context");
  }
 
  const longLabels=[

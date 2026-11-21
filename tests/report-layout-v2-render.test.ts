@@ -42,7 +42,7 @@ describe("v2 identity reconciliation table data", () => {
       .toMatchObject({ value: "Fixture Track", status: "Cross-checked", source: "unavailable" });
     expect(rows.find((row: any) => row.field === "Album"))
       .toMatchObject({ value: "Fixture EP vs Alternate EP", status: "Conflict" });
-    expect(rows.find((row: any) => row.field === "UPC"))
+    expect(rows.find((row: any) => row.field === "Release code"))
       .toMatchObject({ value: "Unavailable", status: "Unavailable" });
   });
 });
@@ -87,12 +87,9 @@ describe("v2 DSP playlist provider diagnostics", () => {
       ]
     };
     const lines = reportV2Render.buildPlaylistProviderStatusLines(input).join(" ");
-    expect(lines).toContain("Spotify provider unavailable:");
+    expect(lines).toContain("Spotify playlist search unavailable:");
     expect(lines).toContain("HTTP 403");
-    expect(lines).toContain("SPOTIFY_CLIENT_ID");
-    expect(lines).toContain("SPOTIFY_CLIENT_SECRET");
-    expect(lines).toContain("Apple Music provider unavailable:");
-    expect(lines).toContain("APPLE_MUSIC_DEVELOPER_TOKEN");
+    expect(lines).toContain("Apple Music playlist search unavailable:");
   });
 
   it("does not claim playlist discovery ran when no provider outcome was persisted", () => {
@@ -114,7 +111,7 @@ describe("v2 DSP playlist provider diagnostics", () => {
 });
 
 describe("v2 detector diagnostics", () => {
-  it("renders persisted tempo candidates, raw scores, independent estimate, window agreement and abstention", () => {
+  it("renders plain-language provisional tempo readings and abstention", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.sonicDna = { ...input.sonicDna, rhythmFeatures: {
       method: "high_frequency_transient_autocorrelation",
@@ -125,16 +122,16 @@ describe("v2 detector diagnostics", () => {
       abstentionReason: "Window stability did not meet the reporting gate."
     }};
     const lines = reportV2Render.buildTempoDiagnosticLines(input).join(" ");
-    expect(lines).toContain("96 BPM (score 0.812)");
-    expect(lines).toContain("raw confidence score: 0.713");
-    expect(lines).toContain("Independent low-frequency envelope estimate: 95.8 BPM");
-    expect(lines).toContain("observed agreement 0.750");
-    expect(lines).toContain("Window stability");
+    expect(lines).toContain("Possible tempo readings: 96 BPM; 192 BPM.");
+    expect(lines).not.toMatch(/confidence|score|probability|detector/i);
+    expect(lines).toContain("Tempo readings are broadly consistent across the analyzed sections.");
+    expect(lines).not.toContain("observed agreement");
+    expect(lines).toContain("Tempo not confirmed");
     expect(lines).toContain("Window stability did not meet the reporting gate");
-    expect(lines).toContain("not a calibrated probability");
+    expect(lines).not.toMatch(/calibrated|Goertzel|harmonic|FFT/i);
   });
 
-  it("renders tonal candidates, tuning, segment agreement, independent disagreement and abstention", () => {
+  it("renders plain-language song-key possibilities and abstention", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.sonicDna = { ...input.sonicDna, harmonicFeatures: {
       method: "fft_harmonic_chroma_ensemble", confidence: 0.8123, segmentAgreement: 0.7,
@@ -145,12 +142,12 @@ describe("v2 detector diagnostics", () => {
       limitation: "Independent estimators disagree; no single key is asserted."
     }};
     const lines = reportV2Render.buildKeyDiagnosticLines(input).join(" ");
-    expect(lines).toContain("A minor (score 0.710)");
-    expect(lines).toContain("Segment agreement: 0.700 across 5");
-    expect(lines).toContain("Tuning offset: -12.4 cents");
-    expect(lines).toContain("Independent Goertzel estimate: C major");
-    expect(lines).toContain("Independent estimator disagreement: yes");
-    expect(lines).toContain("Relative major/minor ambiguity detected");
+    expect(lines).toContain("Possible song keys: A minor; C major.");
+    expect(lines).toContain("Song-key readings are broadly consistent across the analyzed sections.");
+    expect(lines).not.toContain("Tuning offset");
+    expect(lines).not.toMatch(/Goertzel|score|margin|confidence|harmonic|FFT/i);
+    expect(lines).toContain("Different key readings were returned; no single key is confirmed.");
+    expect(lines).toContain("relative major/minor pair");
     expect(lines).toContain("no single key is asserted");
   });
 });
@@ -162,8 +159,8 @@ describe("v2 gated report pages", () => {
     input.assessment.adjacentLanes = [];
     input.evidence.genre = null;
     const lines = buildPositioningLines(input);
-    expect(lines.join(" ")).toContain("Positioning not established");
-    expect(lines.join(" ")).toContain("provider-attributed genre");
+    expect(lines.join(" ")).toContain("Genre positioning is not established");
+    expect(lines.join(" ")).toContain("music-platform genre listing");
     expect(lines.every((line: string) => line.trim().length > 0)).toBe(true);
   });
 

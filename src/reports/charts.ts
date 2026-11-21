@@ -276,18 +276,14 @@ export function chartEvidenceIntegrityErrors(input: Pick<ChartPanelInput, "evide
 }
 
 export function chartPanelDisplayStatus(input: Pick<ChartPanelInput, "fixture" | "inferred" | "unavailable" | "evidenceClass">): string {
- const status=chartPanelStatus(input);
- const evidence=input.evidenceClass==="provider-recognized"?"PROVIDER-RECOGNIZED"
-  :input.evidenceClass==="assessment-derived"?"ASSESSMENT-DERIVED"
-  :input.evidenceClass==="illustrative"?"ILLUSTRATIVE"
-  :input.evidenceClass==="inferred"||input.inferred?"HYPOTHESIS"
-  :input.evidenceClass==="measured"?"MEASURED":"UNCLASSIFIED";
- const labels:string[]=[];
- if(input.fixture)labels.push("SYNTHETIC FIXTURE");
- if(input.unavailable)labels.push("REQUIRES AUDIO");
- if(status!=="SYNTHETIC FIXTURE"&&status!=="REQUIRES AUDIO")labels.push(status);
- if((!input.unavailable||(evidence!=="MEASURED"))&&!labels.includes(evidence))labels.push(evidence);
- return labels.join(" · ");
+ if(input.fixture)return "SAMPLE DATA · AUDIO REQUIRED";
+ if(input.unavailable)return "NOT AVAILABLE";
+ if(input.inferred||input.evidenceClass==="inferred")return "WORKING DIRECTION";
+ if(input.evidenceClass==="provider-recognized")return "MUSIC PLATFORM RESULTS";
+ if(input.evidenceClass==="assessment-derived")return "A&R REVIEW";
+ if(input.evidenceClass==="illustrative")return "ILLUSTRATIVE";
+ if(input.evidenceClass==="measured")return "MEASURED FROM RECORDING";
+ return "REVIEW";
 }
 function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,height:number){
  const x=CARD_X,w=input.width??CARD_W,top=input.y??700,bottom=top-height;
@@ -298,20 +294,19 @@ function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,hei
  p.drawRectangle({x:x+3,y:bottom+2,width:w-6,height:2,color:C.navy,opacity:.08});
  p.drawRectangle({x,y:top-HEADER_H,width:w,height:HEADER_H,color:C.navy});
  p.drawRectangle({x,y:top-HEADER_H,width:5,height:HEADER_H,color:input.inferred?C.violet:input.unavailable?C.coral:C.teal});
- tracked(p,input.title.toUpperCase(),x+13,top-19,bold,8,C.white,.65);
+ tracked(p,input.title.toUpperCase(),x+13,top-19,bold,8.5,C.white,.65);
  const status=chartPanelDisplayStatus(input),statusWidth=Math.min(155,Math.max(78,w*.38));
- tracked(p,status,x+w-13-statusWidth,top-19,bold,5.2,input.fixture||input.inferred?C.gold:input.unavailable?C.coral:C.teal,.25);
+ tracked(p,status,x+w-13-statusWidth,top-19,bold,6,input.fixture||input.inferred?C.gold:input.unavailable?C.coral:C.teal,.25);
  const captionTop=bottom+CAPTION_H;
  line(p,x+9,captionTop,x+w-9,captionTop,C.line,.65);
  let cy=bottom+CAPTION_H-10;
  const captionRows:[string,string,number][]=[
-  ["EVIDENCE REFS: ",(input.evidenceRefs??[]).join(", ")||"not supplied",1],
-  ["SHOWS: ",input.shows,2],
-  ["CAN'T SHOW: ",input.cantShow,2],
+  ["WHAT IT SHOWS: ",input.shows,2],
+  ["WHAT IT DOES NOT SHOW: ",input.cantShow,2],
  ];
  for(const [label,value,maxLines] of captionRows){
-  const lines=wrap(label+value,font,5.2,w-24).slice(0,maxLines);
-  for(const part of lines){text(p,part,x+12,cy,font,5.2,C.muted);cy-=6;}
+  const lines=wrap(label+value,font,6,w-24).slice(0,maxLines);
+  for(const part of lines){text(p,part,x+12,cy,font,6,C.muted);cy-=7;}
  }
  return {x,top,bottom,width:w,height,contentTop:top-HEADER_H-9,contentBottom:captionTop+5};
 }

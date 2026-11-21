@@ -28,7 +28,7 @@ describe("Phase 5 report integration", () => {
     expect(text).toContain("EXISTING ISRC PRESENCE — not an outreach prospect");
     expect(text).toContain("TARGET SHORTLIST — membership absent or unverified");
     expect(text).toContain("candidate-track BPM, key, energy and acoustic feature vectors");
-    expect(text).toContain("provisional audio_feature_heuristics_v1 outputs, not calibrated perceptual predictions");
+    expect(text).toContain("Uploaded-master mood tags are provisional listening directions, not confirmed descriptions.");
     expect(text).toContain("Territory prioritization");
     expect(text).toContain("No verified territory-level audience telemetry");
     expect(text).toContain("Timestamped short-form edit candidates");

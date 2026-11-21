@@ -1,4 +1,4 @@
-import { hasMultipleTuningWindows, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
+import { hasMultipleTuningWindows, hasReportableKeyCandidates, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 import { hasSubmittedMasterAudio } from "../../audio/master-audio-evidence.js";
 import type { AuditReportInput } from "../generate-audit-report.js";
 
@@ -168,18 +168,16 @@ export function buildDecisionDimensions(input: AuditReportInput): DecisionDimens
   ].filter(field => finite(audio?.[field]));
   const audioSubmitted = hasSubmittedMasterAudio(evidence ?? {}, audio);
   const audioMeasures = [
-    ...(tempoMeasured ? ["confidence-qualified tempo"] : []),
-    ...(keyMeasured ? ["confidence-qualified key"] : []),
-    ...descriptiveMeasurements,
+    ...(tempoMeasured ? ["tempo"] : []),
+    ...(keyMeasured ? ["song key"] : []),
+    ...(descriptiveMeasurements.length ? ["recording profile"] : []),
   ];
   const audioStatus = !audioSubmitted
     ? "NOT MEASURED"
     : audioMeasures.length ? "MEASURED" : "ANALYSIS INCOMPLETE";
   const audioBasis = !audioSubmitted
-    ? "No uploaded-master provenance marker is present."
-    : audioMeasures.length
-      ? "Uploaded-master evidence: " + audioMeasures.join(", ") + ". Descriptive measurements do not establish artistic quality or mastering readiness."
-      : "An uploaded master is recorded, but no supported technical measurements are available.";
+    ? "No uploaded recording was available for review."
+    : "The uploaded recording was reviewed. Only supported findings are presented; artistic quality and final mastering suitability require human review.";
 
   const identityStatus = conflicts.length
     ? "CONFLICTS OPEN"
@@ -271,7 +269,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const comparables = comparablesFrom(evidence);
   const moments = momentsFrom(audio, evidence);
   const notYetMeasured: string[] = [];
-  if (!tempoReliable) {
+  if (!tempoReliable && typeof audio?.tempoConfidence === "number" && Number.isFinite(audio.tempoConfidence) && audio.tempoConfidence > 0) {
     const candidate = firstFinite(audio, ["tempoCandidateBpm", "bpm"]);
     if (candidate !== null && candidate >= 40 && candidate <= 220) {
       const alternatives = [candidate / 2, candidate * 2]
@@ -284,7 +282,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       notYetMeasured.push("Tempo candidate " + candidate + " BPM abstained: outside the plausible 40–220 BPM reporting range.");
     }
   }
-  if (!keyReliable) {
+  if (!keyReliable && hasReportableKeyCandidates(audio)) {
     const harmonic = record(audio?.harmonicFeatures);
     const candidates = Array.isArray(harmonic?.topCandidates) ? harmonic.topCandidates.map(record).filter(Boolean) : [];
     const labels = candidates.map(item => [nonEmpty(item?.key), nonEmpty(item?.mode)].filter(Boolean).join(" ")).filter(Boolean);

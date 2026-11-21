@@ -86,8 +86,8 @@ describe("Phillo evidence guardrails", () => {
       } },
     } as any).join(" ");
 
-    expect(lines).toContain("40 BPM (score 0.800)");
-    expect(lines).toContain("220 BPM (score 0.700)");
+    expect(lines).toContain("Possible tempo readings: 40 BPM; 220 BPM.");
+    expect(lines).not.toMatch(/score|confidence|probability|detector/i);
     expect(lines).not.toContain("39 BPM");
     expect(lines).not.toContain("221 BPM");
     expect(lines).not.toContain("Alternate half/double-time candidate");
@@ -101,7 +101,7 @@ describe("Phillo evidence guardrails", () => {
       genreClassification: { primaryGenre: null, abstained: true },
     });
     expect(result.scorecard.tempoLaneFit.score).toBeNull();
-    expect(result.scorecard.tempoLaneFit.rationale).toContain("tempo is confidence-qualified");
+    expect(result.scorecard.tempoLaneFit.rationale).toContain("tempo remains provisional");
     expect(result.scorecard.tempoLaneFit.rationale).not.toContain("did not pass the confidence gate");
   });
 
@@ -345,9 +345,9 @@ describe("Phillo evidence guardrails", () => {
       genreClassification: { primaryGenre: null, abstained: true },
     });
     expect(Object.values(result.scorecard).every((dimension) => dimension.score === null)).toBe(true);
-    expect(Object.values(result.scorecard).every((dimension) => /overall assessment confidence is zero/i.test(dimension.rationale))).toBe(true);
+    expect(Object.values(result.scorecard).every((dimension) => /^Not scored:/i.test(dimension.rationale))).toBe(true);
     expect(result.scorecard.dynamicRangeLoudness.rationale).not.toContain("Key confidence");
-    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("destination-specific integrated-loudness");
+    expect(result.scorecard.dynamicRangeLoudness.rationale).toContain("No destination-specific loudness or peak targets were supplied");
   });
 
   it("removes specific key and mode assertions from narrative when key confidence is below the reporting gate", () => {
@@ -449,7 +449,7 @@ describe("Phillo evidence guardrails", () => {
     ];
     expect(Object.keys(result.scorecard).sort()).toEqual(required.sort());
     expect(Object.values(result.scorecard).every((dimension) => dimension.score === null)).toBe(true);
-    expect(Object.values(result.scorecard).every((dimension) => /overall assessment confidence is zero/i.test(dimension.rationale))).toBe(true);
+    expect(Object.values(result.scorecard).every((dimension) => /^Not scored:/i.test(dimension.rationale))).toBe(true);
     expect(result.strengths).toEqual([]);
   });
 

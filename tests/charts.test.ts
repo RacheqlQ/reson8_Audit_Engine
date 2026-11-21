@@ -32,14 +32,22 @@ describe("native PDF chart helpers", () => {
     expect(chartPanelStatus({ fixture: false })).toBe("UNCLASSIFIED");
     for (const [evidenceClass, label] of classes) {
       expect(chartPanelStatus({ evidenceClass })).toBe(label);
+      const publicLabels: Record<string, string> = {
+        measured: "MEASURED FROM RECORDING",
+        "provider-recognized": "MUSIC PLATFORM RESULTS",
+        inferred: "WORKING DIRECTION",
+        "assessment-derived": "A&R REVIEW",
+        illustrative: "ILLUSTRATIVE",
+      };
+      expect(chartPanelDisplayStatus({ evidenceClass })).toBe(publicLabels[evidenceClass]);
       const display = chartPanelDisplayStatus({ fixture: true, evidenceClass });
-      expect(display).toContain("SYNTHETIC FIXTURE");
-      expect(display).toContain(label);
+      expect(display).toContain("SAMPLE DATA · AUDIO REQUIRED");
+      expect(display).toBe("SAMPLE DATA · AUDIO REQUIRED");
     }
     expect(chartPanelDisplayStatus({ fixture: true, unavailable: true, evidenceClass: "measured" }))
-      .toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO");
+      .toBe("SAMPLE DATA · AUDIO REQUIRED");
     expect(chartPanelDisplayStatus({ unavailable: true, evidenceClass: "provider-recognized" }))
-      .toBe("REQUIRES AUDIO · PROVIDER-RECOGNIZED");
+      .toBe("NOT AVAILABLE");
   });
 
   it("preserves full assessment text while supplying concise chart-only item summaries", () => {

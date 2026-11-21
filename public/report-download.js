@@ -1,3 +1,10 @@
+export function normalizeReportAccessKey(input) {
+  return input
+    .replace(/[\s\u200B-\u200D\uFEFF]/g, "")
+    .replace(/^["']+|["']+$/g, "")
+    .toLowerCase();
+}
+
 export async function readPdfResponse(response) {
   const contentType = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
 

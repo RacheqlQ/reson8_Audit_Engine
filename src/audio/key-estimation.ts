@@ -26,6 +26,19 @@ export interface KeyEstimate {
 }
 
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
+export const CIRCLE_OF_FIFTHS_PITCH_CLASSES = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5] as const;
+
+/** Root support from the tonic and its adjacent fourth/fifth neighbours on the circle of fifths. */
+export function circleOfFifthsRootScore(bassChroma: readonly number[], tonic: number): number {
+  if (!Number.isInteger(tonic) || tonic < 0 || tonic > 11 || bassChroma.length !== 12) return 0;
+  const total = bassChroma.reduce((sum, value) => sum + (Number.isFinite(value) ? Math.max(0, value) : 0), 0);
+  if (total <= EPSILON) return 0;
+  const position = CIRCLE_OF_FIFTHS_PITCH_CLASSES.findIndex(value => value === tonic);
+  const fifth = CIRCLE_OF_FIFTHS_PITCH_CLASSES[(position + 1) % 12]!;
+  const fourth = CIRCLE_OF_FIFTHS_PITCH_CLASSES[(position + 11) % 12]!;
+  const at = (pitch: number) => Math.max(0, bassChroma[pitch] ?? 0) / total;
+  return at(tonic) * 0.6 + at(fifth) * 0.25 + at(fourth) * 0.15;
+}
 const FRAME_SIZE = 4096;
 const MAX_WINDOWS = 12;
 const MIN_FREQUENCY_HZ = 55;
@@ -54,7 +67,7 @@ export const MIN_KEY_SEGMENT_AGREEMENT = 0.8;
 // Internal candidate-retention floors are deliberately lower than reportability gates.
 // Candidates remain provisional until they pass the stricter evidence guardrails.
 const MIN_KEY_CANDIDATE_CONFIDENCE = 0.12;
-const MIN_KEY_CANDIDATE_SEGMENT_AGREEMENT = 0.6;
+const MIN_KEY_CANDIDATE_SEGMENT_AGREEMENT = 0.7;
 
 type Mode = "major" | "minor";
 interface Candidate { key: number; mode: Mode; score: number; }
@@ -173,6 +186,7 @@ function tuningDeviationCents(peaks: Array<{ frequency: number; magnitude: numbe
 
 function profileForSegment(samples: Float32Array, start: number, sampleRate: number): {
   chroma: number[];
+  bassChroma: number[];
   peaks: Array<{ frequency: number; magnitude: number }>;
   fftButterflyCount: number;
 } {
@@ -207,13 +221,13 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
   // A single harmonic series is evidence of a pitched note, not a musical key.
   // Count independent spectral roots before harmonic-aware chroma voting.
   if (fundamentals.length < 2) {
-    return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
+    return { chroma: Array(12).fill(0), bassChroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
   }
   const tuningCents = tuningOffset(peaks);
   // A stable global tuning offset should explain independent tonal roots.
   // Do not compare upper harmonics as if each were an independent note.
   if (peaks.length >= 4 && tuningDeviationCents(peaks, tuningCents) > 30) {
-    return { chroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
+    return { chroma: Array(12).fill(0), bassChroma: Array(12).fill(0), peaks: [], fftButterflyCount: operations };
   }
   const bassChroma = Array(12).fill(0);
   const midChroma = Array(12).fill(0);
@@ -249,7 +263,7 @@ function profileForSegment(samples: Float32Array, start: number, sampleRate: num
     }
   }
   const chroma = bassChroma.map((value, index) => value * 0.55 + midChroma[index] * 0.45);
-  return { chroma, peaks, fftButterflyCount: operations };
+  return { chroma, bassChroma, peaks, fftButterflyCount: operations };
 }
 
 function correlation(profile: readonly number[], template: readonly number[]): number {
@@ -268,19 +282,30 @@ function correlation(profile: readonly number[], template: readonly number[]): n
   return numerator / Math.sqrt(Math.max(EPSILON, profileEnergy * templateEnergy));
 }
 
-function scoreCandidate(chroma: readonly number[], key: number, mode: Mode): number {
+function scoreCandidate(chroma: readonly number[], key: number, mode: Mode, bassChroma: readonly number[] = []): number {
   const rotated = chroma.map((_, index) => chroma[(index + key) % 12]);
-  return correlation(rotated, KRUMHANSL[mode]) * 0.35
+  const profileScore = correlation(rotated, KRUMHANSL[mode]) * 0.35
     + correlation(rotated, TEMPERLEY[mode]) * 0.3
     + correlation(rotated, DIATONIC[mode]) * 0.2
     + correlation(rotated, PENTATONIC[mode]) * 0.15;
+  // A modest tonic anchor rewards bass support for the proposed root and its
+  // circle-of-fifths neighbours. It never overrides conflicting sections.
+  return profileScore + circleOfFifthsRootScore(bassChroma, key) * 0.08;
 }
 
-function rankCandidates(chroma: readonly number[]): Candidate[] {
+function diatonicChordQualities(key: number, mode: Mode): Map<number, Mode> {
+  const intervals = mode === "major" ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
+  const qualities: Mode[] = mode === "major"
+    ? ["major", "minor", "minor", "major", "major", "minor", "minor"]
+    : ["minor", "minor", "major", "minor", "minor", "major", "major"];
+  return new Map(intervals.map((interval, degree) => [(key + interval) % 12, qualities[degree]!]));
+}
+
+function rankCandidates(chroma: readonly number[], bassChroma: readonly number[] = []): Candidate[] {
   const candidates: Candidate[] = [];
   for (let key = 0; key < 12; key++) {
     for (const mode of ["major", "minor"] as const) {
-      candidates.push({ key, mode, score: scoreCandidate(chroma, key, mode) });
+      candidates.push({ key, mode, score: scoreCandidate(chroma, key, mode, bassChroma) });
     }
   }
   return candidates.sort((a, b) => b.score - a.score);
@@ -307,6 +332,7 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   const possibleWindows = Math.floor((samples.length - FRAME_SIZE) / hop) + 1;
   const windowCount = Math.min(MAX_WINDOWS, possibleWindows);
   const aggregate = Array(12).fill(0);
+  const aggregateBass = Array(12).fill(0);
   const segmentProfiles: number[][] = [];
   const segmentWinners: Candidate[] = [];
   const segmentChroma: KeySegmentDiagnostic[] = [];
@@ -323,9 +349,14 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
     const total = result.chroma.reduce((sum, value) => sum + value, 0);
     if (total <= EPSILON) continue;
     const normalized = result.chroma.map((value) => value / total);
-    for (let pitch = 0; pitch < 12; pitch++) aggregate[pitch] += normalized[pitch];
+    const bassTotal = result.bassChroma.reduce((sum, value) => sum + value, 0);
+    const normalizedBass = bassTotal > EPSILON ? result.bassChroma.map(value => value / bassTotal) : Array(12).fill(0);
+    for (let pitch = 0; pitch < 12; pitch++) {
+      aggregate[pitch] += normalized[pitch];
+      aggregateBass[pitch] += normalizedBass[pitch];
+    }
     segmentProfiles.push(normalized);
-    const best = rankCandidates(normalized)[0];
+    const best = rankCandidates(normalized, normalizedBass)[0];
     if (best) segmentWinners.push(best);
     segmentChroma.push({
       startSeconds: Number((start / sampleRate).toFixed(4)),
@@ -345,14 +376,21 @@ export function estimateKey(samples: Float32Array, sampleRate: number): KeyEstim
   const aggregateTotal = aggregate.reduce((sum, value) => sum + value, 0);
   if (aggregateTotal <= EPSILON) return emptyEstimate("No stable tonal energy was detected for key estimation.");
   const normalizedAggregate = aggregate.map((value) => value / aggregateTotal);
-  const ranked = rankCandidates(normalizedAggregate);
+  const aggregateBassTotal = aggregateBass.reduce((sum, value) => sum + value, 0);
+  const normalizedAggregateBass = aggregateBassTotal > EPSILON ? aggregateBass.map(value => value / aggregateBassTotal) : Array(12).fill(0);
+  const ranked = rankCandidates(normalizedAggregate, normalizedAggregateBass);
   const best = ranked[0];
   const second = ranked[1];
   const topCandidates = ranked.slice(0, 5).map((candidate) => ({
     key: NOTES[candidate.key], mode: candidate.mode, score: Number(candidate.score.toFixed(6)),
   }));
   const windowConsensus = bootstrapCategoricalConsensus(segmentWinners.map((winner) => `${NOTES[winner.key]}:${winner.mode}`));
-  const agreement = segmentWinners.filter((winner) => winner.key === best.key && winner.mode === best.mode).length / segmentWinners.length;
+  const supportedChords = diatonicChordQualities(best.key, best.mode);
+  // Recognize diatonic chord progressions (e.g. C–F–G–C) while rejecting
+  // incompatible sections whose chord roots or major/minor quality do not fit.
+  const agreement = segmentWinners.filter(winner =>
+    supportedChords.get(winner.key) === winner.mode
+  ).length / segmentWinners.length;
   const margin = best.score - second.score;
   const confidence = clamp((margin * 2.5 + 0.08) * (0.35 + 0.65 * agreement));
   const tuningCents = tuningValues.length ? weightedMedian(tuningValues) : 0;

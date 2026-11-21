@@ -153,7 +153,7 @@ function territoryPriorities(evidence: Record<string, unknown>): TerritoryPriori
 
 function shortFormHooks(sonicDna: Record<string, unknown> | null, executionMode: MarketPlacementInput["executionMode"]): ShortFormHooks {
   const unavailable = (reason: string): ShortFormHooks => ({
-    status: "unavailable", method: "onset_envelope_plus_windowed_rms_v1", segments: [],
+    status: "unavailable", method: "onset and signal-level review", segments: [],
     limitations: [reason, "Candidates are edit suggestions, not confirmed musical hooks; human listening and rights review are required before publication."],
   });
   if (executionMode === "dsp_link" || clean(sonicDna?.provenance) !== "uploaded_audio_master") {
@@ -210,7 +210,7 @@ function shortFormHooks(sonicDna: Record<string, unknown> | null, executionMode:
   }
   if (!segments.length) return unavailable("No distinct local onset peaks were found in the uploaded master.");
   return {
-    status: "available", method: "onset_envelope_plus_windowed_rms_v1", segments,
+    status: "available", method: "Onset and relative signal-level review", segments,
     limitations: [
       "Priority scores are relative signal-ranking aids, not probabilities, retention predictions or proof of a memorable hook.",
       "The downsampled onset envelope and sparse windowed RMS summaries locate candidate excerpts; human listening must confirm musical context, lyrics, clean edit boundaries and suitability.",
@@ -237,13 +237,13 @@ function positioning(sonicDna: Record<string, unknown> | null, evidence: Record<
   const reliableKey = masterProvenance && Boolean(key) && ["major", "minor"].includes(mode) && keyConfidence !== null && keyConfidence >= 0.8 && keyAgreement !== null && keyAgreement >= 0.8;
   const djBasis = [ "Measured tempo: " + bpm + " BPM", "Tentative beat-grid evidence is present" ];
   if (alternateTempo !== null && bpm !== null && alternateTempo !== bpm) djBasis.push("Alternate metrical interpretation: " + alternateTempo + " BPM; this is an alternate half/double-time reading, not a second independent tempo.");
-  if (reliableKey) djBasis.push("Confidence-qualified harmonic estimate: " + key + " " + mode + " (key confidence and segment agreement both at least 0.80).");
+  if (reliableKey) djBasis.push("Harmonic estimate: " + key + " " + mode + " (key consistency across the analyzed sections).");
   const dj: PositioningRecommendation = reliableTempo && beatGrid
-    ? { status: "review_required", reason: "The uploaded master has confidence-qualified tempo and a tentative beat grid; audition and DJ transition testing are still required.", basis: djBasis, limitations: ["Tempo and beat-grid evidence do not establish DJ demand, mix compatibility or venue support.", ...(reliableKey ? ["The key estimate is a harmonic-mixing cue only; human confirmation is still required."] : [])] }
-    : { status: "blocked", reason: "DJ positioning requires a confidence-qualified master tempo and tentative beat-grid evidence.", basis: [], limitations: ["No DJ suitability claim is made from metadata-only or low-confidence tempo candidates."] };
+    ? { status: "review_required", reason: "The uploaded master has a reportable tempo and a tentative beat guide; audition and DJ transition testing are still required.", basis: djBasis, limitations: ["Tempo and beat-grid evidence do not establish DJ demand, mix compatibility or venue support.", ...(reliableKey ? ["The key estimate is a harmonic-mixing cue only; human confirmation is still required."] : [])] }
+    : { status: "blocked", reason: "DJ positioning requires a reliable tempo reading and a tentative beat guide.", basis: [], limitations: ["No DJ suitability claim is made from metadata-only or low-confidence tempo candidates."] };
   const club: PositioningRecommendation = reliableTempo && beatGrid && energyAvailable
     ? { status: "review_required", reason: "Tempo, tentative beat-grid and provisional energy evidence justify a human club-play test, not a venue or audience claim.", basis: ["Measured tempo: " + bpm + " BPM", "Provisional audio energy: " + clean(energyPrediction.label), "Tentative beat-grid evidence is present"], limitations: ["Provisional energy is heuristic, not a calibrated perceptual score; these signals are not evidence of venue demand or dancefloor response."] }
-    : { status: "blocked", reason: "Club positioning requires confidence-qualified tempo, tentative beat-grid evidence and a provisional audio-energy estimate.", basis: [], limitations: ["No club-fit conclusion is inferred from genre labels or catalogue popularity alone."] };
+    : { status: "blocked", reason: "Club positioning requires a reportable tempo, a tentative beat guide and a provisional energy estimate.", basis: [], limitations: ["No club-fit conclusion is inferred from genre labels or catalogue popularity alone."] };
   const rights = clean(evidence.rightsStatus).toLowerCase();
   const rightsCleared = ["cleared", "rights_cleared"].includes(rights);
   const approved = evidence.masterApproved === true;
