@@ -150,6 +150,8 @@ export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
  if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("The leading candidates form a relative major/minor pair; no single key is asserted.");
  if(finite(resolution.windowAgreement))lines.push("Window agreement: "+(resolution.windowAgreement*100).toFixed(0)+"%.");
  if(finite(resolution.bootstrapShare))lines.push("Bootstrap top-rank share: "+(resolution.bootstrapShare*100).toFixed(0)+"% of deterministic resamples; this is not a calibrated probability.");
+ if(finite(resolution.downbeatAnchorWindowCount))lines.push("Strong bass-root anchors: "+resolution.downbeatAnchorWindowCount+" of "+str(resolution.validWindowCount, "0")+" valid tonal windows.");
+ if(finite(resolution.cadenceWeightedWindowCount)&&resolution.cadenceWeightedWindowCount>0)lines.push("Outro-resolution weighting was applied to "+resolution.cadenceWeightedWindowCount+" tonal window(s).");
  const reasonCodes=arr(resolution.reasonCodes).filter((code):code is string=>typeof code==="string");
  const reasonText=reasonCodes.map(code=>({
   RELATIVE_MAJOR_MINOR_AMBIGUITY:"Relative major/minor ambiguity remains.",
