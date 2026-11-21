@@ -71,6 +71,7 @@ export interface SupabaseAuditStore {
   }>;
   getAuditReportPayload(jobId: string, tier: "sample" | "full", ownerId?: string): Promise<unknown | null>;
   verifyAuditAccessToken(jobId: string, token: string): Promise<boolean>;
+  diagnoseAuditReportAccess(jobId: string, tier: "sample" | "full", token: string | undefined): Promise<{ reason: string | null; normalized: { suppliedLength: number; whitespaceRemoved: number; nonHexRemoved: number } | null }>;
 }
 
 export function createSupabaseAuditStore(
