@@ -59,6 +59,18 @@ describe("deterministic tonal resolution geometry", () => {
     expect(result.thresholds.relativePairAmbiguityMargin).toBe(0.04);
   });
 
+  it("uses only a 45% consensus of supplied downbeat bass anchors as a tonic score cue", () => {
+    const anchored = windows(0, "major", 8);
+    const conflicting = anchored.map((window, index) => ({
+      ...window,
+      downbeatRoot: index < 3 ? 0 : 9,
+    }));
+    const result = resolveTonalCentre(conflicting);
+    expect(result.downbeatAnchorWindowCount).toBe(8);
+    expect(result.status).toBe("PROVISIONAL");
+    expect(result.reasonCodes).toContain("LOW_WINDOW_CONSENSUS");
+  });
+
   it("retains a relative major/minor ambiguity as provisional rather than inventing a winner", () => {
     const ambiguous = windows(0, "major").map((window) => ({
       ...window,
