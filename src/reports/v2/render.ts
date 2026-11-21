@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
-import { planAuditReportPages, buildArNotesDecisionContext, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
+import { buildArNotesDecisionContext, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
 import { loadReportFonts } from "../fonts.js";
-import { chartPanelHeight, countEvidenceLayers, drawChartPanel } from "../charts.js";
+import { chartEvidenceIntegrityErrors, chartPanelHeight, countEvidenceLayers, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
 
@@ -16,6 +16,7 @@ type Fonts={regular:PDFFont;bold:PDFFont;italic:PDFFont;boldItalic:PDFFont};
 type Block={label:string;value:string;provenance?:string;confidence?:string;color?:keyof typeof C};
 type PageSpec={title:string;blocks:Block[];lines?:string[];kind?:string};
 const rec=(v:unknown):Record<string,unknown>=>v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:{};
+const finite=(value:unknown):value is number=>typeof value==="number"&&Number.isFinite(value);
 export function normalizePdfText(value:string):string {
  return value
   .replace(/[\u2018\u2019]/g,"'")
@@ -29,6 +30,10 @@ export function normalizePdfText(value:string):string {
 }
 const str=(v:unknown,fallback="Not supplied")=>typeof v==="string"&&v.trim()?normalizePdfText(v.trim()):typeof v==="number"&&Number.isFinite(v)?String(v):fallback;
 const arr=(v:unknown):unknown[]=>Array.isArray(v)?v:[];
+const INTERNAL_ANALYSIS_STATUS = /(?:vocal analysis.{0,80}(?:temporarily disabled|not performed|unavailable|disabled|not run)|vocal presence(?:\s*\/\s*absence)? is unknown|no vocal conclusion is available|learned audio model.{0,40}disabled|detection model.{0,40}disabled)/i;
+export function publicReportLimitations(value: unknown): string[] {
+ return arr(value).map(item=>str(item,"")).filter(line=>line&&!INTERNAL_ANALYSIS_STATUS.test(line));
+}
 const dateText=(v:unknown)=>{const s=str(v,"");return s?s.slice(0,10):"Date not supplied";};
 function wrap(value:string,font:PDFFont,size:number,width:number):string[]{
  const words=normalizePdfText(value).replace(/\s+/g," ").split(" ").filter(Boolean),out:string[]=[];let line="";
@@ -54,11 +59,11 @@ function metricBlock(data:ReportV2Data):Block[]{
   {label:"ENERGY / LOUDNESS",value:data.energy.value===null?"N/D":String(data.energy.value),confidence:data.energy.confidence??"Low",provenance:prov(data.energy.evidence)}
  ];
 }
-function scoreChip(page:PDFPage,x:number,y:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
- page.drawRectangle({x,y,width:158,height:48,color:C.white,borderColor:C.line,borderWidth:.7});
+function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
+ page.drawRectangle({x,y,width,height:48,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawCircle({x:x+13,y:y+31,size:3.5,color});
  page.drawText(label.toUpperCase(),{x:x+24,y:y+28,size:6.5,font:fonts.bold,color:C.muted});
- drawWrapped(page,value,x+12,y+15,134,fonts.bold,9,color,11);
+ drawWrapped(page,value,x+12,y+15,width-24,fonts.bold,8.2,color,10);
 }
 function card(page:PDFPage,x:number,top:number,width:number,title:string,body:string[],fonts:Fonts,opts:{accent?:typeof C.teal;height?:number;provenance?:string}={}):number{
  const pad=12,titleH=14,bodyW=width-pad*2;let bodyHeight=0;
@@ -90,6 +95,47 @@ function header(page:PDFPage,title:string,fonts:Fonts){
 function pageBase(pdf:PDFDocument,title:string,fonts:Fonts):PDFPage{
  const p=pdf.addPage([W,H]);p.drawRectangle({x:0,y:0,width:W,height:H,color:C.paper});header(p,title,fonts);return p;
 }
+function detectorNumber(value: unknown, digits = 3): string | null {
+ return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : null;
+}
+export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
+ const sonic=rec(input.sonicDna), rhythm=rec(sonic.rhythmFeatures), independent=rec(rhythm.independentEstimator);
+ const lines:string[]=[];
+ const reportableBpm=(value:unknown):value is number=>finite(value)&&value>=40&&value<=220;
+ const candidates=arr(rhythm.candidateScores).map(value=>rec(value)).filter(item=>reportableBpm(item.bpm)&&finite(item.score))
+  .slice(0,5).map(item=>String(item.bpm)+" BPM (score "+Number(item.score).toFixed(3)+")");
+ if(candidates.length)lines.push("Primary detector candidates: "+candidates.join("; "));
+ else if(Array.isArray(rhythm.candidateBpms)) {
+  const fallbackCandidates=rhythm.candidateBpms.filter(reportableBpm).slice(0,5);
+  if(fallbackCandidates.length)lines.push("Primary detector candidates: "+fallbackCandidates.map(value=>String(value)).join(", ")+" BPM");
+ }
+ if(finite(rhythm.confidence))lines.push("Primary detector raw confidence score: "+Number(rhythm.confidence).toFixed(3)+" (not a calibrated probability).");
+ if(reportableBpm(rhythm.alternateTempo))lines.push("Alternate half/double-time candidate: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
+ if(reportableBpm(independent.bpm))lines.push("Independent low-frequency envelope estimate: "+Number(independent.bpm).toFixed(1)+" BPM; raw score "+(detectorNumber(independent.score)??"not supplied")+".");
+ const consensus=rec(rhythm.windowConsensus);
+ if(finite(consensus.windowCount)&&consensus.windowCount>0)lines.push("Window stability: "+str(consensus.winner,"no consensus")+" across "+consensus.windowCount+" valid windows; observed agreement "+(detectorNumber(consensus.observedAgreement)??"not supplied")+".");
+ lines.push("Beat grid: "+str(rhythm.beatGridStatus,"not determined")+"; "+arr(rhythm.beatTimesSeconds).length+" candidate beat timestamps; downbeat grouping is diagnostic only.");
+ const abstention=str(rhythm.abstentionReason,"");
+ if(abstention&&abstention!=="Not supplied")lines.push("Tempo abstention: "+abstention);
+ return lines.length?lines:["No persisted tempo-detector diagnostics were supplied."];
+}
+export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
+ const sonic=rec(input.sonicDna), harmonic=rec(sonic.harmonicFeatures), independent=rec(harmonic.independentEstimator);
+ const lines:string[]=[];
+ const candidates=arr(harmonic.topCandidates).map(value=>rec(value)).filter(item=>typeof item.key==="string")
+  .slice(0,5).map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" ")+" (score "+(detectorNumber(item.score)??"not supplied")+")");
+ if(candidates.length)lines.push("Primary tonal candidates: "+candidates.join("; "));
+ if(finite(harmonic.confidence))lines.push("Primary key raw confidence score: "+Number(harmonic.confidence).toFixed(3)+" (not a calibrated probability).");
+ if(finite(harmonic.segmentAgreement))lines.push("Segment agreement: "+Number(harmonic.segmentAgreement).toFixed(3)+" across "+(finite(harmonic.analysisWindows)?harmonic.analysisWindows:"unknown")+" analysis windows.");
+ if(finite(harmonic.tuningCents))lines.push("Tuning offset: "+Number(harmonic.tuningCents).toFixed(1)+" cents; evidence windows: "+(finite(harmonic.tuningEvidenceWindows)?harmonic.tuningEvidenceWindows:"not supplied")+".");
+ if(typeof independent.key==="string")lines.push("Independent Goertzel estimate: "+independent.key+(typeof independent.mode==="string"?" "+independent.mode:"")+"; raw score "+(detectorNumber(independent.score)??"not supplied")+"; margin "+(detectorNumber(independent.margin)??"not supplied")+".");
+ if(harmonic.independentEstimatorDisagrees===true)lines.push("Independent estimator disagreement: yes; no forced consensus is applied.");
+ if(harmonic.relativeMajorMinorAmbiguity===true)lines.push("Relative major/minor ambiguity detected; single-key assertion withheld.");
+ const limitation=str(harmonic.limitation,"");
+ if(limitation&&limitation!=="Not supplied")lines.push("Key abstention / limitation: "+limitation);
+ return lines.length?lines:["No persisted key-detector diagnostics were supplied."];
+}
+
 export function buildEvidenceLedgerSummary(labels: Array<{ label: string }>): string {
  const counts = countEvidenceLayers(labels);
  return "Measured: " + counts.OBSERVED
@@ -110,6 +156,29 @@ export function buildReleaseFramingLine(input: AuditReportInput): string {
  return Number.isFinite(release)&&Number.isFinite(generated)&&release<generated
   ? "Post-release framing: release date is in the past."
   : "Release framing: date does not establish a past release.";
+}
+
+export function buildPlaylistProviderStatusLines(input: AuditReportInput): string[] {
+ const discovery=rec(rec(input.evidence).playlistDiscovery);
+ const outcomes=arr(discovery.outcomes).map(value=>rec(value));
+ if(!outcomes.length) {
+  return ["Playlist discovery not run: no normalized ISRC or persisted provider outcome was available; no playlist target is asserted."];
+ }
+ return outcomes.flatMap(outcome=>{
+  const provider=outcome.provider==="spotify"?"Spotify":outcome.provider==="apple_music"?"Apple Music":str(outcome.provider,"DSP provider");
+  const status=str(outcome.status,"unavailable");
+  const reason=str(outcome.reason,"No provider reason was persisted.");
+  if(status==="not_configured"||status==="unavailable") {
+   const required=outcome.provider==="spotify"
+    ? "Required environment variables: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET."
+    : outcome.provider==="apple_music"
+      ? "Required environment variable: APPLE_MUSIC_DEVELOPER_TOKEN."
+      : "";
+   return [provider+" provider unavailable: "+reason+" "+(required?required:"")].filter(Boolean);
+  }
+  if(status==="partial")return [provider+" provider partially available: "+reason];
+  return [];
+ });
 }
 
 export function buildPositioningLines(input: AuditReportInput): string[] {
@@ -148,15 +217,19 @@ function identityStatusLabel(status:string):string{
  return status;
 }
 export function buildIdentityReconciliationRows(input:AuditReportInput):Array<{field:string;value:string;status:string;source:string}>{
- const e=rec(input.evidence),reconciliation=rec(e.reconciliation),conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
+ const e=rec(input.evidence),reconciliation=rec(e.reconciliation);
+ const conflicts=arr(reconciliation.conflicts).map(v=>rec(v));
+ const releaseDifferences=arr(reconciliation.releaseContextDifferences).map(v=>rec(v));
  const fields:[string,string][]=[["artist","Artist"],["title","Track"],["album","Album"],["genre","Genre"],["releaseDate","Release date"],["isrc","ISRC"],["upc","UPC"],["label","Label"]];
  return fields.map(([key,label])=>{
   const conflict=conflicts.find(item=>item.field===key);
+  const releaseDifference=releaseDifferences.find(item=>item.field===key);
   const raw=key==="genre"?(e.genre??e.genres):e[key];
-  const value=conflict?arr(conflict.values).map(v=>str(v,"")).filter(Boolean).join(" vs "):Array.isArray(raw)?raw.map(v=>str(v,"")).filter(Boolean).join(", "):str(raw,"Unavailable");
+  const differingValues=conflict??releaseDifference;
+  const value=differingValues?arr(differingValues.values).map(v=>str(v,"")).filter(Boolean).join(" vs "):Array.isArray(raw)?raw.map(v=>str(v,"")).filter(Boolean).join(", "):str(raw,"Unavailable");
   const sourceLabel=metadataFieldSource(e,key),source=sourceLabel.replace("Field source: ","");
   const fieldStatus=metadataFieldStatus(e,key);
-  const status=conflict?"Conflict":fieldStatus.startsWith("Available")&&source!=="unavailable"?"Source-returned":identityStatusLabel(fieldStatus);
+  const status=conflict?"Conflict":releaseDifference?"Release variant":fieldStatus.startsWith("Available")&&source!=="unavailable"?"Source-returned":identityStatusLabel(fieldStatus);
   return {field:label,value,status,source};
  });
 }
@@ -169,7 +242,7 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  rows.forEach((row,index)=>{
   const rowTop=top-headerH-index*rowH,rowBottom=rowTop-rowH;
   page.drawRectangle({x,y:rowBottom,width,height:rowH,color:index%2===0?C.white:C.paper,borderColor:C.line,borderWidth:.45});
-  const values=[row.field,row.value,row.status,row.source],colors=[C.ink,C.ink,row.status==="Conflict"?C.coral:row.status==="Cross-checked"?C.teal:row.status==="Unavailable"?C.muted:row.status==="Hypothesis"?C.amber:C.ink,C.muted];
+  const values=[row.field,row.value,row.status,row.source],colors=[C.ink,C.ink,row.status==="Conflict"?C.coral:row.status==="Release variant"||row.status==="Hypothesis"?C.amber:row.status==="Cross-checked"?C.teal:row.status==="Unavailable"?C.muted:C.ink,C.muted];
   let cellX=x;
   values.forEach((value,col)=>{
    const font=col===0||col===2?fonts.bold:fonts.regular,size=col===0?7.1:col===1?7:6.7,maxLines=3,lines=wrap(value||"Not supplied",font,size,columns[col]-14);
@@ -185,11 +258,11 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
   "Sources checked: "+checked,
   "Provider responses: "+providers,
   "Platform coverage: "+str(e.platformCoverage,"Not supplied"),
-  "Conflict policy: conflicting values remain visible; no source is silently preferred."
+  "Recording identity conflicts remain blocking; album, UPC, label and date differences are shown as release variants."
  ],fonts,{accent:C.gold});
  return summaryTop-summaryHeight-14;
 }
-function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
+function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:AuditReportTier):PageSpec[]{
  const e=rec(input.evidence),a=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)),sonic=rec(input.sonicDna);
  const notesContext=buildArNotesDecisionContext(input);
  const technicalProfile=[
@@ -222,6 +295,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "Headline score: "+(data.headlineScore===null?"N/D — no scored headline value supplied":data.headlineScore+"/100"),
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
    "Market evidence: "+(data.hasVerifiedCommercialEvidence?"Source-attributed commercial data supplied":"Insufficient — no verified commercial source data supplied."),
+   ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
    ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
   {title:"A&R positioning",blocks:[],lines:buildPositioningLines(input)},
@@ -237,6 +311,7 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "General guidance: "+str(a.industryPractice,"No industry guidance supplied."),
    "Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v)).join("; "),
    "Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v)).join("; "),
+   ...buildPlaylistProviderStatusLines(input),
    ...(e.label||e.partner?["Supplied label / partner: "+str(e.label??e.partner)]:[])
   ]},
   {title:"Human listening checklist and A&R notes",blocks:[],lines:arr(a.humanListeningChecklist).map(v=>"[ ] "+str(v)).concat([notesContext.verdict,notesContext.summary,...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),"Editable notes field: use the PDF form field named ar_notes."])},
@@ -245,12 +320,21 @@ function buildPages(input:AuditReportInput,data:ReportV2Data):PageSpec[]{
    "Tempo method: "+str(data.tempo.method,"Not supplied")+" · "+data.tempo.evidence,
    "Key method: "+str(data.key.method,"Not supplied")+" · "+data.key.evidence,
    "Energy method: "+str(data.energy.method,"Not supplied")+" · "+data.energy.evidence,
+   "Assessment model provenance: "+str(rec(a.generationProvenance).provider,"NOT RECORDED")+" / "+str(rec(a.generationProvenance).model,"NOT RECORDED")+" · prompt "+str(rec(a.generationProvenance).promptVersion,"NOT RECORDED")+" · generated "+str(rec(a.generationProvenance).generatedAt,"timestamp not recorded"),
+   "Narrative field provenance: "+(Object.entries(rec(rec(a.generationProvenance).fieldGroups)).map(([field,group])=>field+" → "+String(group)).join("; ")||"NOT RECORDED"),
    "Worked example: when evidence is insufficient, display a dash and mark any estimate provisional; do not convert absence into a score.",
-   "Limitations: "+arr(a.limitations).map(v=>str(v)).join("; "),
+   "Limitations: "+publicReportLimitations(a.limitations).join("; "),
    "AI-assisted analysis, not a forecast.",
    ...(technicalProfile.length?["Technical descriptors: "+technicalProfile.join(" · ")+". RMS signal level is dBFS; RMS-envelope spread is an internal proxy, not mastering dynamic range."]:[])
   ]}
  ];
+ if(tier==="full"){
+  pages.push(
+   {title:"Sonic DNA dashboard",blocks:[],kind:"full-axes"},
+   {title:"Tempo and energy spectrum",blocks:[],kind:"tempo-energy"},
+   {title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"}
+  );
+ }
  return pages;
 }
 
@@ -385,7 +469,6 @@ function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  card(page,M,y,W-2*M,"How moments are chosen",["Moments are rendered from supplied timestamped detector output or device flags. This report does not create or infer additional flags."],fonts,{accent:C.gold});
 }
 
-type FullFlowUnit = { kind: "heading"; title: string; accent: string } | { kind: "paragraph"; lines: string[]; accent: string };
 export function partitionFullReportUnits<T>(
  units:T[],
  heights:number[],
@@ -430,155 +513,55 @@ export function partitionFullReportUnits<T>(
  }
  return pages.length===pageCount?pages:null;
 }
-type FullReportLayoutProfile = {
- bodyFontSize:number; bodyLineHeight:number; paragraphPadding:number; paragraphGap:number; maxParagraphLines:number;
- headingFontSize:number; headingLineHeight:number; headingPadding:number; headingGap:number;
-};
-const FULL_REPORT_LAYOUT_PROFILES:FullReportLayoutProfile[]=[
- {bodyFontSize:8.1,bodyLineHeight:10.2,paragraphPadding:17,paragraphGap:6,maxParagraphLines:20,headingFontSize:11,headingLineHeight:14,headingPadding:13,headingGap:7},
- {bodyFontSize:7.7,bodyLineHeight:9.5,paragraphPadding:13,paragraphGap:5,maxParagraphLines:16,headingFontSize:10.5,headingLineHeight:13,headingPadding:12,headingGap:6},
- {bodyFontSize:7.3,bodyLineHeight:8.8,paragraphPadding:10,paragraphGap:4,maxParagraphLines:12,headingFontSize:10,headingLineHeight:12,headingPadding:10,headingGap:5},
-];
-function fullFlowUnitHeight(unit:FullFlowUnit,fonts:Fonts,profile:FullReportLayoutProfile):number{
- const contentHeight=unit.kind==="heading"
-  ?wrap(unit.title,fonts.bold,profile.headingFontSize,W-2*M-24).length*profile.headingLineHeight+profile.headingPadding
-  :unit.lines.length*profile.bodyLineHeight+profile.paragraphPadding;
- return contentHeight+(unit.kind==="heading"?profile.headingGap:profile.paragraphGap);
-}
-function buildFullFlowUnits(
- sectionPlans:ReturnType<typeof planAuditReportPages>,
- provisionalEvidence:string[],
- fonts:Fonts,
- profile:FullReportLayoutProfile,
-):FullFlowUnit[]{
- const units:FullFlowUnit[]=[];
- for(const section of sectionPlans){
-  units.push({kind:"heading",title:section.title,accent:"gold"});
-  for(const paragraph of section.text){
-   const lines=wrap(paragraph,fonts.regular,profile.bodyFontSize,W-2*M-30);
-   for(let offset=0;offset<lines.length;offset+=profile.maxParagraphLines){
-    units.push({kind:"paragraph",lines:lines.slice(offset,offset+profile.maxParagraphLines),accent:"gold"});
-   }
-  }
- }
- if(provisionalEvidence.length){
-  units.push({kind:"heading",title:"Provisional harmonic and tuning evidence",accent:"gold"});
-  for(const detail of provisionalEvidence){
-   const lines=wrap(detail,fonts.regular,profile.bodyFontSize,W-2*M-30);
-   for(let offset=0;offset<lines.length;offset+=profile.maxParagraphLines){
-    units.push({kind:"paragraph",lines:lines.slice(offset,offset+profile.maxParagraphLines),accent:"gold"});
-   }
-  }
- }
- return units;
-}
-async function renderFullReportV2(input:AuditReportInput,data:ReportV2Data,pdf:PDFDocument,fonts:Fonts):Promise<Uint8Array>{
- const sectionPlans=planAuditReportPages(input,"full");
- const provisionalEvidence=data.notYetMeasured.filter(value=>/provisional harmonic candidate|multiple tonal windows; provisional/i.test(value));
- const pageCapacity=H-94-64,targetPageCount=12,bodyPageCount=targetPageCount-2;
- let units:FullFlowUnit[]=[];
- let buckets:FullFlowUnit[][]|null=null;
- let selectedProfile:FullReportLayoutProfile|null=null;
- for(const profile of FULL_REPORT_LAYOUT_PROFILES){
-  const candidateUnits=buildFullFlowUnits(sectionPlans,provisionalEvidence,fonts,profile);
-  const heights=candidateUnits.map(unit=>fullFlowUnitHeight(unit,fonts,profile));
-  const candidateBuckets=partitionFullReportUnits(candidateUnits,heights,bodyPageCount,pageCapacity);
-  if(candidateBuckets){
-   units=candidateUnits;
-   buckets=candidateBuckets;
-   selectedProfile=profile;
-   break;
-  }
- }
- if(!buckets||!selectedProfile){
-  const diagnosticUnits=buildFullFlowUnits(sectionPlans,provisionalEvidence,fonts,FULL_REPORT_LAYOUT_PROFILES.at(-1)!);
-  const diagnosticHeights=diagnosticUnits.map(unit=>fullFlowUnitHeight(unit,fonts,FULL_REPORT_LAYOUT_PROFILES.at(-1)!));
-  console.error(JSON.stringify({
-   event:"full_report_layout_allocation_failed",
-   unitCount:diagnosticUnits.length,
-   pageCount:bodyPageCount,
-   pageCapacity,
-   totalMeasuredHeight:Math.round(diagnosticHeights.reduce((sum,height)=>sum+height,0)),
-   largestUnitHeight:Math.round(Math.max(0,...diagnosticHeights)),
-   profileCount:FULL_REPORT_LAYOUT_PROFILES.length,
-  }));
-  throw new Error("Full report content cannot fit the approved 12-page V2 allocation without clipping or omission.");
- }
- const profile=selectedProfile;
- const cover=pageBase(pdf,"Full A&R report",fonts);
- const evidence=rec(input.evidence),assessment=rec(input.assessment);
- drawWrapped(cover,"FULL A&R REPORT",M,H-112,W-2*M,fonts.bold,8,C.gold,11);
- drawWrapped(cover,str(evidence.artist,"Artist not supplied"),M,H-155,W-2*M,fonts.bold,22,C.ink,27);
- drawWrapped(cover,str(evidence.title,"Track not supplied"),M,H-187,W-2*M,fonts.regular,14,C.muted,18);
- drawWrapped(cover,"Audit "+input.auditId+" · Generated "+dateText(input.generatedAt)+" · Release "+dateText(evidence.releaseDate),M,H-211,W-2*M,fonts.regular,7,C.muted,9);
- const reconciliation=rec(evidence.reconciliation);
- const identityStatus=arr(reconciliation.conflicts).length?"Conflict":arr(reconciliation.reconciledFields).length?"Recognized":"Insufficient";
- scoreChip(cover,M,H-285,"Audio evidence",data.tempo.value!==null||data.key.value!==null?"Partial":"Insufficient",C.amber,fonts);
- scoreChip(cover,M+166,H-285,"Identity",identityStatus,identityStatus==="Recognized"?C.teal:C.amber,fonts);
- scoreChip(cover,M+332,H-285,"Market evidence",data.hasVerifiedCommercialEvidence?"Source-attributed":"Insufficient",data.hasVerifiedCommercialEvidence?C.teal:C.muted,fonts);
- const metricWidth=(W-2*M-16)/3;
- metricBlock(data).forEach((block,index)=>drawMetricCard(cover,M+index*(metricWidth+8),H-325,metricWidth,block,fonts));
- const summary=str(assessment.executiveSummary,"");
- if(summary)card(cover,M,H-450,W-2*M,"Executive assessment",[summary],fonts,{accent:C.gold});
- const recommendation=str(rec(assessment.releaseStrategy).recommendation,"");
- const evidenceGap=arr(assessment.evidenceGaps).map(value=>str(value,"")).find(Boolean)??"";
- const nextAction=recommendation||evidenceGap;
- if(nextAction)card(cover,M,H-585,W-2*M,"Next action",[nextAction],fonts,{accent:C.gold});
- drawFooter(cover,"Reson8 A&R Audit",input.auditId,1,targetPageCount,fonts);
- for(let index=0;index<buckets.length;index++){
-  const page=pageBase(pdf,"A&R findings · "+(index+1),fonts);
-  let y=H-94;
-  for(const unit of buckets[index]){
-   if(unit.kind==="heading"){
-    const lines=wrap(unit.title,fonts.bold,profile.headingFontSize,W-2*M-24);
-    const h=lines.length*profile.headingLineHeight+profile.headingPadding;
-    if(y-h<64)throw new Error("Full report section heading exceeds its allocated v2 page: "+unit.title);
-    page.drawRectangle({x:M,y:y-h+2,width:W-2*M,height:h,color:C.white,borderColor:C.line,borderWidth:.6});
-    page.drawRectangle({x:M,y:y-1,width:3,height:h-2,color:C.gold});
-    lines.forEach((line,lineIndex)=>page.drawText(line,{x:M+13,y:y-11-lineIndex*profile.headingLineHeight,size:profile.headingFontSize,font:fonts.bold,color:C.ink}));
-    y-=h+profile.headingGap;
-   }else{
-    const h=unit.lines.length*profile.bodyLineHeight+profile.paragraphPadding;
-    if(y-h<64)throw new Error("Full report content exceeds its existing page allocation.");
-    page.drawRectangle({x:M,y:y-h+1,width:W-2*M,height:h,color:C.white,borderColor:C.line,borderWidth:.5});
-    unit.lines.forEach((line,lineIndex)=>page.drawText(line,{x:M+12,y:y-10-lineIndex*profile.bodyLineHeight,size:profile.bodyFontSize,font:fonts.regular,color:C.ink}));
-    y-=h+profile.paragraphGap;
-   }
-  }
-  drawFooter(page,"Reson8 A&R Audit",input.auditId,index+2,targetPageCount,fonts);
- }
- const notesPage=pageBase(pdf,"A&R notes and decision context",fonts);
- const context=buildArNotesDecisionContext(input);
- let notesY=H-105;
- const contextHeight=52+wrap(context.summary,fonts.regular,8,W-2*M-28).length*10;
- card(notesPage,M,notesY,W-2*M,context.heading,[context.verdict,context.summary],fonts,{accent:C.gold,height:contextHeight});
- notesY-=contextHeight+12;
- if(context.prompts.length){
-  const promptHeight=context.prompts.reduce((sum,prompt)=>sum+wrap(prompt,fonts.regular,7.4,W-2*M-28).length*9+4,0)+18;
-  card(notesPage,M,notesY,W-2*M,"Review prompts",context.prompts,fonts,{accent:C.gold,height:promptHeight});
- }
- notesPage.drawText("PRIVATE WORKING NOTES",{x:M,y:195,size:7,font:fonts.bold,color:C.gold});
- const form=pdf.getForm(),notes=form.createTextField("ar_notes");
- notes.enableMultiline();
- notes.addToPage(notesPage,{x:M,y:66,width:W-2*M,height:112,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
- notes.setFontSize(8);notes.updateAppearances(fonts.regular);
- drawFooter(notesPage,"Reson8 A&R Audit",input.auditId,targetPageCount,targetPageCount,fonts);
- if(pdf.getPageCount()!==targetPageCount)throw new Error("Full report v2 page count differs from the existing full report.");
- return pdf.save();
-}
-
 export async function generateAuditReportV2(source:AuditReportInput,tier:AuditReportTier="sample"):Promise<Uint8Array>{
  const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
- if(tier==="full") return renderFullReportV2(input,data,pdf,fonts);
- const pages=buildPages(input,data),total=pages.length;
+ const pages=buildReportSections(input,data,tier),total=tier==="full"?12:9;
+ if(pages.length!==total)throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
-  const spec=pages[index],page=pageBase(pdf,spec.title,fonts);
+  const spec=pages[index],page=pageBase(pdf,tier==="full"&&index===0?"Full A&R report":spec.title,fonts);
   let chartCursor=H-380;
   if(spec.kind==="identity"){
    chartCursor=drawIdentityReconciliation(page,input,fonts);
   }else if(spec.kind==="snapshot"){
    drawSnapshot(page,data,fonts,input);
+  }else if(spec.kind==="full-axes"){
+   if(data.sonicAxes)drawSonicAxes(page,data,fonts);
+   else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
+  }else if(spec.kind==="tempo-energy"){
+   const tempo=data.tempo.value===null?data.notYetMeasured.find(value=>/tempo/i.test(value))??"NOT MEASURED: no confidence-qualified tempo result was supplied.":"MEASURED: "+data.tempo.value+" BPM · "+(data.tempo.confidence??"confidence unavailable")+" confidence";
+   const energy=data.energy.value===null?"NOT MEASURED: no supported energy or loudness values were supplied.":String(data.energy.value);
+   card(page,M,H-105,W-2*M,"Tempo evidence",[tempo,"Method: "+(data.tempo.method??"Not supplied"),"Evidence: "+data.tempo.evidence,...buildTempoDiagnosticLines(input)],fonts,{accent:data.tempo.value===null?C.amber:C.teal});
+   const keyValue=data.key.value===null?"NOT MEASURED: no confidence-qualified key/mode result was supplied.":"MEASURED: "+String(data.key.value)+" · "+(data.key.confidence??"confidence unavailable")+" confidence";
+   card(page,M,H-245,W-2*M,"Key and mode evidence",[keyValue,"Method: "+(data.key.method??"Not supplied"),"Evidence: "+data.key.evidence,...buildKeyDiagnosticLines(input)],fonts,{accent:data.key.value===null?C.amber:C.teal});
+   card(page,M,H-410,W-2*M,"Energy and loudness evidence",[energy,"Method: "+(data.energy.method??"Not supplied"),"Evidence: "+data.energy.evidence],fonts,{accent:data.energy.value===null?C.amber:C.teal});
+   if(data.energySeries){
+    const top=H-540,height=220,left=M+28,right=W-M-18,bottom=top-height+32;
+    page.drawRectangle({x:M,y:top-height,width:W-2*M,height,color:C.white,borderColor:C.line,borderWidth:.7});
+    page.drawText("ENERGY SPECTRUM · SOURCE VALUES",{x:M+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
+    const values=data.energySeries.map(point=>point.value),min=Math.min(...values),max=Math.max(...values),span=max-min||1;
+    const t0=data.energySeries[0].timeSeconds,t1=data.energySeries[data.energySeries.length-1].timeSeconds,dt=t1-t0||1;
+    for(let i=1;i<data.energySeries.length;i++){
+     const a=data.energySeries[i-1],b=data.energySeries[i];
+     page.drawLine({start:{x:left+(a.timeSeconds-t0)/dt*(right-left),y:bottom+(a.value-min)/span*(top-48-bottom)},end:{x:left+(b.timeSeconds-t0)/dt*(right-left),y:bottom+(b.value-min)/span*(top-48-bottom)},color:C.teal,thickness:2});
+    }
+    page.drawText("Elapsed "+t0.toFixed(1)+"–"+t1.toFixed(1)+" s",{x:left,y:bottom-15,size:6,font:fonts.regular,color:C.muted});
+   }else card(page,M,H-540,W-2*M,"Energy spectrum · Not measured",["NOT MEASURED: no valid timestamped energy series was supplied."],fonts,{accent:C.amber});
+  }else if(spec.kind==="full-depth"){
+   const assessment=rec(input.assessment),release=rec(assessment.releaseStrategy);
+   const scoreLines=data.headlineScore===null?["NOT MEASURED: no validated headline score was supplied.",...(data.scoreDrivers??[]).map(driver=>driver.label+": "+driver.score+"/100 · "+(driver.evidence||"Evidence note not supplied"))]:["Supplied assessment score: "+data.headlineScore+"/100",...(data.scoreDrivers??[]).map(driver=>driver.label+": "+driver.score+"/100 · "+(driver.evidence||"Evidence note not supplied"))];
+   card(page,M,H-105,W-2*M,"Evidence scorecard",scoreLines,fonts,{accent:C.gold});
+   const rawTimeline=Array.isArray(release.executionTimeline)?release.executionTimeline:Array.isArray(assessment.executionTimeline)?assessment.executionTimeline:[];
+   const timelineLines=rawTimeline.map(value=>{const row=rec(value);return [str(row.label??row.phase??row.title,""),str(row.timing??row.when??row.window,""),str(row.action??row.description??row.task,"")].filter(value=>value&&value!=="Not supplied").join(" · ");}).filter(Boolean);
+   card(page,M,H-245,W-2*M,"Execution timeline · PLAN",timelineLines.length?["ILLUSTRATIVE PLAN — proposed guidance, not a verified campaign outcome.",...timelineLines]:["NOT SUPPLIED: no execution timeline was included in the persisted assessment."],fonts,{accent:C.amber});
+   const sonic=rec(input.sonicDna);
+   const loudness=[
+    Number.isFinite(sonic.loudnessLufs)?"Integrated loudness: "+Number(sonic.loudnessLufs).toFixed(1)+" LUFS":"Integrated loudness: NOT MEASURED",
+    Number.isFinite(sonic.loudnessRangeLu)?"Loudness range: "+Number(sonic.loudnessRangeLu).toFixed(1)+" LU":"Loudness range: NOT MEASURED",
+    Number.isFinite(sonic.truePeakDbfs)?"True peak: "+Number(sonic.truePeakDbfs).toFixed(1)+" dBFS":"True peak: NOT MEASURED",
+    Number.isFinite(sonic.rmsLevelDbfs)?"RMS level: "+Number(sonic.rmsLevelDbfs).toFixed(1)+" dBFS":"RMS level: NOT MEASURED"
+   ];
+   card(page,M,H-430,W-2*M,"Loudness, true peak and LRA panel",[...loudness,"Descriptive measurements only; no mastering-readiness verdict is inferred."],fonts,{accent:C.gold});
   }else if(spec.kind==="axes"){
    drawSonicAxes(page,data,fonts);
   }else if(spec.kind==="comparables"){
@@ -587,16 +570,15 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    drawMoments(page,data,fonts);
   }else if(spec.kind==="cover"){
    const e=rec(input.evidence),a=rec(input.assessment);
-   page.drawText("TRACK AUDIT",{x:M,y:H-112,size:8,font:fonts.bold,color:C.gold});
+   if(tier==="sample")page.drawText("TRACK AUDIT",{x:M,y:H-112,size:8,font:fonts.bold,color:C.gold});
    drawWrapped(page,str(e.artist,"Artist not supplied"),M,H-155,W-2*M,fonts.bold,22,C.ink,27);
    drawWrapped(page,str(e.title,"Track not supplied"),M,H-186,W-2*M,fonts.regular,14,C.muted,18);
    page.drawText("AUDIT "+input.auditId+"  ·  "+dateText(input.generatedAt)+"  ·  "+dateText(e.releaseDate),{x:M,y:H-210,size:7,font:fonts.regular,color:C.muted});
-   const chipY=H-260;
-   scoreChip(page,M,chipY,"Audio quality","N/D — no scored quality metric",C.teal,fonts);
-   const reconciliation=rec(e.reconciliation);
-   const identityStatus=arr(reconciliation.conflicts).length?"Conflict":arr(reconciliation.reconciledFields).length?"Cross-checked":"Unavailable";
-   scoreChip(page,M+166,chipY,"Identity confidence",identityStatus,C.amber,fonts);
-   scoreChip(page,M+332,chipY,"Market evidence",data.hasVerifiedCommercialEvidence?"Source-attributed":"Insufficient",C.coral,fonts);
+   const chipY=H-260,chipGap=8,chipWidth=(W-2*M-chipGap*3)/4;
+   const chipColors=[C.teal,C.amber,C.coral,C.gold] as const;
+   data.decisionDimensions.forEach((dimension,index)=>{
+    scoreChip(page,M+index*(chipWidth+chipGap),chipY,chipWidth,dimension.name,dimension.status,chipColors[index]??C.gold,fonts);
+   });
    if(data.headlineScore!==null){
     const ringX=M+65,ringY=H-355;
     page.drawCircle({x:ringX,y:ringY,size:43,color:C.paper,borderColor:C.line,borderWidth:9});
@@ -642,6 +624,8 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    // Anchor evidence panels to the actual end of the page's content card.
    // The fit guard below still fails closed when the complete chart cannot fit.
    for(const panel of chartsForSection(input,chartSection)){
+    const evidenceErrors=chartEvidenceIntegrityErrors(panel);
+    if(evidenceErrors.length)throw new Error("Report chart evidence integrity failed for "+panel.title+": "+evidenceErrors.join("; "));
     const panelHeight=chartPanelHeight(panel.kind,panel.rows,W-2*M),panelTop=chartCursor;
     if(panelTop-panelHeight<76)throw new Error("Evidence charts cannot fit safely on "+spec.title);
     drawChartPanel(page,{...panel,fixture:rec(input.evidence).fixture===true,y:panelTop,width:W-2*M},fonts.regular,fonts.bold);
@@ -651,8 +635,8 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
  }
  const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
- const last=pdf.getPages()[pages.length-2]??pdf.getPages()[0];
- notes.addToPage(last,{x:M,y:78,width:W-2*M,height:38,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
+ const notesPage=pdf.getPages()[tier==="full"?7:Math.max(0,pages.length-2)]??pdf.getPages()[0];
+ notes.addToPage(notesPage,{x:M,y:78,width:W-2*M,height:38,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
  notes.setFontSize(8);notes.updateAppearances(fonts.regular);
  return pdf.save();
 }

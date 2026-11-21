@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isReliableKey, isReliableTempo, hasMultipleTuningWindows, sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
+import { buildTempoDiagnosticLines } from "../src/reports/v2/render.js";
 
 const baseAssessment = {
   executiveSummary: "The recording is a 156 BPM high-energy release with a strong rhythmic lane.",
@@ -42,6 +43,55 @@ describe("Phillo evidence guardrails", () => {
     expect(isReliableTempo({ bpm: 120, tempoConfidence: 0.9, rhythmFeatures: { status: "measured", abstentionReason: "ambiguous pulse" } })).toBe(false);
     expect(isReliableTempo({ bpm: 0, tempoConfidence: 0.9 })).toBe(false);
     expect(isReliableTempo({ bpm: null, tempoConfidence: 0.9 })).toBe(false);
+  });
+
+  it("accepts only 40–220 BPM as a reportable tempo measurement", () => {
+    expect(isReliableTempo({ bpm: 40, tempoConfidence: 0.9 })).toBe(true);
+    expect(isReliableTempo({ bpm: 220, tempoConfidence: 0.9 })).toBe(true);
+    expect(isReliableTempo({ bpm: 39.99, tempoConfidence: 0.9 })).toBe(false);
+    expect(isReliableTempo({ bpm: 220.01, tempoConfidence: 0.9 })).toBe(false);
+  });
+
+  it("removes mismatched numeric tempo and loudness claims across assessment sections", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "The uploaded master measures 156 BPM. Integrated loudness is -14.0 LUFS.",
+      creativeIdentity: "The measured tempo is 120 BPM and integrated loudness is -11.3 LUFS.",
+      strengths: ["The track measures 156 BPM."],
+      risks: ["The loudness is -14.0 LUFS."],
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master",
+      bpm: 120,
+      tempoConfidence: 0.94,
+      loudnessLufs: -11.32,
+      loudnessRangeLu: 7.4,
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("156 BPM");
+    expect(serialized).not.toContain("-14.0 LUFS");
+    expect(result.creativeIdentity).toContain("120 BPM");
+    expect(result.creativeIdentity).toContain("-11.3 LUFS");
+  });
+
+  it("filters out-of-range tempo candidates from every diagnostic estimate", () => {
+    const lines = buildTempoDiagnosticLines({
+      sonicDna: { rhythmFeatures: {
+        candidateScores: [{ bpm: 39, score: 0.9 }, { bpm: 40, score: 0.8 }, { bpm: 220, score: 0.7 }, { bpm: 221, score: 0.6 }],
+        candidateBpms: [39, 40, 220, 221],
+        alternateTempo: 240,
+        independentEstimator: { bpm: 250, score: 0.5 },
+        confidence: 0.8,
+        beatGridStatus: "tentative",
+      } },
+    } as any).join(" ");
+
+    expect(lines).toContain("40 BPM (score 0.800)");
+    expect(lines).toContain("220 BPM (score 0.700)");
+    expect(lines).not.toContain("39 BPM");
+    expect(lines).not.toContain("221 BPM");
+    expect(lines).not.toContain("Alternate half/double-time candidate");
+    expect(lines).not.toContain("Independent low-frequency envelope estimate");
   });
 
   it("does not mislabel a missing genre tempo range as a failed tempo-confidence gate", () => {
@@ -345,6 +395,35 @@ describe("Phillo evidence guardrails", () => {
     expect(claims).not.toMatch(/tempo|BPM|key and mode|major|vocal|instrumental/i);
     expect(claims).toContain("RMS loudness level: -11.32 dBFS");
     expect(claims).toContain("Measured RMS-envelope spread (internal proxy; not mastering dynamic range): 13.11 dB");
+  });
+
+
+  it("withholds unsupported numeric claims for duration, sample rate, channels and acoustic descriptors", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "Duration is 180 seconds. Sample rate is 48000 Hz. The master has 2 channels. RMS energy is 0.42 and zero-crossing rate is 0.125.",
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master", durationSeconds: 179.5, sampleRate: 44100, channels: 1,
+      rmsEnergy: 0.31, zeroCrossingRate: 0.09,
+    });
+    expect(result.executiveSummary).not.toMatch(/180 seconds|48000 Hz|2 channels|0.42|0.125/);
+  });
+
+  it("retains rounded numeric acoustic claims only when they match the uploaded-master measurement", () => {
+    const assessment = {
+      ...baseAssessment,
+      executiveSummary: "Duration is 179.5 seconds. Sample rate is 44100 Hz. The master has 1 channel. RMS energy is 0.31 and zero-crossing rate is 0.09.",
+    };
+    const result = sanitizeAssessmentForEvidence(assessment, {
+      provenance: "uploaded_audio_master", durationSeconds: 179.5, sampleRate: 44100, channels: 1,
+      rmsEnergy: 0.31, zeroCrossingRate: 0.09,
+    });
+    expect(result.executiveSummary).toContain("179.5 seconds");
+    expect(result.executiveSummary).toContain("44100 Hz");
+    expect(result.executiveSummary).toContain("1 channel");
+    expect(result.executiveSummary).toContain("0.31");
+    expect(result.executiveSummary).toContain("0.09");
   });
 
   it("fills all five scorecard dimensions when a zero-confidence assessment is incomplete", () => {

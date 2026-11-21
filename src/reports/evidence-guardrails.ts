@@ -19,7 +19,7 @@ export function isReliableTempo(value: TempoEvidence): boolean {
   if (!value || typeof value !== "object") return false;
   const bpm = value.bpm;
   const confidence = value.tempoConfidence;
-  if (typeof bpm !== "number" || !Number.isFinite(bpm) || bpm < 40 || bpm > 240) return false;
+  if (typeof bpm !== "number" || !Number.isFinite(bpm) || bpm < 40 || bpm > 220) return false;
   if (typeof confidence !== "number" || !Number.isFinite(confidence)) return false;
   if (confidence < MIN_RELIABLE_TEMPO_CONFIDENCE || confidence > 1) return false;
   if (typeof value.abstentionReason === "string" && value.abstentionReason.trim()) return false;
@@ -216,6 +216,77 @@ export function deriveMetadataCompleteness(evidence?: Record<string, unknown> | 
   };
 }
 
+function numericValueMatchesMeasurement(claimed: number, measured: unknown, tolerance: number): boolean {
+  return typeof measured === "number" && Number.isFinite(measured) && Math.abs(claimed - measured) <= tolerance;
+}
+
+/**
+ * Cross-section guard for explicit measured-unit claims in assessment prose.
+ * Only supported, directly measured Sonic DNA values can substantiate these
+ * numeric assertions; unsupported or mismatched sentences are withheld.
+ */
+function stripMismatchedMeasuredNumericClaims(value: unknown, sonicDna: Record<string, unknown> | null | undefined): unknown {
+  if (typeof value === "string") {
+    const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
+    const kept = sentences.filter((sentence) => {
+      const matches = (pattern: RegExp, expected: unknown, tolerance: number): boolean | null => {
+        const match = sentence.match(pattern);
+        if (!match) return null;
+        return numericValueMatchesMeasurement(Number(match[1]), expected, tolerance);
+      };
+      const bpm = matches(/(?<![\w.])(-?\d+(?:\.\d+)?)\s*BPM\b/i, sonicDna?.bpm, 0.51);
+      if (bpm === false) return false;
+      const lufs = matches(/(?<![\w.])(-?\d+(?:\.\d+)?)\s*LUFS\b/i, sonicDna?.loudnessLufs, 0.051);
+      if (lufs === false) return false;
+      const loudnessRange = matches(/\b(?:loudness range|LRA)\s*(?:of|:|is)?\s*(-?\d+(?:\.\d+)?)\s*LU\b/i, sonicDna?.loudnessRangeLu, 0.051);
+      if (loudnessRange === false) return false;
+      const truePeakClaim = /\btrue peak\b/i.test(sentence);
+      const rmsClaim = /\bRMS\b|\brms level\b/i.test(sentence);
+      const dbfs = sentence.match(/(?<![\w.])(-?\d+(?:\.\d+)?)\s*dBFS\b/i);
+      if (dbfs) {
+        const candidates = truePeakClaim
+          ? [sonicDna?.truePeakDbfs]
+          : rmsClaim
+            ? [sonicDna?.rmsLevelDbfs]
+            : [sonicDna?.truePeakDbfs, sonicDna?.rmsLevelDbfs];
+        if (!candidates.some((candidate) => numericValueMatchesMeasurement(Number(dbfs[1]), candidate, 0.051))) return false;
+      }
+      const hz = sentence.match(/(?<![\w.])(-?\d+(?:\.\d+)?)\s*Hz\b/i);
+      if (hz) {
+        const lower = sentence.toLowerCase();
+        const candidates = lower.includes("sample rate")
+          ? [sonicDna?.sampleRate]
+          : lower.includes("centroid")
+            ? [sonicDna?.spectralCentroidHz]
+            : lower.includes("bandwidth")
+              ? [sonicDna?.spectralBandwidthHz]
+              : lower.includes("rolloff")
+                ? [sonicDna?.spectralRolloffHz]
+                : [sonicDna?.spectralCentroidHz, sonicDna?.spectralBandwidthHz, sonicDna?.spectralRolloffHz];
+        if (!candidates.some((candidate) => numericValueMatchesMeasurement(Number(hz[1]), candidate, 0.51))) return false;
+      }
+      const duration = matches(/\b(?:duration|runtime)\s*(?:of|:|is)?\s*(-?\d+(?:\.\d+)?)\s*(?:s|sec|seconds)\b/i, sonicDna?.durationSeconds, 0.051);
+      if (duration === false) return false;
+      const channels = matches(/(?<![\w.])(\d+)\s+channels?\b/i, sonicDna?.channels, 0);
+      if (channels === false) return false;
+      const rmsEnergy = matches(/\bRMS energy\s*(?:of|:|is)?\s*(-?\d+(?:\.\d+)?)/i, sonicDna?.rmsEnergy, 0.00051);
+      if (rmsEnergy === false) return false;
+      const zeroCrossing = matches(/\bzero[- ]crossing rate\s*(?:of|:|is)?\s*(-?\d+(?:\.\d+)?)/i, sonicDna?.zeroCrossingRate, 0.00051);
+      if (zeroCrossing === false) return false;
+      const envelopeSpread = matches(/\bRMS[- ]envelope spread\s*(?:of|:|is)?\s*(-?\d+(?:\.\d+)?)\s*dB\b/i, sonicDna?.dynamicRangeDb, 0.051);
+      if (envelopeSpread === false) return false;
+      return true;
+    });
+    return kept.join(" ").trim();
+  }
+  if (Array.isArray(value)) return value.map((item) => stripMismatchedMeasuredNumericClaims(item, sonicDna));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => [key, stripMismatchedMeasuredNumericClaims(item, sonicDna)]));
+  }
+  return value;
+}
+
 export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   assessment: T,
   sonicDna: Record<string, unknown> | null | undefined,
@@ -236,6 +307,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   const measuredCentroid = sonicDna?.spectralCentroidHz;
   const suppressBrightTimbre = typeof measuredCentroid === "number" && Number.isFinite(measuredCentroid) && measuredCentroid <= 2_000;
   result = stripUnsupportedTechnicalClaims(result, suppressLoudnessOptimisation, suppressBrightTimbre, typeof sonicDna?.dynamicRangeDb === "number" ? sonicDna.dynamicRangeDb : undefined) as T;
+  result = stripMismatchedMeasuredNumericClaims(result, sonicDna) as T;
 
   if (hasAlbumConflict(evidence)) {
     result = sanitizeAlbumConflictClaims(result) as T;

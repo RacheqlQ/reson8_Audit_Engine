@@ -52,7 +52,7 @@ for(const [name,input] of variants){
   const bytes=await ensurePdfReport(reportInput,tier);
   const pdf=await PDFDocument.load(bytes);
   if(tier==="sample"&&pdf.getPageCount()!==9)throw new Error(name+" sample report must be exactly 9 pages; got "+pdf.getPageCount());
-  if(tier==="full"&&(pdf.getPageCount()<12||pdf.getPageCount()>13))throw new Error(name+" full report must be 12 or 13 pages; got "+pdf.getPageCount());
+  if(tier==="full"&&pdf.getPageCount()!==12)throw new Error(name+" full report must be exactly 12 pages; got "+pdf.getPageCount());
   const filename=name+"-"+tier+"-audit-report.pdf";
   const fileUrl=new URL(filename,out),filePath=fileUrl.pathname;
   await writeFile(fileUrl,bytes);
@@ -85,8 +85,8 @@ for(const [name,input] of variants){
   const normalizedExtracted=extracted.replace(/\s+/g," ");
   if(name==="ambiguous-audio-low-confidence"){
    const expectedEvidence=tier==="sample"
-    ?["128 (provisional","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"]
-    :["128 BPM candidate; half-time 64.0 BPM; double-time 256.0 BPM","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"];
+    ?["128 BPM (provisional","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"]
+    :["128 BPM (provisional","C major (provisional harmonic candidate","14 (multiple tonal windows; provisional)"];
    for(const expected of expectedEvidence){
     if(!normalizedExtracted.includes(expected))throw new Error(filename+" is missing the expected provisional audio evidence: "+expected);
    }
@@ -95,6 +95,13 @@ for(const [name,input] of variants){
   if(tier==="sample"){
    for(const label of chartLabels){
     if(!normalizedExtracted.includes(normalizeReportText(label).replace(/\s+/g," ").trim()))throw new Error(filename+" is missing a complete lane-constellation label: "+label);
+   }
+  }
+  if(name==="combined-master-and-dsp"&&tier==="full"){
+   const requiredCharts=["Evidence layers","DSP platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"];
+   const fullText=normalizedExtracted.toLocaleLowerCase();
+   for(const chart of requiredCharts){
+    if(!fullText.includes(chart.toLocaleLowerCase()))throw new Error(filename+" is missing a sample-parity chart: "+chart);
    }
   }
   if(name==="long-form-audio"&&tier==="full"){
@@ -116,6 +123,14 @@ try{
  const unsafeInput=structuredClone(ambiguousAudioFixture);
  unsafeInput.assessment={
   ...unsafeInput.assessment,
+  limitations:[
+   ...(Array.isArray(unsafeInput.assessment.limitations)?unsafeInput.assessment.limitations:[]),
+   "Vocal analysis: Not performed - Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
+   "Vocal presence/absence is unknown and is not inferred.",
+   "No vocal conclusion is available because the separation model did not complete.",
+   "Learned audio model: disabled.",
+   "Detection model status: disabled."
+  ],
   executiveSummary:[
    "The recording is a 128 BPM high-energy Afrobeats release.",
    "The track has 24000 streams, strong market demand and high commercial potential.",
@@ -123,13 +138,48 @@ try{
    "Further listening and source verification are required before any external decision."
   ].join(" ")
  };
+ unsafeInput.evidence={
+  ...unsafeInput.evidence,
+  playlistDiscovery:{
+   status:"partial",
+   outcomes:[
+    {provider:"spotify",status:"unavailable",reason:"Spotify catalog request failed with HTTP 403"},
+    {provider:"apple_music",status:"not_configured",reason:"Apple Music developer token is not configured."}
+   ]
+  }
+ };
  const unsafeBytes=await ensurePdfReport({...unsafeInput,generatedAt:new Date().toISOString()},"full");
  await writeFile(evidenceCheckPath,unsafeBytes);
  const unsafeText=execFileSync("pdftotext",["-layout",evidenceCheckPath,"-"],{encoding:"utf8"});
- if(/(?:128\s*BPM(?!\s*candidate\b)|high-energy|Afrobeats|24000 streams|market demand|commercial potential|24000 monthly listeners|commercially successful)/i.test(unsafeText)){
-  throw new Error("Generated PDF reintroduced an unsupported tempo, genre or commercial claim");
+ const normalizedUnsafeText=unsafeText.replace(/\s+/g," ").trim();
+ const internalStatusNotices=[
+  "Vocal analysis: Not performed",
+  "Vocal presence/absence is unknown",
+  "No vocal conclusion is available",
+  "Learned audio model: disabled",
+  "Detection model status: disabled"
+ ];
+ for(const notice of internalStatusNotices){
+  if(normalizedUnsafeText.toLocaleLowerCase().includes(notice.toLocaleLowerCase())){
+   throw new Error("Generated PDF exposed an internal analysis status notice: "+notice);
+  }
  }
- if(!/128\s+BPM candidate;\s*half-time 64\.0 BPM;\s*double-time 256\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF lost or mislabelled provisional tempo relationships");
+ for(const required of ["Spotify provider unavailable:","HTTP 403","SPOTIFY_CLIENT_ID","SPOTIFY_CLIENT_SECRET","Apple Music provider unavailable:","APPLE_MUSIC_DEVELOPER_TOKEN"]){
+  if(!normalizedUnsafeText.includes(required)){
+   throw new Error("Generated PDF is missing provider availability evidence: "+required);
+  }
+ }
+ const forbiddenClaims=[
+  "The recording is a 128 BPM high-energy Afrobeats release.",
+  "The track has 24000 streams, strong market demand and high commercial potential.",
+  "Verified 24000 monthly listeners prove the campaign is commercially successful."
+ ];
+ const reintroducedClaim=forbiddenClaims.find((claim)=>normalizedUnsafeText.toLocaleLowerCase().includes(claim.toLocaleLowerCase()));
+ if(reintroducedClaim){
+  throw new Error("Generated PDF reintroduced an unsupported claim: "+reintroducedClaim);
+ }
+ if(!/128\s+BPM \(provisional tempo candidate;\s*plausible half\/double-time alternatives: 64 BPM/i.test(unsafeText)) throw new Error("Generated PDF lost or mislabelled provisional tempo relationships");
+ if(/double-time 256\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF printed an implausible double-time candidate");
  if(!unsafeText.includes("Further listening and source verification are required")){
   throw new Error("Generated PDF lost the supported A&R Notes decision-context sentence");
  }

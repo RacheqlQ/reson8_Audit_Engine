@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe,expect,it,vi } from "vitest";
-import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,sonicDashboardRowsForReport,type AuditReportInput } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContext,checkLayout,checkPageDensity,chartLayoutIssuesForReport,coverVerdictLabel,generateAuditReport,metadataFieldSource,normalizeReportText,paginateArNotesSummary,planAuditReportPages,sonicDashboardRowsForReport,chartsForSection,type AuditReportInput } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture,partialAudioFixture,metadataOnlyFixture,longFormAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { buildStrengthRiskChartRows,chartPanelDisplayStatus,chartPanelHeight,constellationLabelLineCount } from "../src/reports/charts.js";
@@ -31,6 +31,14 @@ describe("A4 report layout and fixture coverage",()=>{
  it("does not attach measured status to unavailable metadata-only charts",()=>{
   expect(chartPanelDisplayStatus({fixture:true,unavailable:true,evidenceClass:"measured"})).toBe("SYNTHETIC FIXTURE · REQUIRES AUDIO");
   expect(chartPanelDisplayStatus({evidenceClass:"illustrative"})).toBe("ILLUSTRATIVE");
+ });
+ it("retains the DSP coverage panel when provider lookup outcomes are unavailable",()=>{
+  const input=structuredClone(metadataOnlyFixture) as any;
+  input.evidence.catalogSources=[];
+  const panels=chartsForSection(input,"Identity and source reconciliation");
+  expect(panels).toHaveLength(1);
+  expect(panels[0]).toMatchObject({title:"DSP platform coverage",unavailable:true,evidenceClass:"provider-recognized"});
+  expect(panels[0].shows).toContain("coverage is unavailable, not zero");
  });
  it("reserves enough wrapped rows for long lane constellation labels",()=>{
   expect(constellationLabelLineCount({label:"Adjacent lane",value:"Alternative R&B (fixture lane hypothesis)"},499)).toBeGreaterThan(1);
@@ -453,13 +461,16 @@ describe("Sonic DNA provisional candidate reporting", () => {
     expect(rows.find((row) => row.label === "TEMPO BPM")?.value).toBeNull();
     expect(rows.find((row) => row.label === "TEMPO CANDIDATE BPM")?.value).toContain("165 (provisional");
     expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
-      .toContain("165 BPM candidate; half-time 82.5 BPM; double-time 330.0 BPM");
+      .toContain("165 BPM candidate; half-time 82.5 BPM");
+    expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
+      .not.toContain("double-time 330.0 BPM");
     expect(rows.find((row) => row.label === "PROVISIONAL HALF / DOUBLE-TIME RELATIONS")?.value)
       .toContain("not independently validated beat interpretations");
     const reportInput=structuredClone(fullAudioFixture) as AuditReportInput;
     reportInput.sonicDna={...reportInput.sonicDna,provenance:"uploaded_audio_master",tempoCandidateBpm:165,tempoConfidence:0.28};
     const reportText=planAuditReportPages(reportInput,"full").flatMap((page)=>[page.title,...page.text]).join(" ");
-    expect(reportText).toContain("165 BPM candidate; half-time 82.5 BPM; double-time 330.0 BPM");
+    expect(reportText).toContain("165 BPM candidate; half-time 82.5 BPM");
+    expect(reportText).not.toContain("double-time 330.0 BPM");
     expect(reportText).toContain("derived arithmetic relationships only; not independently validated beat interpretations");
     expect(rows.find((row) => row.label === "TEMPO DETECTION REASON")?.value).toContain("reliable result");
     expect(rows.find((row) => row.label === "BEAT GRID STATUS")?.value).toContain("tentative (candidate; not independently validated)");

@@ -10,7 +10,8 @@ describe("sample-report command",()=>{
   expect(script).toContain('["sample","full"]');
   expect(script).toContain("ensurePdfReport");
   expect(script).toContain('pdf.getPageCount()!==9');
-  expect(script).toContain('pdf.getPageCount()<12||pdf.getPageCount()>13');
+  expect(script).toContain('pdf.getPageCount()!==12');
+  expect(script).toContain('requiredCharts=["Evidence layers","DSP platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"]');
   expect(script).toContain("generatedAt: new Date().toISOString()");
   expect(script).not.toContain("fetch(");
   const ambiguous=await readFile(new URL("scripts/fixtures/ambiguous-audio.mjs",root),"utf8");
@@ -28,6 +29,7 @@ describe("sample-report command",()=>{
   const pkg=JSON.parse(await readFile(new URL("package.json",root),"utf8"));
   expect(pkg.scripts["sample-report"]).toBe("npm run build && node scripts/sample-report.mjs");
   const workflow=await readFile(new URL(".github/workflows/ci.yml",root),"utf8");
-  expect(workflow).toContain("path: artifacts/*.pdf");
+  expect(workflow).toContain("artifacts/*.pdf");
+  expect(workflow).toContain("artifacts/*.json");
  });
 });

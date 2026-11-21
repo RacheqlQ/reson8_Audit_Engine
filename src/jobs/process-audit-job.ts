@@ -421,7 +421,10 @@ function reconciliationEvidence(reconciliation: MetadataReconciliation): Record<
       ? "RECONCILED"
       : reconciliation.identity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
     reconciledFields: reconciliation.reconciledFields,
+    reconciledRecordingFields: reconciliation.reconciledRecordingFields,
+    releaseContextFields: reconciliation.releaseContextFields,
     conflicts: reconciliation.conflicts,
+    releaseContextDifferences: reconciliation.releaseContextDifferences,
     identity: identityEvidence(reconciliation.identity),
   };
 }
@@ -832,7 +835,10 @@ export async function processAuditJob(
         ? "RECONCILED"
         : assessmentIdentity.sourceProviders.length > 0 ? "RECOGNIZED" : null,
       reconciledFields: assessmentReconciliation.reconciledFields,
+      reconciledRecordingFields: assessmentReconciliation.reconciledRecordingFields,
+      releaseContextFields: assessmentReconciliation.releaseContextFields,
       conflicts: assessmentReconciliation.conflicts,
+      releaseContextDifferences: assessmentReconciliation.releaseContextDifferences,
       identity: identityEvidence(assessmentIdentity),
     };
     const assessmentRecognition = recognitionEvidence(recognition);
@@ -913,7 +919,19 @@ export async function processAuditJob(
         };
       }
     }
-    const reportEvidence = playlistDiscovery ? { ...evidence, playlistDiscovery } : evidence;
+    const reportSourceEvidence = playlistDiscovery ? { ...evidence, playlistDiscovery } : evidence;
+    // Persist one canonical evidence envelope with both report tiers. The AI
+    // assessment and the PDFs now reference the exact same sanitized evidence
+    // projection, while retaining the broader source record for auditability.
+    const canonicalEvidence = Object.freeze({
+      schemaVersion: "1.0.0",
+      auditId: jobId,
+      sourceEvidence: reportSourceEvidence,
+      assessmentEvidence,
+      identityFieldProvenance: assessmentIdentity.fieldProvenance,
+      reconciliation: assessmentReconciliationEvidence,
+    });
+    const reportEvidence = { ...reportSourceEvidence, canonicalEvidence };
     const generatedAt = new Date().toISOString();
     const executionMode = hasMaster && hasCatalog ? "combined" : hasMaster ? "master" : "dsp_link";
     let realMasterContract: RealMasterAuditContract | null = null;
@@ -999,7 +1017,7 @@ export async function processAuditJob(
               diagnostic: { code: "DSP_CATALOG_LOOKUP_UNAVAILABLE", message: result.error ?? "The DSP catalogue lookup did not return a record.", stage: "catalog_lookup", retryable: true }, attemptedAt: generatedAt,
             })),
           ],
-          strategicSynthesis: masterDna.bpm !== null ? [{ claim: "A tempo measurement was returned by analysis of the uploaded master.", evidenceRefs: ["signal:tempo_bpm"], evidenceClass: "OBSERVED", limitations: ["The current estimator score is not a calibrated probability."] }] : [],
+          strategicSynthesis: masterDna.bpm !== null ? [{ claim: "A tempo measurement was returned by analysis of the uploaded master.", evidenceRefs: ["signal:tempo_bpm"], evidenceClass: "OBSERVED", numericClaims: [{ value: masterDna.bpm, unit: "BPM", evidenceRef: "signal:tempo_bpm" }], limitations: ["The current estimator score is not a calibrated probability."] }] : [],
           pipelineDiagnostics: masterDna.limitations.map((message) => ({ code: "ANALYSIS_LIMITATION", message, stage: "sonic_dna", retryable: false })),
         });
       } catch (error) {

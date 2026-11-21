@@ -77,11 +77,16 @@ jobs:
 
       - name: Run test suite
         if: always()
-        run: npm test
+        run: |
+          mkdir -p artifacts
+          npm test -- --reporter=default --reporter=json --outputFile=artifacts/vitest-results.json
 
       - name: Build
         if: always()
         run: npm run build
+
+      - name: Run zero-cost synthetic audio detector evaluation
+        run: npm run evaluate:audio
 
       - name: Install PDF text-inspection tools
         if: always()
@@ -97,10 +102,12 @@ jobs:
         if: always()
         run: npm run sample-report:v2
 
-      - name: Upload report PDFs
+      - name: Upload report and detector evaluation artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: audit-report-pdfs
-          path: artifacts/*.pdf
+          name: audit-report-and-evaluation
+          path: |
+            artifacts/*.pdf
+            artifacts/*.json
           if-no-files-found: warn

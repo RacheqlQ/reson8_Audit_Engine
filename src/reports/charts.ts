@@ -11,7 +11,7 @@ export interface ChartRow {
 export type ChartKind = "bars" | "sonic" | "spectrum" | "constellation" | "layers" | "tension" | "timeline" | "chain" | "radar";
 export type ChartEvidenceClass = "measured" | "provider-recognized" | "inferred" | "assessment-derived" | "illustrative";
 export interface ChartPanelInput {
-  title: string; rows: ChartRow[]; shows: string; cantShow: string;
+  title: string; rows: ChartRow[]; shows: string; cantShow: string; evidenceRefs?: string[];
   kind?: ChartKind; evidenceClass?: ChartEvidenceClass; inferred?: boolean; unavailable?: boolean; fixture?: boolean; y?: number; width?: number;
 }
 export interface ChartRect { x:number; y:number; width:number; height:number; id:string; }
@@ -259,6 +259,22 @@ export function chartPanelStatus(input: Pick<ChartPanelInput, "fixture" | "infer
   default:return "UNCLASSIFIED";
  }
 }
+
+export function chartEvidenceIntegrityErrors(input: Pick<ChartPanelInput, "evidenceClass" | "evidenceRefs" | "rows">): string[] {
+ const refs = (input.evidenceRefs ?? []).filter((ref) => typeof ref === "string" && ref.trim());
+ const errors: string[] = [];
+ if (refs.length === 0) errors.push("Chart assertion has no evidence reference.");
+ const numericRows = input.rows.filter((row) => typeof row.value === "number" && Number.isFinite(row.value));
+ if (numericRows.length > 0 && refs.length === 0) errors.push("Numeric chart values are not linked to source evidence.");
+ const validPrefix = input.evidenceClass === "measured" ? refs.every((ref) => ref.startsWith("sonicDna"))
+  : input.evidenceClass === "provider-recognized" ? refs.every((ref) => ref.startsWith("evidence."))
+  : input.evidenceClass === "assessment-derived" || input.evidenceClass === "inferred" ? refs.every((ref) => ref.startsWith("assessment."))
+  : input.evidenceClass === "illustrative" ? refs.every((ref) => ref.startsWith("reportTemplates."))
+  : false;
+ if (!validPrefix) errors.push("Chart evidence references do not match the declared evidence class.");
+ return errors;
+}
+
 export function chartPanelDisplayStatus(input: Pick<ChartPanelInput, "fixture" | "inferred" | "unavailable" | "evidenceClass">): string {
  const status=chartPanelStatus(input);
  const evidence=input.evidenceClass==="provider-recognized"?"PROVIDER-RECOGNIZED"
@@ -287,10 +303,15 @@ function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,hei
  tracked(p,status,x+w-13-statusWidth,top-19,bold,5.2,input.fixture||input.inferred?C.gold:input.unavailable?C.coral:C.teal,.25);
  const captionTop=bottom+CAPTION_H;
  line(p,x+9,captionTop,x+w-9,captionTop,C.line,.65);
- let cy=bottom+CAPTION_H-12;
- for(const [label,value] of [["SHOWS: ",input.shows],["CAN'T SHOW: ",input.cantShow]] as const){
-  const lines=wrap(label+value,font,5.7,w-24).slice(0,2);
-  for(const part of lines){text(p,part,x+12,cy,font,5.7,C.muted);cy-=7;}
+ let cy=bottom+CAPTION_H-10;
+ const captionRows:[string,string,number][]=[
+  ["EVIDENCE REFS: ",(input.evidenceRefs??[]).join(", ")||"not supplied",1],
+  ["SHOWS: ",input.shows,2],
+  ["CAN'T SHOW: ",input.cantShow,2],
+ ];
+ for(const [label,value,maxLines] of captionRows){
+  const lines=wrap(label+value,font,5.2,w-24).slice(0,maxLines);
+  for(const part of lines){text(p,part,x+12,cy,font,5.2,C.muted);cy-=6;}
  }
  return {x,top,bottom,width:w,height,contentTop:top-HEADER_H-9,contentBottom:captionTop+5};
 }

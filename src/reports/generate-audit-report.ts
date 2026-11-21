@@ -319,6 +319,10 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
  const directTempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
  const tempoCandidate=directTempoCandidate??independentTempoCandidate;
  const tempoCandidateSource=directTempoCandidate!==null?"primary tempo estimator":"independent low-frequency estimator";
+ const plausibleTempoRelationships=tempoCandidate===null?[]:[
+  {label:"half-time",bpm:tempoCandidate/2},
+  {label:"double-time",bpm:tempoCandidate*2},
+ ].filter(candidate=>candidate.bpm>=40&&candidate.bpm<=220);
  const tempoConfidence=typeof s?.tempoConfidence==="number"&&Number.isFinite(s.tempoConfidence)?s.tempoConfidence:null;
  const alternateTempo=typeof s?.alternateTempo==="number"&&Number.isFinite(s.alternateTempo)&&s.alternateTempo>=40&&s.alternateTempo<=240?s.alternateTempo:null;
  const primaryTempo=typeof s?.bpm==="number"&&Number.isFinite(s.bpm)?s.bpm:null;
@@ -334,7 +338,7 @@ export function sonicDashboardRowsForReport(s:Record<string,unknown>|null,hasAud
   {label:"TEMPO BPM",value:tempoReliable?metric(s?.bpm,1):null},
   {label:"TEMPO ALTERNATE INTERPRETATION",value:tempoReliable&&alternateTempo!==null&&primaryTempo!==null&&alternateTempo!==primaryTempo?String(alternateTempo)+" BPM ("+alternateTempoRelation+" interpretation; alternate metrical level)":null},
   {label:"TEMPO CANDIDATE BPM",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" (provisional; "+tempoCandidateSource+"; prominence diagnostic "+(tempoConfidence===null?"not available":tempoConfidence.toFixed(2))+(leadingTempoScore&&typeof leadingTempoScore.score==="number"?"; candidate score "+leadingTempoScore.score.toFixed(3):"")+")":null},
-  {label:"PROVISIONAL HALF / DOUBLE-TIME RELATIONS",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" BPM candidate; half-time "+(tempoCandidate/2).toFixed(1)+" BPM; double-time "+(tempoCandidate*2).toFixed(1)+" BPM (derived arithmetic relationships only; not independently validated beat interpretations)":null},
+  {label:"PROVISIONAL HALF / DOUBLE-TIME RELATIONS",value:hasAudio&&!tempoReliable&&tempoCandidate!==null?String(tempoCandidate)+" BPM candidate"+(plausibleTempoRelationships.length?"; "+plausibleTempoRelationships.map(candidate=>candidate.label+" "+candidate.bpm.toFixed(1)+" BPM").join("; "):"")+" (derived arithmetic relationships only; not independently validated beat interpretations)":null},
   {label:"TEMPO DETECTION REASON",value:hasAudio&&!tempoReliable?(tempoReason||"No tempo candidate passed the reliability gate."):null},
   {label:"TEMPO WINDOW CONSENSUS",value:hasAudio?windowConsensusSummary(rhythm.windowConsensus,rhythm.independentEstimator):null},
   {label:"BEAT GRID STATUS",value:!hasAudio?null:beatTimes.length?String(rhythm.beatGridStatus||"provisional")+" (candidate; not independently validated)":"Not established"},
@@ -389,33 +393,38 @@ export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAu
 export function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
  const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),counts=countEvidenceLayers(a.evidenceLabels);
 
- if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",evidenceClass:"assessment-derived",rows:[{label:"Measured",value:counts.OBSERVED},{label:"Source matches",value:counts.RECOGNIZED},{label:"Cross-checked",value:counts.RECONCILED},{label:"Hypotheses",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful."}];
- if(title==="Identity and source reconciliation"&&Array.isArray(e.catalogSources)&&e.catalogSources.length>0){
-  const sources=e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"));
+ if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",evidenceClass:"assessment-derived",rows:[{label:"Measured",value:counts.OBSERVED},{label:"Source matches",value:counts.RECOGNIZED},{label:"Cross-checked",value:counts.RECONCILED},{label:"Hypotheses",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful.",evidenceRefs:["assessment.evidenceLabels"]}];
+ if(title==="Identity and source reconciliation"){
+  const sources=Array.isArray(e.catalogSources)
+   ?e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"))
+   :[];
   const count=(status:string)=>sources.filter((item)=>item.status===status).length;
-  return [{title:"DSP platform coverage",kind:"bars",evidenceClass:"provider-recognized",rows:[
+  return [{title:"DSP platform coverage",kind:"bars",evidenceClass:"provider-recognized",unavailable:sources.length===0,rows:[
    {label:"Recognized",value:count("recognized")},
    {label:"Partial",value:count("partial")},
    {label:"Unavailable",value:count("unavailable")},
-  ],shows:"Provider lookup outcomes across the submitted track links.",cantShow:"Audience size, stream counts, playlist placement or listener demand."}];
+  ],shows:sources.length
+   ?"Provider lookup outcomes across the submitted track links."
+   :"No submitted DSP provider lookup outcomes were recorded; coverage is unavailable, not zero.",
+   cantShow:"Audience size, stream counts, playlist placement or listener demand.",evidenceRefs:["evidence.catalogSources"]}];
  }
  if(title==="Sonic DNA and technical profile")return [
   {
    title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
    rows:sonicDashboardRowsForReport(s,hasAudio),
-   shows:"Confidence-qualified tempo and key/mode plus direct loudness and RMS measurements from the uploaded master.",cantShow:"Audience demand, listener response, mastering quality or commercial performance."
+   shows:"Confidence-qualified tempo and key/mode plus direct loudness and RMS measurements from the uploaded master.",cantShow:"Audience demand, listener response, mastering quality or commercial performance.",evidenceRefs:["sonicDna"]
   },
   {
    title:"Signal characteristics",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
    rows:signalDashboardRowsForReport(s,hasAudio),
-   shows:"File format and signal-derived acoustic descriptors with their original units. "+(s?.acousticFeatureProfile&&typeof s.acousticFeatureProfile==="object"?(()=>{const profile=s.acousticFeatureProfile as Record<string,unknown>,p=profile.provenance&&typeof profile.provenance==="object"?profile.provenance as Record<string,unknown>:{};return "Profile "+val(p.featureVersion,"unavailable")+"; analysis "+val(p.analysisSampleRateHz,"unknown")+" Hz; "+val(p.windowCount,"0")+" windows; "+val(p.windowSizeSamples,"unknown")+"-sample windows / "+val(p.hopSizeSamples,"unknown")+"-sample hop; "+val(p.aggregation,"unknown")+"; "+val(p.downmix,"unknown")+"; resampling "+val(p.analysisResampling,"unknown")+"."})():"Acoustic feature profile not available."),cantShow:"Validated perceptual mood/energy accuracy, vocal presence, genre or commercial performance."
+   shows:"File format and signal-derived acoustic descriptors with their original units. "+(s?.acousticFeatureProfile&&typeof s.acousticFeatureProfile==="object"?(()=>{const profile=s.acousticFeatureProfile as Record<string,unknown>,p=profile.provenance&&typeof profile.provenance==="object"?profile.provenance as Record<string,unknown>:{};return "Profile "+val(p.featureVersion,"unavailable")+"; analysis "+val(p.analysisSampleRateHz,"unknown")+" Hz; "+val(p.windowCount,"0")+" windows; "+val(p.windowSizeSamples,"unknown")+"-sample windows / "+val(p.hopSizeSamples,"unknown")+"-sample hop; "+val(p.aggregation,"unknown")+"; "+val(p.downmix,"unknown")+"; resampling "+val(p.analysisResampling,"unknown")+"."})():"Acoustic feature profile not available."),cantShow:"Validated perceptual mood/energy accuracy, vocal presence, genre or commercial performance.",evidenceRefs:["sonicDna.acousticFeatureProfile","sonicDna"]
   }
  ];
- if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap."}];
- if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"RMS / envelope",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes."}];
- if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(reportableAssessmentItems(a.strengths).slice(0,10),reportableAssessmentItems(a.risks).slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes."}];
- if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:"See provider-attributed playlist shortlist in A&R positioning"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth."}];
- if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",evidenceClass:"illustrative",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes."}];
+ if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap.",evidenceRefs:["assessment.aAndRPositioning"]}];
+ if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"RMS / envelope",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes.",evidenceRefs:["assessment.scorecard"]}];
+ if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(reportableAssessmentItems(a.strengths).slice(0,10),reportableAssessmentItems(a.risks).slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes.",evidenceRefs:["assessment.strengths","assessment.risks"]}];
+ if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:"See provider-attributed playlist shortlist in A&R positioning"},{label:"Listener action",value:"Track saves and attributable visits"}],shows:"An illustrative sequence of approved content, discovery categories and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth.",evidenceRefs:["reportTemplates.discoveryPathway.v1"]}];
+ if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",evidenceClass:"illustrative",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes.",evidenceRefs:["reportTemplates.executionTimeline.v1"]}];
  return [];
 }
 
@@ -487,9 +496,17 @@ function sections(i:AuditReportInput):Section[]{
   );
   sonicDnaBody.push("Track structure and section boundaries: not calculated in this pipeline version; no section-segmentation result is available to support verse, chorus, bridge or intro/outro claims.");
   const provisionalTempoCandidate=typeof s?.tempoCandidateBpm==="number"&&Number.isFinite(s.tempoCandidateBpm)?s.tempoCandidateBpm:null;
-  if(provisionalTempoCandidate!==null&&!tempoReliable)sonicDnaBody.push(
-   "Provisional tempo candidate relationships: "+provisionalTempoCandidate+" BPM candidate; half-time "+(provisionalTempoCandidate/2).toFixed(1)+" BPM; double-time "+(provisionalTempoCandidate*2).toFixed(1)+" BPM (derived arithmetic relationships only; not independently validated beat interpretations)."
-  );
+  if(provisionalTempoCandidate!==null&&!tempoReliable){
+   const tempoRelationships=[
+    {label:"half-time",bpm:provisionalTempoCandidate/2},
+    {label:"double-time",bpm:provisionalTempoCandidate*2},
+   ].filter(candidate=>candidate.bpm>=40&&candidate.bpm<=220);
+   sonicDnaBody.push(
+    "Provisional tempo candidate relationships: "+provisionalTempoCandidate+" BPM candidate"+
+    (tempoRelationships.length?"; "+tempoRelationships.map(candidate=>candidate.label+" "+candidate.bpm.toFixed(1)+" BPM").join("; "):"")+
+    " (derived arithmetic relationships only; not independently validated beat interpretations)."
+   );
+  }
   if (vocalAnalysisPerformed) {
    const vocalSegments=Array.isArray(vocalFeatures?.activitySegments)?vocalFeatures.activitySegments.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"&&!Array.isArray(item))):[];
    const segmentSummary=vocalSegments.slice(0,8).map((segment)=>metric(segment.startSeconds,2)+"–"+metric(segment.endSeconds,2)+" s").join("; ");

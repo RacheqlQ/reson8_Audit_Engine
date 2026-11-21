@@ -1,6 +1,7 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
+import * as reportV2Render from "../src/reports/v2/render.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
@@ -46,6 +47,114 @@ describe("v2 identity reconciliation table data", () => {
   });
 });
 
+describe("v2 report limitation disclosure", () => {
+  it("removes internal disabled/not-performed vocal status notices without adding a vocal-analysis claim", () => {
+    const lines = reportV2Render.publicReportLimitations([
+      "Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
+      "Vocal presence/absence is unknown and is not inferred.",
+      "No vocal conclusion is available because the separation model did not complete.",
+      "Learned audio model: disabled.",
+      "Rights clearance has not been verified.",
+      "The supplied master has an unresolved identity conflict."
+    ]);
+    expect(lines).toEqual([
+      "Rights clearance has not been verified.",
+      "The supplied master has an unresolved identity conflict."
+    ]);
+  });
+
+  it("keeps unrelated limitations while suppressing only internal vocal/model state", () => {
+    const lines = reportV2Render.publicReportLimitations([
+      "No valid timestamped energy series was supplied.",
+      "Vocal analysis was not performed.",
+      "No verified commercial metrics were supplied."
+    ]);
+    expect(lines).toEqual([
+      "No valid timestamped energy series was supplied.",
+      "No verified commercial metrics were supplied."
+    ]);
+  });
+});
+
+describe("v2 DSP playlist provider diagnostics", () => {
+  it("surfaces Spotify HTTP failures and exact credential variable names", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.playlistDiscovery = {
+      status: "unavailable",
+      outcomes: [
+        { provider: "spotify", status: "unavailable", reason: "Spotify catalog request failed with HTTP 403" },
+        { provider: "apple_music", status: "not_configured", reason: "Apple Music developer token is not configured." }
+      ]
+    };
+    const lines = reportV2Render.buildPlaylistProviderStatusLines(input).join(" ");
+    expect(lines).toContain("Spotify provider unavailable:");
+    expect(lines).toContain("HTTP 403");
+    expect(lines).toContain("SPOTIFY_CLIENT_ID");
+    expect(lines).toContain("SPOTIFY_CLIENT_SECRET");
+    expect(lines).toContain("Apple Music provider unavailable:");
+    expect(lines).toContain("APPLE_MUSIC_DEVELOPER_TOKEN");
+  });
+
+  it("does not claim playlist discovery ran when no provider outcome was persisted", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.playlistDiscovery = null;
+    const lines = reportV2Render.buildPlaylistProviderStatusLines(input);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("Playlist discovery not run");
+    expect(lines[0]).toContain("no playlist target is asserted");
+  });
+
+  it("does not label a successful no-match response as provider failure", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.playlistDiscovery = {
+      outcomes: [{ provider: "spotify", status: "no_matches", reason: "No matching public playlist metadata was returned." }]
+    };
+    expect(reportV2Render.buildPlaylistProviderStatusLines(input)).toEqual([]);
+  });
+});
+
+describe("v2 detector diagnostics", () => {
+  it("renders persisted tempo candidates, raw scores, independent estimate, window agreement and abstention", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = { ...input.sonicDna, rhythmFeatures: {
+      method: "high_frequency_transient_autocorrelation",
+      candidateScores: [{ bpm: 96, score: 0.8123 }, { bpm: 192, score: 0.4012 }],
+      confidence: 0.7134, alternateTempo: 192, beatGridStatus: "tentative",
+      beatTimesSeconds: [0.1, 0.72, 1.35], windowConsensus: { winner: "96", windowCount: 4, observedAgreement: 0.75 },
+      independentEstimator: { bpm: 95.8, score: 0.6234 },
+      abstentionReason: "Window stability did not meet the reporting gate."
+    }};
+    const lines = reportV2Render.buildTempoDiagnosticLines(input).join(" ");
+    expect(lines).toContain("96 BPM (score 0.812)");
+    expect(lines).toContain("raw confidence score: 0.713");
+    expect(lines).toContain("Independent low-frequency envelope estimate: 95.8 BPM");
+    expect(lines).toContain("observed agreement 0.750");
+    expect(lines).toContain("Window stability");
+    expect(lines).toContain("Window stability did not meet the reporting gate");
+    expect(lines).toContain("not a calibrated probability");
+  });
+
+  it("renders tonal candidates, tuning, segment agreement, independent disagreement and abstention", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = { ...input.sonicDna, harmonicFeatures: {
+      method: "fft_harmonic_chroma_ensemble", confidence: 0.8123, segmentAgreement: 0.7,
+      analysisWindows: 5, tuningCents: -12.4, tuningEvidenceWindows: 4,
+      topCandidates: [{ key: "A", mode: "minor", score: 0.71 }, { key: "C", mode: "major", score: 0.43 }],
+      independentEstimator: { key: "C", mode: "major", score: 0.51, margin: 0.08 },
+      independentEstimatorDisagrees: true, relativeMajorMinorAmbiguity: true,
+      limitation: "Independent estimators disagree; no single key is asserted."
+    }};
+    const lines = reportV2Render.buildKeyDiagnosticLines(input).join(" ");
+    expect(lines).toContain("A minor (score 0.710)");
+    expect(lines).toContain("Segment agreement: 0.700 across 5");
+    expect(lines).toContain("Tuning offset: -12.4 cents");
+    expect(lines).toContain("Independent Goertzel estimate: C major");
+    expect(lines).toContain("Independent estimator disagreement: yes");
+    expect(lines).toContain("Relative major/minor ambiguity detected");
+    expect(lines).toContain("no single key is asserted");
+  });
+});
+
 describe("v2 gated report pages", () => {
   it("provides a useful positioning decision panel when no lane evidence exists", () => {
     const input = structuredClone(fullAudioFixture) as any;
@@ -82,8 +191,7 @@ describe("v2 gated report pages", () => {
   it("keeps a full report within the approved 12–13 page range without consulting v1 pagination", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(12);
-    expect(pdf.getPageCount()).toBeLessThanOrEqual(13);
+    expect(pdf.getPageCount()).toBe(12);
   });
 
   it("keeps an expanded real-world narrative inside the fixed 12-page full-report allocation", async () => {
@@ -110,8 +218,7 @@ describe("v2 gated report pages", () => {
     };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(12);
-    expect(pdf.getPageCount()).toBeLessThanOrEqual(13);
+    expect(pdf.getPageCount()).toBe(12);
   });
 
   it("omits every gated page for a minimal audio-only fixture", async () => {

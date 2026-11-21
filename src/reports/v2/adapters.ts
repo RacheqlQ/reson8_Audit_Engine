@@ -1,4 +1,5 @@
 import { hasMultipleTuningWindows, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
+import { hasSubmittedMasterAudio } from "../../audio/master-audio-evidence.js";
 import type { AuditReportInput } from "../generate-audit-report.js";
 
 export type ConfidenceTag = "High" | "Medium" | "Low";
@@ -27,6 +28,13 @@ export interface ReportV2Data {
   scoreDrivers: Array<{ label: string; score: number; weight: number | null; evidence: string }> | null;
   hasVerifiedCommercialEvidence: boolean;
   notYetMeasured: string[];
+  decisionDimensions: DecisionDimension[];
+}
+
+export interface DecisionDimension {
+  name: "Audio" | "Identity" | "Market" | "Release readiness";
+  status: string;
+  basis: string;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -137,6 +145,92 @@ function commercialEvidenceExists(evidence: UnknownRecord | null): boolean {
   }
   return false;
 }
+export function buildDecisionDimensions(input: AuditReportInput): DecisionDimension[] {
+  const evidence = record(input.evidence);
+  const audio = record(input.sonicDna);
+  const reconciliation = record(evidence?.reconciliation);
+  const conflicts = Array.isArray(reconciliation?.conflicts) ? reconciliation.conflicts : [];
+  const reconciledFields = Array.isArray(reconciliation?.reconciledRecordingFields)
+    ? reconciliation.reconciledRecordingFields
+    : Array.isArray(reconciliation?.reconciledFields)
+      ? reconciliation.reconciledFields.filter(field => !["album", "upc", "label", "releaseDate"].includes(String(field)))
+      : [];
+  const sourceProviders = Array.isArray(evidence?.sourceProviders) ? evidence.sourceProviders.filter(value => typeof value === "string") : [];
+  const fieldProvenance = record(evidence?.fieldProvenance);
+  const identityFields = ["artist", "title", "isrc"].filter(field =>
+    nonEmpty(evidence?.[field]) && (nonEmpty(fieldProvenance?.[field]) !== null || sourceProviders.length > 0)
+  );
+  const tempoMeasured = isReliableTempo(audio as Parameters<typeof isReliableTempo>[0]);
+  const keyMeasured = isReliableKey(audio);
+  const descriptiveMeasurements = [
+    "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "rmsLevelDbfs", "rmsEnergy",
+    "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate",
+  ].filter(field => finite(audio?.[field]));
+  const audioSubmitted = hasSubmittedMasterAudio(evidence ?? {}, audio);
+  const audioMeasures = [
+    ...(tempoMeasured ? ["confidence-qualified tempo"] : []),
+    ...(keyMeasured ? ["confidence-qualified key"] : []),
+    ...descriptiveMeasurements,
+  ];
+  const audioStatus = !audioSubmitted
+    ? "NOT MEASURED"
+    : audioMeasures.length ? "MEASURED" : "ANALYSIS INCOMPLETE";
+  const audioBasis = !audioSubmitted
+    ? "No uploaded-master provenance marker is present."
+    : audioMeasures.length
+      ? "Uploaded-master evidence: " + audioMeasures.join(", ") + ". Descriptive measurements do not establish artistic quality or mastering readiness."
+      : "An uploaded master is recorded, but no supported technical measurements are available.";
+
+  const identityStatus = conflicts.length
+    ? "CONFLICTS OPEN"
+    : reconciledFields.length >= 2
+      ? "CROSS-CHECKED"
+      : identityFields.length >= 2
+        ? "SOURCE-RETURNED"
+        : "UNVERIFIED";
+  const identityBasis = conflicts.length
+    ? conflicts.length + " identity field conflict(s) remain unresolved."
+    : reconciledFields.length >= 2
+      ? "Reconciled fields: " + reconciledFields.join(", ") + "."
+      : identityFields.length >= 2
+        ? "Source-attributed identity fields: " + identityFields.join(", ") + "."
+        : "Fewer than two core identity fields have source attribution.";
+
+  const hasCommercial = commercialEvidenceExists(evidence);
+  const marketPlacement = record(input.marketPlacement);
+  const hasCatalogueContext = Boolean(
+    comparablesFrom(evidence)
+    || (Array.isArray(marketPlacement?.playlistPresence) && marketPlacement.playlistPresence.length)
+    || (Array.isArray(marketPlacement?.playlistTargets) && marketPlacement.playlistTargets.length)
+  );
+  const marketStatus = hasCommercial
+    ? "PERFORMANCE VERIFIED"
+    : hasCatalogueContext ? "CATALOGUE CONTEXT ONLY" : "NOT ESTABLISHED";
+  const marketBasis = hasCommercial
+    ? "At least one non-negative commercial metric has a verified source and reporting period."
+    : hasCatalogueContext
+      ? "Source-attributed catalogue or playlist context is present; audience demand and commercial performance are not established."
+      : "No verified commercial-performance record or source-attributed market comparison is available.";
+
+  const readinessGates = [
+    ["rightsClearanceVerified", "rights clearance"],
+    ["deliveryConfirmed", "delivery confirmation"],
+    ["releaseStatusVerified", "release status"],
+    ["masterApprovalVerified", "final master approval"],
+  ] as const;
+  const missingGates = readinessGates.filter(([key]) => evidence?.[key] !== true).map(([, label]) => label);
+  const releaseStatus = missingGates.length ? "NOT CLEARED" : "GATES VERIFIED";
+  const releaseBasis = missingGates.length
+    ? "Not source-verified: " + missingGates.join(", ") + "."
+    : "All four required release gates are explicitly marked verified in the supplied evidence.";
+  return [
+    { name: "Audio", status: audioStatus, basis: audioBasis },
+    { name: "Identity", status: identityStatus, basis: identityBasis },
+    { name: "Market", status: marketStatus, basis: marketBasis },
+    { name: "Release readiness", status: releaseStatus, basis: releaseBasis },
+  ];
+}
+
 function driversFrom(assessment: UnknownRecord | null): ReportV2Data["scoreDrivers"] {
   const raw = assessment?.scoreDrivers;
   if (!Array.isArray(raw) || raw.length === 0) return null;
@@ -162,6 +256,15 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const energyValue = firstFinite(audio, ["energy", "rmsEnergy", "loudnessLufs", "rmsLevelDbfs"]);
   const energyConfidence = confidence(audio?.energyConfidence ?? audio?.rmsEnergyConfidence ?? audio?.loudnessConfidence);
   const energyMethod = methodOf(audio, ["energyMethod", "loudnessMethod", "method"]);
+  const loudnessMetrics = [
+    finite(audio?.loudnessLufs) ? "Integrated loudness " + Number(audio?.loudnessLufs).toFixed(1) + " LUFS" : null,
+    finite(audio?.loudnessRangeLu) ? "Loudness range " + Number(audio?.loudnessRangeLu).toFixed(1) + " LU" : null,
+    finite(audio?.truePeakDbfs) ? "True peak " + Number(audio?.truePeakDbfs).toFixed(1) + " dBFS" : null,
+    finite(audio?.rmsLevelDbfs) ? "RMS level " + Number(audio?.rmsLevelDbfs).toFixed(1) + " dBFS" : null,
+  ].filter((value): value is string => value !== null);
+  const energyDisplay = loudnessMetrics.length
+    ? loudnessMetrics.join(" · ") + (energyValue === null ? "" : " · Energy index " + Number(energyValue).toFixed(1))
+    : energyValue === null ? null : energyValue;
   const structure = sectionsFrom(audio);
   const energySeries = seriesFrom(audio);
   const sonicAxes = axesFrom(audio);
@@ -170,8 +273,15 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const notYetMeasured: string[] = [];
   if (!tempoReliable) {
     const candidate = firstFinite(audio, ["tempoCandidateBpm", "bpm"]);
-    if (candidate !== null) {
-      notYetMeasured.push(candidate + " (provisional BPM candidate; half-time " + (candidate / 2).toFixed(1) + " BPM; double-time " + (candidate * 2).toFixed(1) + " BPM; not a confirmed tempo).");
+    if (candidate !== null && candidate >= 40 && candidate <= 220) {
+      const alternatives = [candidate / 2, candidate * 2]
+        .filter(value => value >= 40 && value <= 220)
+        .map(value => Number(value.toFixed(1)));
+      notYetMeasured.push(candidate + " BPM (provisional tempo candidate" +
+        (alternatives.length ? "; plausible half/double-time alternatives: " + alternatives.join(" / ") + " BPM" : "") +
+        "; not a confirmed tempo).");
+    } else if (candidate !== null) {
+      notYetMeasured.push("Tempo candidate " + candidate + " BPM abstained: outside the plausible 40–220 BPM reporting range.");
     }
   }
   if (!keyReliable) {
@@ -202,7 +312,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       evidence: sourceLine(record(audio?.harmonicFeatures), "Uploaded-master harmonic evidence"),
     },
     energy: {
-      value: energyConfidence && energyValue !== null ? energyValue : null,
+      value: energyDisplay,
       confidence: energyConfidence,
       method: energyMethod,
       evidence: sourceLine(audio, "Uploaded-master energy evidence"),
@@ -211,6 +321,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
     headlineScore: finite(assessment?.headlineScore) && assessment.headlineScore >= 0 && assessment.headlineScore <= 100 ? assessment.headlineScore : null,
     scoreDrivers: driversFrom(assessment),
     hasVerifiedCommercialEvidence: commercialEvidenceExists(evidence),
+    decisionDimensions: buildDecisionDimensions(input),
     notYetMeasured,
   };
 }

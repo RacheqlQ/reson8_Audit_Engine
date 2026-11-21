@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildStrengthRiskChartRows, compactChartItemSummary, parseChartMetricValue, strengthRiskItemsForColumn, chartPanelStatus, chartPanelDisplayStatus, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, radarScoreDisplayValue, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
+import { buildStrengthRiskChartRows, compactChartItemSummary, parseChartMetricValue, strengthRiskItemsForColumn, chartPanelStatus, chartPanelDisplayStatus, chartEvidenceIntegrityErrors, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, radarScoreDisplayValue, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
 import { checkLayout } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
@@ -244,6 +244,24 @@ describe("native PDF chart helpers", () => {
     const page=pdf.addPage([595.28,841.89]);
     expect(longFormAudioFixture.evidence.fixture).toBe(true);
     expect(()=>drawChartPanel(page,{title:"Long-form evidence",kind:"layers",rows:[{label:"OBSERVED",value:3},{label:"RECOGNIZED",value:1},{label:"RECONCILED",value:2},{label:"INFERRED",value:4}],shows:"A complete set of source-labelled claims with multiple independently attributed fields.",cantShow:"Truth, completeness, commercial relevance or listener response."},font,bold)).not.toThrow();
+  });
+
+  it("requires every chart assertion to carry provenance matching its evidence class", () => {
+    expect(chartEvidenceIntegrityErrors({
+      evidenceClass: "measured", evidenceRefs: ["sonicDna.loudnessLufs"],
+      rows: [{ label: "LUFS", value: -14.2 }],
+    })).toEqual([]);
+    expect(chartEvidenceIntegrityErrors({
+      evidenceClass: "provider-recognized", evidenceRefs: ["assessment.scorecard"],
+      rows: [{ label: "Recognized", value: 2 }],
+    })).toContain("Chart evidence references do not match the declared evidence class.");
+    expect(chartEvidenceIntegrityErrors({
+      evidenceClass: "assessment-derived", rows: [{ label: "Score", value: 80 }],
+    })).toContain("Chart assertion has no evidence reference.");
+    expect(chartEvidenceIntegrityErrors({
+      evidenceClass: "illustrative", evidenceRefs: ["reportTemplates.discoveryPathway.v1"],
+      rows: [{ label: "Step", value: "Review" }],
+    })).toEqual([]);
   });
 
   it("counts evidence layers exactly from the supplied labels", () => {

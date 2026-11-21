@@ -57,7 +57,16 @@ jobs:
           WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test
         run: bash .github/scripts/worker-queue-fairness-postgres.sh
       - name: Run unit tests
-        run: npm test
+        run: |
+          mkdir -p artifacts
+          npm test -- --reporter=default --reporter=json --outputFile=artifacts/vitest-results.json
+      - name: Upload unit-test diagnostics
+        if: always() && matrix.pass == 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results-pass-${{ matrix.pass }}
+          path: artifacts/vitest-results.json
+          if-no-files-found: warn
       - name: Build
         run: npm run build
       - name: Install PDF text-inspection tools
