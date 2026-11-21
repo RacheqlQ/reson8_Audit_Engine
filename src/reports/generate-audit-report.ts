@@ -201,8 +201,8 @@ function professionalEvidenceLanguage(value:string):string {
   .replace(/acousticFeatureProfile\.predictions\.mood/gi,"provisional uploaded-master mood analysis")
   .replace(/acousticFeatureProfile\.predictions\.energy/gi,"provisional uploaded-master energy analysis")
   .replace(/\bVALIDATED_MODEL_NOT_CONFIGURED\b/gi,"a validated mood model is not configured")
-  .replace(/\bCALIBRATED_ENERGY_MODEL_NOT_CONFIGURED\b/gi,"a calibrated perceptual-energy model is not configured")
-  .replace(/\bCALIBRATED_CLASSIFIER_NOT_CONFIGURED\b/gi,"a calibrated tonal classifier is not configured")
+  .replace(/\bCALIBRATED_ENERGY_MODEL_NOT_CONFIGURED\b/gi,"a validated energy model is not available")
+  .replace(/\bCALIBRATED_CLASSIFIER_NOT_CONFIGURED\b/gi,"a validated song-key model is not available")
   .replace(/\bTEMPO_BELOW_REPORTING_THRESHOLD\b/gi,"tempo candidate below the reporting threshold")
   .replace(/\bMEASUREMENT_UNAVAILABLE\b/gi,"measurement not available")
   .replace(/\bPROVIDER_NOT_CONFIGURED\b/gi,"provider lookup not configured")
@@ -232,8 +232,8 @@ function professionalEvidenceLanguage(value:string):string {
 function executiveDiagnosticMessage(code:string,message:string,metricName?:string):string {
  const known:Record<string,string>={
   VALIDATED_MODEL_NOT_CONFIGURED:"A validated mood model is not configured; provisional signal-derived mood tags are shown separately where available.",
-  CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED:"A calibrated perceptual-energy model is not configured; provisional signal-derived energy estimates are shown separately where available.",
-  CALIBRATED_CLASSIFIER_NOT_CONFIGURED:"A calibrated key/mode probability model is not configured; tonal candidates and estimator diagnostics are shown separately.",
+  CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED:"No validated energy estimate is available; provisional listening directions are shown separately where available.",
+  CALIBRATED_CLASSIFIER_NOT_CONFIGURED:"No validated song-key result is available; possible keys are shown as provisional where supported.",
   TEMPO_BELOW_REPORTING_THRESHOLD:"A tempo candidate was returned but did not meet the reporting threshold; it remains provisional.",
   MEASUREMENT_UNAVAILABLE:"The analysis stage did not provide a reportable measurement for this field.",
   PROVIDER_NOT_CONFIGURED:"This catalogue provider is not configured for lookup.",
@@ -471,12 +471,12 @@ function sections(i:AuditReportInput):Section[]{
  const playlistMoodSource=text(playlistDiscovery.moodSource)||"source not supplied";
  const playlistMoodNotes=[
   ...(playlistMoodSource.includes("catalogue sonic profile")?["Catalogue mood descriptors are provider-supplied metadata, not an audio-derived mood measurement."]:[]),
-  ...(playlistMoodSource.includes("uploaded-master provisional audio_feature_heuristics_v1")?["Uploaded-master mood tags are provisional audio_feature_heuristics_v1 outputs, not calibrated perceptual predictions."]:[])
+  ...(playlistMoodSource.includes("uploaded-master provisional audio_feature_heuristics_v1")?["Uploaded-master mood tags are provisional listening directions, not confirmed descriptions."]:[])
  ];
  const uploadedMoodNote=masterMoodTags.length?" Uploaded-master provisional mood tags: "+masterMoodTags.join(", ")+" (provisional listening direction).":"";
  const uploadedEnergyNote=masterEnergyLabel?" Provisional uploaded-master energy estimate: "+masterEnergyLabel+" (provisional estimate).":"";
  const playlistMoodSummary=playlistMoodTags.length
-  ? "Mood search tags: "+playlistMoodTags.join(", ")+" [Source: "+playlistMoodSource+"]. "+(playlistMoodNotes.join(" ")||"Source attribution is incomplete; no calibrated mood claim is made.")+uploadedMoodNote+uploadedEnergyNote
+  ? "Mood search tags: "+playlistMoodTags.join(", ")+" [Source: "+playlistMoodSource+"]. "+(playlistMoodNotes.join(" ")||"Source attribution is incomplete; no confirmed mood finding is made.")+uploadedMoodNote+uploadedEnergyNote
   : masterMoodTags.length||masterEnergyLabel
    ? "No source-attributed DSP mood tags were returned for playlist search."+uploadedMoodNote+uploadedEnergyNote+" These provisional master-derived descriptors are presented as analysis context, not as validated playlist-fit or audience-response evidence."
    : "Mood alignment was not asserted because neither source-attributed DSP mood tags nor uploaded-master provisional mood tags were available; playlist matching is limited to the confirmed genre and adjacent lanes.";
@@ -589,24 +589,10 @@ const curatorCampaignBody=[
    "SOURCE SHA-256: "+i.realMasterContract.source.sha256,
    "SOURCE MIME / SIZE: "+i.realMasterContract.source.mimeType+" / "+i.realMasterContract.source.byteLength+" bytes",
    ...i.realMasterContract.directSignalMeasurements.map((m)=>executiveMetricLabel(m.name)+": "+(m.status==="measured"?text(m.value)+" "+m.unit+"; method: "+executiveMethodLabel(m.method)+"; measured: "+m.measuredAt:"Not reported as a confirmed measurement; "+m.diagnostics.map((d)=>executiveDiagnosticMessage(d.code,d.message,m.name)).join("; "))),
-   ...(i.realMasterContract.provisionalPredictions??[]).map((p)=>"PROVISIONAL "+(p.name==="audio_mood"?"AUDIO MOOD":"AUDIO ENERGY")+": "+p.label+" (heuristic score "+p.score+"/100; not a probability; method: "+executiveMethodLabel(p.method)+")."),
-   ...(i.realMasterContract.calibratedPredictions??[]).map((p) => {
-    if (p.status !== "predicted") {
-     return executiveMetricLabel(p.name) + ": No calibrated model is configured. " + p.diagnostics.map((d) => executiveDiagnosticMessage(d.code,d.message)).join("; ");
-    }
-    const drivers = p.featureDrivers.length
-     ? p.featureDrivers.map((d) => d.feature + " " + d.direction + " (" + d.contribution.toFixed(3) + ")").join(", ")
-     : "none recorded";
-    const diagnostics = p.diagnostics.length
-     ? "; diagnostics: " + p.diagnostics.map((d) => executiveDiagnosticMessage(d.code,d.message)).join("; ")
-     : "";
-    return executiveMetricLabel(p.name) + ": " + p.label + " (" + (p.probability * 100).toFixed(1) +
-     "% calibrated; model " + p.modelVersion + "; calibration " + p.calibration.method +
-     " / " + p.calibration.modelVersion + "; validation " + p.calibration.validationDataset +
-     " (n=" + p.calibration.validationSamples + "); ECE " +
-     p.calibration.expectedCalibrationError.toFixed(3) + "; Brier " +
-     p.calibration.brierScore.toFixed(3) + "; feature drivers: " + drivers + diagnostics + ")";
-   }),
+   ...(i.realMasterContract.provisionalPredictions??[]).map((p)=>"PROVISIONAL "+(p.name==="audio_mood"?"MOOD DIRECTION":"ENERGY DIRECTION")+": "+p.label+" (exploratory; confirm by listening)."),
+   ...(i.realMasterContract.calibratedPredictions??[]).map((p)=>p.status==="predicted"
+    ? executiveMetricLabel(p.name)+": "+p.label+" (validated model output; confirm with human listening)."
+    : executiveMetricLabel(p.name)+": No validated model prediction is available."),
    ...(i.realMasterContract.externalRecords??[]).map((r)=>r.status==="verified"
      ?"EXTERNAL RECORD: "+r.provider+" / "+r.recordId+"; retrieved: "+r.retrievedAt+"; fields: "+Object.keys(r.fields).join(", ")+"; field provenance: "+Object.entries(r.fieldProvenance).map(([field,p])=>field+"="+p.provider+"/"+p.recordId+"@"+p.retrievedAt).join(", ")
      :"EXTERNAL RECORD UNAVAILABLE: "+r.provider+" — "+executiveDiagnosticMessage(r.reasonCode,r.diagnostic.message)),
