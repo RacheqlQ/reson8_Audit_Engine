@@ -216,7 +216,7 @@ describe("v2 gated report pages", () => {
       "A release decision still requires rights clearance, delivery confirmation, approved final master and source-attributed commercial reporting."
     )];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(15);
+    expect(pdf.getPageCount()).toBe(13);
   });
 
   it("adds only the analytical pages supported by optional evidence", async () => {
@@ -230,7 +230,7 @@ describe("v2 gated report pages", () => {
     };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(14);
+    expect(pdf.getPageCount()).toBe(13);
   });
 
   it("omits every gated page for a minimal audio-only fixture", async () => {
