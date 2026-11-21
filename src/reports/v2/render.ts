@@ -353,7 +353,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    buildEvidenceLedgerSummary(arr(a.evidenceLabels).map(value => rec(value) as { label: string })),
    "Headline score: "+(data.headlineScore===null?"N/D — no scored headline value supplied":data.headlineScore+"/100"),
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
-   "Market evidence: "+(data.hasVerifiedCommercialEvidence?"Source-attributed commercial data supplied":"Insufficient — no verified commercial source data supplied."),
+   "Market proposition: "+(data.hasVerifiedCommercialEvidence?"PERFORMANCE VERIFIED — source-attributed commercial data supplied.":"PROPOSED — an evidence-informed A&R/commercial thesis; historical streams, sales, revenue, chart activity and audience demand are not asserted."),
    ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
    ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
@@ -368,16 +368,17 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   {title:"Release and promotion plan",blocks:[],lines:[
    buildReleaseFramingLine(input),
    "General guidance: "+str(a.industryPractice,"No industry guidance supplied."),
-   "Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v)).join("; "),
-   "Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v)).join("; "),
+   ...(arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v,"")).filter(Boolean).length?["Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v,"")).filter(Boolean).join("; ")]:[]),
+   ...(arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v,"")).filter(Boolean).length?["Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v,"")).filter(Boolean).join("; ")]:[]),
    ...buildPlaylistProviderStatusLines(input),
    ...(e.label||e.partner?["Supplied label / partner: "+str(e.label??e.partner)]:[])
   ]},
  ];
  if(tier==="full"){
   const promotion=rec(a.promotionPlan),partner=rec(a.labelPartnerFit),execution=rec(a.executionPlan);
-  const paragraph=(label:string,value:unknown):Block=>({label,value:str(value,"Not supplied in the assessment.")});
-  const list=(label:string,value:unknown[]):Block=>({label,value:value.map(item=>str(item,"")).filter(Boolean).join("\n\n")||"Not supplied in the assessment."});
+  const paragraph=(label:string,value:unknown,fallback="Not supplied in the assessment."):Block=>({label,value:str(value,fallback)});
+  const list=(label:string,value:unknown[],fallback="Not supplied in the assessment."):Block=>({label,value:value.map(item=>str(item,"")).filter(Boolean).join("\n\n")||fallback});
+  const executionFallback=(phase:string)=>"Post-release action: "+phase+". Confirm completion with dated source records; do not substitute estimated streams, sales, revenue, audience reach or conversion for unavailable reporting.";
   // The five full-report narrative sections follow the seven core analytical pages.
   pages.push(
    {title:"Production and arrangement guidance",blocks:[paragraph("Production and arrangement guidance",a.productionArrangementGuidance),list("Human listening checks",arr(a.listeningChecks))],kind:"narrative"},
@@ -392,7 +393,9 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
     paragraph("Rights and submission diligence",partner.diligenceBeforeContact),paragraph("Industry practice",partner.industryPractice)
    ],kind:"narrative"},
    {title:"30 / 60 / 90-day execution plan",blocks:[
-    paragraph("First 30 days",execution.days30),paragraph("Days 31–60",execution.days60),paragraph("Days 61–90",execution.days90)
+    paragraph("First 30 days",execution.days30,executionFallback("reconcile ISRC, UPC, artist/title spelling, EP-versus-album release mapping, rights splits and approved master; prepare a post-release positioning brief and verify the first curator/creator target list")),
+    paragraph("Days 31–60",execution.days60,executionFallback("run a controlled post-release reactivation with approved short-form excerpts, follow up on curator responses, refresh visual assets and record only source-attributed platform and campaign observations")),
+    paragraph("Days 61–90",execution.days90,buildDays6190Plan(input))
    ],kind:"narrative"}
   );
   // Deep-dive pages are evidence-gated; do not emit pages that contain only missing-data placeholders.
@@ -654,7 +657,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    drawSnapshot(page,data,fonts,input);
   }else if(spec.kind==="ar-notes"){
    const lines=spec.lines??[];
-   const decision=lines.slice(-5);
+   const decision=lines.slice(-6);
    const checklist=lines.slice(0,Math.max(0,lines.length-5));
    let y=H-100;
    if(checklist.length){const h=card(page,M,y,W-2*M,"Human listening review",checklist,fonts,{accent:C.gold});y-=h+14;}
