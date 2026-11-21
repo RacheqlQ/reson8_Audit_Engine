@@ -210,7 +210,7 @@ export function buildNextActionLine(input: AuditReportInput): string {
 
 export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
  const evidence=rec(input.evidence),raw=str(evidence.releaseDate,"");
- const valid=/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)&&Number.isFinite(Date.parse(raw+"T00:00:00Z"));
+ const valid=/^\d{4}-\d{2}-\d{2}$/.test(raw)&&Number.isFinite(Date.parse(raw+"T00:00:00Z"));
  const source=metadataFieldSource(evidence,"releaseDate").replace("Field source: ","");
  const status=metadataFieldStatus(evidence,"releaseDate");
  const attributed=source!=="unavailable"&&(status.startsWith("Cross-checked")||status.startsWith("Available")||status.startsWith("Returned")||Boolean(rec(evidence.fieldProvenance).releaseDate));
