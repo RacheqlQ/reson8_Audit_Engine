@@ -209,7 +209,7 @@ export function buildNextActionLine(input: AuditReportInput): string {
  return "Recommended next step: "+(usableRecommendation||firstGap||"Confirm the recording identifier and release-version mapping, complete rights and master-clearance checks, then run a measured post-release curator and creator reactivation.");
 }
 
-export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
+export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "UPCOMING" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
  const evidence=rec(input.evidence),raw=str(evidence.releaseDate,"");
  const valid=/^\d{4}-\d{2}-\d{2}$/.test(raw)&&Number.isFinite(Date.parse(raw+"T00:00:00Z"));
  const source=metadataFieldSource(evidence,"releaseDate").replace("Field source: ","");
@@ -218,7 +218,7 @@ export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DET
  const verdict=valid&&attributed?"DETERMINED":"UNVERIFIED";
  const generated=Date.parse(String(input.generatedAt??""));
  const release=valid?Date.parse(raw+"T00:00:00Z"):NaN;
- return {verdict,context:verdict==="DETERMINED"&&Number.isFinite(generated)&&release<generated?"POST-RELEASE":"RELEASE DATE NOT RECONCILED",date:valid?raw:"Date not reconciled",source:attributed?source:"Source not reconciled"};
+ return {verdict,context:verdict!=="DETERMINED"?"RELEASE DATE NOT RECONCILED":Number.isFinite(generated)&&release<generated?"POST-RELEASE":"UPCOMING",date:valid?raw:"Date not reconciled",source:attributed?source:"Source not reconciled"};
 }
 export function buildReleaseFramingLine(input: AuditReportInput): string {
  const status=buildReleaseDateStatus(input);
