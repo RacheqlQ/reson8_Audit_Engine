@@ -271,14 +271,14 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
  const e=rec(input.evidence),a=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)),sonic=rec(input.sonicDna);
  const notesContext=buildArNotesDecisionContext(input);
  const pages:PageSpec[]=[
-  {title:"Cover and verdict",kind:"cover",blocks:metricBlock(data),lines:[
+  {title:"Cover and verdict",kind:"cover",blocks:metricBlock(data,input),lines:[
    "Artist: "+str(e.artist)+"   Track: "+str(e.title),
    "Audit date: "+dateText(input.generatedAt)+"   Release date: "+dateText(e.releaseDate),
    "Executive summary: "+str(a.executiveSummary,"No executive summary supplied."),
    buildNextActionLine(input)
   ]},
   {title:"Identity and source reconciliation",kind:"identity",blocks:[]},
-  {title:"Track snapshot",kind:"snapshot",blocks:metricBlock(data),lines:[
+  {title:"Track snapshot",kind:"snapshot",blocks:metricBlock(data,input),lines:[
    ...(data.structure?["STRUCTURE — "+data.structure.map(s=>s.index+". "+s.label+" ("+s.startSeconds+"–"+s.endSeconds+"s)").join(" | ")]:[]),
    ...(data.energySeries?["ENERGY SERIES — "+data.energySeries.length+" timestamped points; peak/dip derived from supplied series."]:[]),
    ...(data.sonicAxes?["SONIC DNA AXES — "+Object.entries(data.sonicAxes).map(([name,axis])=>name+" "+axis.value+"/100"+(axis.note?" ("+axis.note+")":"")).join("; ")]:[])
