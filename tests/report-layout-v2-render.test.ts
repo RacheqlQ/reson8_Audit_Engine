@@ -193,6 +193,16 @@ describe("v2 gated report pages", () => {
     expect(pdf.getPageCount()).toBe(17);
   });
 
+  it("keeps the five narrative pages after page 9 and omits unsupported analytical stub pages", async () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = { ...input.sonicDna, sonicDnaAxes: null, sonicAxes: null, energyOverTime: null, energySeries: null,
+      bpm: null, tempoBpm: null, key: null, musicalKey: null };
+    input.assessment = { ...input.assessment, headlineScore: null, scoreDrivers: [], executionTimeline: [] };
+    input.realMasterContract = null;
+    const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
+    expect(pdf.getPageCount()).toBe(14);
+  });
+
   it("renders the expanded narrative across the complete 17-page full-report allocation", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.assessment.executiveSummary = Array(3).fill(input.assessment.executiveSummary).join(" ");
