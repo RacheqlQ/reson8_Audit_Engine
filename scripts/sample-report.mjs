@@ -92,7 +92,7 @@ for(const [name,input] of variants){
    if(/\b128\s*BPM\b/.test(normalizedExtracted))throw new Error(filename+" exposed a zero-confidence tempo candidate");
    if(!normalizedExtracted.includes("Provisional tonal centre: C major."))throw new Error(filename+" failed to retain the provisional audio-derived tonic");
    if(!normalizedExtracted.includes("Candidates: C major"))throw new Error(filename+" failed to retain the provisional candidate list");
-   if(!normalizedExtracted.includes("Relative major/minor ambiguity remains."))throw new Error(filename+" omitted the relative-key ambiguity disclosure");
+   if(!normalizedExtracted.includes("Tonal windows do not consistently support one candidate.")&&!normalizedExtracted.includes("Relative major/minor ambiguity remains."))throw new Error(filename+" omitted the human-readable tonal disambiguation reason");
    if(!normalizedExtracted.includes("Bootstrap rank share (not a calibrated probability): 52%."))throw new Error(filename+" omitted provisional bootstrap diagnostics");
   }
   if(tier==="sample"){
