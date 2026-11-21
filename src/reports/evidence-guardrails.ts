@@ -74,11 +74,17 @@ export function isReliableKey(value: Record<string, unknown> | null | undefined)
   const resolutionValue = harmonic?.tonalResolution ?? value.tonalResolution;
   const resolution = resolutionValue && typeof resolutionValue === "object"
     ? resolutionValue as Record<string, unknown> : null;
-  if (resolution && resolution.status !== "CONFIRMED") return false;
   const key = value.key;
   const mode = value.mode;
-  const harmonic = value.harmonicFeatures;
   if (harmonic && typeof harmonic === "object" && (harmonic as Record<string, unknown>).status === "insufficient_evidence") return false;
+  if (resolution) {
+    // The explicit resolver owns the tonal confidence gate. Do not re-apply
+    // legacy 0.80 confidence/agreement floors to a result already confirmed
+    // by its bootstrap, window-consensus and runner-up-margin thresholds.
+    return resolution.status === "CONFIRMED"
+      && typeof key === "string" && key.trim() === resolution.tonic
+      && (mode === "major" || mode === "minor") && mode === resolution.mode;
+  }
   const confidence = value.keyConfidence;
   const agreement = value.keySegmentAgreement;
   return typeof key === "string" && key.trim().length > 0
