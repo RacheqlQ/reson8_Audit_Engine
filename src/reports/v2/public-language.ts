@@ -1,4 +1,4 @@
-const INTERNAL_LINE = /^(?:tempo method:|key method:|energy method:|assessment model provenance:|narrative field provenance:|worked example:|technical descriptors:|primary detector raw confidence|primary key raw confidence|segment agreement:|tuning offset:|independent goertzel estimate:|independent estimator disagreement:|relative major\/minor ambiguity detected|window stability:|beat grid:|tempo abstention:|key abstention \/ limitation:)/i;
+const INTERNAL_LINE = /^(?:tempo method:|key method:|energy method:|assessment model provenance:|narrative field provenance:|worked example:|technical descriptors:|primary detector candidates:|alternate half\/double-time candidate:|independent low-frequency envelope estimate:|primary detector raw confidence|primary key raw confidence|primary tonal candidates:|segment agreement:|tuning offset:|independent goertzel estimate:|independent estimator disagreement:|relative major\/minor ambiguity detected|window stability:|beat grid:|tempo abstention:|key abstention \/ limitation:)/i;
 
 function candidateNames(value: string): string[] {
   return value
