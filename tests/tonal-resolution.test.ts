@@ -15,6 +15,11 @@ const majorScale = (root: number, tonicWeight = 5): number[] => {
   for (const interval of [0, 2, 4, 5, 7, 9, 11]) values[(root + interval) % 12] = interval === 0 ? tonicWeight : 1.5;
   return values;
 };
+const minorScale = (root: number, tonicWeight = 5): number[] => {
+  const values = Array(12).fill(0);
+  for (const interval of [0, 2, 3, 5, 7, 8, 10]) values[(root + interval) % 12] = interval === 0 ? tonicWeight : 1.5;
+  return values;
+};
 const windows = (root: number, mode: "major" | "minor", count = 8): TonalWindow[] => {
   const intervals = mode === "major" ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
   return Array.from({ length: count }, (_, index) => {
@@ -53,7 +58,7 @@ describe("deterministic tonal resolution geometry", () => {
   it("retains a relative major/minor ambiguity as provisional rather than inventing a winner", () => {
     const ambiguous = windows(0, "major").map((window) => ({
       ...window,
-      chroma: majorScale(0, 2).map((value, index) => Math.max(value, majorScale(9, 2)[index])),
+      chroma: majorScale(0, 2).map((value, index) => Math.max(value, minorScale(9, 2)[index])),
       bassChroma: Array(12).fill(1),
       downbeatRoot: null,
       cadenceWeight: 0,
