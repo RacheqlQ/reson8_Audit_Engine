@@ -10,6 +10,7 @@ const candidate = {
 const thresholds = {
   minWindows: 3, minMeanSalience: 0.12, minBootstrapShare: 0.8,
   minWindowAgreement: 0.7, minRunnerUpMargin: 0.025,
+  relativePairAmbiguityMargin: 0.04, adjacentFifthsAmbiguityMargin: 0.04, bootstrapIterations: 256,
 };
 const input = (status: "CONFIRMED" | "PROVISIONAL" | "UNAVAILABLE"): AuditReportInput => ({
   auditId: "tonal-fixture",
@@ -32,6 +33,8 @@ const input = (status: "CONFIRMED" | "PROVISIONAL" | "UNAVAILABLE"): AuditReport
     windowAgreement: status === "UNAVAILABLE" ? null : 0.75,
     runnerUpMargin: status === "UNAVAILABLE" ? null : 0.08,
     validWindowCount: status === "UNAVAILABLE" ? 0 : 8,
+    downbeatAnchorWindowCount: status === "UNAVAILABLE" ? 0 : 6,
+    cadenceWeightedWindowCount: status === "UNAVAILABLE" ? 0 : 1,
     meanSalience: status === "UNAVAILABLE" ? 0 : 0.6,
     method: "circle_of_fifths_audio_first_v1",
     thresholds,
