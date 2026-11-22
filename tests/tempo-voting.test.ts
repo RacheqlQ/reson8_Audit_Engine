@@ -41,6 +41,14 @@ describe("deterministic tempo voting", () => {
     expect(result.primary_candidate_bpm).toBe(92);
   });
 
+  it("does not confirm a tempo from a single valid window", () => {
+    const result = voteTempoCandidates({ windows: [
+      { bpm: 92, prominence: 0.95, beatStrength: 0.95, durationSeconds: 8 },
+    ] });
+    expect(result.confirmation_status).toBe("CANDIDATE");
+    expect(result.reason_codes).toContain("INSUFFICIENT_WINDOW_COVERAGE");
+  });
+
   it("reports tied metrical candidates as provisional rather than inventing certainty", () => {
     const result = voteTempoCandidates({ windows: [
       { bpm: 90, prominence: 0.9, durationSeconds: 8 },
