@@ -141,7 +141,7 @@ export function buildAuditStageFailureDiagnostic(stage: string, error: unknown, 
 
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
   const message = error instanceof Error ? error.message : String(error);
-  if (/AI_PROVIDERS_UNAVAILABLE|provider unavailable|provider_error|HTTP 402|payment required|insufficient credits|billing required|HTTP 5\\d\\d|service unavailable|bad gateway|gateway timeout|not configured|fetch failed|ECONNRESET|ENOTFOUND|EHOSTUNREACH/i.test(message)) return "provider_unavailable";
+  if (/AI_PROVIDERS_UNAVAILABLE|provider unavailable|provider_error|HTTP 402|payment required|insufficient credits|billing required|HTTP 5\d\d|service unavailable|bad gateway|gateway timeout|not configured|fetch failed|ECONNRESET|ENOTFOUND|EHOSTUNREACH/i.test(message)) return "provider_unavailable";
   if (/HTTP 401|HTTP 403|unauthorized|forbidden|authentication/i.test(message)) return "auth";
   if (/capacity|HTTP 413|HTTP 429|TPD|tokens per day|GROQ_REQUEST_TOO_LARGE/i.test(message)) return "capacity";
   if (/timed out|timeout|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT|AUDIT_STAGE_TIMEOUT|AUDIT_JOB_DEADLINE_EXCEEDED/i.test(message)) return "timeout";
