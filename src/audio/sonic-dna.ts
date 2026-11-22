@@ -196,16 +196,27 @@ function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate
  const bestBpm=selected[0]?.[0];
  const bestScore=selected[0]?.[1]??0;
  const candidateScores=selected.map(([bpm,score])=>({bpm,score:Number(score.toFixed(6))}));
- if(bestBpm===undefined||bestScore<0.08)
-  return {...emptyTempoEstimate("Transient autocorrelation did not produce a sufficiently prominent tempo candidate."),topCandidateBpm:bestBpm??null,candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
+ const related=bestBpm===undefined?[]:[0.5,1/3,2,3]
+  .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
+  .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=220&&candidate.bpm!==bestBpm&&candidate.score>=Math.max(EPSILON,bestScore*0.25))
+  .sort((a,b)=>b.score-a.score||b.bpm-a.bpm);
+ const relatedCandidate=related[0]??null;
+ if(bestBpm===undefined||bestScore<0.08){
+  const weakCandidateScores=new Map(candidateScores.map(item=>[item.bpm,item.score]));
+  for(const candidate of related)weakCandidateScores.set(candidate.bpm,Number(candidate.score.toFixed(6)));
+  const weakCandidates=selected.map(([candidate])=>candidate);
+  for(const candidate of related)if(!weakCandidates.includes(candidate.bpm))weakCandidates.push(candidate.bpm);
+  return {
+   ...emptyTempoEstimate("Transient autocorrelation did not produce a sufficiently prominent tempo candidate."),
+   topCandidateBpm:bestBpm??null,alternateTempo:relatedCandidate?.bpm??null,
+   candidateBpms:weakCandidates.filter(candidate=>candidate>=40&&candidate<=220).slice(0,8),
+   candidateScores:[...weakCandidateScores.entries()].map(([bpm,score])=>({bpm,score})).sort((a,b)=>b.score-a.score||a.bpm-b.bpm).slice(0,8),
+   onsetEnvelope,
+  };
+ }
  const sortedScores=[...scores.values()].sort((a,b)=>a-b);
  const median=sortedScores[Math.floor(sortedScores.length/2)]??0;
  const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
- const related=[0.5,1/3,2,3]
-  .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
-  .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=240&&candidate.bpm!==bestBpm&&candidate.score>=bestScore*0.25)
-  .sort((a,b)=>b.score-a.score||b.bpm-a.bpm);
- const relatedCandidate=related[0]??null;
  const bpm=relatedCandidate&&relatedCandidate.bpm>bestBpm?relatedCandidate.bpm:bestBpm;
  const alternateTempo=relatedCandidate?(bpm===bestBpm?relatedCandidate.bpm:bestBpm):null;
  const candidates=selected.map(([candidate])=>candidate);
@@ -254,42 +265,23 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  }
  const windowConsensus=bootstrapCategoricalConsensus(labels,{iterations:1000,seed:17});
  const independentEstimator=estimateLowFrequencyEnvelopeTempo(samples,sampleRate);
- const tempoRatio=overall.bpm!==null&&independentEstimator.bpm!==null?overall.bpm/independentEstimator.bpm:null;
+ const tempoAnchor=overall.bpm??overall.topCandidateBpm;
+ const tempoRatio=tempoAnchor!==null&&independentEstimator.bpm!==null?tempoAnchor/independentEstimator.bpm:null;
  const octaveRelated=tempoRatio!==null&&[0.5,1,2].some(ratio=>Math.abs(tempoRatio-ratio)<=Math.max(0.03,ratio*0.03));
+ const octaveMultiple=tempoRatio!==null&&[0.5,2].some(ratio=>Math.abs(tempoRatio-ratio)<=Math.max(0.03,ratio*0.03));
  const unstableWindows=windowConsensus.windowCount>=3&&(windowConsensus.winner===null||(windowConsensus.observedAgreement??0)<0.6);
  const materialDisagreement=overall.bpm!==null&&independentEstimator.bpm!==null&&!octaveRelated&&independentEstimator.score>=0.4&&unstableWindows;
- return materialDisagreement
-  ? {...overall,bpm:null,confidence:null,abstentionReason:"Independent tempo pathways materially disagreed and the primary tempo windows were unstable; no single tempo is asserted.",windowConsensus,independentEstimator}
-  : {...overall,alternateTempo:overall.alternateTempo??(octaveRelated?independentEstimator.bpm:null),windowConsensus,independentEstimator};
-}
-
-export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):SonicDnaFeatures {
- const acousticFeatureProfile=extractAcousticFeatureProfile(samples,sampleRate,channels);
- const prepared=prepareAnalysisPcm(samples,sampleRate,channels),a=prepared.samples,rate=prepared.sampleRate,energy=rms(a);
- const vocalDiagnostics=analyzeVocalSignalDiagnostics(a,rate);
- let crossings=0;
- for(let i=1;i<a.length;i++)if((a[i-1]<0&&a[i]>=0)||(a[i-1]>=0&&a[i]<0))crossings++;
- const size=2048,bins=size/2,available=Math.max(1,Math.floor((a.length-size)/(size/2))+1),count=Math.min(12,available);
- let csum=0,bsum=0,rsum=0,used=0;
- for(let w=0;w<count;w++){
-  const start=count===1?0:Math.floor(w*(available-1)/(count-1))*Math.floor(size/2);
-  if(start+size>a.length)continue;
-  const mags:number[]=[];let total=0,weighted=0;
-  for(let b=1;b<=bins;b++){
-   const hz=b*rate/size,angle=2*Math.PI*b/size,stepCos=Math.cos(angle),stepSin=Math.sin(angle);
-   let re=0,im=0,cos=1,sin=0;
-   for(let n=0;n<size;n++){
-    const window=0.5-0.5*Math.cos(2*Math.PI*n/(size-1)),x=a[start+n]*window;
-    re+=x*cos;im-=x*sin;
-    const nextCos=cos*stepCos-sin*stepSin;
-    sin=sin*stepCos+cos*stepSin;cos=nextCos;
-   }
-   const m=Math.hypot(re,im);mags.push(m);total+=m;weighted+=hz*m;
-  }
-  if(total<=EPSILON)continue;
-  const centroid=weighted/total;let variance=0,cum=0,roll=0;
-  for(let i=0;i<mags.length;i++){const hz=(i+1)*rate/size;variance+=(hz-centroid)**2*mags[i];cum+=mags[i];if(!roll&&cum>=total*0.85)roll=hz;}
-  csum+=centroid;bsum+=Math.sqrt(variance/total);rsum+=roll;used++;
+ if(materialDisagreement)
+  return {...overall,bpm:null,confidence:null,abstentionReason:"Independent tempo pathways materially disagreed and the primary tempo windows were unstable; no single tempo is asserted.",windowConsensus,independentEstimator};
+ const reconciledCandidateBpms=overall.bpm===null&&octaveMultiple&&independentEstimator.bpm!==null
+  ?[...new Set([...overall.candidateBpms,independentEstimator.bpm])].filter(value=>value>=40&&value<=220).slice(0,8)
+  :overall.candidateBpms;
+ return {
+  ...overall,
+  alternateTempo:overall.alternateTempo??(octaveMultiple?independentEstimator.bpm:null),
+  candidateBpms:reconciledCandidateBpms,
+  windowConsensus,independentEstimator,
+ };
  }
  const centroid=used?csum/used:0,bandwidth=used?bsum/used:0,rolloff=used?rsum/used:0;
  const frames:number[]=[],frame=Math.max(256,Math.floor(rate*0.05));
