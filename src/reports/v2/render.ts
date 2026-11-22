@@ -764,20 +764,20 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
   drawWrapped(page,item,x+14,y+5,columns===2?235:W-2*M-42,fonts.regular,6.6,C.ink,7.6);
  });
  const context=buildArNotesDecisionContext(input);
- const contextTop=578,contextHeight=112,contextBottom=contextTop-contextHeight;
+ const contextTop=578,contextHeight=126,contextBottom=contextTop-contextHeight;
  page.drawRectangle({x:M,y:contextBottom,width:W-2*M,height:contextHeight,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x:M,y:contextTop-3,width:W-2*M,height:3,color:C.teal});
  page.drawText(context.heading,{x:M+12,y:contextTop-17,size:7,font:fonts.bold,color:C.teal});
- const summaryHeight=drawWrapped(page,context.verdict+" · "+context.summary,M+12,contextTop-33,W-2*M-24,fonts.regular,7.1,C.ink,9.2);
+ drawWrapped(page,context.verdict+" · "+context.summary,M+12,contextTop-33,W-2*M-24,fonts.regular,6,C.ink,7.1);
  const promptTop=contextBottom+28,promptGap=8,promptWidth=(W-2*M-24-promptGap*2)/3;
  context.prompts.slice(0,3).forEach((prompt,index)=>{
   const x=M+12+index*(promptWidth+promptGap);
   page.drawLine({start:{x,y:promptTop+10},end:{x:x+promptWidth,y:promptTop+10},color:C.line,thickness:.7});
   drawWrapped(page,prompt,x,promptTop,promptWidth,fonts.bold,6.1,C.muted,7.2);
  });
- if(summaryHeight>50) page.drawText("Decision context continues in the report narrative.",{x:M+12,y:contextBottom+5,size:5.8,font:fonts.italic,color:C.muted});
 
- const notesX=M,notesY=151,notesWidth=W-2*M,notesHeight=300;
+
+ const notesX=M,notesY=140,notesWidth=W-2*M,notesHeight=300;
  page.drawText("WORKING NOTES · EDITABLE",{x:notesX,y:notesY+notesHeight+10,size:7,font:fonts.bold,color:C.gold});
  const notes=form.createTextField("ar_notes");
  notes.enableMultiline();
@@ -790,13 +790,13 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  }
 
  const owner=form.createTextField("ar_owner");
- owner.addToPage(page,{x:M,y:105,width:128,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
+ owner.addToPage(page,{x:M,y:94,width:128,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
  owner.setFontSize(7);owner.updateAppearances(fonts.regular);
- page.drawText("A&R OWNER",{x:M,y:127,size:6,font:fonts.bold,color:C.muted});
+ page.drawText("A&R OWNER",{x:M,y:116,size:6,font:fonts.bold,color:C.muted});
  const followup=form.createTextField("ar_followup_date");
- followup.addToPage(page,{x:M+150,y:105,width:88,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
+ followup.addToPage(page,{x:M+150,y:94,width:88,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
  followup.setFontSize(7);followup.updateAppearances(fonts.regular);
- page.drawText("FOLLOW-UP DATE",{x:M+150,y:127,size:6,font:fonts.bold,color:C.muted});
+ page.drawText("FOLLOW-UP DATE",{x:M+150,y:116,size:6,font:fonts.bold,color:C.muted});
  const decisions=[
   ["ar_decision_hold","HOLD",M+258],
   ["ar_decision_reaudit","RE-AUDIT",M+340],
@@ -804,9 +804,9 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  ] as const;
  for(const [name,label,x] of decisions){
   const field=form.createCheckBox(name);
-  field.addToPage(page,{x,y:109,width:9,height:9,borderWidth:.8,borderColor:C.gold,backgroundColor:C.white});
+  field.addToPage(page,{x,y:98,width:9,height:9,borderWidth:.8,borderColor:C.gold,backgroundColor:C.white});
   field.updateAppearances(fonts.regular);
-  page.drawText(label,{x:x+13,y:110,size:6.1,font:fonts.bold,color:C.ink});
+  page.drawText(label,{x:x+13,y:99,size:6.1,font:fonts.bold,color:C.ink});
  }
 }
 
