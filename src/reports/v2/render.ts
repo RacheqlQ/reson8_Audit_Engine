@@ -166,12 +166,12 @@ function notesSentence(value:unknown,fallback:string):string{
 }
 
 function drawHumanReviewCard(page:PDFPage,items:string[],top:number,fonts:Fonts):number{
- const width=W-2*M,bodyWidth=width-48,size=6.5,lineHeight=7.8;
+ const width=W-2*M,bodyWidth=width-48,size=6.3,lineHeight=7.5;
  const layouts=items.map(item=>wrap(item,fonts.regular,size,bodyWidth));
- const height=18+12+layouts.reduce((sum,lines)=>sum+lines.length*lineHeight+4,0)+10;
- if(height>122)throw new Error("A&R Notes human listening review exceeds its reserved page region.");
+ const height=16+10+layouts.reduce((sum,lines)=>sum+lines.length*lineHeight+2,0)+6;
+ if(height>112)throw new Error("A&R Notes human listening review exceeds its reserved page region.");
  card(page,M,top,width,"Human listening review",[],fonts,{accent:C.gold,height,titleColor:C.labelGold});
- let y=top-31;
+ let y=top-28;
  layouts.forEach(lines=>{
   page.drawRectangle({x:M+12,y:y-2,width:8,height:8,color:C.white,borderColor:C.gold,borderWidth:.8});
   lines.forEach(line=>{page.drawText(line,{x:M+27,y,size,font:fonts.regular,color:C.ink});y-=lineHeight;});
@@ -192,7 +192,7 @@ function drawDecisionContextCard(page:PDFPage,context:ReturnType<typeof buildArN
  const promptLayouts=context.prompts.map(prompt=>wrap(prompt,fonts.regular,5.6,colWidth));
  const promptLineHeight=6.5,promptHeight=Math.max(0,...promptLayouts.map(lines=>lines.length))*promptLineHeight;
  const height=16+10+8+sectionLayouts.reduce((sum,section)=>sum+7+section.lines.length*lineHeight+3,0)+5+8+promptHeight+8;
- if(height>163)throw new Error("A&R Notes decision context exceeds its reserved page region.");
+ if(height>170)throw new Error("A&R Notes decision context exceeds its reserved page region.");
  card(page,M,top,width,"A&R decision context",[],fonts,{accent:C.teal,height,titleColor:C.labelGold});
  let y=top-27;
  page.drawText("Current assessment: "+context.verdict+". Human sign-off remains separate from the automated assessment.",{x:M+pad,y,size:6.1,font:fonts.italic,color:C.muted});
@@ -224,16 +224,17 @@ function drawArNotesPage(page:PDFPage,pdf:PDFDocument,input:AuditReportInput,fon
  ];
  const humanHeight=drawHumanReviewCard(page,checklist, H-162,fonts);
  const context=buildArNotesDecisionContext(input);
- const decisionTop=H-162-humanHeight-12;
+ const decisionTop=H-162-humanHeight-8;
  const decisionHeight=drawDecisionContextCard(page,context,decisionTop,fonts);
  const notesTop=decisionTop-decisionHeight-18;
  if(notesTop<389)throw new Error("A&R Notes working area cannot retain its minimum 35 percent page height.");
  page.drawText("WORKING NOTES",{x:M,y:notesTop-2,size:7,font:fonts.bold,color:C.labelGold});
  page.drawText("Editable multiline field · private reviewer annotations only",{x:M,y:notesTop-14,size:6.2,font:fonts.italic,color:C.muted});
+ const notesFieldY=notesTop-18-295;
  const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
- notes.addToPage(page,{x:M,y:76,width:W-2*M,height:295,borderWidth:1,borderColor:C.gold,backgroundColor:C.white});
+ notes.addToPage(page,{x:M,y:notesFieldY,width:W-2*M,height:295,borderWidth:1,borderColor:C.gold,backgroundColor:C.white});
  notes.setFontSize(8);notes.updateAppearances(fonts.regular);
- for(let y=98;y<360;y+=22)page.drawLine({start:{x:M+10,y},end:{x:W-M-10,y},color:rgb(239/255,235/255,227/255),thickness:.35});
+ for(let y=notesFieldY+22;y<notesFieldY+285;y+=22)page.drawLine({start:{x:M+10,y},end:{x:W-M-10,y},color:rgb(239/255,235/255,227/255),thickness:.35});
  const owner=form.createTextField("ar_owner");
  owner.addToPage(page,{x:M+34,y:53,width:105,height:14,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
  owner.setFontSize(7);owner.updateAppearances(fonts.regular);
