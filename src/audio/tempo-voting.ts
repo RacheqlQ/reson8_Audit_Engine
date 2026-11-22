@@ -125,17 +125,19 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
   const windowAgreement = winningWindowCount / Math.max(1, validWindows.size);
   const prominenceScore = winner.votes.reduce((sum, vote) => sum + vote.prominence * vote.weight, 0) / winner.weight;
 
-  const levels: Array<{ bpm: number; weight: number }> = [];
+  const levels: Array<{ bpm: number; weight: number; weightedBpm: number }> = [];
   for (const vote of winner.votes) {
     let level = levels.find(item => closeTempo(item.bpm, vote.bpm, absoluteTolerance, relativeTolerance));
-    if (!level) { level = { bpm: vote.bpm, weight: 0 }; levels.push(level); }
+    if (!level) { level = { bpm: vote.bpm, weight: 0, weightedBpm: 0 }; levels.push(level); }
     level.weight += vote.weight;
+    level.weightedBpm += vote.bpm * vote.weight;
   }
+  for (const level of levels) level.bpm = level.weightedBpm / level.weight;
   const nominal = winner.key * 2;
   levels.sort((a, b) => b.weight - a.weight
     || Math.abs(a.bpm - nominal) - Math.abs(b.bpm - nominal)
     || a.bpm - b.bpm);
-  const primary = roundBpm(levels[0]!.bpm);
+  const primary = Math.round(levels[0]!.bpm);
   const half = roundBpm(primary / 2), doubled = roundBpm(primary * 2);
   const octaveAlternatives = [half, doubled].filter(value => value >= 30 && value <= 300 && levels.some(level => closeTempo(level.bpm, value, absoluteTolerance, relativeTolerance)));
   const alternativeWeight = levels.filter(level => !closeTempo(level.bpm, primary, absoluteTolerance, relativeTolerance))
