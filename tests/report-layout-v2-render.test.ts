@@ -477,10 +477,18 @@ describe("v2 A&R Notes page acceptance", () => {
     }
   });
 
-  it("derives all four A&R Notes chip values from the same verdict dimensions as the report", () => {
+  it("uses persisted verdict dimensions for all four A&R Notes chip values", () => {
     const input = structuredClone(fullAudioFixture) as any;
+    input.decisionDimensions = [
+      { name: "Audio", status: "MEASURED", basis: "Uploaded-master measurements are present." },
+      { name: "Identity", status: "CONFLICTS OPEN", basis: "Recording identity conflicts remain unresolved." },
+      { name: "Market", status: "PROPOSED", basis: "Market positioning is a provisional thesis." },
+      { name: "Release readiness", status: "PENDING RIGHTS CHECKS", basis: "Rights and clearance are not confirmed." }
+    ];
     const chips = reportV2Render.buildArNotesStatusChips(input);
     const verdicts = adaptReportV2(input).decisionDimensions;
+    expect(verdicts).toEqual(input.decisionDimensions);
+    expect(chips.map((chip: any) => chip.value)).toEqual(["MEASURED", "CONFLICTS OPEN", "PROPOSED", "PENDING RIGHTS CHECKS"]);
     expect(chips.map((chip: any) => chip.value)).toEqual(verdicts.map(dimension => dimension.status));
     expect(chips.map((chip: any) => chip.label)).toEqual(["AUDIO", "IDENTITY", "MARKET", "RELEASE READINESS"]);
   });
