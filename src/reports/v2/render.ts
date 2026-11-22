@@ -12,7 +12,7 @@ const C={
  paper:rgb(247/255,243/255,236/255),white:rgb(1,1,1),ink:rgb(43/255,40/255,37/255),
  muted:rgb(108/255,101/255,92/255),line:rgb(226/255,219/255,207/255),
  charcoal:rgb(43/255,40/255,37/255),gold:rgb(176/255,141/255,87/255),
- teal:rgb(29/255,158/255,117/255),amber:rgb(239/255,159/255,39/255),coral:rgb(216/255,90/255,48/255)
+ teal:rgb(29/255,158/255,117/255),label:rgb(138/255,106/255,48/255),amber:rgb(239/255,159/255,39/255),coral:rgb(216/255,90/255,48/255)
 };
 type Fonts={regular:PDFFont;bold:PDFFont;italic:PDFFont;boldItalic:PDFFont};
 type Block={label:string;value:string;provenance?:string;confidence?:string;color?:keyof typeof C};
@@ -753,9 +753,7 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
   "Confirm the strongest excerpt and any edit points by listening to the master."
  ];
  const reviewTop=690,reviewHeight=94,reviewBottom=reviewTop-reviewHeight;
- page.drawRectangle({x:M,y:reviewBottom,width:W-2*M,height:reviewHeight,color:C.white,borderColor:C.line,borderWidth:.7});
- page.drawRectangle({x:M,y:reviewTop-3,width:W-2*M,height:3,color:C.gold});
- page.drawText("HUMAN LISTENING REVIEW",{x:M+12,y:reviewTop-17,size:7,font:fonts.bold,color:C.gold});
+ card(page,M,reviewTop,W-2*M,"Human listening review",[],fonts,{height:reviewHeight,accent:C.label});
  const columns=reviewItems.length>3?2:1,rows=Math.ceil(reviewItems.length/columns);
  reviewItems.forEach((item,index)=>{
   const col=columns===2?Math.floor(index/rows):0,row=columns===2?index%rows:index;
@@ -765,9 +763,7 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  });
  const context=buildArNotesDecisionContext(input);
  const contextTop=578,contextHeight=126,contextBottom=contextTop-contextHeight;
- page.drawRectangle({x:M,y:contextBottom,width:W-2*M,height:contextHeight,color:C.white,borderColor:C.line,borderWidth:.7});
- page.drawRectangle({x:M,y:contextTop-3,width:W-2*M,height:3,color:C.teal});
- page.drawText(context.heading,{x:M+12,y:contextTop-17,size:7,font:fonts.bold,color:C.teal});
+ card(page,M,contextTop,W-2*M,"A&R decision context",[],fonts,{height:contextHeight,accent:C.teal});
  drawWrapped(page,context.verdict+" · "+context.summary,M+12,contextTop-33,W-2*M-24,fonts.regular,6,C.ink,7.1);
  const promptTop=contextBottom+28,promptGap=8,promptWidth=(W-2*M-24-promptGap*2)/3;
  context.prompts.slice(0,3).forEach((prompt,index)=>{
@@ -778,7 +774,7 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
 
 
  const notesX=M,notesY=140,notesWidth=W-2*M,notesHeight=300;
- page.drawText("WORKING NOTES · EDITABLE",{x:notesX,y:notesY+notesHeight+10,size:7,font:fonts.bold,color:C.gold});
+ page.drawText("WORKING NOTES · EDITABLE",{x:notesX,y:notesY+notesHeight+10,size:7,font:fonts.bold,color:C.label});
  const notes=form.createTextField("ar_notes");
  notes.enableMultiline();
  notes.addToPage(page,{x:notesX,y:notesY,width:notesWidth,height:notesHeight,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
@@ -792,11 +788,11 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  const owner=form.createTextField("ar_owner");
  owner.addToPage(page,{x:M,y:94,width:128,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
  owner.setFontSize(7);owner.updateAppearances(fonts.regular);
- page.drawText("A&R OWNER",{x:M,y:116,size:6,font:fonts.bold,color:C.muted});
+ page.drawText("A&R OWNER",{x:M,y:116,size:6,font:fonts.bold,color:C.label});
  const followup=form.createTextField("ar_followup_date");
  followup.addToPage(page,{x:M+150,y:94,width:88,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
  followup.setFontSize(7);followup.updateAppearances(fonts.regular);
- page.drawText("FOLLOW-UP DATE",{x:M+150,y:116,size:6,font:fonts.bold,color:C.muted});
+ page.drawText("FOLLOW-UP DATE",{x:M+150,y:116,size:6,font:fonts.bold,color:C.label});
  const decisions=[
   ["ar_decision_hold","HOLD",M+258],
   ["ar_decision_reaudit","RE-AUDIT",M+340],
