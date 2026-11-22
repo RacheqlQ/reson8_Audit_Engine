@@ -283,8 +283,10 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
     const rhythm = record(audio?.rhythmFeatures);
     const verdict = record(rhythm?.tempoVerdict);
     const candidate = firstFinite(audio, ["tempoCandidateBpm", "bpm"]) ?? firstFinite(verdict, ["primary_candidate_bpm"]);
+    const zeroProminence = (typeof audio?.tempoConfidence === "number" && Number.isFinite(audio.tempoConfidence) && audio.tempoConfidence <= 0)
+      || (finite(verdict?.prominence_score) && verdict.prominence_score <= 0);
     const hasPositiveProminence = typeof audio?.tempoConfidence === "number" && Number.isFinite(audio.tempoConfidence) && audio.tempoConfidence > 0;
-    const hasExplicitVote = finite(verdict?.primary_candidate_bpm) && verdict?.confirmation_status !== "UNDETERMINED";
+    const hasExplicitVote = !zeroProminence && finite(verdict?.primary_candidate_bpm) && verdict?.confirmation_status !== "UNDETERMINED";
     if (candidate !== null && candidate >= 40 && candidate <= 220 && (hasPositiveProminence || hasExplicitVote)) {
       const alternatives = Array.isArray(verdict?.octave_alternatives)
         ? verdict.octave_alternatives.filter(finite).filter(value => value >= 40 && value <= 220)
