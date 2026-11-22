@@ -3,6 +3,7 @@ import { PDFDocument } from "@cantoo/pdf-lib";
 import { buildArNotesDecisionContext } from "../src/reports/generate-audit-report.js";
 import { generateAuditReportV2 } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
+import { buildTempoDiagnosticLines } from "../src/reports/v2/render.js";
 import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("A&R Notes report page", () => {
