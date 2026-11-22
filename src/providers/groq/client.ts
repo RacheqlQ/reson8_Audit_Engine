@@ -371,7 +371,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           promptVersion: GROQ_PROMPT_VERSION,
           sectionGroup: groupName,
           evidence: compactPromptValue(compactEvidenceForGroq(input.evidence, groupName)),
-          sonicDna: compactPromptValue(input.sonicDna),
+          sonicDna: compactSonicDnaForGroq(input.sonicDna),
           catalogMetadata: compactPromptValue(input.catalogMetadata ?? null),
           correction: attempt === 0 ? null : lastError,
           ...(fallbackMode ? { outputSchema } : {}),
