@@ -200,7 +200,7 @@ function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate
   .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
   .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=220&&candidate.bpm!==bestBpm&&candidate.score>=Math.max(EPSILON,bestScore*0.25))
   .sort((a,b)=>b.score-a.score||b.bpm-a.bpm);
- const relatedCandidate=related[0]??null;
+ const relatedCandidate=related.filter(candidate=>[0.5,2].some(ratio=>Math.abs(candidate.bpm/bestBpm-ratio)<=Math.max(0.03,ratio*0.03)))[0]??null;
  if(bestBpm===undefined||bestScore<0.08){
   const weakCandidateScores=new Map(candidateScores.map(item=>[item.bpm,item.score]));
   for(const candidate of related)weakCandidateScores.set(candidate.bpm,Number(candidate.score.toFixed(6)));
