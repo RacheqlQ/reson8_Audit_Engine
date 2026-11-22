@@ -150,8 +150,8 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
   const raw=typeof value==="string"?professionalEvidenceLanguage(value):"";
   const cleaned=raw.replace(/\.{3,}/g,".").replace(/\u2026/g,".").trim();
   const placeholder=/^(?:not supplied|not provided|not available|n\/a|none)(?: in the assessment)?\.?$/i.test(cleaned);
-  const sentence=!cleaned||placeholder?fallback:cleaned;
-  const first=sentence.match(/^(.+?[.!?])(?:\s|$)/)?.[1]??sentence;
+  if(!cleaned||placeholder)return fallback;
+  const first=cleaned.match(/^(.+?[.!?])(?:\s|$)/)?.[1]??cleaned;
   return /[.!?]$/.test(first)?first:first+".";
  };
  const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[])]
