@@ -80,8 +80,8 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
     const uniqueCandidates = candidates.filter((candidate, index, all) =>
       all.findIndex(other => finitePositive(other.bpm) && finitePositive(candidate.bpm)
         && closeTempo(other.bpm, candidate.bpm, absoluteTolerance, relativeTolerance)) === index);
-    const durationWeight = finitePositive(window.durationSeconds) ? Math.min(1, window.durationSeconds / 8) : 1;
-    const coverageWeight = typeof window.coverage === "number" && Number.isFinite(window.coverage) ? clamp01(window.coverage) : 1;
+    const durationWeight = window.durationSeconds === undefined ? 1 : finitePositive(window.durationSeconds) ? Math.min(1, window.durationSeconds / 8) : 0;
+    const coverageWeight = window.coverage === undefined ? 1 : typeof window.coverage === "number" && Number.isFinite(window.coverage) && window.coverage >= 0 ? clamp01(window.coverage) : 0;
     for (const candidate of uniqueCandidates) {
       if (!finitePositive(candidate.bpm) || candidate.bpm < 30 || candidate.bpm > 300) continue;
       const prominenceRaw = candidate.prominence ?? candidate.confidence ?? window.prominence ?? window.confidence ?? 0;
