@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";\nimport { clearAssessmentProviderUnavailable, getAssessmentProviderReadiness } from "../src/providers/provider-policy.js";
 
 const long=(s:string,n=65)=>{let v=s;while(v.trim().split(/\s+/).length<n)v+=" "+s;return v;};
 const p=(group:string):Record<string,unknown>=>{
@@ -535,4 +535,19 @@ describe("Groq JSON-object fallback schema contract", () => {
       expect(dimensionSchema.properties.rationale).toMatchObject({ type: "string" });
     }
   });
+});
+
+describe("assessment provider billing availability", () => {
+ it("marks a provider returning HTTP 402 unavailable for subsequent audit jobs", async () => {
+  clearAssessmentProviderUnavailable();
+  const mock = vi.fn(async () => new Response(JSON.stringify({ error: { message: "Payment required" } }), { status: 402 }));
+  const client = new OllamaClient("test-ollama-key", "test-model", mock as typeof fetch, async () => {});
+  await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow("HTTP 402");
+  expect(getAssessmentProviderReadiness({ OLLAMA_API_KEY: "test-ollama-key" })).toMatchObject([
+   { provider: "groq", usable: false, reason: "not_configured" },
+   { provider: "gemini", usable: false, reason: "not_configured" },
+   { provider: "ollama", usable: false, reason: "billing_required" },
+  ]);
+  clearAssessmentProviderUnavailable();
+ });
 });
