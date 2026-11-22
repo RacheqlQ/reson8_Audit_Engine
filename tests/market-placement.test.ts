@@ -241,3 +241,28 @@ describe("ISRC-first market strategy routing", () => {
     expect(plan.playlistTargets).toEqual([]);
   });
 });
+
+
+describe("conflicting ISRC claims", () => {
+  it("withholds canonical ISRC routing and playlist targeting when supplied identifiers disagree", () => {
+    const plan = buildMarketPlacementPlan({
+      executionMode: "combined",
+      evidence: {
+        isrc: null,
+        isrcConflict: true,
+        isrcCandidates: ["USSM10501515", "GBAYE0601498"],
+        userInput: { isrc: "GBAYE0601498" },
+        identity: { isrc: "USSM10501515" },
+      },
+      sonicDna: master,
+    });
+    expect(plan.isrcStrategy).toMatchObject({
+      status: "pending_verification",
+      route: "NON_ISRC_FALLBACK",
+      isrc: null,
+      conflicts: ["USSM10501515", "GBAYE0601498"],
+    });
+    expect(plan.isrcStrategy.requiredActions.join(" ")).toMatch(/conflicting valid ISRC claims/i);
+    expect(plan.playlistTargets).toEqual([]);
+  });
+});
