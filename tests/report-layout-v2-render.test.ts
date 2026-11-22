@@ -5,6 +5,7 @@ import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
 import { sanitizePublicReportLine } from "../src/reports/v2/public-language.js";
+import { buildArNotesDecisionContext } from "../src/reports/generate-audit-report.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
@@ -408,5 +409,79 @@ describe("post-release campaign framing", () => {
     expect(labels.first30).toMatch(/post-release/i);
     expect(labels.days3160).toMatch(/post-release/i);
     expect(labels.days6190).toMatch(/post-release/i);
+  });
+});
+
+
+describe("v2 tempo and tonal status reporting", () => {
+  it("preserves ambiguous 55/110 BPM candidates, raw confidence and window consensus without confirming either", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna.rhythmFeatures = {
+      bpm: null,
+      candidateBpms: [55, 110],
+      candidateScores: [{ bpm: 55, score: 0.41 }, { bpm: 110, score: 0.39 }],
+      confidence: 0.24,
+      alternateTempo: 110,
+      windowConsensus: { winner: "55", windowCount: 4, observedAgreement: 0.45 },
+      abstentionReason: "Transient prominence is weak and the half/double-time candidates are unresolved."
+    };
+    input.sonicDna.bpm = null;
+    const lines = reportV2Render.buildTempoDiagnosticLines(input).join(" ");
+    expect(lines).toContain("55 BPM");
+    expect(lines).toContain("110 BPM");
+    expect(lines).toMatch(/0\.24/);
+    expect(lines).toMatch(/45%|0\.45/);
+    expect(lines).toMatch(/candidate|not confirmed|abstain/i);
+    expect(adaptReportV2(input).tempo.value).toBeNull();
+  });
+
+  it("keeps provisional tonal status and ambiguity consistent between cover, overview and diagnostics", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.tonalResolution = {
+      status: "PROVISIONAL", tonic: "D", mode: "major",
+      windowAgreement: 0.48, bootstrapShare: 0.52,
+      candidates: [{ tonic: "D", mode: "major" }, { tonic: "B", mode: "minor" }],
+      reasonCodes: ["LOW_WINDOW_CONSENSUS", "RELATIVE_MAJOR_MINOR_AMBIGUITY"]
+    };
+    const data = adaptReportV2(input);
+    expect(buildCoverKeyLabel(input, data)).toBe("Possible: D major");
+    expect(buildRecordingOverviewKeyLabel(data)).toBe("Provisional: D major");
+    const diagnostics = reportV2Render.buildKeyDiagnosticLines(input).join(" ");
+    expect(diagnostics).toMatch(/provisional/i);
+    expect(diagnostics).toMatch(/relative major\/minor/i);
+    expect(diagnostics).toMatch(/window agreement/i);
+  });
+});
+
+describe("v2 A&R Notes page acceptance", () => {
+  it("uses complete decision sentences without ellipsis truncation", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.assessment.executiveSummary = "A long evidence-led decision summary that must wrap naturally across the available A&R Notes card width without losing the final sentence or inserting a truncation marker. The second sentence explains the actual assessment basis and should remain complete.";
+    const context = buildArNotesDecisionContext(input);
+    expect(context.summary).not.toContain("...");
+    expect(context.summary).toMatch(/Decision basis:.*\./);
+    expect(context.summary).toMatch(/Open diligence:.*\./);
+    expect(context.summary).toMatch(/Next action:.*\./);
+  });
+
+  it("renders the exact editable fields and a working-notes region at least 35 percent of A4 height in both tiers", async () => {
+    const expected = ["ar_notes", "ar_owner", "ar_followup_date", "ar_decision_hold", "ar_decision_reaudit", "ar_decision_proceed"].sort();
+    for (const tier of ["sample", "full"] as const) {
+      const pdf = await PDFDocument.load(await generateAuditReportV2(structuredClone(fullAudioFixture) as any, tier));
+      const names = pdf.getForm().getFields().map(field => field.getName()).sort();
+      expect(names).toEqual(expected);
+      const notesWidget = pdf.getForm().getTextField("ar_notes").acroField.getWidgets()[0];
+      expect(notesWidget.getRectangle().height).toBeGreaterThanOrEqual(295);
+      expect(pdf.getPages().at(-1)?.getWidth()).toBeCloseTo(595.28, 1);
+      expect(pdf.getPages().at(-1)?.getHeight()).toBeCloseTo(841.89, 1);
+    }
+  });
+
+  it("derives all four A&R Notes chip values from the same verdict dimensions as the report", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    const chips = reportV2Render.buildArNotesStatusChips(input);
+    const verdicts = adaptReportV2(input).decisionDimensions;
+    expect(chips.map((chip: any) => chip.value)).toEqual(verdicts.map(dimension => dimension.status));
+    expect(chips.map((chip: any) => chip.label)).toEqual(["AUDIO", "IDENTITY", "MARKET", "RELEASE READINESS"]);
   });
 });
