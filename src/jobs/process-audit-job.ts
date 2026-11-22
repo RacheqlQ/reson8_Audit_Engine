@@ -657,23 +657,29 @@ export async function processAuditJob(
 
     let isrcLookup: IsrcCatalogLookup | null = null;
     const userSuppliedIsrcCandidates = [job.catalogUrl, ...(job.catalogUrls ?? [])]
-      .map(value => typeof value === "string" ? value.match(/\\b[A-Z]{2}[A-Z0-9]{3}[0-9]{7}\\b/i)?.[0] ?? null : null);
+      .map(value => {
+        if (typeof value !== "string") return null;
+        const match = value.match(/\\b([A-Z]{2})-?([A-Z0-9]{3})-?([0-9]{2})-?([0-9]{5})\\b/i);
+        return match ? match.slice(1).join("") : null;
+      });
     const isrcCandidates = [
       recognition.matched ? recognition.isrc : null,
       ...metadataSources.map((source) => source.isrc),
       ...userSuppliedIsrcCandidates,
       masterTags?.isrc ?? null,
     ];
-    let normalizedIsrc: string | null = null;
+    const normalizedIsrcCandidates: string[] = [];
     for (const candidate of isrcCandidates) {
       if (!candidate) continue;
       try {
-        normalizedIsrc = normalizeIsrc(candidate);
-        break;
+        const normalized = normalizeIsrc(candidate);
+        if (!normalizedIsrcCandidates.includes(normalized)) normalizedIsrcCandidates.push(normalized);
       } catch {
-        // A malformed higher-priority claim must not suppress a valid lower-priority source.
+        // A malformed claim is retained as unavailable; it cannot suppress another valid source.
       }
     }
+    const normalizedIsrc: string | null = normalizedIsrcCandidates[0] ?? null;
+    const isrcConflict = normalizedIsrcCandidates.length > 1;
     const isrcLookupAvailable = Boolean(
       deps.collectIsrcCatalogMetadata
       || providerDecision("musicbrainz").enabled
@@ -768,7 +774,9 @@ export async function processAuditJob(
 
     const identity = reconciliation.identity;
     const evidence = {
-      isrc: normalizedIsrc,
+      isrc: isrcConflict ? null : normalizedIsrc,
+      isrcCandidates: normalizedIsrcCandidates,
+      isrcConflict,
       userInput: { isrc: userSuppliedIsrcCandidates.find((value): value is string => Boolean(value)) ?? null },
       ...(metadata ? catalogEvidence(metadata, identity) : { auditType: "MASTER-BASED AUDIT" }),
       auditType: hasMaster && hasCatalog ? "COMBINED MASTER + DSP AUDIT" : hasCatalog ? "METADATA-BASED AUDIT" : "MASTER-BASED AUDIT",
