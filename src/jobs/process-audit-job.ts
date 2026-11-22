@@ -2,6 +2,7 @@ import type { AuditRecognition } from "../providers/audd/normalize.js";
 import type { CatalogMetadata } from "../providers/dsp/catalog.js";
 import type { ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
+import { adaptReportV2 } from "../reports/v2/adapters.js";
 import { isPdf } from "../reports/pdf-output.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
 import { parseRealMasterAuditContract, buildUnavailableMetric, requireRealMasterInput, type RealMasterAuditContract } from "../audio/real-master-contract.js";
@@ -1046,6 +1047,7 @@ export async function processAuditJob(
     }
     const marketPlacement = buildMarketPlacementPlan({ executionMode, evidence: reportEvidence, sonicDna: masterDna ? dnaEvidence(masterDna) : sonicDna, playlistDiscovery });
     const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment, executionMode, marketPlacement, tonalResolution: masterDna?.tonalResolution ?? null, ...(realMasterContract ? { realMasterContract } : {}) };
+    reportInput.decisionDimensions = adaptReportV2(reportInput).decisionDimensions;
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
