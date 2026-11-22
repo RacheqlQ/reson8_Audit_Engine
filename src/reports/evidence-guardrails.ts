@@ -11,9 +11,10 @@ type TempoEvidence = {
 } | null | undefined;
 
 /**
- * A BPM candidate is reportable only when its confidence is explicit,
+ * A BPM is reportable as confirmed only when its confidence is explicit,
  * finite, within the supported analysis range, and not marked as abstained.
- * The threshold is a conservative product gate, not a calibrated accuracy claim.
+ * Candidate diagnostics are retained separately; this threshold is a conservative
+ * confirmation gate, not a calibrated accuracy claim.
  */
 export function isReliableTempo(value: TempoEvidence): boolean {
   if (!value || typeof value !== "object") return false;
