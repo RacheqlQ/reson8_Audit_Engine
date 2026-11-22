@@ -249,7 +249,8 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  for(let window=0;window<windowCount;window++){
   const start=window*windowSamples;
   const estimate=estimateTempoCore(samples.subarray(start,start+windowSamples),sampleRate);
-  if(estimate.bpm!==null)labels.push(String(Math.round(estimate.bpm)));
+  const windowCandidate=estimate.bpm??estimate.topCandidateBpm;
+  if(windowCandidate!==null)labels.push(String(Math.round(windowCandidate)));
  }
  const windowConsensus=bootstrapCategoricalConsensus(labels,{iterations:1000,seed:17});
  const independentEstimator=estimateLowFrequencyEnvelopeTempo(samples,sampleRate);
