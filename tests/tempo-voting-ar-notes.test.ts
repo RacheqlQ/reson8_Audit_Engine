@@ -69,7 +69,7 @@ describe("A&R Notes report page", () => {
       ],
     };
     const context = buildArNotesDecisionContextFull(input);
-    expect(context.summary).not.toMatch(/Vocal analysis: Not performed|Vocal presence\\/absence is unknown|No vocal conclusion is available|Learned audio model: disabled|Detection model status: disabled/i);
+    expect(context.summary).not.toMatch(/Vocal analysis: Not performed|Vocal presence\/absence is unknown|No vocal conclusion is available|Learned audio model: disabled|Detection model status: disabled/i);
   });
 
   it("keeps complete A&R decision sentences and exactly three review prompts", () => {
