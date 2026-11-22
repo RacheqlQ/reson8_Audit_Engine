@@ -174,7 +174,7 @@ export function providerDecision(provider: ProviderId): ProviderDecision {
 }
 
 type AssessmentProviderId = "groq" | "gemini" | "ollama";
-type RuntimeUnavailableReason = "auth_error" | "daily_capacity";
+type RuntimeUnavailableReason = "auth_error" | "daily_capacity" | "billing_required";
 const runtimeUnavailable = new Map<AssessmentProviderId, { reason: RuntimeUnavailableReason; until: number }>();
 
 export function markAssessmentProviderUnavailable(provider: AssessmentProviderId, reason: RuntimeUnavailableReason, until = Number.POSITIVE_INFINITY): void {
@@ -191,7 +191,7 @@ export interface AssessmentProviderReadiness {
   enabled: boolean;
   configured: boolean;
   usable: boolean;
-  reason: "disabled_by_data_policy" | "not_configured" | "auth_error" | "daily_capacity" | null;
+  reason: "disabled_by_data_policy" | "not_configured" | "auth_error" | "daily_capacity" | "billing_required" | null;
 }
 
 export function getAssessmentProviderReadiness(env: Record<string, string | undefined> = process.env): AssessmentProviderReadiness[] {
