@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
-import { buildArNotesDecisionContext, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
+import { buildArNotesDecisionContext, buildArNotesDecisionContextFull, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
 import { loadReportFonts } from "../fonts.js";
 import { chartEvidenceIntegrityErrors, chartPanelHeight, countEvidenceLayers, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
@@ -761,7 +761,7 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
   page.drawRectangle({x,y:y-1,width:8,height:8,borderColor:C.gold,borderWidth:.8,color:C.white});
   drawWrapped(page,item,x+14,y+5,columns===2?235:W-2*M-42,fonts.regular,6.6,C.ink,7.6);
  });
- const context=buildArNotesDecisionContext(input);
+ const context=buildArNotesDecisionContextFull(input);
  const contextTop=578,contextHeight=126,contextBottom=contextTop-contextHeight;
  card(page,M,contextTop,W-2*M,"A&R decision context",[],fonts,{height:contextHeight,accent:C.teal});
  drawWrapped(page,context.verdict+" · "+context.summary,M+12,contextTop-33,W-2*M-24,fonts.regular,6,C.ink,7.1);
