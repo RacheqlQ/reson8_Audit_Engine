@@ -98,6 +98,9 @@ export interface ProviderAttemptDiagnostic {
   errorType: "none" | "capacity" | "auth" | "malformed_output" | "timeout" | "provider_unavailable" | "provider_error";
   retryable: boolean;
   attempt: number;
+  group?: string;
+  failureKind?: "empty_content" | "invalid_json" | "schema_violation" | "threshold_violation" | "prompt_budget_exceeded";
+  validationIssues?: Array<{ code: string; path: string[] }>;
 }
 export interface GroqAssessmentInput {
   evidence: Record<string, unknown>;
@@ -404,6 +407,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens)
       : sectionOutputBudget;
     if (groqTpmBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS)) {
+      console.warn(JSON.stringify({ event: "provider_preflight_rejection", provider: providerName, model, group: groupName, failureKind: "prompt_budget_exceeded", estimatedInputTokens, minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS }));
       throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
@@ -539,7 +543,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, actualPromptTokens: payload.usage?.prompt_tokens ?? null, actualCompletionTokens: payload.usage?.completion_tokens ?? null, actualTotalTokens: payload.usage?.total_tokens ?? null }));
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
-      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1 });
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "empty_content" });
       if (scheduleCorrection("The response contained no JSON content. Return one complete JSON object matching outputSchema.")) continue;
       break;
     }
@@ -548,14 +552,14 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     try {
       parsed = JSON.parse(content);
     } catch {
-      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1 });
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "invalid_json" });
       if (scheduleCorrection("The response was not valid JSON. Return raw JSON only, without markdown or surrounding prose.")) continue;
       break;
     }
 
     const result = schema.safeParse(parsed);
     if (!result.success) {
-      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1 });
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "schema_violation", validationIssues: result.error.issues.slice(0, 12).map(issue => ({ code: issue.code, path: issue.path.map(part => String(part)).slice(0, 8) })) });
       const detail = responseMode === "json_object" || responseMode === "prompt_only"
         ? "The " + responseMode + " response failed local Zod validation: " + result.error.message + "."
         : "Strict structured output failed local Zod validation: " + result.error.message + ".";
@@ -565,6 +569,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 
     const wordError = thresholdError(groupName, result.data);
     if (wordError) {
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "threshold_violation" });
       if (scheduleCorrection(wordError + " Repair the exact field and preserve the evidence-bounded meaning.")) continue;
       break;
     }
