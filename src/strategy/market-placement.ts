@@ -123,11 +123,13 @@ export function resolveIsrcStrategyRoute(evidence: Record<string, unknown>, soni
     };
   }
   const audio = record(sonicDna);
+  const rhythm = record(audio.rhythmFeatures);
+  const harmonic = record(audio.harmonicFeatures);
   const tags = record(evidence.id3);
   const nonIsrcEvidence = unique([
     ...(finite(audio.bpm) ? ["measured tempo"] : []),
-    ...(Array.isArray(record(audio.rhythmFeatures).candidateBpms) && record(audio.rhythmFeatures).candidateBpms.length ? ["provisional tempo candidates"] : []),
-    ...(Array.isArray(record(audio.harmonicFeatures).topCandidates) && record(audio.harmonicFeatures).topCandidates.length ? ["provisional tonal candidates"] : []),
+    ...(Array.isArray(rhythm.candidateBpms) && rhythm.candidateBpms.length ? ["provisional tempo candidates"] : []),
+    ...(Array.isArray(harmonic.topCandidates) && harmonic.topCandidates.length ? ["provisional tonal candidates"] : []),
     ...(finite(audio.loudnessLufs) ? ["integrated loudness"] : []),
     ...(finite(audio.loudnessRangeLu) ? ["loudness range"] : []),
     ...(finite(audio.sampleRate) ? ["sample rate and audio format"] : []),
