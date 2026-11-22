@@ -65,6 +65,7 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
   const minRunnerUpMargin = options.minRunnerUpMargin ?? 0.15;
   const octaveAmbiguityShare = options.octaveAmbiguityShare ?? 0.65;
   const votes: Vote[] = [];
+  const raw_candidates: TempoVotingVerdict["raw_candidates"] = [];
   const validWindows = new Set<number>();
 
   options.windows.forEach((window, windowIndex) => {
@@ -77,12 +78,10 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
     const candidates = suppliedCandidates.length ? suppliedCandidates : (finitePositive(window.bpm)
       ? [{ bpm: window.bpm, prominence: window.prominence, confidence: window.confidence, beatStrength: window.beatStrength }]
       : []);
-    const uniqueCandidates = candidates.filter((candidate, index, all) =>
-      all.findIndex(other => finitePositive(other.bpm) && finitePositive(candidate.bpm)
-        && closeTempo(other.bpm, candidate.bpm, absoluteTolerance, relativeTolerance)) === index);
     const durationWeight = window.durationSeconds === undefined ? 1 : finitePositive(window.durationSeconds) ? Math.min(1, window.durationSeconds / 8) : 0;
     const coverageWeight = window.coverage === undefined ? 1 : typeof window.coverage === "number" && Number.isFinite(window.coverage) && window.coverage >= 0 ? clamp01(window.coverage) : 0;
-    for (const candidate of uniqueCandidates) {
+    const windowVotes: Vote[] = [];
+    for (const candidate of candidates) {
       if (!finitePositive(candidate.bpm) || candidate.bpm < 30 || candidate.bpm > 300) continue;
       const prominenceRaw = candidate.prominence ?? candidate.confidence ?? window.prominence ?? window.confidence ?? 0;
       const beatRaw = candidate.beatStrength ?? window.beatStrength ?? 1;
@@ -91,15 +90,16 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
       const quality = prominence * clamp01(beatRaw);
       const weight = quality * durationWeight * coverageWeight;
       if (!(weight > 0) || !Number.isFinite(weight)) continue;
-      votes.push({ bpm: candidate.bpm, prominence, weight, window: windowIndex, octaveKey: octaveClass(candidate.bpm) });
+      raw_candidates.push({ bpm: roundBpm(candidate.bpm), prominence: roundBpm(prominence), weight: Number(weight.toFixed(6)), window_index: windowIndex });
+      windowVotes.push({ bpm: candidate.bpm, prominence, weight, window: windowIndex, octaveKey: octaveClass(candidate.bpm) });
+    }
+    const uniqueWindowVotes = windowVotes.filter((vote, index, all) =>
+      all.findIndex(other => closeTempo(other.bpm, vote.bpm, absoluteTolerance, relativeTolerance)) === index);
+    if (uniqueWindowVotes.length) {
+      votes.push(...uniqueWindowVotes);
       validWindows.add(windowIndex);
     }
   });
-
-  const raw_candidates = votes.map(vote => ({
-    bpm: roundBpm(vote.bpm), prominence: roundBpm(vote.prominence),
-    weight: Number(vote.weight.toFixed(6)), window_index: vote.window,
-  }));
   if (!votes.length) {
     return {
       primary_candidate_bpm: null, octave_alternatives: [], vote_share: 0, window_agreement: 0,
