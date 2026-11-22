@@ -514,6 +514,7 @@ describe("ISRC strategy presentation", () => {
     expect(lines).toMatch(/ISRC conflict/i);
     expect(lines).toMatch(/measured tempo, provisional tonal candidates, embedded audio tags/i);
     expect(lines).toMatch(/provisional A&R guidance/i);
+    expect(lines).toMatch(/ISRC action: Resolve the ISRC conflict/i);
   });
 
   it("does not present an available ISRC as proof of a provider match or commercial performance", () => {
@@ -532,5 +533,6 @@ describe("ISRC strategy presentation", () => {
     const lines = buildPositioningLines(input).join(" ");
     expect(lines).toMatch(/ISRC-keyed catalog and release reconciliation/i);
     expect(lines).toMatch(/does not prove a provider match or commercial performance/i);
+    expect(lines).toMatch(/ISRC action: Run catalog and release-reconciliation lookups/i);
   });
 });
