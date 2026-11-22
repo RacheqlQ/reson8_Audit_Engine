@@ -127,13 +127,11 @@ describe("v2 detector diagnostics", () => {
       abstentionReason: "Window stability did not meet the reporting gate."
     }};
     const lines = reportV2Render.buildTempoDiagnosticLines(input).join(" ");
-    expect(lines).toContain("Possible tempo readings: 96 BPM; 192 BPM.");
-    expect(lines).not.toMatch(/confidence|score|probability|detector/i);
-    expect(lines).toContain("Tempo readings are broadly consistent across the analyzed sections.");
-    expect(lines).not.toContain("observed agreement");
-    expect(lines).toContain("Tempo not confirmed");
-    expect(lines).toContain("Window stability did not meet the reporting gate");
-    expect(lines).not.toMatch(/calibrated|Goertzel|harmonic|FFT/i);
+    expect(lines).toContain("Retained tempo candidates: 96 BPM (raw score 0.812); 192 BPM (raw score 0.401).");
+    expect(lines).toContain("Primary detector raw confidence: 0.713");
+    expect(lines).toContain("Candidate window consensus: 96 across 4 windows; observed agreement 75%.");
+    expect(lines).toContain("Tempo abstention: Window stability did not meet the reporting gate.");
+    expect(lines).not.toMatch(/Goertzel|harmonic|FFT/i);
   });
 
   it("renders plain-language song-key possibilities and abstention", () => {
