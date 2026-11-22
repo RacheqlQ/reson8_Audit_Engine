@@ -280,6 +280,9 @@ export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
  if(confidence!==null&&!confirmed)lines.push("Primary detector raw confidence: "+confidence.toFixed(3)+" (not a calibrated probability; confirmation threshold 0.500).");
  if(finite(rhythm.alternateTempo)&&rhythm.alternateTempo>=40&&rhythm.alternateTempo<=220)
   lines.push("Half/double-time alternative: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM; alternative timing is not independently confirmed.");
+ const independent=rec(rhythm.independentEstimator);
+ if(finite(independent.bpm)&&independent.bpm>=40&&independent.bpm<=220)
+  lines.push("Independent low-frequency envelope candidate: "+Number(independent.bpm).toFixed(1)+" BPM"+(finite(independent.score)?"; raw score "+Number(independent.score).toFixed(3):"")+"; corroboration only, not confirmation.");
  const consensus=rec(rhythm.windowConsensus);
  if(finite(consensus.windowCount)&&consensus.windowCount>0){
   const agreement=finite(consensus.observedAgreement)?(consensus.observedAgreement*100).toFixed(0)+"%":"not available";
