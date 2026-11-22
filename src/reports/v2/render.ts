@@ -162,7 +162,8 @@ function notesSentence(value:unknown,fallback:string):string{
  const raw=typeof value==="string"?sanitizePublicReportLine(value).trim():"";
  const cleaned=raw.replace(/\.{3,}/g,".").replace(/\u2026/g,".").trim();
  if(!cleaned||/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(cleaned))return fallback;
- return /[.!?]$/.test(cleaned)?cleaned:cleaned+".";
+ const first=cleaned.match(/^(.+?[.!?])(?:\s|$)/)?.[1]??cleaned;
+ return /[.!?]$/.test(first)?first:first+".";
 }
 
 function drawHumanReviewCard(page:PDFPage,items:string[],top:number,fonts:Fonts):number{
@@ -214,11 +215,10 @@ function drawArNotesPage(page:PDFPage,pdf:PDFDocument,input:AuditReportInput,fon
  const chips=buildArNotesStatusChips(input),gap=7,chipWidth=(W-2*M-gap*3)/4,chipY=H-144;
  chips.forEach((chip,index)=>scoreChip(page,M+index*(chipWidth+gap),chipY,chipWidth,chip.label,chip.value,chip.dotColor,fonts,chip.textColor));
  const assessment=rec(input.assessment);
- const rawChecklist=arr(assessment.humanListeningChecklist).map(value=>notesSentence(value,"")).filter(Boolean);
+ const rawChecklist=arr(assessment.humanListeningChecklist).map(value=>notesSentence(value,"")).filter(Boolean).slice(0,4);
  const checklist=rawChecklist.length?rawChecklist:[
   "Listen once without viewing the analysis and record the first impression of the hook and arrangement.",
   "Review vocal performance, lyric clarity and mix translation against the submitted master.",
-  "Compare the strongest section and the ending for pacing, dynamics and replay interest.",
   "Check the artist and release identity against the available source records.",
   "Verify rights, master approval and metadata before any external pitch.",
  ];
