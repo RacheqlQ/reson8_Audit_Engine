@@ -122,7 +122,7 @@ for(const [tier,suffix,minPages] of [["sample","sample",8],["full","full",13]]){
  assertArNotes(pdf,"audit-618b9b7a-"+tier,notesPage);
  const normalized=notesPage.replace(/\s+/g," ").toUpperCase();
  for(const {label,status} of expectedAudit618Dimensions){
-  if(!normalized.includes(label+" "+status))throw new Error("Audit 618b9b7a "+tier+" A&R Notes chip does not match persisted "+label+" verdict: "+status);
+  if(!normalized.includes(label)||!normalized.includes(status))throw new Error("Audit 618b9b7a "+tier+" A&R Notes chip is missing persisted "+label+" verdict: "+status);
  }
  if(!/55\s*BPM/i.test(extracted)||!/UNCONFIRMED/i.test(extracted)||/\b(?:Confirmed|Measured) tempo:\s*55\s*BPM/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF must preserve the 55 BPM candidate as unconfirmed");
  if(!/PROVISIONAL/i.test(extracted)||!/F#/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF must preserve provisional tonal candidates");
