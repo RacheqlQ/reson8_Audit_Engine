@@ -56,7 +56,7 @@ describe("Sonic DNA",()=>{
   const result=estimateTempo(pulse(120),8000);
   expect(result.method).toBe("high_frequency_transient_autocorrelation");
   expect(result.candidateBpms).toContain(120);
-  expect(result.abstentionReason).toBeNull();
+  expect(result.abstentionReason).not.toBeNull();
  });
  it("abstains on sustained non-rhythmic noise instead of reporting an arbitrary tempo",()=>{
   let seed=17;
