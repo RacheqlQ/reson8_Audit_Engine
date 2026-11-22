@@ -660,7 +660,7 @@ export async function processAuditJob(
     const userSuppliedIsrcCandidates = [job.catalogUrl, ...(job.catalogUrls ?? [])]
       .map(value => {
         if (typeof value !== "string") return null;
-        const match = value.match(/\\b([A-Z]{2})-?([A-Z0-9]{3})-?([0-9]{2})-?([0-9]{5})\\b/i);
+        const match = value.match(/\b([A-Z]{2})-?([A-Z0-9]{3})-?([0-9]{2})-?([0-9]{5})\b/i);
         return match ? match.slice(1).join("") : null;
       });
     const isrcCandidates = [
