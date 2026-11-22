@@ -54,4 +54,20 @@ describe("audit stage failure diagnostics", () => {
     expect(diagnostic.errorCode).toBe("PDF_FONT_ENCODING_ERROR");
     expect(JSON.stringify(diagnostic)).not.toContain("🎵");
   });
+
+  it("classifies provider HTTP 402 as a billing-related provider failure without exposing response text", () => {
+    const diagnostic = buildAuditStageFailureDiagnostic(
+      "ai_assessment",
+      new Error("Ollama evidence-score assessment failed with HTTP 402: account billing details are private"),
+    );
+    expect(diagnostic).toMatchObject({
+      stage: "ai_assessment",
+      failureCode: "provider_unavailable",
+      errorCode: "AI_PROVIDER_BILLING_REQUIRED",
+      timedOut: false,
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain("billing details");
+  });
 });
+
+  

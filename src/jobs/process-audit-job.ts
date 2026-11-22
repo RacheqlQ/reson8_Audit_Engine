@@ -110,6 +110,7 @@ function safeAuditErrorCode(error: unknown): string {
     [/Report v2 renderer did not return a PDF/i, "PDF_RENDERER_INVALID_OUTPUT"],
     [/Report JSON payload does not contain a valid audit report input/i, "PDF_REPORT_INPUT_INVALID"],
     [/Report source is neither a PDF nor valid JSON/i, "PDF_REPORT_SOURCE_INVALID"],
+    [/HTTP 402|payment required|insufficient credits|billing required/i, "AI_PROVIDER_BILLING_REQUIRED"],
     [/WinAnsi|cannot encode|encode.*character|glyph/i, "PDF_FONT_ENCODING_ERROR"],
   ];
   return known.find(([pattern]) => pattern.test(message))?.[1] ?? "UNCLASSIFIED_STAGE_ERROR";
@@ -140,7 +141,7 @@ export function buildAuditStageFailureDiagnostic(stage: string, error: unknown, 
 
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
   const message = error instanceof Error ? error.message : String(error);
-  if (/AI_PROVIDERS_UNAVAILABLE|provider unavailable|provider_error|HTTP 5\d\d|service unavailable|bad gateway|gateway timeout|not configured|fetch failed|ECONNRESET|ENOTFOUND|EHOSTUNREACH/i.test(message)) return "provider_unavailable";
+  if (/AI_PROVIDERS_UNAVAILABLE|provider unavailable|provider_error|HTTP 402|payment required|insufficient credits|billing required|HTTP 5\d\d|service unavailable|bad gateway|gateway timeout|not configured|fetch failed|ECONNRESET|ENOTFOUND|EHOSTUNREACH/i.test(message)) return "provider_unavailable";
   if (/HTTP 401|HTTP 403|unauthorized|forbidden|authentication/i.test(message)) return "auth";
   if (/capacity|HTTP 413|HTTP 429|TPD|tokens per day|GROQ_REQUEST_TOO_LARGE/i.test(message)) return "capacity";
   if (/timed out|timeout|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT|AUDIT_STAGE_TIMEOUT|AUDIT_JOB_DEADLINE_EXCEEDED/i.test(message)) return "timeout";
@@ -171,6 +172,7 @@ function userSafeFailureMessage(error: unknown): string {
     return messages[stage] ?? "Audit processing: the " + stage.replace(/_/g, " ") + " stage exceeded its time limit. Please retry.";
   }
   if (raw === "GROQ_ASSESSMENT_TIMEOUT") return "AI assessment: one provider reached its allocated time limit; the configured fallback chain could not complete the assessment.";
+  if (/HTTP 402|payment required|insufficient credits|billing required/i.test(raw)) return "AI assessment: a configured provider rejected the request because its account requires billing or has insufficient credits. The fallback chain was exhausted; retry after provider availability is restored.";
   if (raw.startsWith("Combined audit is missing its uploaded master")) return "Audio intake: the combined audit is missing its uploaded master audio. Upload the master file and retry.";
   if (raw === "master unavailable") return "Audio intake: the uploaded master could not be retrieved. Re-upload it and retry.";
   if (raw.includes("evidenceGaps") || raw.includes("scorecard") || raw.includes("Zod validation")) return "AI assessment: the generated response did not meet the report's validation requirements. Please retry later.";
