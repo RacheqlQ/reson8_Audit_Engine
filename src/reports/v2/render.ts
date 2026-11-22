@@ -419,7 +419,7 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
  const adjacent = arr(assessment.adjacentLanes).map(value => str(value, "")).filter(Boolean);
  if (hypotheses.length) lines.push("Related styles to review: " + hypotheses.join("; "));
  if (adjacent.length) lines.push("Other styles to consider: " + adjacent.join("; "));
- if (!lines.length) {
+ if (!genre&&!hypotheses.length&&!adjacent.length) {
   lines.push("PROPOSED market thesis: use the reconciled recording identity and measured sonic profile to test a differentiated Afro-influenced positioning direction with specialist curators and independent partners.");
   lines.push("Validation route: verify platform genre attribution, build a source-backed comparable-recording shortlist, and test the proposition through human-reviewed curator and creator outreach.");
   lines.push("Evidence boundary: this is a strategic proposition, not proof of audience overlap, commercial reach, listener demand or campaign performance.");
