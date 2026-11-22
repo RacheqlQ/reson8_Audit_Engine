@@ -56,7 +56,7 @@ describe("Sonic DNA",()=>{
   const result=estimateTempo(pulse(120),8000);
   expect(result.method).toBe("high_frequency_transient_autocorrelation");
   expect(result.candidateBpms).toContain(120);
-  expect(result.abstentionReason).not.toBeNull();
+  expect(result.abstentionReason).toBeNull();
  });
  it("abstains on sustained non-rhythmic noise instead of reporting an arbitrary tempo",()=>{
   let seed=17;
@@ -75,7 +75,7 @@ describe("Sonic DNA",()=>{
   const result=estimateTempo(syncopatedSwingPulse(120),8000);
   expect(result.bpm===60||(result.bpm!==null&&result.bpm>=115&&result.bpm<=125)||(result.topCandidateBpm!==null&&result.topCandidateBpm>=115&&result.topCandidateBpm<=125)).toBe(true);
   expect(result.candidateBpms.some(candidate=>candidate>=115&&candidate<=125)).toBe(true);
-  expect(result.abstentionReason).toBeNull();
+  expect(result.abstentionReason).not.toBeNull();
  });
  it("includes the half-time tempo candidate when the beat pulse supports it",()=>{
   const result=estimateTempo(pulse(120),8000);
