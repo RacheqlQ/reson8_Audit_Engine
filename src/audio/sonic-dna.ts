@@ -241,7 +241,7 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const toVotes=(estimate:TempoEstimate,durationSeconds:number)=>{
   const candidates=estimate.candidateScores
    .filter(item=>Number.isFinite(item.bpm)&&item.bpm>0&&Number.isFinite(item.score))
-   .map(item=>({bpm:item.bpm,prominence:estimate.confidence??item.score}));
+   .map(item=>({bpm:item.bpm,prominence:estimate.confidence===null?item.score:item.score*estimate.confidence}));
   if(!candidates.length&&estimate.topCandidateBpm!==null)
    candidates.push({bpm:estimate.topCandidateBpm,prominence:estimate.confidence??0});
   return {bpm:estimate.bpm??undefined,prominence:estimate.confidence??undefined,durationSeconds,candidates};
