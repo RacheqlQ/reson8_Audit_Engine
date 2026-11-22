@@ -92,7 +92,7 @@ export function buildCoverTempoLabel(data:ReportV2Data,input:AuditReportInput):s
  return "Not determined";
 }
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
- const provenance="Measured from the uploaded recording";
+ const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna);
  const tempoDisplay=buildCoverTempoLabel(data,input);
  const signed=(value:unknown)=>finite(value)?(value>0?"+":"")+value.toFixed(1):null;
  const loudness=[
