@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "@cantoo/pdf-lib";
-import { buildArNotesDecisionContext } from "../src/reports/generate-audit-report.js";
+import { buildArNotesDecisionContextFull } from "../src/reports/generate-audit-report.js";
 import { generateAuditReportV2 } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildTempoDiagnosticLines } from "../src/reports/v2/render.js";
@@ -59,7 +59,7 @@ describe("A&R Notes report page", () => {
   it("keeps complete A&R decision sentences and exactly three review prompts", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.assessment = { ...input.assessment, executiveSummary: "A complete decision summary requiring human listening, source verification, identity reconciliation, rights review and release planning. ".repeat(3), evidenceGaps: ["Confirm the final master and recording identifier.", "Verify the rights and delivery records before external pitching."] };
-    const context = buildArNotesDecisionContext(input);
+    const context = buildArNotesDecisionContextFull(input);
     expect(context.prompts).toHaveLength(3);
     expect(context.summary).not.toContain("...");
     expect(context.summary.length).toBeGreaterThan(180);
