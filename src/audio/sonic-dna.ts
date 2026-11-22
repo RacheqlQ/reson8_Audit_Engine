@@ -254,13 +254,23 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  }
  const windowConsensus=bootstrapCategoricalConsensus(labels,{iterations:1000,seed:17});
  const independentEstimator=estimateLowFrequencyEnvelopeTempo(samples,sampleRate);
- const tempoRatio=overall.bpm!==null&&independentEstimator.bpm!==null?overall.bpm/independentEstimator.bpm:null;
+ const tempoAnchor=overall.bpm??overall.topCandidateBpm;
+ const tempoRatio=tempoAnchor!==null&&independentEstimator.bpm!==null?tempoAnchor/independentEstimator.bpm:null;
  const octaveRelated=tempoRatio!==null&&[0.5,1,2].some(ratio=>Math.abs(tempoRatio-ratio)<=Math.max(0.03,ratio*0.03));
+ const octaveMultiple=tempoRatio!==null&&[0.5,2].some(ratio=>Math.abs(tempoRatio-ratio)<=Math.max(0.03,ratio*0.03));
  const unstableWindows=windowConsensus.windowCount>=3&&(windowConsensus.winner===null||(windowConsensus.observedAgreement??0)<0.6);
  const materialDisagreement=overall.bpm!==null&&independentEstimator.bpm!==null&&!octaveRelated&&independentEstimator.score>=0.4&&unstableWindows;
- return materialDisagreement
-  ? {...overall,bpm:null,confidence:null,abstentionReason:"Independent tempo pathways materially disagreed and the primary tempo windows were unstable; no single tempo is asserted.",windowConsensus,independentEstimator}
-  : {...overall,alternateTempo:overall.alternateTempo??(octaveRelated?independentEstimator.bpm:null),windowConsensus,independentEstimator};
+ if(materialDisagreement)
+  return {...overall,bpm:null,confidence:null,abstentionReason:"Independent tempo pathways materially disagreed and the primary tempo windows were unstable; no single tempo is asserted.",windowConsensus,independentEstimator};
+ const reconciledCandidateBpms=overall.bpm===null&&octaveMultiple&&independentEstimator.bpm!==null
+  ?[...new Set([...overall.candidateBpms,independentEstimator.bpm])].filter(value=>value>=40&&value<=220).slice(0,8)
+  :overall.candidateBpms;
+ return {
+  ...overall,
+  alternateTempo:overall.alternateTempo??(octaveMultiple?independentEstimator.bpm:null),
+  candidateBpms:reconciledCandidateBpms,
+  windowConsensus,independentEstimator,
+ };
 }
 
 export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):SonicDnaFeatures {
