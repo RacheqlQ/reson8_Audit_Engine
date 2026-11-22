@@ -910,7 +910,7 @@ export async function processAuditJob(
     await awaitWithStage(deps, "assessment_persist", 15_000, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
 
     let playlistDiscovery: PlaylistDiscoveryResult | null = null;
-    if (normalizedIsrc && deps.discoverPlaylists) {
+    if (normalizedIsrc && !isrcConflict && deps.discoverPlaylists) {
       const providerMoodTags = metadataSources.flatMap((source) => source.sonicProfile?.moodTags ?? []);
       const playlistMoodContext = buildPlaylistMoodContext(providerMoodTags, masterDna);
       const playlistInput: PlaylistDiscoveryInput = {
