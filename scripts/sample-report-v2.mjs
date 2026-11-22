@@ -112,15 +112,15 @@ for(const [tier,suffix,minPages] of [["sample","sample",8],["full","full",13]]){
  const file=new URL("audit-618b9b7a-"+suffix+".pdf",out);
  await writeFile(file,bytes);
  const extracted=execFileSync("pdftotext",["-layout",file.pathname,"-"],{encoding:"utf8"});
- const pages=extracted.split("\\f").filter(page=>page.trim().length>0);
+ const pages=extracted.split("\f").filter(page=>page.trim().length>0);
  const notesPage=pages.at(-1)??"";
  assertArNotes(pdf,"audit-618b9b7a-"+tier,notesPage);
- const normalized=notesPage.replace(/\\s+/g," ").toUpperCase();
+ const normalized=notesPage.replace(/\s+/g," ").toUpperCase();
  for(const [label,value] of [["AUDIO",expectedAudit618Dimensions.audio],["IDENTITY",expectedAudit618Dimensions.identity],["MARKET",expectedAudit618Dimensions.market],["RELEASE READINESS",expectedAudit618Dimensions.releaseReadiness]]){
   if(!normalized.includes(label+" "+value))throw new Error("Audit 618b9b7a "+tier+" A&R Notes chip does not match persisted "+label+" verdict: "+value);
  }
- if(!/55\\s*BPM/i.test(extracted)||!/UNCONFIRMED/i.test(extracted)||/\\b(?:Confirmed|Measured) tempo:\\s*55\\s*BPM/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF must preserve the 55 BPM candidate as unconfirmed");
+ if(!/55\s*BPM/i.test(extracted)||!/UNCONFIRMED/i.test(extracted)||/\b(?:Confirmed|Measured) tempo:\s*55\s*BPM/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF must preserve the 55 BPM candidate as unconfirmed");
  if(!/PROVISIONAL/i.test(extracted)||!/F#/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF must preserve provisional tonal candidates");
- if(/\\b\\d[\\d,]*\\s*(?:streams|listeners|saves|sales|revenue)\\b/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF invented unsupported market-performance metrics");
- process.stdout.write("audit-618b9b7a-"+tier+": "+pdf.getPageCount()+" pages; persisted verdict chips, ISRC route, audio abstention and final A&R Notes verified.\\n");
+ if(/\b\d[\d,]*\s*(?:streams|listeners|saves|sales|revenue)\b/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF invented unsupported market-performance metrics");
+ process.stdout.write("audit-618b9b7a-"+tier+": "+pdf.getPageCount()+" pages; persisted verdict chips, ISRC route, audio abstention and final A&R Notes verified.\n");
 }
