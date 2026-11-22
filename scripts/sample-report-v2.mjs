@@ -17,7 +17,7 @@ function assertArNotes(pdf,name,notesPageText){
  if(Math.abs(page.getWidth()-595.28)>1||Math.abs(page.getHeight()-841.89)>1)throw new Error(name+" A&R Notes page is not A4");
  if(notesPageText.includes("...")||notesPageText.includes("…"))throw new Error(name+" A&R Notes page contains ellipsis truncation");
  if(notesPageText.includes("[ ]"))throw new Error(name+" A&R Notes page must use vector checkboxes, not bracket text");
- const normalizedText=notesPageText.replace(/\\s+/g," ");
+ const normalizedText=notesPageText.replace(/\s+/g," ");
  const upper=normalizedText.toUpperCase();
  for(const label of ["AUDIO","IDENTITY","MARKET","RELEASE READINESS","HUMAN LISTENING REVIEW","A&R DECISION CONTEXT","DECISION BASIS","OPEN DILIGENCE","NEXT ACTION","WORKING NOTES"]){
   if(!upper.includes(label))throw new Error(name+" A&R Notes page is missing "+label);
