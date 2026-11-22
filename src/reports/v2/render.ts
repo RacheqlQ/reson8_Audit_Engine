@@ -404,6 +404,8 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
  if(isrcStrategy.route==="ISRC_FIRST"&&typeof isrcStrategy.isrc==="string"){
   lines.push("ISRC routing: a validated recording code is available from "+str(isrcStrategy.source,"supplied track evidence")+". Prioritize ISRC-keyed catalog and release reconciliation; the code alone does not prove a provider match or commercial performance.");
  }else{
+  const conflicts=arr(isrcStrategy.conflicts).filter((value):value is string=>typeof value==="string"&&value.trim().length>0);
+  if(conflicts.length)lines.push("ISRC conflict: multiple valid recording codes remain unresolved. Do not treat any single catalog result as the canonical recording match.");
   lines.push("ISRC routing: unavailable or pending verification. Use measured audio, embedded tags and supplied release context for provisional A&R guidance; confirm or register the ISRC and complete rights checks before wide distribution or external pitching.");
   const fallbackEvidence=arr(isrcStrategy.nonIsrcEvidence).filter((value):value is string=>typeof value==="string"&&value.trim().length>0);
   if(fallbackEvidence.length)lines.push("Available non-ISRC evidence: "+fallbackEvidence.join(", ")+".");
