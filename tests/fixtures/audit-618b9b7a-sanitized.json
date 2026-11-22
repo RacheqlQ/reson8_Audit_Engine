@@ -1,0 +1,3469 @@
+{
+  "auditId": "618b9b7a-5c0c-4acf-a583-f0e4e0f58a3b",
+  "evidence": {
+    "upc": null,
+    "isrc": "USSM10501515",
+    "album": "The Essential Michael Jackson",
+    "genre": "Pop",
+    "label": "Sony Music",
+    "title": "Will You Be There",
+    "artist": "Michael Jackson",
+    "genres": [
+      "Pop"
+    ],
+    "source": "audd",
+    "status": "recognized",
+    "matched": false,
+    "identity": {
+      "upc": null,
+      "isrc": "USSM10501515",
+      "album": "The Essential Michael Jackson",
+      "label": "Sony Music",
+      "title": "Will You Be There",
+      "artist": "Michael Jackson",
+      "genres": [
+        "Pop"
+      ],
+      "releaseDate": "2005-07-19",
+      "fieldProvenance": {
+        "upc": null,
+        "isrc": "tidal",
+        "album": "tidal",
+        "genre": "apple_music",
+        "label": "tidal",
+        "title": "tidal",
+        "artist": "tidal",
+        "releaseDate": "tidal"
+      },
+      "sourceProviders": [
+        "tidal",
+        "apple_music",
+        "id3"
+      ]
+    },
+    "platform": "apple_music",
+    "auditType": "COMBINED MASTER + DSP AUDIT",
+    "confidence": null,
+    "externalIds": {
+      "apple_music": "159295684"
+    },
+    "masterAudio": {
+      "provenance": "uploaded_audio_master",
+      "evidenceClass": "OBSERVED"
+    },
+    "releaseDate": "2005-07-19",
+    "canonicalUrl": "https://music.apple.com/ng/album/will-you-be-there-single-version/159292399?i=159295684&uo=4",
+    "sonicProfile": null,
+    "evidenceClass": "RECOGNIZED",
+    "catalogSources": [
+      {
+        "reason": "Provider returned track metadata.",
+        "status": "recognized",
+        "platform": "apple_music",
+        "catalogId": "159295684",
+        "canonicalUrl": "https://music.apple.com/ng/song/will-you-be-there-single-version/159295684"
+      },
+      {
+        "reason": "Provider returned track metadata.",
+        "status": "recognized",
+        "platform": "tidal",
+        "catalogId": "11335944",
+        "canonicalUrl": "https://tidal.com/browse/track/11335944"
+      }
+    ],
+    "reconciliation": {
+      "status": "conflict",
+      "identity": {
+        "upc": null,
+        "isrc": "USSM10501515",
+        "album": "The Essential Michael Jackson",
+        "label": "Sony Music",
+        "title": "Will You Be There",
+        "artist": "Michael Jackson",
+        "genres": [
+          "Pop"
+        ],
+        "releaseDate": "2005-07-19",
+        "fieldProvenance": {
+          "upc": null,
+          "isrc": "tidal",
+          "album": "tidal",
+          "genre": "apple_music",
+          "label": "tidal",
+          "title": "tidal",
+          "artist": "tidal",
+          "releaseDate": "tidal"
+        },
+        "sourceProviders": [
+          "tidal",
+          "apple_music",
+          "id3"
+        ]
+      },
+      "conflicts": [
+        {
+          "field": "title",
+          "values": [
+            "Will You Be There",
+            "Will You Be There (Single Version)",
+            "Michael Jackson - Will You Be There (Official Video - Upscaled)"
+          ]
+        },
+        {
+          "field": "artist",
+          "values": [
+            "Michael Jackson",
+            "michaeljacksonVEVO"
+          ]
+        }
+      ],
+      "evidenceClass": "RECOGNIZED",
+      "reconciledFields": [
+        "album"
+      ],
+      "releaseContextFields": [
+        "album"
+      ],
+      "reconciledRecordingFields": [],
+      "releaseContextDifferences": [
+        {
+          "field": "releaseDate",
+          "values": [
+            "2005-07-19",
+            "1993-06-28"
+          ]
+        }
+      ]
+    },
+    "fieldProvenance": {
+      "upc": null,
+      "isrc": "tidal",
+      "album": "tidal",
+      "genre": "apple_music",
+      "label": "tidal",
+      "title": "tidal",
+      "artist": "tidal",
+      "releaseDate": "tidal"
+    },
+    "sourceProviders": [
+      "tidal",
+      "apple_music",
+      "id3"
+    ],
+    "canonicalEvidence": {
+      "auditId": "618b9b7a-5c0c-4acf-a583-f0e4e0f58a3b",
+      "schemaVersion": "1.0.0",
+      "reconciliation": {
+        "status": "conflict",
+        "identity": {
+          "upc": null,
+          "isrc": "USSM10501515",
+          "album": "The Essential Michael Jackson",
+          "label": "Sony Music",
+          "title": null,
+          "artist": null,
+          "genres": [
+            "Pop"
+          ],
+          "releaseDate": "2005-07-19",
+          "fieldProvenance": {
+            "upc": null,
+            "isrc": "tidal",
+            "album": "tidal",
+            "genre": "apple_music",
+            "label": "tidal",
+            "title": null,
+            "artist": null,
+            "releaseDate": "tidal"
+          },
+          "sourceProviders": [
+            "tidal",
+            "apple_music",
+            "id3"
+          ]
+        },
+        "conflicts": [
+          {
+            "field": "title",
+            "values": [
+              "Will You Be There",
+              "Will You Be There (Single Version)",
+              "Michael Jackson - Will You Be There (Official Video - Upscaled)"
+            ]
+          },
+          {
+            "field": "artist",
+            "values": [
+              "Michael Jackson",
+              "michaeljacksonVEVO"
+            ]
+          }
+        ],
+        "evidenceClass": "RECOGNIZED",
+        "reconciledFields": [
+          "album"
+        ],
+        "releaseContextFields": [
+          "album"
+        ],
+        "reconciledRecordingFields": [],
+        "releaseContextDifferences": [
+          {
+            "field": "releaseDate",
+            "values": [
+              "2005-07-19",
+              "1993-06-28"
+            ]
+          }
+        ]
+      },
+      "sourceEvidence": {
+        "upc": null,
+        "isrc": "USSM10501515",
+        "album": "The Essential Michael Jackson",
+        "genre": "Pop",
+        "label": "Sony Music",
+        "title": "Will You Be There",
+        "artist": "Michael Jackson",
+        "genres": [
+          "Pop"
+        ],
+        "source": "audd",
+        "status": "recognized",
+        "matched": false,
+        "identity": {
+          "upc": null,
+          "isrc": "USSM10501515",
+          "album": "The Essential Michael Jackson",
+          "label": "Sony Music",
+          "title": "Will You Be There",
+          "artist": "Michael Jackson",
+          "genres": [
+            "Pop"
+          ],
+          "releaseDate": "2005-07-19",
+          "fieldProvenance": {
+            "upc": null,
+            "isrc": "tidal",
+            "album": "tidal",
+            "genre": "apple_music",
+            "label": "tidal",
+            "title": "tidal",
+            "artist": "tidal",
+            "releaseDate": "tidal"
+          },
+          "sourceProviders": [
+            "tidal",
+            "apple_music",
+            "id3"
+          ]
+        },
+        "platform": "apple_music",
+        "auditType": "COMBINED MASTER + DSP AUDIT",
+        "confidence": null,
+        "externalIds": {
+          "apple_music": "159295684"
+        },
+        "masterAudio": {
+          "provenance": "uploaded_audio_master",
+          "evidenceClass": "OBSERVED"
+        },
+        "releaseDate": "2005-07-19",
+        "canonicalUrl": "https://music.apple.com/ng/album/will-you-be-there-single-version/159292399?i=159295684&uo=4",
+        "sonicProfile": null,
+        "evidenceClass": "RECOGNIZED",
+        "catalogSources": [
+          {
+            "reason": "Provider returned track metadata.",
+            "status": "recognized",
+            "platform": "apple_music",
+            "catalogId": "159295684",
+            "canonicalUrl": "https://music.apple.com/ng/song/will-you-be-there-single-version/159295684"
+          },
+          {
+            "reason": "Provider returned track metadata.",
+            "status": "recognized",
+            "platform": "tidal",
+            "catalogId": "11335944",
+            "canonicalUrl": "https://tidal.com/browse/track/11335944"
+          }
+        ],
+        "reconciliation": {
+          "status": "conflict",
+          "identity": {
+            "upc": null,
+            "isrc": "USSM10501515",
+            "album": "The Essential Michael Jackson",
+            "label": "Sony Music",
+            "title": "Will You Be There",
+            "artist": "Michael Jackson",
+            "genres": [
+              "Pop"
+            ],
+            "releaseDate": "2005-07-19",
+            "fieldProvenance": {
+              "upc": null,
+              "isrc": "tidal",
+              "album": "tidal",
+              "genre": "apple_music",
+              "label": "tidal",
+              "title": "tidal",
+              "artist": "tidal",
+              "releaseDate": "tidal"
+            },
+            "sourceProviders": [
+              "tidal",
+              "apple_music",
+              "id3"
+            ]
+          },
+          "conflicts": [
+            {
+              "field": "title",
+              "values": [
+                "Will You Be There",
+                "Will You Be There (Single Version)",
+                "Michael Jackson - Will You Be There (Official Video - Upscaled)"
+              ]
+            },
+            {
+              "field": "artist",
+              "values": [
+                "Michael Jackson",
+                "michaeljacksonVEVO"
+              ]
+            }
+          ],
+          "evidenceClass": "RECOGNIZED",
+          "reconciledFields": [
+            "album"
+          ],
+          "releaseContextFields": [
+            "album"
+          ],
+          "reconciledRecordingFields": [],
+          "releaseContextDifferences": [
+            {
+              "field": "releaseDate",
+              "values": [
+                "2005-07-19",
+                "1993-06-28"
+              ]
+            }
+          ]
+        },
+        "fieldProvenance": {
+          "upc": null,
+          "isrc": "tidal",
+          "album": "tidal",
+          "genre": "apple_music",
+          "label": "tidal",
+          "title": "tidal",
+          "artist": "tidal",
+          "releaseDate": "tidal"
+        },
+        "sourceProviders": [
+          "tidal",
+          "apple_music",
+          "id3"
+        ],
+        "catalogPopularity": null,
+        "playlistDiscovery": {
+          "status": "unavailable",
+          "outcomes": [
+            {
+              "reason": "Spotify API returned HTTP 403 Forbidden for https://api.spotify.com/v1/search?q=Pop&type=playlist&market=NG&limit=10. Spotify message: unknown Spotify API error. If the Spotify app",
+              "status": "unavailable",
+              "provider": "spotify"
+            },
+            {
+              "reason": "Apple Music developer token is not configured.",
+              "status": "not_configured",
+              "provider": "apple_music"
+            }
+          ],
+          "candidates": [],
+          "moodSource": "uploaded-master provisional audio_feature_heuristics_v1",
+          "moodTagsUsed": [
+            "driving",
+            "tense"
+          ]
+        },
+        "sourceCombination": "master_and_dsp",
+        "genreClassification": {
+          "model": {
+            "status": "disabled",
+            "predictions": []
+          },
+          "genres": [
+            {
+              "id": "pop",
+              "label": "Pop",
+              "sources": [
+                "apple_music"
+              ],
+              "confidence": 1
+            }
+          ],
+          "method": "weighted_provider_evidence_with_limited_tempo_prior",
+          "evidence": {
+            "tempoUsed": false,
+            "providerCount": 1,
+            "providerWeightShare": 1,
+            "tempoContributionCap": 0.15
+          },
+          "abstained": false,
+          "sceneTags": [],
+          "confidence": 1,
+          "regionTags": [],
+          "primaryGenre": "Pop",
+          "unmappedTags": [],
+          "adjacentLanes": [
+            "R&B",
+            "Hip-Hop",
+            "House"
+          ],
+          "taxonomyVersion": "2026.2"
+        },
+        "catalogPopularityScale": null,
+        "metadataSourcesChecked": [
+          "apple_music",
+          "tidal",
+          "id3",
+          "audd"
+        ]
+      },
+      "assessmentEvidence": {
+        "upc": null,
+        "isrc": "USSM10501515",
+        "album": "The Essential Michael Jackson",
+        "genre": "Pop",
+        "label": "Sony Music",
+        "title": null,
+        "artist": null,
+        "genres": [
+          "Pop"
+        ],
+        "source": "audd",
+        "status": "recognized",
+        "matched": false,
+        "identity": {
+          "upc": null,
+          "isrc": "USSM10501515",
+          "album": "The Essential Michael Jackson",
+          "label": "Sony Music",
+          "title": null,
+          "artist": null,
+          "genres": [
+            "Pop"
+          ],
+          "releaseDate": "2005-07-19",
+          "fieldProvenance": {
+            "upc": null,
+            "isrc": "tidal",
+            "album": "tidal",
+            "genre": "apple_music",
+            "label": "tidal",
+            "title": null,
+            "artist": null,
+            "releaseDate": "tidal"
+          },
+          "sourceProviders": [
+            "tidal",
+            "apple_music",
+            "id3"
+          ]
+        },
+        "platform": "apple_music",
+        "auditType": "METADATA-BASED AUDIT",
+        "confidence": null,
+        "externalIds": {
+          "apple_music": "159295684"
+        },
+        "masterAudio": {
+          "provenance": "uploaded_audio_master",
+          "evidenceClass": "OBSERVED"
+        },
+        "releaseDate": "2005-07-19",
+        "canonicalUrl": "https://music.apple.com/ng/album/will-you-be-there-single-version/159292399?i=159295684&uo=4",
+        "sonicProfile": null,
+        "evidenceClass": "RECOGNIZED",
+        "catalogSources": [
+          {
+            "reason": "Provider returned track metadata.",
+            "status": "recognized",
+            "platform": "apple_music",
+            "catalogId": "159295684",
+            "canonicalUrl": "https://music.apple.com/ng/song/will-you-be-there-single-version/159295684"
+          },
+          {
+            "reason": "Provider returned track metadata.",
+            "status": "recognized",
+            "platform": "tidal",
+            "catalogId": "11335944",
+            "canonicalUrl": "https://tidal.com/browse/track/11335944"
+          }
+        ],
+        "reconciliation": {
+          "status": "conflict",
+          "identity": {
+            "upc": null,
+            "isrc": "USSM10501515",
+            "album": "The Essential Michael Jackson",
+            "label": "Sony Music",
+            "title": null,
+            "artist": null,
+            "genres": [
+              "Pop"
+            ],
+            "releaseDate": "2005-07-19",
+            "fieldProvenance": {
+              "upc": null,
+              "isrc": "tidal",
+              "album": "tidal",
+              "genre": "apple_music",
+              "label": "tidal",
+              "title": null,
+              "artist": null,
+              "releaseDate": "tidal"
+            },
+            "sourceProviders": [
+              "tidal",
+              "apple_music",
+              "id3"
+            ]
+          },
+          "conflicts": [
+            {
+              "field": "title",
+              "values": [
+                "Will You Be There",
+                "Will You Be There (Single Version)",
+                "Michael Jackson - Will You Be There (Official Video - Upscaled)"
+              ]
+            },
+            {
+              "field": "artist",
+              "values": [
+                "Michael Jackson",
+                "michaeljacksonVEVO"
+              ]
+            }
+          ],
+          "evidenceClass": "RECOGNIZED",
+          "reconciledFields": [
+            "album"
+          ],
+          "releaseContextFields": [
+            "album"
+          ],
+          "reconciledRecordingFields": [],
+          "releaseContextDifferences": [
+            {
+              "field": "releaseDate",
+              "values": [
+                "2005-07-19",
+                "1993-06-28"
+              ]
+            }
+          ]
+        },
+        "fieldProvenance": {
+          "upc": null,
+          "isrc": "tidal",
+          "album": "tidal",
+          "genre": "apple_music",
+          "label": "tidal",
+          "title": null,
+          "artist": null,
+          "releaseDate": "tidal"
+        },
+        "sourceProviders": [
+          "tidal",
+          "apple_music",
+          "id3"
+        ],
+        "catalogPopularity": null,
+        "sourceCombination": "master_and_dsp",
+        "genreClassification": {
+          "model": {
+            "status": "disabled",
+            "predictions": []
+          },
+          "genres": [
+            {
+              "id": "pop",
+              "label": "Pop",
+              "sources": [
+                "apple_music"
+              ],
+              "confidence": 1
+            }
+          ],
+          "method": "weighted_provider_evidence_with_limited_tempo_prior",
+          "evidence": {
+            "tempoUsed": false,
+            "providerCount": 1,
+            "providerWeightShare": 1,
+            "tempoContributionCap": 0.15
+          },
+          "abstained": false,
+          "sceneTags": [],
+          "confidence": 1,
+          "regionTags": [],
+          "primaryGenre": "Pop",
+          "unmappedTags": [],
+          "adjacentLanes": [
+            "R&B",
+            "Hip-Hop",
+            "House"
+          ],
+          "taxonomyVersion": "2026.2"
+        },
+        "catalogPopularityScale": null,
+        "metadataSourcesChecked": [
+          "apple_music",
+          "tidal",
+          "musicbrainz",
+          "id3",
+          "audd"
+        ]
+      },
+      "identityFieldProvenance": {
+        "upc": null,
+        "isrc": "tidal",
+        "album": "tidal",
+        "genre": "apple_music",
+        "label": "tidal",
+        "title": null,
+        "artist": null,
+        "releaseDate": "tidal"
+      }
+    },
+    "catalogPopularity": null,
+    "playlistDiscovery": {
+      "status": "unavailable",
+      "outcomes": [
+        {
+          "reason": "Spotify API returned HTTP 403 Forbidden for https://api.spotify.com/v1/search?q=Pop&type=playlist&market=NG&limit=10. Spotify message: unknown Spotify API error. If the Spotify app",
+          "status": "unavailable",
+          "provider": "spotify"
+        },
+        {
+          "reason": "Apple Music developer token is not configured.",
+          "status": "not_configured",
+          "provider": "apple_music"
+        }
+      ],
+      "candidates": [],
+      "moodSource": "uploaded-master provisional audio_feature_heuristics_v1",
+      "moodTagsUsed": [
+        "driving",
+        "tense"
+      ]
+    },
+    "sourceCombination": "master_and_dsp",
+    "genreClassification": {
+      "model": {
+        "status": "disabled",
+        "predictions": []
+      },
+      "genres": [
+        {
+          "id": "pop",
+          "label": "Pop",
+          "sources": [
+            "apple_music"
+          ],
+          "confidence": 1
+        }
+      ],
+      "method": "weighted_provider_evidence_with_limited_tempo_prior",
+      "evidence": {
+        "tempoUsed": false,
+        "providerCount": 1,
+        "providerWeightShare": 1,
+        "tempoContributionCap": 0.15
+      },
+      "abstained": false,
+      "sceneTags": [],
+      "confidence": 1,
+      "regionTags": [],
+      "primaryGenre": "Pop",
+      "unmappedTags": [],
+      "adjacentLanes": [
+        "R&B",
+        "Hip-Hop",
+        "House"
+      ],
+      "taxonomyVersion": "2026.2"
+    },
+    "catalogPopularityScale": null,
+    "metadataSourcesChecked": [
+      "apple_music",
+      "tidal",
+      "id3",
+      "audd"
+    ]
+  },
+  "sonicDna": {
+    "bpm": null,
+    "key": null,
+    "mode": null,
+    "channels": 2,
+    "moodTags": [
+      "driving",
+      "tense"
+    ],
+    "rmsEnergy": 0.09706511187942293,
+    "provenance": "uploaded_audio_master",
+    "sampleRate": 48000,
+    "limitations": [
+      "The tonal centre remains provisional. A stable window consensus was not reached across the analyzed audio segments. Resampled candidate rankings are not stable enough for confirmation. The leading candidate is too close to its runner-up. Relative major and minor readings remain close.",
+      "Tempo could not be determined reliably from the supplied audio.",
+      "No vocal conclusion is available because the separation model did not complete."
+    ],
+    "genreContext": [
+      "Pop"
+    ],
+    "loudnessLufs": -15.1,
+    "rmsLevelDbfs": -20.25873681088543,
+    "truePeakDbfs": -2.3,
+    "evidenceClass": "OBSERVED",
+    "keyCandidates": [
+      {
+        "key": "F#",
+        "mode": "minor",
+        "score": 0.836283
+      },
+      {
+        "key": "B",
+        "mode": "minor",
+        "score": 0.82619
+      },
+      {
+        "key": "D",
+        "mode": "major",
+        "score": 0.81748
+      },
+      {
+        "key": "A",
+        "mode": "major",
+        "score": 0.807372
+      },
+      {
+        "key": "G#",
+        "mode": "minor",
+        "score": 0.785335
+      }
+    ],
+    "keyConfidence": 0.15624795324996274,
+    "vocalFeatures": {
+      "model": {
+        "name": "Open-Unmix UMX-HQ vocals",
+        "artifactSha256": "f27742bb52b24cb039614dc76d0764e279df3eb2a9d6daa82c6daee3369ec747"
+      },
+      "pitch": {
+        "track": [],
+        "lowerHz": null,
+        "upperHz": null,
+        "medianHz": null,
+        "voicedFrameRatio": null
+      },
+      "lyrics": "not_requested",
+      "method": "not_run",
+      "reason": "Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
+      "status": "unavailable",
+      "delivery": "not_classified",
+      "layering": "not_classified",
+      "limitations": [
+        "No vocal conclusion is available because the separation model did not complete."
+      ],
+      "reviewStatus": "not_human_reviewed",
+      "voicePresence": "uncertain",
+      "activitySegments": [],
+      "vocalEnergyShare": null,
+      "vocalStemRmsDbfs": null,
+      "vocalActivityRatio": null,
+      "activeDurationSeconds": 0
+    },
+    "alternateTempo": null,
+    "dynamicRangeDb": 22.359281675272243,
+    "keyTuningCents": 0.9440400539649929,
+    "rhythmFeatures": {
+      "bpm": null,
+      "method": "high_frequency_transient_autocorrelation",
+      "status": "insufficient_evidence",
+      "confidence": 0.1647488612447099,
+      "candidateBpms": [
+        55,
+        165,
+        169,
+        173,
+        83
+      ],
+      "onsetEnvelope": [
+        0.006618,
+        0.01341,
+        0.001089,
+        0.018746,
+        0.013523,
+        0.01361,
+        0.096527,
+        0.309284,
+        0.384366,
+        0.370171,
+        0.344826,
+        0.405298,
+        0.32193,
+        0.402694,
+        0.512964,
+        0.448666,
+        0.485404,
+        0.282767,
+        0.443192,
+        0.599173,
+        0.405723,
+        0.531576,
+        0.229996,
+        0.409034,
+        0.515062,
+        0.326837,
+        0.50021,
+        0.38195,
+        0.389396,
+        0.393325,
+        0.368343,
+        0.253549,
+        0.393827,
+        0.317271,
+        0.398184,
+        0.442507,
+        0.290898,
+        0.301387,
+        0.462312,
+        0.33511,
+        0.359453,
+        0.469803,
+        0.244717,
+        0.573308,
+        0.226905,
+        0.339833,
+        0.50111,
+        0.179835,
+        0.296526,
+        0.472312,
+        0.374219,
+        0.530159,
+        0.612505,
+        0.187193,
+        0.429658,
+        0.364299,
+        0.433928,
+        0.284439,
+        0.309474,
+        0.311163,
+        0.413616,
+        0.272973,
+        0.381508,
+        0.30631,
+        0.426422,
+        0.336779,
+        0.268883,
+        0.350218,
+        0.410065,
+        0.321236,
+        0.323021,
+        0.40881,
+        0.399032,
+        0.465303,
+        0.429792,
+        0.214714,
+        0.399451,
+        0.338114,
+        0.514031,
+        0.299138,
+        0.215802,
+        0.448274,
+        0.483257,
+        0.454379,
+        0.470334,
+        0.369654,
+        0.354865,
+        0.253833,
+        0.375243,
+        0.29586,
+        0.184286,
+        1,
+        0.502948,
+        0.240592,
+        0.331478,
+        0.350064,
+        0.451932,
+        0.455152,
+        0.276812,
+        0.562853,
+        0.275899,
+        0.326859,
+        0.390178,
+        0.260713,
+        0.491019,
+        0.299399,
+        0.763963,
+        0.180606,
+        0.630587,
+        0.524986,
+        0.545144,
+        0.482541,
+        0.225084,
+        0.475898,
+        0.193571,
+        0.231954,
+        0.458338,
+        0.417194,
+        0.311174,
+        0.313559,
+        0.293747,
+        0.291216,
+        0.247431,
+        0.215192,
+        0.079995,
+        0.042624,
+        0.008447,
+        0.001841
+      ],
+      "alternateTempo": null,
+      "beatGridStatus": "not_determined",
+      "candidateScores": [
+        {
+          "bpm": 55,
+          "score": 0.266632
+        },
+        {
+          "bpm": 165,
+          "score": 0.263803
+        },
+        {
+          "bpm": 169,
+          "score": 0.263803
+        },
+        {
+          "bpm": 173,
+          "score": 0.228873
+        },
+        {
+          "bpm": 83,
+          "score": 0.209523
+        }
+      ],
+      "windowConsensus": {
+        "method": "deterministic_window_bootstrap",
+        "winner": null,
+        "iterations": 1000,
+        "windowCount": 0,
+        "observedAgreement": null,
+        "lowerAgreementBound": null,
+        "upperAgreementBound": null
+      },
+      "abstentionReason": "Tempo candidate prominence is too weak to support a reliable result.",
+      "beatTimesSeconds": [],
+      "independentEstimator": {
+        "bpm": 41.67,
+        "score": 0.450369,
+        "method": "low_frequency_energy_envelope_autocorrelation",
+        "frameCount": 10881,
+        "limitation": null
+      },
+      "downbeatGridAssumption": null,
+      "downbeatCandidateTimesSeconds": []
+    },
+    "durationSeconds": 217.632,
+    "loudnessRangeLu": 10.8,
+    "tempoConfidence": 0.1647488612447099,
+    "tonalResolution": {
+      "mode": "minor",
+      "tonic": "F#",
+      "method": "circle_of_fifths_audio_first_v1",
+      "status": "PROVISIONAL",
+      "candidates": [
+        {
+          "mode": "minor",
+          "score": 0.836283,
+          "tonic": "F#",
+          "margin": 0,
+          "pitchClass": 6,
+          "bootstrapShare": 0.113281,
+          "windowAgreement": 0
+        },
+        {
+          "mode": "minor",
+          "score": 0.82619,
+          "tonic": "B",
+          "margin": 0.012069,
+          "pitchClass": 11,
+          "bootstrapShare": 0.191406,
+          "windowAgreement": 0
+        },
+        {
+          "mode": "major",
+          "score": 0.81748,
+          "tonic": "D",
+          "margin": 0.022484,
+          "pitchClass": 2,
+          "bootstrapShare": 0.160156,
+          "windowAgreement": 0.1875
+        },
+        {
+          "mode": "major",
+          "score": 0.807372,
+          "tonic": "A",
+          "margin": 0.034571,
+          "pitchClass": 9,
+          "bootstrapShare": 0.066406,
+          "windowAgreement": 0.125
+        },
+        {
+          "mode": "minor",
+          "score": 0.785335,
+          "tonic": "G#",
+          "margin": 0.060922,
+          "pitchClass": 8,
+          "bootstrapShare": 0.289063,
+          "windowAgreement": 0.1875
+        }
+      ],
+      "thresholds": {
+        "minWindows": 3,
+        "minMeanSalience": 0.12,
+        "minBootstrapShare": 0.8,
+        "minRunnerUpMargin": 0.025,
+        "minWindowAgreement": 0.7,
+        "bootstrapIterations": 256,
+        "relativePairAmbiguityMargin": 0.04,
+        "adjacentFifthsAmbiguityMargin": 0.04
+      },
+      "reasonCodes": [
+        "LOW_WINDOW_CONSENSUS",
+        "LOW_BOOTSTRAP_CONSENSUS",
+        "LOW_RUNNER_UP_MARGIN",
+        "RELATIVE_MAJOR_MINOR_AMBIGUITY"
+      ],
+      "meanSalience": 0.240941,
+      "bootstrapShare": 0.113281,
+      "runnerUpMargin": 0.012069,
+      "windowAgreement": 0,
+      "validWindowCount": 16,
+      "downbeatAnchorWindowCount": 0,
+      "cadenceWeightedWindowCount": 1
+    },
+    "harmonicFeatures": {
+      "key": null,
+      "mode": null,
+      "method": "fft_harmonic_chroma_ensemble",
+      "status": "measured",
+      "confidence": 0.15624795324996274,
+      "limitation": "The tonal centre remains provisional. A stable window consensus was not reached across the analyzed audio segments. Resampled candidate rankings are not stable enough for confirmation. The leading candidate is too close to its runner-up. Relative major and minor readings remain close.",
+      "tuningCents": 0.9440400539649929,
+      "segmentChroma": [
+        {
+          "chroma": [
+            0.102208,
+            0.030852,
+            0.309439,
+            0.077329,
+            0.039408,
+            0.020023,
+            0.100211,
+            0.076309,
+            0.019099,
+            0.05626,
+            0.101076,
+            0.067787
+          ],
+          "endSeconds": 12,
+          "winningKey": "D",
+          "winningMode": "major",
+          "startSeconds": 0,
+          "winningScore": 0.497449
+        },
+        {
+          "chroma": [
+            0.01068,
+            0.073486,
+            0.110198,
+            0.03074,
+            0.035035,
+            0.029895,
+            0.106574,
+            0.07062,
+            0.096645,
+            0.276737,
+            0.117111,
+            0.04228
+          ],
+          "endSeconds": 24,
+          "winningKey": "A",
+          "winningMode": "major",
+          "startSeconds": 12,
+          "winningScore": 0.508808
+        },
+        {
+          "chroma": [
+            0.055266,
+            0.050452,
+            0.127066,
+            0.083389,
+            0.10346,
+            0.014559,
+            0.197174,
+            0.156095,
+            0.076302,
+            0.06185,
+            0.027291,
+            0.047097
+          ],
+          "endSeconds": 42,
+          "winningKey": "D",
+          "winningMode": "major",
+          "startSeconds": 30,
+          "winningScore": 0.562978
+        },
+        {
+          "chroma": [
+            0.042795,
+            0.054409,
+            0.247976,
+            0.059597,
+            0.11896,
+            0.027611,
+            0.079414,
+            0.084485,
+            0.031135,
+            0.108547,
+            0.071457,
+            0.073614
+          ],
+          "endSeconds": 54,
+          "winningKey": "D",
+          "winningMode": "major",
+          "startSeconds": 42,
+          "winningScore": 0.749883
+        },
+        {
+          "chroma": [
+            0.051558,
+            0.040433,
+            0.150957,
+            0.057308,
+            0.028334,
+            0.023851,
+            0.120513,
+            0.049462,
+            0.098312,
+            0.253688,
+            0.064578,
+            0.061005
+          ],
+          "endSeconds": 66,
+          "winningKey": "D",
+          "winningMode": "major",
+          "startSeconds": 54,
+          "winningScore": 0.586669
+        },
+        {
+          "chroma": [
+            0.043874,
+            0.051959,
+            0.196713,
+            0.107314,
+            0.062516,
+            0.030048,
+            0.099975,
+            0.127769,
+            0.01653,
+            0.114127,
+            0.05055,
+            0.098625
+          ],
+          "endSeconds": 84,
+          "winningKey": "D",
+          "winningMode": "major",
+          "startSeconds": 72,
+          "winningScore": 0.749448
+        },
+        {
+          "chroma": [
+            0.039711,
+            0.054878,
+            0.167143,
+            0.010405,
+            0.078499,
+            0.044122,
+            0.086359,
+            0.090165,
+            0.021965,
+            0.204327,
+            0.086691,
+            0.115736
+          ],
+          "endSeconds": 96,
+          "winningKey": "D",
+          "winningMode": "major",
+          "startSeconds": 84,
+          "winningScore": 0.799966
+        },
+        {
+          "chroma": [
+            0.026484,
+            0.026973,
+            0.258751,
+            0.028145,
+            0.049605,
+            0.031328,
+            0.087005,
+            0.047731,
+            0.049655,
+            0.232165,
+            0.113722,
+            0.048437
+          ],
+          "endSeconds": 108,
+          "winningKey": "D",
+          "winningMode": "major",
+          "startSeconds": 96,
+          "winningScore": 0.673484
+        },
+        {
+          "chroma": [
+            0.08545,
+            0.028765,
+            0.127738,
+            0.077871,
+            0.057098,
+            0.108727,
+            0.082018,
+            0.075751,
+            0.063323,
+            0.13556,
+            0.110256,
+            0.047443
+          ],
+          "endSeconds": 126,
+          "winningKey": "D",
+          "winningMode": "minor",
+          "startSeconds": 114,
+          "winningScore": 0.735523
+        },
+        {
+          "chroma": [
+            0.035131,
+            0.022528,
+            0.038892,
+            0.070935,
+            0.112243,
+            0.027264,
+            0.060006,
+            0.05686,
+            0.118175,
+            0.111426,
+            0.106635,
+            0.239904
+          ],
+          "endSeconds": 138,
+          "winningKey": "E",
+          "winningMode": "major",
+          "startSeconds": 126,
+          "winningScore": 0.580238
+        },
+        {
+          "chroma": [
+            0.070248,
+            0.016503,
+            0.029907,
+            0.073783,
+            0.179915,
+            0.050387,
+            0.056252,
+            0.047102,
+            0.068983,
+            0.056972,
+            0.066843,
+            0.283105
+          ],
+          "endSeconds": 150,
+          "winningKey": "E",
+          "winningMode": "major",
+          "startSeconds": 138,
+          "winningScore": 0.577053
+        },
+        {
+          "chroma": [
+            0.051351,
+            0.156338,
+            0.067211,
+            0.034497,
+            0.024116,
+            0.063298,
+            0.191402,
+            0.044404,
+            0.061993,
+            0.031618,
+            0.187427,
+            0.086346
+          ],
+          "endSeconds": 168,
+          "winningKey": "F#",
+          "winningMode": "major",
+          "startSeconds": 156,
+          "winningScore": 0.789173
+        },
+        {
+          "chroma": [
+            0.057702,
+            0.074377,
+            0.074456,
+            0.080785,
+            0.060604,
+            0.064222,
+            0.092617,
+            0.075425,
+            0.137484,
+            0.042748,
+            0.183446,
+            0.056134
+          ],
+          "endSeconds": 180,
+          "winningKey": "A#",
+          "winningMode": "minor",
+          "startSeconds": 168,
+          "winningScore": 0.562712
+        },
+        {
+          "chroma": [
+            0.079035,
+            0.03476,
+            0.073223,
+            0.220487,
+            0.076411,
+            0.042944,
+            0.032503,
+            0.062958,
+            0.233734,
+            0.051078,
+            0.059105,
+            0.033762
+          ],
+          "endSeconds": 192,
+          "winningKey": "G#",
+          "winningMode": "major",
+          "startSeconds": 180,
+          "winningScore": 0.657682
+        },
+        {
+          "chroma": [
+            0.05221,
+            0.046233,
+            0.073301,
+            0.112998,
+            0.072363,
+            0.038104,
+            0.077825,
+            0.072399,
+            0.242592,
+            0.057384,
+            0.075206,
+            0.079384
+          ],
+          "endSeconds": 210,
+          "winningKey": "G#",
+          "winningMode": "minor",
+          "startSeconds": 198,
+          "winningScore": 0.651749
+        },
+        {
+          "chroma": [
+            0.034321,
+            0.06754,
+            0.042026,
+            0.184517,
+            0.084633,
+            0.043152,
+            0.040018,
+            0.101545,
+            0.242807,
+            0.044385,
+            0.070235,
+            0.044819
+          ],
+          "endSeconds": 217.632,
+          "winningKey": "G#",
+          "winningMode": "minor",
+          "startSeconds": 205.632,
+          "winningScore": 0.623369
+        }
+      ],
+      "topCandidates": [
+        {
+          "key": "F#",
+          "mode": "minor",
+          "score": 0.836283
+        },
+        {
+          "key": "B",
+          "mode": "minor",
+          "score": 0.82619
+        },
+        {
+          "key": "D",
+          "mode": "major",
+          "score": 0.81748
+        },
+        {
+          "key": "A",
+          "mode": "major",
+          "score": 0.807372
+        },
+        {
+          "key": "G#",
+          "mode": "minor",
+          "score": 0.785335
+        }
+      ],
+      "analysisWindows": 16,
+      "tonalResolution": {
+        "mode": "minor",
+        "tonic": "F#",
+        "method": "circle_of_fifths_audio_first_v1",
+        "status": "PROVISIONAL",
+        "candidates": [
+          {
+            "mode": "minor",
+            "score": 0.836283,
+            "tonic": "F#",
+            "margin": 0,
+            "pitchClass": 6,
+            "bootstrapShare": 0.113281,
+            "windowAgreement": 0
+          },
+          {
+            "mode": "minor",
+            "score": 0.82619,
+            "tonic": "B",
+            "margin": 0.012069,
+            "pitchClass": 11,
+            "bootstrapShare": 0.191406,
+            "windowAgreement": 0
+          },
+          {
+            "mode": "major",
+            "score": 0.81748,
+            "tonic": "D",
+            "margin": 0.022484,
+            "pitchClass": 2,
+            "bootstrapShare": 0.160156,
+            "windowAgreement": 0.1875
+          },
+          {
+            "mode": "major",
+            "score": 0.807372,
+            "tonic": "A",
+            "margin": 0.034571,
+            "pitchClass": 9,
+            "bootstrapShare": 0.066406,
+            "windowAgreement": 0.125
+          },
+          {
+            "mode": "minor",
+            "score": 0.785335,
+            "tonic": "G#",
+            "margin": 0.060922,
+            "pitchClass": 8,
+            "bootstrapShare": 0.289063,
+            "windowAgreement": 0.1875
+          }
+        ],
+        "thresholds": {
+          "minWindows": 3,
+          "minMeanSalience": 0.12,
+          "minBootstrapShare": 0.8,
+          "minRunnerUpMargin": 0.025,
+          "minWindowAgreement": 0.7,
+          "bootstrapIterations": 256,
+          "relativePairAmbiguityMargin": 0.04,
+          "adjacentFifthsAmbiguityMargin": 0.04
+        },
+        "reasonCodes": [
+          "LOW_WINDOW_CONSENSUS",
+          "LOW_BOOTSTRAP_CONSENSUS",
+          "LOW_RUNNER_UP_MARGIN",
+          "RELATIVE_MAJOR_MINOR_AMBIGUITY"
+        ],
+        "meanSalience": 0.240941,
+        "bootstrapShare": 0.113281,
+        "runnerUpMargin": 0.012069,
+        "windowAgreement": 0,
+        "validWindowCount": 16,
+        "downbeatAnchorWindowCount": 0,
+        "cadenceWeightedWindowCount": 1
+      },
+      "windowConsensus": {
+        "method": "deterministic_window_bootstrap",
+        "winner": "D:major",
+        "iterations": 1000,
+        "windowCount": 16,
+        "observedAgreement": 0.4375,
+        "lowerAgreementBound": 0.1875,
+        "upperAgreementBound": 0.6875
+      },
+      "resolutionStatus": "PROVISIONAL",
+      "segmentAgreement": 0,
+      "fftButterflyCount": 9412608,
+      "confidenceSemantics": "heuristic_score_diagnostic_not_calibrated_probability",
+      "independentEstimator": {
+        "key": "D",
+        "mode": "major",
+        "score": 0.851616,
+        "margin": 0.206078,
+        "method": "goertzel_pitch_frequency_bank",
+        "limitation": null,
+        "analyzedPitchCount": 16
+      },
+      "tuningEvidenceWindows": 16,
+      "relativeMajorMinorAmbiguity": true,
+      "independentEstimatorDisagrees": false
+    },
+    "zeroCrossingRate": 0.15070170084580883,
+    "spectralRolloffHz": 3535.8664772727275,
+    "tempoCandidateBpm": 55,
+    "spectralCentroidHz": 1747.8869823261584,
+    "genreClassification": {
+      "model": {
+        "status": "disabled",
+        "predictions": []
+      },
+      "genres": [
+        {
+          "id": "pop",
+          "label": "Pop",
+          "sources": [
+            "apple_music"
+          ],
+          "confidence": 1
+        }
+      ],
+      "method": "weighted_provider_evidence_with_limited_tempo_prior",
+      "evidence": {
+        "tempoUsed": false,
+        "providerCount": 1,
+        "providerWeightShare": 1,
+        "tempoContributionCap": 0.15
+      },
+      "abstained": false,
+      "sceneTags": [],
+      "confidence": 1,
+      "regionTags": [],
+      "primaryGenre": "Pop",
+      "unmappedTags": [],
+      "adjacentLanes": [
+        "R&B",
+        "Hip-Hop",
+        "House"
+      ],
+      "taxonomyVersion": "2026.2"
+    },
+    "keySegmentAgreement": 0,
+    "spectralBandwidthHz": 1558.1713305504018,
+    "tuningEvidenceWindows": 16,
+    "acousticFeatureProfile": {
+      "status": "measured",
+      "provenance": {
+        "downmix": "arithmetic_mean",
+        "channels": 2,
+        "algorithm": "reson8-windowed-radix2-fft",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "aggregation": "median_and_percentiles",
+        "windowCount": 128,
+        "featureVersion": "acoustic-profile-v1",
+        "hopSizeSamples": 1024,
+        "durationSeconds": 217.632,
+        "sourceEndSeconds": 217.632,
+        "maxWindowsApplied": true,
+        "sourceAudioSha256": "c7dd264f369257ccb240b470233de03ed94a17d69319b60133cf8fc05813de31",
+        "windowSizeSamples": 2048,
+        "analysisResampling": "block_average_antialias",
+        "sourceSampleRateHz": 48000,
+        "sourceStartSeconds": 0,
+        "analysisSampleRateHz": 12000
+      },
+      "descriptors": {
+        "rmsDbfs": {
+          "p10": -38.333415788055184,
+          "p90": -16.98409388761063,
+          "unit": "dBFS",
+          "median": -20.862446083175712,
+          "method": "windowed_pcm_rms"
+        },
+        "peakDbfs": {
+          "p10": -26.63469748864569,
+          "p90": -6.132519502907435,
+          "unit": "dBFS",
+          "median": -9.006686760234107,
+          "method": "windowed_pcm_peak"
+        },
+        "spectralFlux": {
+          "p10": 0.22456427270064658,
+          "p90": 0.7079167895375759,
+          "unit": "ratio",
+          "median": 0.42338119831675464,
+          "method": "positive_spectral_flux"
+        },
+        "crestFactorDb": {
+          "p10": 9.418024875031849,
+          "p90": 14.032874916311703,
+          "unit": "dB",
+          "median": 11.263302459138373,
+          "method": "peak_to_rms"
+        },
+        "spectralFlatness": {
+          "p10": 0.3193746250911702,
+          "p90": 0.6488709788344236,
+          "unit": "ratio",
+          "median": 0.5068189820109312,
+          "method": "geometric_to_arithmetic_spectral_mean"
+        },
+        "zeroCrossingRate": {
+          "p10": 0.06531509526135808,
+          "p90": 0.23634587200781632,
+          "unit": "ratio",
+          "median": 0.1389838788470933,
+          "method": "pcm_zero_crossing_rate"
+        },
+        "lowBandEnergyRatio": {
+          "p10": 0.07742719897475289,
+          "p90": 0.7375596833859883,
+          "unit": "ratio",
+          "median": 0.34490079659375206,
+          "method": "fft_band_power_ratio_20_250_hz"
+        },
+        "midBandEnergyRatio": {
+          "p10": 0.24318455860726462,
+          "p90": 0.899774514582226,
+          "unit": "ratio",
+          "median": 0.582911380805623,
+          "method": "fft_band_power_ratio_250_4000_hz"
+        },
+        "spectralCentroidHz": {
+          "p10": 1111.1023731341538,
+          "p90": 2205.252676845797,
+          "unit": "Hz",
+          "median": 1675.077473151891,
+          "method": "hann_window_radix2_fft"
+        },
+        "highBandEnergyRatio": {
+          "p10": 0.0015164410307808302,
+          "p90": 0.04018976622243059,
+          "unit": "ratio",
+          "median": 0.008806258282151428,
+          "method": "fft_band_power_ratio_4000_hz_to_nyquist"
+        },
+        "spectralBandwidthHz": {
+          "p10": 1301.3203683755928,
+          "p90": 1776.660421440974,
+          "unit": "Hz",
+          "median": 1488.5012354357405,
+          "method": "hann_window_radix2_fft"
+        },
+        "spectralRolloff85Hz": {
+          "p10": 2350.1953125,
+          "p90": 4381.640625,
+          "unit": "Hz",
+          "median": 3413.0859375,
+          "method": "hann_window_radix2_fft"
+        }
+      },
+      "predictions": {
+        "mood": {
+          "labels": [
+            "driving",
+            "tense"
+          ],
+          "method": "audio_feature_heuristics_v1",
+          "scores": {
+            "calm": 21,
+            "dark": 72,
+            "warm": 41,
+            "tense": 73,
+            "bright": 28,
+            "driving": 83
+          },
+          "status": "provisional",
+          "probability": null
+        },
+        "energy": {
+          "label": "high",
+          "score": 68,
+          "method": "audio_feature_heuristics_v1",
+          "status": "provisional",
+          "probability": null
+        }
+      },
+      "schemaVersion": "1.0.0",
+      "windowSummaries": [
+        {
+          "rmsDbfs": -81.20766973284277,
+          "endSeconds": 0.17066666666666666,
+          "startSeconds": 0,
+          "spectralFlatness": 0.5580317316304692,
+          "spectralCentroidHz": 1560.7834274509255
+        },
+        {
+          "rmsDbfs": -46.88464278847512,
+          "endSeconds": 1.8773333333333333,
+          "startSeconds": 1.7066666666666668,
+          "spectralFlatness": 0.11771585012926472,
+          "spectralCentroidHz": 478.8350281359656
+        },
+        {
+          "rmsDbfs": -40.733757366295855,
+          "endSeconds": 3.584,
+          "startSeconds": 3.4133333333333336,
+          "spectralFlatness": 0.12130148350583708,
+          "spectralCentroidHz": 783.0280011299313
+        },
+        {
+          "rmsDbfs": -43.52199607721153,
+          "endSeconds": 5.290666666666667,
+          "startSeconds": 5.12,
+          "spectralFlatness": 0.38340126504756344,
+          "spectralCentroidHz": 1101.7438524377862
+        },
+        {
+          "rmsDbfs": -43.93606195462547,
+          "endSeconds": 6.997333333333334,
+          "startSeconds": 6.826666666666667,
+          "spectralFlatness": 0.10023807324006127,
+          "spectralCentroidHz": 612.2977700037927
+        },
+        {
+          "rmsDbfs": -33.877749487465046,
+          "endSeconds": 8.704,
+          "startSeconds": 8.533333333333333,
+          "spectralFlatness": 0.25144863709448245,
+          "spectralCentroidHz": 1176.911326829627
+        },
+        {
+          "rmsDbfs": -41.357792788277095,
+          "endSeconds": 10.410666666666666,
+          "startSeconds": 10.24,
+          "spectralFlatness": 0.22787411566834403,
+          "spectralCentroidHz": 960.5243677613262
+        },
+        {
+          "rmsDbfs": -20.417925610419466,
+          "endSeconds": 12.117333333333333,
+          "startSeconds": 11.946666666666667,
+          "spectralFlatness": 0.38138049964084736,
+          "spectralCentroidHz": 1115.2367567137912
+        },
+        {
+          "rmsDbfs": -22.078068075097043,
+          "endSeconds": 13.909333333333333,
+          "startSeconds": 13.738666666666667,
+          "spectralFlatness": 0.41943503141013605,
+          "spectralCentroidHz": 1266.2220336902046
+        },
+        {
+          "rmsDbfs": -19.846186027218398,
+          "endSeconds": 15.616,
+          "startSeconds": 15.445333333333334,
+          "spectralFlatness": 0.3038977586314945,
+          "spectralCentroidHz": 962.4358676382548
+        },
+        {
+          "rmsDbfs": -18.55186456693037,
+          "endSeconds": 17.322666666666667,
+          "startSeconds": 17.152,
+          "spectralFlatness": 0.41400108182886824,
+          "spectralCentroidHz": 1236.9402939724027
+        },
+        {
+          "rmsDbfs": -19.34909499834668,
+          "endSeconds": 19.029333333333334,
+          "startSeconds": 18.858666666666668,
+          "spectralFlatness": 0.4504692995123368,
+          "spectralCentroidHz": 1295.7446954980333
+        },
+        {
+          "rmsDbfs": -20.00467240477619,
+          "endSeconds": 20.736,
+          "startSeconds": 20.565333333333335,
+          "spectralFlatness": 0.2829227813128339,
+          "spectralCentroidHz": 907.3873701604684
+        },
+        {
+          "rmsDbfs": -19.686235486380138,
+          "endSeconds": 22.442666666666668,
+          "startSeconds": 22.272,
+          "spectralFlatness": 0.4203765013789853,
+          "spectralCentroidHz": 1178.0737439533275
+        },
+        {
+          "rmsDbfs": -21.079861745938196,
+          "endSeconds": 24.149333333333335,
+          "startSeconds": 23.978666666666665,
+          "spectralFlatness": 0.651344050129678,
+          "spectralCentroidHz": 2075.5154379547366
+        },
+        {
+          "rmsDbfs": -26.95621793197371,
+          "endSeconds": 25.856,
+          "startSeconds": 25.685333333333332,
+          "spectralFlatness": 0.5185438924290388,
+          "spectralCentroidHz": 1786.5360619152882
+        },
+        {
+          "rmsDbfs": -32.383566159833,
+          "endSeconds": 27.562666666666665,
+          "startSeconds": 27.392,
+          "spectralFlatness": 0.2830267916378878,
+          "spectralCentroidHz": 966.8963138714341
+        },
+        {
+          "rmsDbfs": -27.89755301397002,
+          "endSeconds": 29.269333333333332,
+          "startSeconds": 29.098666666666666,
+          "spectralFlatness": 0.642422746714122,
+          "spectralCentroidHz": 2337.1550729850223
+        },
+        {
+          "rmsDbfs": -46.081987150359026,
+          "endSeconds": 30.976,
+          "startSeconds": 30.805333333333333,
+          "spectralFlatness": 0.736535311253489,
+          "spectralCentroidHz": 2992.202889877536
+        },
+        {
+          "rmsDbfs": -31.351119799179447,
+          "endSeconds": 32.68266666666667,
+          "startSeconds": 32.512,
+          "spectralFlatness": 0.35826588342082033,
+          "spectralCentroidHz": 1538.8877610724414
+        },
+        {
+          "rmsDbfs": -20.873814582007736,
+          "endSeconds": 34.38933333333333,
+          "startSeconds": 34.218666666666664,
+          "spectralFlatness": 0.5054578547277286,
+          "spectralCentroidHz": 1764.0848850737857
+        },
+        {
+          "rmsDbfs": -31.013260637004414,
+          "endSeconds": 36.096,
+          "startSeconds": 35.925333333333334,
+          "spectralFlatness": 0.5324907941460837,
+          "spectralCentroidHz": 2174.001790243612
+        },
+        {
+          "rmsDbfs": -36.842912382115365,
+          "endSeconds": 37.80266666666667,
+          "startSeconds": 37.632,
+          "spectralFlatness": 0.6337272166945112,
+          "spectralCentroidHz": 2457.1286252259692
+        },
+        {
+          "rmsDbfs": -46.50574266145635,
+          "endSeconds": 39.50933333333333,
+          "startSeconds": 39.33866666666667,
+          "spectralFlatness": 0.5908158623971058,
+          "spectralCentroidHz": 1965.2035388003296
+        },
+        {
+          "rmsDbfs": -30.052127850532333,
+          "endSeconds": 41.30133333333333,
+          "startSeconds": 41.13066666666667,
+          "spectralFlatness": 0.31496736067847647,
+          "spectralCentroidHz": 1483.6565896176019
+        },
+        {
+          "rmsDbfs": -20.59237995812638,
+          "endSeconds": 43.008,
+          "startSeconds": 42.83733333333333,
+          "spectralFlatness": 0.6773782394577945,
+          "spectralCentroidHz": 2104.658096404489
+        },
+        {
+          "rmsDbfs": -30.895547218180468,
+          "endSeconds": 44.714666666666666,
+          "startSeconds": 44.544,
+          "spectralFlatness": 0.45300702949103727,
+          "spectralCentroidHz": 2157.29163325728
+        },
+        {
+          "rmsDbfs": -29.51461544647266,
+          "endSeconds": 46.42133333333334,
+          "startSeconds": 46.25066666666667,
+          "spectralFlatness": 0.5498275400622518,
+          "spectralCentroidHz": 1653.6098910357293
+        },
+        {
+          "rmsDbfs": -22.24625979212292,
+          "endSeconds": 48.128,
+          "startSeconds": 47.95733333333333,
+          "spectralFlatness": 0.4198522118599708,
+          "spectralCentroidHz": 1305.0740122559848
+        },
+        {
+          "rmsDbfs": -21.205884212336855,
+          "endSeconds": 49.834666666666664,
+          "startSeconds": 49.664,
+          "spectralFlatness": 0.5162876035555275,
+          "spectralCentroidHz": 1475.3889665376444
+        },
+        {
+          "rmsDbfs": -21.970616506079956,
+          "endSeconds": 51.541333333333334,
+          "startSeconds": 51.370666666666665,
+          "spectralFlatness": 0.48785580318182464,
+          "spectralCentroidHz": 1508.8069416847884
+        },
+        {
+          "rmsDbfs": -18.62255329001461,
+          "endSeconds": 53.248,
+          "startSeconds": 53.077333333333335,
+          "spectralFlatness": 0.3486260037303674,
+          "spectralCentroidHz": 1169.0178869191102
+        },
+        {
+          "rmsDbfs": -17.5052833976522,
+          "endSeconds": 54.95466666666667,
+          "startSeconds": 54.784,
+          "spectralFlatness": 0.4209079811652605,
+          "spectralCentroidHz": 1235.6201491320344
+        },
+        {
+          "rmsDbfs": -19.87188137023888,
+          "endSeconds": 56.66133333333333,
+          "startSeconds": 56.49066666666667,
+          "spectralFlatness": 0.3861493378071701,
+          "spectralCentroidHz": 1115.1131677183114
+        },
+        {
+          "rmsDbfs": -19.478111950150346,
+          "endSeconds": 58.368,
+          "startSeconds": 58.19733333333333,
+          "spectralFlatness": 0.33085973868380086,
+          "spectralCentroidHz": 994.5437627564651
+        },
+        {
+          "rmsDbfs": -21.602237892264426,
+          "endSeconds": 60.074666666666666,
+          "startSeconds": 59.904,
+          "spectralFlatness": 0.41322235996593004,
+          "spectralCentroidHz": 1184.7684395958497
+        },
+        {
+          "rmsDbfs": -19.268542267225012,
+          "endSeconds": 61.781333333333336,
+          "startSeconds": 61.61066666666667,
+          "spectralFlatness": 0.6349977322600743,
+          "spectralCentroidHz": 1842.5848613573066
+        },
+        {
+          "rmsDbfs": -18.082060827814058,
+          "endSeconds": 63.488,
+          "startSeconds": 63.31733333333333,
+          "spectralFlatness": 0.4005262116632055,
+          "spectralCentroidHz": 1209.55937170611
+        },
+        {
+          "rmsDbfs": -21.710082506506247,
+          "endSeconds": 65.19466666666666,
+          "startSeconds": 65.024,
+          "spectralFlatness": 0.321179556834417,
+          "spectralCentroidHz": 1191.7724760039648
+        },
+        {
+          "rmsDbfs": -17.46333650247628,
+          "endSeconds": 66.90133333333333,
+          "startSeconds": 66.73066666666666,
+          "spectralFlatness": 0.44557143718665665,
+          "spectralCentroidHz": 1338.4181209954281
+        },
+        {
+          "rmsDbfs": -20.54082012345942,
+          "endSeconds": 68.69333333333333,
+          "startSeconds": 68.52266666666667,
+          "spectralFlatness": 0.5752801218361779,
+          "spectralCentroidHz": 1625.4975887559442
+        },
+        {
+          "rmsDbfs": -25.14181099328055,
+          "endSeconds": 70.4,
+          "startSeconds": 70.22933333333333,
+          "spectralFlatness": 0.4187186327961396,
+          "spectralCentroidHz": 1723.9079837551762
+        },
+        {
+          "rmsDbfs": -24.50428925777102,
+          "endSeconds": 72.10666666666667,
+          "startSeconds": 71.936,
+          "spectralFlatness": 0.34031199957672426,
+          "spectralCentroidHz": 1170.5316389479874
+        },
+        {
+          "rmsDbfs": -29.365437396983253,
+          "endSeconds": 73.81333333333333,
+          "startSeconds": 73.64266666666667,
+          "spectralFlatness": 0.53333719858272,
+          "spectralCentroidHz": 2008.2373709356127
+        },
+        {
+          "rmsDbfs": -28.174569788356038,
+          "endSeconds": 75.52,
+          "startSeconds": 75.34933333333333,
+          "spectralFlatness": 0.7022032907315415,
+          "spectralCentroidHz": 2494.6605584351432
+        },
+        {
+          "rmsDbfs": -43.44501848733675,
+          "endSeconds": 77.22666666666667,
+          "startSeconds": 77.056,
+          "spectralFlatness": 0.7655794162158756,
+          "spectralCentroidHz": 3089.1885913691626
+        },
+        {
+          "rmsDbfs": -29.857107718404322,
+          "endSeconds": 78.93333333333334,
+          "startSeconds": 78.76266666666666,
+          "spectralFlatness": 0.28974465449324677,
+          "spectralCentroidHz": 1592.594655670801
+        },
+        {
+          "rmsDbfs": -20.358529753851172,
+          "endSeconds": 80.64,
+          "startSeconds": 80.46933333333334,
+          "spectralFlatness": 0.6657803481978438,
+          "spectralCentroidHz": 2135.974537659265
+        },
+        {
+          "rmsDbfs": -26.6839136988471,
+          "endSeconds": 82.34666666666666,
+          "startSeconds": 82.176,
+          "spectralFlatness": 0.5498140704053927,
+          "spectralCentroidHz": 2713.611803163934
+        },
+        {
+          "rmsDbfs": -32.601067380353896,
+          "endSeconds": 84.05333333333333,
+          "startSeconds": 83.88266666666667,
+          "spectralFlatness": 0.698283643568173,
+          "spectralCentroidHz": 2429.7937183203308
+        },
+        {
+          "rmsDbfs": -37.30469796880919,
+          "endSeconds": 85.76,
+          "startSeconds": 85.58933333333333,
+          "spectralFlatness": 0.6478110911364574,
+          "spectralCentroidHz": 2392.121002429352
+        },
+        {
+          "rmsDbfs": -31.855762537204903,
+          "endSeconds": 87.46666666666667,
+          "startSeconds": 87.296,
+          "spectralFlatness": 0.5662638067590062,
+          "spectralCentroidHz": 2137.7947279945015
+        },
+        {
+          "rmsDbfs": -32.19156801676136,
+          "endSeconds": 89.17333333333333,
+          "startSeconds": 89.00266666666667,
+          "spectralFlatness": 0.7766136368493453,
+          "spectralCentroidHz": 3003.8234645804196
+        },
+        {
+          "rmsDbfs": -24.14444848291534,
+          "endSeconds": 90.88,
+          "startSeconds": 90.70933333333333,
+          "spectralFlatness": 0.5274951311491417,
+          "spectralCentroidHz": 2163.565421338522
+        },
+        {
+          "rmsDbfs": -32.9643567806918,
+          "endSeconds": 92.58666666666667,
+          "startSeconds": 92.416,
+          "spectralFlatness": 0.6447979369837104,
+          "spectralCentroidHz": 2253.9656902301635
+        },
+        {
+          "rmsDbfs": -18.092764455878967,
+          "endSeconds": 94.29333333333334,
+          "startSeconds": 94.12266666666666,
+          "spectralFlatness": 0.33635196239243303,
+          "spectralCentroidHz": 1022.1618643477632
+        },
+        {
+          "rmsDbfs": -20.953882207472162,
+          "endSeconds": 96.08533333333334,
+          "startSeconds": 95.91466666666666,
+          "spectralFlatness": 0.36117626796858066,
+          "spectralCentroidHz": 1243.1922613403028
+        },
+        {
+          "rmsDbfs": -20.851077584343688,
+          "endSeconds": 97.792,
+          "startSeconds": 97.62133333333334,
+          "spectralFlatness": 0.40600434422457654,
+          "spectralCentroidHz": 1318.8826205082235
+        },
+        {
+          "rmsDbfs": -17.522171904739633,
+          "endSeconds": 99.49866666666667,
+          "startSeconds": 99.328,
+          "spectralFlatness": 0.5019353129989451,
+          "spectralCentroidHz": 1487.1493759264995
+        },
+        {
+          "rmsDbfs": -18.095575606086967,
+          "endSeconds": 101.20533333333333,
+          "startSeconds": 101.03466666666667,
+          "spectralFlatness": 0.3810605849919904,
+          "spectralCentroidHz": 1133.9551522814922
+        },
+        {
+          "rmsDbfs": -19.661868479370163,
+          "endSeconds": 102.912,
+          "startSeconds": 102.74133333333333,
+          "spectralFlatness": 0.5765313466391367,
+          "spectralCentroidHz": 1668.0718974702495
+        },
+        {
+          "rmsDbfs": -16.94351780335766,
+          "endSeconds": 104.61866666666667,
+          "startSeconds": 104.448,
+          "spectralFlatness": 0.248491982560789,
+          "spectralCentroidHz": 869.8872207620302
+        },
+        {
+          "rmsDbfs": -18.401089235902344,
+          "endSeconds": 106.32533333333333,
+          "startSeconds": 106.15466666666667,
+          "spectralFlatness": 0.5816201691409856,
+          "spectralCentroidHz": 1682.0830488335323
+        },
+        {
+          "rmsDbfs": -21.142199154614264,
+          "endSeconds": 108.032,
+          "startSeconds": 107.86133333333333,
+          "spectralFlatness": 0.42130900624718093,
+          "spectralCentroidHz": 1354.8177416755059
+        },
+        {
+          "rmsDbfs": -17.586109222772087,
+          "endSeconds": 109.73866666666666,
+          "startSeconds": 109.568,
+          "spectralFlatness": 0.330990975406615,
+          "spectralCentroidHz": 1047.7669295710766
+        },
+        {
+          "rmsDbfs": -19.858548702766527,
+          "endSeconds": 111.44533333333334,
+          "startSeconds": 111.27466666666666,
+          "spectralFlatness": 0.3151631176902609,
+          "spectralCentroidHz": 1218.0146662176278
+        },
+        {
+          "rmsDbfs": -20.14068225600182,
+          "endSeconds": 113.152,
+          "startSeconds": 112.98133333333334,
+          "spectralFlatness": 0.4787813459807928,
+          "spectralCentroidHz": 1373.7933659331236
+        },
+        {
+          "rmsDbfs": -19.872793985734404,
+          "endSeconds": 114.85866666666666,
+          "startSeconds": 114.688,
+          "spectralFlatness": 0.5081801092941337,
+          "spectralCentroidHz": 1486.6344819102515
+        },
+        {
+          "rmsDbfs": -25.709024792910625,
+          "endSeconds": 116.56533333333333,
+          "startSeconds": 116.39466666666667,
+          "spectralFlatness": 0.41088589690011806,
+          "spectralCentroidHz": 1638.5119165835663
+        },
+        {
+          "rmsDbfs": -21.702893843406756,
+          "endSeconds": 118.272,
+          "startSeconds": 118.10133333333333,
+          "spectralFlatness": 0.6296259903715602,
+          "spectralCentroidHz": 1981.320082152997
+        },
+        {
+          "rmsDbfs": -21.146803532861075,
+          "endSeconds": 119.97866666666667,
+          "startSeconds": 119.808,
+          "spectralFlatness": 0.5122166801169851,
+          "spectralCentroidHz": 1992.9434230713575
+        },
+        {
+          "rmsDbfs": -18.239746681826624,
+          "endSeconds": 121.68533333333333,
+          "startSeconds": 121.51466666666667,
+          "spectralFlatness": 0.5604296618190187,
+          "spectralCentroidHz": 2161.7940828777328
+        },
+        {
+          "rmsDbfs": -20.235156580993067,
+          "endSeconds": 123.47733333333333,
+          "startSeconds": 123.30666666666667,
+          "spectralFlatness": 0.5272213414997843,
+          "spectralCentroidHz": 1946.8414516322546
+        },
+        {
+          "rmsDbfs": -21.9431023427529,
+          "endSeconds": 125.184,
+          "startSeconds": 125.01333333333334,
+          "spectralFlatness": 0.4687503172460398,
+          "spectralCentroidHz": 1619.7258628879583
+        },
+        {
+          "rmsDbfs": -21.018915145499196,
+          "endSeconds": 126.89066666666666,
+          "startSeconds": 126.72,
+          "spectralFlatness": 0.5372640803979275,
+          "spectralCentroidHz": 2270.2892411820694
+        },
+        {
+          "rmsDbfs": -28.49821787668059,
+          "endSeconds": 128.59733333333332,
+          "startSeconds": 128.42666666666668,
+          "spectralFlatness": 0.6637201479707562,
+          "spectralCentroidHz": 1988.0560916526565
+        },
+        {
+          "rmsDbfs": -18.163019644491595,
+          "endSeconds": 130.304,
+          "startSeconds": 130.13333333333333,
+          "spectralFlatness": 0.45099763996389713,
+          "spectralCentroidHz": 1454.9878643178633
+        },
+        {
+          "rmsDbfs": -21.157676010809507,
+          "endSeconds": 132.01066666666668,
+          "startSeconds": 131.84,
+          "spectralFlatness": 0.6181114853973,
+          "spectralCentroidHz": 2063.4062055373047
+        },
+        {
+          "rmsDbfs": -17.421389811676015,
+          "endSeconds": 133.71733333333333,
+          "startSeconds": 133.54666666666665,
+          "spectralFlatness": 0.38870851493935077,
+          "spectralCentroidHz": 1411.75336562917
+        },
+        {
+          "rmsDbfs": -24.642759622084007,
+          "endSeconds": 135.424,
+          "startSeconds": 135.25333333333333,
+          "spectralFlatness": 0.5367625927744061,
+          "spectralCentroidHz": 1759.1462872948175
+        },
+        {
+          "rmsDbfs": -16.787823397733767,
+          "endSeconds": 137.13066666666666,
+          "startSeconds": 136.96,
+          "spectralFlatness": 0.5733471608528874,
+          "spectralCentroidHz": 1811.8561481072295
+        },
+        {
+          "rmsDbfs": -21.046780095933173,
+          "endSeconds": 138.83733333333333,
+          "startSeconds": 138.66666666666666,
+          "spectralFlatness": 0.4833939481304716,
+          "spectralCentroidHz": 1432.368766055988
+        },
+        {
+          "rmsDbfs": -17.770496441145667,
+          "endSeconds": 140.544,
+          "startSeconds": 140.37333333333333,
+          "spectralFlatness": 0.5904226832693943,
+          "spectralCentroidHz": 1853.049743038767
+        },
+        {
+          "rmsDbfs": -17.440369114633413,
+          "endSeconds": 142.25066666666666,
+          "startSeconds": 142.08,
+          "spectralFlatness": 0.4597290558676736,
+          "spectralCentroidHz": 1452.3846997432083
+        },
+        {
+          "rmsDbfs": -19.449791835509867,
+          "endSeconds": 143.95733333333334,
+          "startSeconds": 143.78666666666666,
+          "spectralFlatness": 0.6185087240161323,
+          "spectralCentroidHz": 1929.9699611147514
+        },
+        {
+          "rmsDbfs": -17.592698133397153,
+          "endSeconds": 145.664,
+          "startSeconds": 145.49333333333334,
+          "spectralFlatness": 0.5781194672618034,
+          "spectralCentroidHz": 1989.2233546602602
+        },
+        {
+          "rmsDbfs": -18.754627561328526,
+          "endSeconds": 147.37066666666666,
+          "startSeconds": 147.2,
+          "spectralFlatness": 0.48606365185082046,
+          "spectralCentroidHz": 1566.4586166413073
+        },
+        {
+          "rmsDbfs": -19.45839365292749,
+          "endSeconds": 149.07733333333334,
+          "startSeconds": 148.90666666666667,
+          "spectralFlatness": 0.5134704660607325,
+          "spectralCentroidHz": 1808.3027699743084
+        },
+        {
+          "rmsDbfs": -17.372835874669285,
+          "endSeconds": 150.86933333333334,
+          "startSeconds": 150.69866666666667,
+          "spectralFlatness": 0.4376690985936203,
+          "spectralCentroidHz": 1338.4267444413526
+        },
+        {
+          "rmsDbfs": -20.884073957781595,
+          "endSeconds": 152.576,
+          "startSeconds": 152.40533333333335,
+          "spectralFlatness": 0.6698428738618528,
+          "spectralCentroidHz": 2213.0225879634577
+        },
+        {
+          "rmsDbfs": -19.56629042744633,
+          "endSeconds": 154.28266666666667,
+          "startSeconds": 154.112,
+          "spectralFlatness": 0.5583429979210778,
+          "spectralCentroidHz": 1703.3918192250412
+        },
+        {
+          "rmsDbfs": -18.488279040983258,
+          "endSeconds": 155.98933333333332,
+          "startSeconds": 155.81866666666667,
+          "spectralFlatness": 0.5020760971016239,
+          "spectralCentroidHz": 1643.2977230085585
+        },
+        {
+          "rmsDbfs": -25.788207682418367,
+          "endSeconds": 157.696,
+          "startSeconds": 157.52533333333332,
+          "spectralFlatness": 0.6002501784614281,
+          "spectralCentroidHz": 2139.5766057293054
+        },
+        {
+          "rmsDbfs": -20.51675728344192,
+          "endSeconds": 159.40266666666668,
+          "startSeconds": 159.232,
+          "spectralFlatness": 0.47014342685894545,
+          "spectralCentroidHz": 1754.2425135465896
+        },
+        {
+          "rmsDbfs": -16.868199340383832,
+          "endSeconds": 161.10933333333332,
+          "startSeconds": 160.93866666666668,
+          "spectralFlatness": 0.6311920175445689,
+          "spectralCentroidHz": 2148.193449977905
+        },
+        {
+          "rmsDbfs": -19.83324639375438,
+          "endSeconds": 162.816,
+          "startSeconds": 162.64533333333333,
+          "spectralFlatness": 0.43500939806918076,
+          "spectralCentroidHz": 1373.2269610193785
+        },
+        {
+          "rmsDbfs": -17.18498889956303,
+          "endSeconds": 164.52266666666668,
+          "startSeconds": 164.352,
+          "spectralFlatness": 0.6780415674202712,
+          "spectralCentroidHz": 2020.8826831077736
+        },
+        {
+          "rmsDbfs": -20.631005464544515,
+          "endSeconds": 166.22933333333333,
+          "startSeconds": 166.05866666666665,
+          "spectralFlatness": 0.6316287487077651,
+          "spectralCentroidHz": 2245.2026554537397
+        },
+        {
+          "rmsDbfs": -18.724322041690915,
+          "endSeconds": 167.936,
+          "startSeconds": 167.76533333333333,
+          "spectralFlatness": 0.5022616692247616,
+          "spectralCentroidHz": 1697.0591094526872
+        },
+        {
+          "rmsDbfs": -23.627467061165397,
+          "endSeconds": 169.64266666666666,
+          "startSeconds": 169.472,
+          "spectralFlatness": 0.5875903013614662,
+          "spectralCentroidHz": 2027.6145246746946
+        },
+        {
+          "rmsDbfs": -16.77830107957419,
+          "endSeconds": 171.34933333333333,
+          "startSeconds": 171.17866666666666,
+          "spectralFlatness": 0.49216277146587767,
+          "spectralCentroidHz": 1704.8952058225939
+        },
+        {
+          "rmsDbfs": -18.35822269825197,
+          "endSeconds": 173.056,
+          "startSeconds": 172.88533333333334,
+          "spectralFlatness": 0.5611471283130733,
+          "spectralCentroidHz": 1784.0039419938496
+        },
+        {
+          "rmsDbfs": -17.5690303022449,
+          "endSeconds": 174.76266666666666,
+          "startSeconds": 174.592,
+          "spectralFlatness": 0.5333445245728798,
+          "spectralCentroidHz": 1584.1380933221956
+        },
+        {
+          "rmsDbfs": -16.785596151451024,
+          "endSeconds": 176.46933333333334,
+          "startSeconds": 176.29866666666666,
+          "spectralFlatness": 0.5537384357118689,
+          "spectralCentroidHz": 1696.1145917097253
+        },
+        {
+          "rmsDbfs": -23.798807944631186,
+          "endSeconds": 178.26133333333334,
+          "startSeconds": 178.09066666666666,
+          "spectralFlatness": 0.5570231744417722,
+          "spectralCentroidHz": 1887.3105680880112
+        },
+        {
+          "rmsDbfs": -15.756466462864928,
+          "endSeconds": 179.968,
+          "startSeconds": 179.79733333333334,
+          "spectralFlatness": 0.46722030650300034,
+          "spectralCentroidHz": 1814.59665094487
+        },
+        {
+          "rmsDbfs": -21.442893541878295,
+          "endSeconds": 181.67466666666667,
+          "startSeconds": 181.504,
+          "spectralFlatness": 0.5880442113457587,
+          "spectralCentroidHz": 2089.350789619092
+        },
+        {
+          "rmsDbfs": -16.13831561044935,
+          "endSeconds": 183.38133333333334,
+          "startSeconds": 183.21066666666667,
+          "spectralFlatness": 0.6312978055602428,
+          "spectralCentroidHz": 1962.5827758283522
+        },
+        {
+          "rmsDbfs": -20.796585602727163,
+          "endSeconds": 185.088,
+          "startSeconds": 184.91733333333335,
+          "spectralFlatness": 0.4518247682159156,
+          "spectralCentroidHz": 1441.3503556329936
+        },
+        {
+          "rmsDbfs": -16.821921030118933,
+          "endSeconds": 186.79466666666667,
+          "startSeconds": 186.624,
+          "spectralFlatness": 0.4892559270928955,
+          "spectralCentroidHz": 1653.2420586267624
+        },
+        {
+          "rmsDbfs": -16.118159279436405,
+          "endSeconds": 188.50133333333332,
+          "startSeconds": 188.33066666666667,
+          "spectralFlatness": 0.4565427437717568,
+          "spectralCentroidHz": 1535.094196789142
+        },
+        {
+          "rmsDbfs": -19.918080595371045,
+          "endSeconds": 190.208,
+          "startSeconds": 190.03733333333332,
+          "spectralFlatness": 0.6790870409744634,
+          "spectralCentroidHz": 2001.6386710334696
+        },
+        {
+          "rmsDbfs": -15.965946366040495,
+          "endSeconds": 191.91466666666668,
+          "startSeconds": 191.744,
+          "spectralFlatness": 0.5496319137113179,
+          "spectralCentroidHz": 2072.426114331083
+        },
+        {
+          "rmsDbfs": -16.684673912461513,
+          "endSeconds": 193.62133333333333,
+          "startSeconds": 193.45066666666668,
+          "spectralFlatness": 0.5441483980936057,
+          "spectralCentroidHz": 1894.2381295556434
+        },
+        {
+          "rmsDbfs": -17.00148363800476,
+          "endSeconds": 195.328,
+          "startSeconds": 195.15733333333333,
+          "spectralFlatness": 0.5270577877899107,
+          "spectralCentroidHz": 1953.5510457023133
+        },
+        {
+          "rmsDbfs": -23.986072239192797,
+          "endSeconds": 197.03466666666668,
+          "startSeconds": 196.864,
+          "spectralFlatness": 0.4115100118204295,
+          "spectralCentroidHz": 1453.1831446912756
+        },
+        {
+          "rmsDbfs": -23.96859898971249,
+          "endSeconds": 198.74133333333333,
+          "startSeconds": 198.57066666666665,
+          "spectralFlatness": 0.552558426097841,
+          "spectralCentroidHz": 1639.981896642892
+        },
+        {
+          "rmsDbfs": -17.623002390791747,
+          "endSeconds": 200.448,
+          "startSeconds": 200.27733333333333,
+          "spectralFlatness": 0.5155709015053433,
+          "spectralCentroidHz": 2201.922714938228
+        },
+        {
+          "rmsDbfs": -16.787732359513,
+          "endSeconds": 202.15466666666666,
+          "startSeconds": 201.984,
+          "spectralFlatness": 0.6558167672227799,
+          "spectralCentroidHz": 1936.556938922335
+        },
+        {
+          "rmsDbfs": -24.199173119116367,
+          "endSeconds": 203.86133333333333,
+          "startSeconds": 203.69066666666666,
+          "spectralFlatness": 0.5703746404898479,
+          "spectralCentroidHz": 1960.9691090557637
+        },
+        {
+          "rmsDbfs": -20.472981759322415,
+          "endSeconds": 205.65333333333334,
+          "startSeconds": 205.48266666666666,
+          "spectralFlatness": 0.49700587081501135,
+          "spectralCentroidHz": 1700.5261060511687
+        },
+        {
+          "rmsDbfs": -16.21764901997043,
+          "endSeconds": 207.36,
+          "startSeconds": 207.18933333333334,
+          "spectralFlatness": 0.6068951115603576,
+          "spectralCentroidHz": 2045.4956602044047
+        },
+        {
+          "rmsDbfs": -22.024537226118184,
+          "endSeconds": 209.06666666666666,
+          "startSeconds": 208.896,
+          "spectralFlatness": 0.6004407284532312,
+          "spectralCentroidHz": 1764.2705768625065
+        },
+        {
+          "rmsDbfs": -31.716250605620097,
+          "endSeconds": 210.77333333333334,
+          "startSeconds": 210.60266666666666,
+          "spectralFlatness": 0.43398067020117975,
+          "spectralCentroidHz": 1480.1461270451098
+        },
+        {
+          "rmsDbfs": -42.0986199443568,
+          "endSeconds": 212.48,
+          "startSeconds": 212.30933333333334,
+          "spectralFlatness": 0.47829229800909556,
+          "spectralCentroidHz": 1547.2796193073402
+        },
+        {
+          "rmsDbfs": -49.310665917230516,
+          "endSeconds": 214.18666666666667,
+          "startSeconds": 214.016,
+          "spectralFlatness": 0.38027689455383207,
+          "spectralCentroidHz": 1202.822221902552
+        },
+        {
+          "rmsDbfs": -64.61960475825865,
+          "endSeconds": 215.89333333333335,
+          "startSeconds": 215.72266666666667,
+          "spectralFlatness": 0.5715734095589021,
+          "spectralCentroidHz": 1719.0327721157462
+        },
+        {
+          "rmsDbfs": -240,
+          "endSeconds": 217.6,
+          "startSeconds": 217.42933333333335,
+          "spectralFlatness": 0,
+          "spectralCentroidHz": 0
+        }
+      ],
+      "abstentionReasons": []
+    },
+    "keyAnalysisFftButterflyCount": 9412608
+  },
+  "assessment": {
+    "risks": [
+      "Metadata reconciliation indicates active conflicts across title, artist, and release date fields among connected catalog sources.",
+      "Tempo analysis returned insufficient evidence with a low confidence score of 0.1647, leaving the BPM unconfirmed.",
+      "Tonal resolution remains provisional due to low window consensus, bootstrap consensus, and relative major-minor ambiguity."
+    ],
+    "scorecard": {
+      "tempoLaneFit": {
+        "score": null,
+        "rationale": "Not scored: the uploaded-master tempo estimate could not be confirmed, so a numeric tempo-to-lane comparison would not be sufficiently supported for this release."
+      },
+      "releaseReadiness": {
+        "score": null,
+        "rationale": "Not scored: source-verified rights clearance, delivery confirmation, release status and master approval are not all present."
+      },
+      "rhythmicConsistency": {
+        "score": null,
+        "rationale": "Not scored: a provisional beat guide is available, but its timing has not been confirmed by listening across the recording, so rhythmic consistency cannot yet be assessed reliably for this release."
+      },
+      "dynamicRangeLoudness": {
+        "score": null,
+        "rationale": "Not scored: RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied for this release."
+      },
+      "metadataCompleteness": {
+        "score": 60,
+        "rationale": "Deterministic completeness score across eight core release fields. Source-attributed values receive full credit; conflicting fields receive half credit, and absent fields receive no credit for this release."
+      }
+    },
+    "strengths": [
+      "Recognized metadata provenance across Apple Music and Tidal establishes verified catalog linkage via ISRC USSM10501515.",
+      "Taxonomy-backed provider evidence clearly situates the recording within the Pop genre alongside recognized adjacent lanes.",
+      ""
+    ],
+    "confidence": 0.75,
+    "limitations": [
+      "The tonal centre remains provisional as stable window consensus was not reached across the analyzed audio segments.",
+      "Tempo could not be determined reliably from the supplied audio master due to insufficient transient prominence.",
+      "Metadata reconciliation revealed conflicts across title, artist, and release date fields among connected providers."
+    ],
+    "evidenceGaps": [
+      "",
+      "Vocal separation was not completed, leaving vocal presence and delivery features unverified by direct audio measurement."
+    ],
+    "executionPlan": {
+      "days30": "During the first thirty days, audit the conflicting metadata sources across Apple Music, Tidal, and ID3 tags to resolve ambiguities in the track title, artist attribution, and original release date of 1993 versus the 2005 compilation date.",
+      "days60": "Over the next sixty days, monitor catalog ingestion performance across recognized platforms using ISRC USSM10501515.",
+      "days90": "By ninety days, finalize the metadata reconciliation report across all streaming partners to ensure uniform presentation of the Pop genre classification and adjacent lane tags. Implement ongoing quality control checks for future catalog deliveries to maintain consistent provenance and avoid metadata conflicts on major DSPs."
+    },
+    "promotionPlan": {
+      "preRelease": "",
+      "postRelease": "Analyze post-release consumption metrics across Tidal and Apple Music catalog sources. Maintain engagement by highlighting the track's historical placement within 'The Essential Michael Jackson' compilation and cross-referencing metadata across all recognized source providers.",
+      "contentIdeas": [
+        "Create short-form video clips discussing the historical context of the 2005 Sony Music compilation release.",
+        "Publish editorial breakdowns focusing on the track's Pop genre classification and its structural arrangement.",
+        "Share behind-the-scenes archival trivia regarding the original 1993 release date and subsequent compilation history.",
+        "Develop engaging lyric or visualizer content optimized for streaming platform discovery carousels."
+      ],
+      "releaseWindow": "Coordinate release-day editorial pitching using the recognized 'Pop' primary genre from Apple Music taxonomy, while treating adjacent lanes such as R&B, Hip-Hop, and House as secondary exploratory angles based on groq_assessment hypotheses. Monitor streaming intake across verified catalog platforms and direct promotional traffic toward recognized canonical URLs.",
+      "pitchingAngles": [
+        "Pitch to catalog-focused Pop editorial curators highlighting verified ISRC metadata and official Sony Music release history.",
+        "Target mood-based algorithmic playlists utilizing provisional heuristic descriptors like driving and tense energy markers.",
+        "Position the track within retrospective 90s and 2000s Pop retrospective programming on major streaming services."
+      ],
+      "industryPractice": "Standard industry practice for catalog track promotion involves verifying all ISRC and UPC metadata across DSPs months prior to release, coordinating targeted social media teaser campaigns, securing legacy editorial playlist placements through official distributor portals, and aligning promotional messaging with established genre lanes to maximize algorithmic discovery.",
+      "playlistCategories": [
+        "Classic Pop Hits",
+        "Retro Pop Essentials",
+        "Sony Music Catalogs",
+        "Midtempo Pop Vibe"
+      ]
+    },
+    "commercialRead": {
+      "rationale": "ISRC-linked catalogue evidence supports recording identity, release context, label and DSP availability where returned. It does not establish audience or campaign performance: streams, listeners, saves, sales, revenue, playlist conversion and campaign outcomes require verified DSP analytics for a defined reporting period.",
+      "marketability": "undetermined"
+    },
+    "evidenceLabels": [
+      {
+        "claim": "",
+        "label": "OBSERVED",
+        "source": "uploaded_audio_master"
+      },
+      {
+        "claim": "Apple Music and Tidal providers returned recognized track metadata and catalog identifiers for the release.",
+        "label": "RECOGNIZED",
+        "source": "apple_music"
+      },
+      {
+        "claim": "The album field was successfully reconciled across available provider sources while other release context fields showed conflicts.",
+        "label": "RECONCILED",
+        "source": "tidal"
+      },
+      {
+        "claim": "Genre classification indicates Pop as the primary genre with adjacent lanes in R&B, Hip-Hop, and House based on weighted provider evidence.",
+        "label": "INFERRED",
+        "source": "groq_assessment"
+      }
+    ],
+    "laneHypothesis": "Based on RECOGNIZED provider metadata from apple_music and tidal, the primary genre is Pop, with adjacent INFERRED lanes in R&B, Hip-Hop, and House. Because the confirmed tempo is null with insufficient evidence confidence and vocal features are unavailable due to separation model limitations, lane positioning remains primarily anchored in verified provider metadata and structural genre taxonomy rather than validated audio-derived performance metrics.",
+    "labelPartnerFit": {
+      "partnerProfile": "Major label partnership profiles targeting mainstream Pop releases typically require established catalog presence, verified multi-DSP metadata, and clear genre positioning within Pop alongside adjacent lanes such as R&B, Hip-Hop, and House.",
+      "industryPractice": "Industry practice for major label pitching involves compiling a concise electronic press kit, verifying all underlying publishing and master rights, confirming ISRC metadata consistency across all distributors, and targeting playlist curators who specialize in Pop and R&B formats.",
+      "criteriaToDemonstrate": [
+        "Demonstrate clean metadata reconciliation across recognized DSP platforms to resolve conflicting title and artist entries.",
+        "Showcase consistent audio delivery levels aligned with professional distribution requirements and specified spectral balance.",
+        "Provide verified ownership and clearance documentation for the ISRC associated with the primary release context.",
+        "Highlight multi-platform catalog availability and streaming history across recognized services like Apple Music and Tidal."
+      ],
+      "diligenceBeforeContact": "Perform a comprehensive audit of all metadata discrepancies, resolve conflicting ISRC and release date records between 1993 and 2005 editions, and ensure the master audio meets all current digital service provider distribution guidelines before initiating discussions with label partners."
+    },
+    "listeningChecks": [
+      "Evaluate the primary hook recall and emotional resonance against verified Pop references in your catalog.",
+      "Assess whether the production arrangement and instrumentation choices maintain clarity across different playback systems.",
+      "Check the replay impulse and overall lane consistency within the Pop genre framework.",
+      "Verify whether the low-frequency energy distribution remains controlled and balanced across the stereo field."
+    ],
+    "releaseStrategy": {
+      "priorities": [
+        "Resolve the metadata conflicts across Tidal, Apple Music, and ID3 sources regarding track title variants, artist naming conventions, and original release dates.",
+        "Verify the official master asset and ensure ISRC USSM10501515 correctly maps to the intended release version before final digital service provider submission.",
+        "Review stereo master delivery specifications and channel configuration to ensure compliance with destination platform distribution requirements."
+      ],
+      "recommendation": "Given the recognized metadata conflicts regarding title, artist spelling variants, and release dates across Tidal, Apple Music, and ID3 sources, along with the provisional status of the tonal center and insufficient tempo confidence from the audio master, confirm the exact metadata and resolve ISRC USSM10501515 attribution before scheduling any wider distribution or pitching campaigns. Address the stereo master configuration and distribution compatibility requirements prior to delivery."
+    },
+    "aAndRPositioning": {
+      "rationale": "Provider metadata recognized via apple_music designates Pop as the primary genre classification with a confidence score of 1. Adjacent lanes identified in the genre taxonomy include R&B, Hip-Hop, and House. Provisional audio feature descriptors from source groq_assessment label the track with driving and tense mood indicators, while provisional energy is scored at 68 out of 100.",
+      "primaryLane": "Pop",
+      "adjacentLanes": [
+        "R&B",
+        "Hip-Hop",
+        "House"
+      ]
+    },
+    "creativeIdentity": "Taxonomy-backed provider evidence classifies the primary genre as Pop, with adjacent lanes in R&B, Hip-Hop, and House. Provisional acoustic feature heuristics classify the track's energy score at 68 out of 100 with provisional mood descriptors of driving and tense.",
+    "executiveSummary": "This metadata and audio master audit examines the recognized release associated with ISRC USSM10501515, pointing to 'The Essential Michael Jackson' via Sony Music with a catalog release date of 2005-07-19 and conflicting titles across connected DSP sources.",
+    "industryPractice": "",
+    "assessmentVersion": "audit-ar-v6-2026-11-20",
+    "referencesToVerify": [
+      "Search for contemporary Pop releases featuring gospel choir arrangements and cinematic orchestral intros to verify structural pacing and dynamic builds.",
+      "",
+      "Cross-reference streaming catalog master releases under Sony Music to verify standard dynamic range and spectral balance benchmarks for legacy Pop catalog preservation."
+    ],
+    "verificationMethod": "Verify the track's classification by cross-referencing apple_music and tidal catalog metadata entries against the official release documentation for The Essential Michael Jackson. Review the provisional harmonic and rhythmic features against independent reference tracks within the Pop genre taxonomy to establish contextual benchmarks.",
+    "generationProvenance": {
+      "model": "gemini-3.5-flash-lite",
+      "provider": "gemini",
+      "fieldGroups": {
+        "risks": "narrative",
+        "scorecard": "evidence-score",
+        "strengths": "narrative",
+        "confidence": "evidence-score",
+        "limitations": "evidence-score",
+        "evidenceGaps": "evidence-score",
+        "executionPlan": "timeline",
+        "promotionPlan": "promotion",
+        "commercialRead": "positioning",
+        "evidenceLabels": "evidence-score",
+        "laneHypothesis": "comparables",
+        "labelPartnerFit": "label-fit",
+        "listeningChecks": "production",
+        "releaseStrategy": "release",
+        "aAndRPositioning": "positioning",
+        "creativeIdentity": "narrative",
+        "executiveSummary": "narrative",
+        "industryPractice": "production",
+        "assessmentVersion": "narrative",
+        "referencesToVerify": "comparables",
+        "verificationMethod": "comparables",
+        "humanListeningChecklist": "evidence-score",
+        "productionArrangementGuidance": "production"
+      },
+      "generatedAt": "2026-11-22T09:36:09.281Z",
+      "promptVersion": "audit-ar-v6-analysis-integration-2026-11-20"
+    },
+    "humanListeningChecklist": [
+      "Evaluate the memorability and distinctiveness of the primary vocal hook during the chorus sections against contemporary genre standards.",
+      "Assess the originality and creative arrangement choices of the production elements compared against verified reference tracks in the pop lane.",
+      "Listen closely to the mix balance and instrumentation choices to ensure the overall production quality meets professional commercial standards.",
+      "",
+      "Verify that the stylistic execution clearly establishes the intended genre lane without confusing stylistic overlaps or ambiguous positioning."
+    ],
+    "productionArrangementGuidance": "The uploaded audio master exhibits a measured loudness of -15.1 LUFS with a true peak of -2.3 dBFS and a RMS-envelope spread (internal proxy; not mastering dynamic range) of 22.36 dB."
+  },
+  "generatedAt": "2026-11-22T09:36:09.776Z",
+  "executionMode": "combined",
+  "marketPlacement": {
+    "rollout": [
+      {
+        "gates": [
+          "Rights and identity verified",
+          "Final master and artwork approved",
+          "No unsupported audience or placement claims"
+        ],
+        "phase": "pre_release",
+        "actions": [
+          "Reconfirm reconciled artist, title, ISRC, ownership, split and sample-clearance evidence before any third-party pitching.",
+          "Do not invent playlist targets; complete catalogue discovery only after a valid recording identity and provider access are available.",
+          "Have a human listener audition the timestamped excerpt candidates, select clean edit boundaries and approve captions and visual assets."
+        ]
+      },
+      {
+        "gates": [
+          "DSP delivery confirmed by distributor or platform",
+          "Campaign assets approved",
+          "Partner outreach recorded with source and response status"
+        ],
+        "phase": "release_window",
+        "actions": [
+          "Coordinate confirmed DSP delivery with artist-owned social, video, press and direct-to-fan channels using trackable campaign links.",
+          "Test DJ/club positioning only after an A&R or DJ listener reviews transitions, intro/outro structure and playback context.",
+          "Use sync outreach only against a defined brief after rights, master approval, versioning and chain-of-title checks."
+        ]
+      },
+      {
+        "gates": [
+          "Reporting window and provider defined",
+          "Metrics retained with retrieval timestamps",
+          "No inferred revenue, audience demand or campaign success"
+        ],
+        "phase": "post_release",
+        "actions": [
+          "Collect provider-attributed territory, listener and engagement telemetry with a named reporting period before ranking markets.",
+          "Compare saves, completion, attributable visits and playlist outcomes only where platform-native reports or campaign analytics supply the measurements.",
+          "Record actual outreach, responses and campaign outcomes; update the next cycle from observed results rather than assumed conversion."
+        ]
+      }
+    ],
+    "version": "market-placement-v1",
+    "positioning": {
+      "dj": {
+        "basis": [],
+        "reason": "DJ positioning requires a reliable tempo reading and a tentative beat guide.",
+        "status": "blocked",
+        "limitations": [
+          "No DJ suitability claim is made from metadata-only or low-confidence tempo candidates."
+        ]
+      },
+      "club": {
+        "basis": [],
+        "reason": "Club positioning requires a reportable tempo, a tentative beat guide and a provisional energy estimate.",
+        "status": "blocked",
+        "limitations": [
+          "No club-fit conclusion is inferred from genre labels or catalogue popularity alone."
+        ]
+      },
+      "sync": {
+        "basis": [],
+        "reason": "Sync outreach is blocked until rights clearance and approved master are verified.",
+        "status": "blocked",
+        "limitations": [
+          "No sync suitability or clearance is inferred from audio features, ISRC or catalogue presence."
+        ]
+      }
+    },
+    "shortFormHooks": {
+      "method": "Onset and relative signal-level review",
+      "status": "available",
+      "segments": [
+        {
+          "score": 100,
+          "signals": [
+            "onset/transient peak",
+            "higher relative windowed RMS"
+          ],
+          "scoreType": "relative_signal_peak_priority",
+          "endSeconds": 161.57,
+          "startSeconds": 149.57
+        },
+        {
+          "score": 83,
+          "signals": [
+            "onset/transient peak",
+            "higher relative windowed RMS"
+          ],
+          "scoreType": "relative_signal_peak_priority",
+          "endSeconds": 187.08,
+          "startSeconds": 175.08
+        },
+        {
+          "score": 71,
+          "signals": [
+            "onset/transient peak",
+            "higher relative windowed RMS"
+          ],
+          "scoreType": "relative_signal_peak_priority",
+          "endSeconds": 95.26,
+          "startSeconds": 83.26
+        }
+      ],
+      "limitations": [
+        "Priority scores are relative signal-ranking aids, not probabilities, retention predictions or proof of a memorable hook.",
+        "The downsampled onset envelope and sparse windowed RMS summaries locate candidate excerpts; human listening must confirm musical context, lyrics, clean edit boundaries and suitability.",
+        "Candidates are edit suggestions, not confirmed musical hooks; human listening and rights review are required before publication."
+      ]
+    },
+    "playlistTargets": [],
+    "playlistPresence": [],
+    "globalLimitations": [
+      "This plan reconciles supplied track evidence and provider-returned catalogue metadata; it does not create audience, sales, revenue or campaign telemetry.",
+      "Playlist similarity, provisional mood/energy and acoustic peak scores are targeting aids or hypotheses, not calibrated success predictions.",
+      "Territory rankings require verified provider-attributed audience data; artist location, genre popularity and ISRC matches are not substitutes.",
+      "MusicBrainz-derived data remains evaluation-only for commercial distribution until commercial-use and retention permissions are confirmed."
+    ],
+    "acousticSimilarity": {
+      "reason": "The configured playlist endpoints do not expose candidate-track BPM, key, energy and acoustic feature vectors. Playlist targeting therefore uses exact ISRC presence plus provider-returned genre/mood metadata; no track-to-playlist acoustic similarity score is asserted.",
+      "status": "unavailable"
+    },
+    "territoryPriorities": {
+      "metric": null,
+      "reason": "No verified territory-level audience telemetry with a named provider, metric, reporting period and retrieval timestamp was supplied. Territory priorities are withheld rather than inferred from genre or artist location.",
+      "status": "unavailable",
+      "provider": null,
+      "retrievedAt": null,
+      "territories": [],
+      "reportingPeriod": null
+    }
+  },
+  "tonalResolution": {
+    "mode": "minor",
+    "tonic": "F#",
+    "method": "circle_of_fifths_audio_first_v1",
+    "status": "PROVISIONAL",
+    "candidates": [
+      {
+        "mode": "minor",
+        "score": 0.836283,
+        "tonic": "F#",
+        "margin": 0,
+        "pitchClass": 6,
+        "bootstrapShare": 0.113281,
+        "windowAgreement": 0
+      },
+      {
+        "mode": "minor",
+        "score": 0.82619,
+        "tonic": "B",
+        "margin": 0.012069,
+        "pitchClass": 11,
+        "bootstrapShare": 0.191406,
+        "windowAgreement": 0
+      },
+      {
+        "mode": "major",
+        "score": 0.81748,
+        "tonic": "D",
+        "margin": 0.022484,
+        "pitchClass": 2,
+        "bootstrapShare": 0.160156,
+        "windowAgreement": 0.1875
+      },
+      {
+        "mode": "major",
+        "score": 0.807372,
+        "tonic": "A",
+        "margin": 0.034571,
+        "pitchClass": 9,
+        "bootstrapShare": 0.066406,
+        "windowAgreement": 0.125
+      },
+      {
+        "mode": "minor",
+        "score": 0.785335,
+        "tonic": "G#",
+        "margin": 0.060922,
+        "pitchClass": 8,
+        "bootstrapShare": 0.289063,
+        "windowAgreement": 0.1875
+      }
+    ],
+    "thresholds": {
+      "minWindows": 3,
+      "minMeanSalience": 0.12,
+      "minBootstrapShare": 0.8,
+      "minRunnerUpMargin": 0.025,
+      "minWindowAgreement": 0.7,
+      "bootstrapIterations": 256,
+      "relativePairAmbiguityMargin": 0.04,
+      "adjacentFifthsAmbiguityMargin": 0.04
+    },
+    "reasonCodes": [
+      "LOW_WINDOW_CONSENSUS",
+      "LOW_BOOTSTRAP_CONSENSUS",
+      "LOW_RUNNER_UP_MARGIN",
+      "RELATIVE_MAJOR_MINOR_AMBIGUITY"
+    ],
+    "meanSalience": 0.240941,
+    "bootstrapShare": 0.113281,
+    "runnerUpMargin": 0.012069,
+    "windowAgreement": 0,
+    "validWindowCount": 16,
+    "downbeatAnchorWindowCount": 0,
+    "cadenceWeightedWindowCount": 1
+  },
+  "realMasterContract": {
+    "source": {
+      "mimeType": "audio/mpeg",
+      "byteLength": 8705429,
+      "sourceKind": "uploaded_master"
+    },
+    "auditId": "618b9b7a-5c0c-4acf-a583-f0e4e0f58a3b",
+    "schemaVersion": "1.0.0",
+    "externalRecords": [
+      {
+        "fields": {
+          "album": "The Essential Michael Jackson",
+          "genre": "Pop",
+          "title": "Will You Be There (Single Version)",
+          "artist": "Michael Jackson",
+          "releaseDate": "1993-06-28"
+        },
+        "status": "verified",
+        "provider": "apple_music",
+        "recordId": "159295684",
+        "sourceUrl": "https://music.apple.com/ng/album/will-you-be-there-single-version/159292399?i=159295684&uo=4",
+        "retrievedAt": "2026-11-22T09:34:29.424Z",
+        "fieldProvenance": {
+          "album": {
+            "provider": "apple_music",
+            "recordId": "159295684",
+            "retrievedAt": "2026-11-22T09:34:29.424Z"
+          },
+          "genre": {
+            "provider": "apple_music",
+            "recordId": "159295684",
+            "retrievedAt": "2026-11-22T09:34:29.424Z"
+          },
+          "title": {
+            "provider": "apple_music",
+            "recordId": "159295684",
+            "retrievedAt": "2026-11-22T09:34:29.424Z"
+          },
+          "artist": {
+            "provider": "apple_music",
+            "recordId": "159295684",
+            "retrievedAt": "2026-11-22T09:34:29.424Z"
+          },
+          "releaseDate": {
+            "provider": "apple_music",
+            "recordId": "159295684",
+            "retrievedAt": "2026-11-22T09:34:29.424Z"
+          }
+        }
+      },
+      {
+        "fields": {
+          "isrc": "USSM10501515",
+          "album": "The Essential Michael Jackson",
+          "label": "Sony Music",
+          "title": "Will You Be There",
+          "artist": "Michael Jackson",
+          "releaseDate": "2005-07-19"
+        },
+        "status": "verified",
+        "provider": "tidal",
+        "recordId": "11335944",
+        "sourceUrl": "https://tidal.com/browse/track/11335944",
+        "retrievedAt": "2026-11-22T09:34:29.726Z",
+        "fieldProvenance": {
+          "isrc": {
+            "provider": "tidal",
+            "recordId": "11335944",
+            "retrievedAt": "2026-11-22T09:34:29.726Z"
+          },
+          "album": {
+            "provider": "tidal",
+            "recordId": "11335944",
+            "retrievedAt": "2026-11-22T09:34:29.726Z"
+          },
+          "label": {
+            "provider": "tidal",
+            "recordId": "11335944",
+            "retrievedAt": "2026-11-22T09:34:29.726Z"
+          },
+          "title": {
+            "provider": "tidal",
+            "recordId": "11335944",
+            "retrievedAt": "2026-11-22T09:34:29.726Z"
+          },
+          "artist": {
+            "provider": "tidal",
+            "recordId": "11335944",
+            "retrievedAt": "2026-11-22T09:34:29.726Z"
+          },
+          "releaseDate": {
+            "provider": "tidal",
+            "recordId": "11335944",
+            "retrievedAt": "2026-11-22T09:34:29.726Z"
+          }
+        }
+      },
+      {
+        "status": "unavailable",
+        "provider": "musicbrainz",
+        "diagnostic": {
+          "code": "PROVIDER_LOOKUP_UNAVAILABLE",
+          "stage": "isrc_catalog_lookup",
+          "message": "MusicBrainz ISRC lookup failed with HTTP 503",
+          "retryable": true
+        },
+        "reasonCode": "PROVIDER_LOOKUP_UNAVAILABLE",
+        "attemptedAt": "2026-11-22T09:36:09.776Z"
+      },
+      {
+        "status": "unavailable",
+        "provider": "spotify",
+        "diagnostic": {
+          "code": "PROVIDER_LOOKUP_UNAVAILABLE",
+          "stage": "isrc_catalog_lookup",
+          "message": "Spotify API returned HTTP 403 Forbidden for https://api.spotify.com/v1/search?q=isrc%3AUSSM10501515&type=track&market=US&limit=1. Spotify message: unknown Spotify API error. If the Spotify app is in Development Mode, verify that the Spotify",
+          "retryable": true
+        },
+        "reasonCode": "PROVIDER_LOOKUP_UNAVAILABLE",
+        "attemptedAt": "2026-11-22T09:36:09.776Z"
+      }
+    ],
+    "strategicSynthesis": [],
+    "pipelineDiagnostics": [
+      {
+        "code": "ANALYSIS_LIMITATION",
+        "stage": "sonic_dna",
+        "message": "The tonal centre remains provisional. A stable window consensus was not reached across the analyzed audio segments. Resampled candidate rankings are not stable enough for confirmation. The leading candidate is too close to its runner-up. Relative major and minor readings remain close.",
+        "retryable": false
+      },
+      {
+        "code": "ANALYSIS_LIMITATION",
+        "stage": "sonic_dna",
+        "message": "Tempo could not be determined reliably from the supplied audio.",
+        "retryable": false
+      },
+      {
+        "code": "ANALYSIS_LIMITATION",
+        "stage": "sonic_dna",
+        "message": "No vocal conclusion is available because the separation model did not complete.",
+        "retryable": false
+      }
+    ],
+    "calibratedPredictions": [
+      {
+        "name": "calibrated_audio_mood",
+        "label": null,
+        "status": "unavailable",
+        "diagnostics": [
+          {
+            "code": "VALIDATED_MODEL_NOT_CONFIGURED",
+            "stage": "audio_classification",
+            "message": "A calibrated mood probability is not asserted; provisional audio-derived mood tags are available in acousticFeatureProfile.predictions.mood.",
+            "retryable": false
+          }
+        ],
+        "probability": null,
+        "reasonCodes": [
+          "VALIDATED_MODEL_NOT_CONFIGURED"
+        ]
+      },
+      {
+        "name": "calibrated_audio_energy",
+        "label": null,
+        "status": "unavailable",
+        "diagnostics": [
+          {
+            "code": "CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED",
+            "stage": "audio_classification",
+            "message": "A calibrated perceptual-energy probability is not asserted; a provisional audio-derived low/moderate/high estimate is available in acousticFeatureProfile.predictions.energy.",
+            "retryable": false
+          }
+        ],
+        "probability": null,
+        "reasonCodes": [
+          "CALIBRATED_ENERGY_MODEL_NOT_CONFIGURED"
+        ]
+      },
+      {
+        "name": "calibrated_key_mode_probability",
+        "label": null,
+        "status": "unavailable",
+        "diagnostics": [
+          {
+            "code": "CALIBRATED_CLASSIFIER_NOT_CONFIGURED",
+            "stage": "key_analysis",
+            "message": "The tonal estimator returns candidate scores, not a calibrated class probability; candidate confidence is reported separately.",
+            "retryable": false
+          }
+        ],
+        "probability": null,
+        "reasonCodes": [
+          "CALIBRATED_CLASSIFIER_NOT_CONFIGURED"
+        ]
+      }
+    ],
+    "provisionalPredictions": [
+      {
+        "name": "audio_mood",
+        "label": "driving, tense",
+        "score": 83,
+        "method": "audio_feature_heuristics_v1",
+        "status": "provisional",
+        "scoreScale": "0-100",
+        "diagnostics": [],
+        "probability": null,
+        "featureDrivers": [
+          "spectral_centroid_hz",
+          "spectral_flux",
+          "spectral_flatness",
+          "low_band_energy_ratio",
+          "mid_band_energy_ratio"
+        ]
+      },
+      {
+        "name": "audio_energy",
+        "label": "high",
+        "score": 68,
+        "method": "audio_feature_heuristics_v1",
+        "status": "provisional",
+        "scoreScale": "0-100",
+        "diagnostics": [],
+        "probability": null,
+        "featureDrivers": [
+          "rms_dbfs",
+          "spectral_flux",
+          "spectral_centroid_hz",
+          "zero_crossing_rate"
+        ]
+      }
+    ],
+    "directSignalMeasurements": [
+      {
+        "name": "duration_seconds",
+        "unit": "seconds",
+        "value": 217.632,
+        "method": "decoded_master_duration",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "sample_rate_hz",
+        "unit": "Hz",
+        "value": 48000,
+        "method": "audio_decoder",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "channels",
+        "unit": "count",
+        "value": 2,
+        "method": "audio_decoder",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "tempo_bpm",
+        "unit": "BPM",
+        "value": null,
+        "method": "high_frequency_transient_autocorrelation",
+        "status": "unavailable",
+        "diagnostics": [
+          {
+            "code": "TEMPO_BELOW_REPORTING_THRESHOLD",
+            "message": "The tempo analysis returned a provisional candidate of 55 BPM, but it did not meet the reportability threshold. Window consensus and independent-estimator diagnostics remain available in Sonic DNA.",
+            "retryable": false
+          }
+        ]
+      },
+      {
+        "name": "integrated_loudness_lufs",
+        "unit": "LUFS",
+        "value": -15.1,
+        "method": "audio_decoder_loudness",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "loudness_range_lu",
+        "unit": "LU",
+        "value": 10.8,
+        "method": "audio_decoder_loudness_range",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "true_peak_dbfs",
+        "unit": "dBFS",
+        "value": -2.3,
+        "method": "audio_decoder_true_peak",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "rms_level_dbfs",
+        "unit": "dBFS",
+        "value": -20.25873681088543,
+        "method": "pcm_rms",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "rms_envelope_spread_db",
+        "unit": "dB",
+        "value": 22.359281675272243,
+        "method": "pcm_rms_envelope_p95_p10",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "spectral_centroid_hz",
+        "unit": "Hz",
+        "value": 1747.8869823261584,
+        "method": "fft_spectral_centroid",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "spectral_bandwidth_hz",
+        "unit": "Hz",
+        "value": 1558.1713305504018,
+        "method": "fft_spectral_bandwidth",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "spectral_rolloff_hz",
+        "unit": "Hz",
+        "value": 3535.8664772727275,
+        "method": "fft_spectral_rolloff",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "zero_crossing_rate",
+        "unit": "ratio",
+        "value": 0.15070170084580883,
+        "method": "pcm_zero_crossing_rate",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_rmsDbfs_median",
+        "unit": "dBFS",
+        "value": -20.862446083175712,
+        "method": "windowed_pcm_rms",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_peakDbfs_median",
+        "unit": "dBFS",
+        "value": -9.006686760234107,
+        "method": "windowed_pcm_peak",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_crestFactorDb_median",
+        "unit": "dB",
+        "value": 11.263302459138373,
+        "method": "peak_to_rms",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_spectralCentroidHz_median",
+        "unit": "Hz",
+        "value": 1675.077473151891,
+        "method": "hann_window_radix2_fft",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_spectralBandwidthHz_median",
+        "unit": "Hz",
+        "value": 1488.5012354357405,
+        "method": "hann_window_radix2_fft",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_spectralRolloff85Hz_median",
+        "unit": "Hz",
+        "value": 3413.0859375,
+        "method": "hann_window_radix2_fft",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_spectralFlatness_median",
+        "unit": "ratio",
+        "value": 0.5068189820109312,
+        "method": "geometric_to_arithmetic_spectral_mean",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_spectralFlux_median",
+        "unit": "ratio",
+        "value": 0.42338119831675464,
+        "method": "positive_spectral_flux",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_zeroCrossingRate_median",
+        "unit": "ratio",
+        "value": 0.1389838788470933,
+        "method": "pcm_zero_crossing_rate",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_lowBandEnergyRatio_median",
+        "unit": "ratio",
+        "value": 0.34490079659375206,
+        "method": "fft_band_power_ratio_20_250_hz",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_midBandEnergyRatio_median",
+        "unit": "ratio",
+        "value": 0.582911380805623,
+        "method": "fft_band_power_ratio_250_4000_hz",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      },
+      {
+        "name": "acoustic_highBandEnergyRatio_median",
+        "unit": "ratio",
+        "value": 0.008806258282151428,
+        "method": "fft_band_power_ratio_4000_hz_to_nyquist",
+        "status": "measured",
+        "measuredAt": "2026-11-22T09:35:08.573Z",
+        "diagnostics": []
+      }
+    ]
+  }
+}
