@@ -781,6 +781,9 @@ export function createSupabaseAuditStore(
           errorType: attempt.errorType,
           retryable: attempt.retryable,
           attempt: attempt.attempt,
+          ...(attempt.group ? { group: attempt.group } : {}),
+          ...(attempt.failureKind ? { failureKind: attempt.failureKind } : {}),
+          ...(attempt.validationIssues ? { validationIssues: attempt.validationIssues } : {}),
         },
       });
       if (error) throw new Error("Unable to persist provider attempt diagnostic");
