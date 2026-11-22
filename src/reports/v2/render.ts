@@ -11,8 +11,10 @@ const W=595.28,H=841.89,M=42;
 const C={
  paper:rgb(247/255,243/255,236/255),white:rgb(1,1,1),ink:rgb(43/255,40/255,37/255),
  muted:rgb(108/255,101/255,92/255),line:rgb(226/255,219/255,207/255),
- charcoal:rgb(43/255,40/255,37/255),gold:rgb(176/255,141/255,87/255),
- teal:rgb(29/255,158/255,117/255),amber:rgb(239/255,159/255,39/255),coral:rgb(216/255,90/255,48/255)
+ charcoal:rgb(43/255,40/255,37/255),gold:rgb(176/255,141/255,87/255),labelGold:rgb(138/255,106/255,48/255),
+ teal:rgb(29/255,158/255,117/255),tealDark:rgb(18/255,98/255,75/255),
+ amber:rgb(239/255,159/255,39/255),amberDark:rgb(132/255,83/255,12/255),
+ coral:rgb(216/255,90/255,48/255),coralDark:rgb(144/255,54/255,29/255)
 };
 type Fonts={regular:PDFFont;bold:PDFFont;italic:PDFFont;boldItalic:PDFFont};
 type Block={label:string;value:string;provenance?:string;confidence?:string;color?:keyof typeof C};
@@ -104,13 +106,13 @@ function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
   {label:"LOUDNESS / SIGNAL",value:loudness.length?loudness.join(" · "):data.energy.value===null?"Not measured":String(data.energy.value),provenance}
  ];
 }
-function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
+function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts,textColor:typeof C.teal=color){
  page.drawRectangle({x,y,width,height:48,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawCircle({x:x+13,y:y+31,size:3.5,color});
  page.drawText(label.toUpperCase(),{x:x+24,y:y+28,size:6.5,font:fonts.bold,color:C.muted});
- drawWrapped(page,value,x+12,y+15,width-24,fonts.bold,8.2,color,10);
+ drawWrapped(page,value,x+12,y+15,width-24,fonts.bold,8.2,textColor,10);
 }
-function card(page:PDFPage,x:number,top:number,width:number,title:string,body:string[],fonts:Fonts,opts:{accent?:typeof C.teal;height?:number;provenance?:string}={}):number{
+function card(page:PDFPage,x:number,top:number,width:number,title:string,body:string[],fonts:Fonts,opts:{accent?:typeof C.teal;height?:number;provenance?:string;titleColor?:typeof C.gold}={}):number{
  const pad=12,titleH=14,bodyW=width-pad*2;let bodyHeight=0;
  const chunks=body.map(t=>wrap(t,fonts.regular,8.4,bodyW));
  bodyHeight=chunks.reduce((n,lines)=>n+lines.length*11+5,0);
@@ -119,7 +121,7 @@ function card(page:PDFPage,x:number,top:number,width:number,title:string,body:st
  const y=top-height;
  page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:.65});
  page.drawRectangle({x,y:y+height-3,width,height:3,color:opts.accent??C.gold});
- page.drawText(title.toUpperCase(),{x:x+pad,y:top-pad-8,size:7,font:fonts.bold,color:opts.accent??C.gold});
+ page.drawText(title.toUpperCase(),{x:x+pad,y:top-pad-8,size:7,font:fonts.bold,color:opts.titleColor??opts.accent??C.gold});
  let cy=top-pad-titleH-4;
  for(const lines of chunks){for(const line of lines){page.drawText(line,{x:x+pad,y:cy,size:8.4,font:fonts.regular,color:C.ink});cy-=11;}cy-=5;}
  for(const line of provenance){page.drawText(line,{x:x+pad,y:cy,size:7,font:fonts.italic,color:C.muted});cy-=9;}
@@ -135,11 +137,124 @@ function header(page:PDFPage,title:string,fonts:Fonts){
  page.drawRectangle({x:0,y:H-66,width:W,height:66,color:C.charcoal});
  page.drawText("RESON8  /  A&R INTELLIGENCE",{x:M,y:H-26,size:7,font:fonts.bold,color:C.white});
  page.drawText(title.toUpperCase(),{x:M,y:H-48,size:13,font:fonts.bold,color:C.white});
- page.drawRectangle({x:M,y:H-70,width:W-2*M,height:3,color:C.gold});
+ page.drawRectangle({x:0,y:H-70,width:W,height:4,color:C.gold});
 }
 function pageBase(pdf:PDFDocument,title:string,fonts:Fonts):PDFPage{
  const p=pdf.addPage([W,H]);p.drawRectangle({x:0,y:0,width:W,height:H,color:C.paper});header(p,title,fonts);return p;
 }
+export function buildArNotesStatusChips(input:AuditReportInput):Array<{label:string;value:string;dotColor:typeof C.teal;textColor:typeof C.teal}>{
+ const dimensions=adaptReportV2(input).decisionDimensions;
+ const specs=[
+  {name:"Audio",label:"AUDIO",dotColor:C.teal,textColor:C.tealDark},
+  {name:"Identity",label:"IDENTITY",dotColor:C.amber,textColor:C.amberDark},
+  {name:"Market",label:"MARKET",dotColor:C.coral,textColor:C.coralDark},
+  {name:"Release readiness",label:"RELEASE READINESS",dotColor:C.gold,textColor:C.labelGold},
+ ] as const;
+ return specs.map(spec=>({
+  label:spec.label,
+  value:dimensions.find(dimension=>dimension.name.toLowerCase()===spec.name.toLowerCase())?.status??"UNAVAILABLE",
+  dotColor:spec.dotColor,
+  textColor:spec.textColor,
+ }));
+}
+
+function notesSentence(value:unknown,fallback:string):string{
+ const raw=typeof value==="string"?sanitizePublicReportLine(value).trim():"";
+ const cleaned=raw.replace(/\\.{3,}/g,".").replace(/\\u2026/g,".").trim();
+ if(!cleaned||/^(?:not supplied|not provided|not available)(?: in the assessment)?\\.?$/i.test(cleaned))return fallback;
+ return /[.!?]$/.test(cleaned)?cleaned:cleaned+".";
+}
+
+function drawHumanReviewCard(page:PDFPage,items:string[],top:number,fonts:Fonts):number{
+ const width=W-2*M,bodyWidth=width-48,size=7.2,lineHeight=9.1;
+ const layouts=items.map(item=>wrap(item,fonts.regular,size,bodyWidth));
+ const height=18+12+layouts.reduce((sum,lines)=>sum+lines.length*lineHeight+4,0)+10;
+ if(height>122)throw new Error("A&R Notes human listening review exceeds its reserved page region.");
+ card(page,M,top,width,"Human listening review",[],fonts,{accent:C.gold,height,titleColor:C.labelGold});
+ let y=top-31;
+ layouts.forEach(lines=>{
+  page.drawRectangle({x:M+12,y:y-2,width:8,height:8,color:C.white,borderColor:C.gold,borderWidth:.8});
+  lines.forEach(line=>{page.drawText(line,{x:M+27,y,size,font:fonts.regular,color:C.ink});y-=lineHeight;});
+  y-=4;
+ });
+ return height;
+}
+
+function drawDecisionContextCard(page:PDFPage,context:ReturnType<typeof buildArNotesDecisionContext>,top:number,fonts:Fonts):number{
+ const width=W-2*M,pad=12,bodyWidth=width-pad*2,size=7.1,lineHeight=8.6;
+ const sections=[
+  {label:"DECISION BASIS",value:context.decisionBasis},
+  {label:"OPEN DILIGENCE",value:context.openDiligence},
+  {label:"NEXT ACTION",value:context.nextAction},
+ ];
+ const sectionLayouts=sections.map(section=>({label:section.label,lines:wrap(section.value,fonts.regular,size,bodyWidth)}));
+ const colGap=8,colWidth=(bodyWidth-colGap*2)/3;
+ const promptLayouts=context.prompts.map(prompt=>wrap(prompt,fonts.regular,6.1,colWidth));
+ const promptHeight=Math.max(0,...promptLayouts.map(lines=>lines.length))*7.2;
+ const height=18+12+10+sectionLayouts.reduce((sum,section)=>sum+8+section.lines.length*lineHeight+5,0)+8+9+promptHeight+10;
+ if(height>170)throw new Error("A&R Notes decision context exceeds its reserved page region.");
+ card(page,M,top,width,"A&R decision context",[],fonts,{accent:C.teal,height,titleColor:C.labelGold});
+ let y=top-30;
+ page.drawText("Current assessment: "+context.verdict+". Human sign-off remains separate from the automated assessment.",{x:M+pad,y,size:6.5,font:fonts.italic,color:C.muted});
+ y-=15;
+ sectionLayouts.forEach(section=>{
+  page.drawText(section.label,{x:M+pad,y,size:6.2,font:fonts.bold,color:C.labelGold});y-=9;
+  section.lines.forEach(line=>{page.drawText(line,{x:M+pad,y,size,font:fonts.regular,color:C.ink});y-=lineHeight;});
+  y-=4;
+ });
+ page.drawText("REVIEW PROMPTS",{x:M+pad,y,size:6.2,font:fonts.bold,color:C.labelGold});y-=10;
+ promptLayouts.forEach((lines,index)=>{
+  const x=M+pad+index*(colWidth+colGap);
+  lines.forEach(line=>page.drawText(line,{x,y:y-((promptHeight/7.2)-lines.length)*3.6,size:6.1,font:fonts.regular,color:C.ink}));
+ });
+ return height;
+}
+
+function drawArNotesPage(page:PDFPage,pdf:PDFDocument,input:AuditReportInput,data:ReportV2Data,fonts:Fonts):void{
+ const chips=buildArNotesStatusChips(input),gap=7,chipWidth=(W-2*M-gap*3)/4,chipY=H-144;
+ chips.forEach((chip,index)=>scoreChip(page,M+index*(chipWidth+gap),chipY,chipWidth,chip.label,chip.value,chip.dotColor,fonts,chip.textColor));
+ const assessment=rec(input.assessment);
+ const rawChecklist=arr(assessment.humanListeningChecklist).map(value=>notesSentence(value,"")).filter(Boolean);
+ const checklist=rawChecklist.length?rawChecklist:[
+  "Listen once without viewing the analysis and record the first impression of the hook and arrangement.",
+  "Review vocal performance, lyric clarity and mix translation against the submitted master.",
+  "Compare the strongest section and the ending for pacing, dynamics and replay interest.",
+  "Check the artist and release identity against the available source records.",
+  "Verify rights, master approval and metadata before any external pitch.",
+ ];
+ const humanHeight=drawHumanReviewCard(page,checklist, H-162,fonts);
+ const context=buildArNotesDecisionContext(input);
+ const decisionTop=H-162-humanHeight-12;
+ const decisionHeight=drawDecisionContextCard(page,context,decisionTop,fonts);
+ const notesTop=decisionTop-decisionHeight-20;
+ if(notesTop-(76+295)<8)throw new Error("A&R Notes working area cannot retain its minimum 35 percent page height.");
+ page.drawText("WORKING NOTES",{x:M,y:notesTop-2,size:7,font:fonts.bold,color:C.labelGold});
+ page.drawText("Editable multiline field · private reviewer annotations only",{x:M,y:notesTop-14,size:6.2,font:fonts.italic,color:C.muted});
+ const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
+ notes.addToPage(page,{x:M,y:76,width:W-2*M,height:295,borderWidth:1,borderColor:C.gold,backgroundColor:C.white});
+ notes.setFontSize(8);notes.updateAppearances(fonts.regular);
+ for(let y=98;y<360;y+=22)page.drawLine({start:{x:M+10,y},end:{x:W-M-10,y},color:rgb(239/255,235/255,227/255),thickness:.35});
+ const owner=form.createTextField("ar_owner");
+ owner.addToPage(page,{x:M+34,y:53,width:105,height:14,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
+ owner.setFontSize(7);owner.updateAppearances(fonts.regular);
+ const followup=form.createTextField("ar_followup_date");
+ followup.addToPage(page,{x:M+212,y:53,width:82,height:14,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
+ followup.setFontSize(7);followup.updateAppearances(fonts.regular);
+ page.drawText("OWNER",{x:M,y:57,size:6,font:fonts.bold,color:C.labelGold});
+ page.drawText("FOLLOW-UP",{x:M+147,y:57,size:6,font:fonts.bold,color:C.labelGold});
+ page.drawText("DECISION",{x:M+310,y:57,size:6,font:fonts.bold,color:C.labelGold});
+ const decisions=[
+  {name:"ar_decision_hold",label:"Hold",x:M+370},
+  {name:"ar_decision_reaudit",label:"Re-audit",x:M+420},
+  {name:"ar_decision_proceed",label:"Proceed",x:M+482},
+ ];
+ for(const decision of decisions){
+  const checkbox=form.createCheckBox(decision.name);
+  checkbox.addToPage(page,{x:decision.x,y:55,width:9,height:9,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
+  page.drawText(decision.label,{x:decision.x+12,y:56,size:5.8,font:fonts.regular,color:C.ink});
+ }
+}
+
 function detectorNumber(value: unknown, digits = 3): string | null {
  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : null;
 }
@@ -393,7 +508,6 @@ export function buildReleaseCampaignLabels(input:AuditReportInput){
 }
 function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:AuditReportTier):PageSpec[]{
  const e=rec(input.evidence),a=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence)),sonic=rec(input.sonicDna);
- const notesContext=buildArNotesDecisionContext(input);
  const pages:PageSpec[]=[
   {title:"Cover and verdict",kind:"cover",blocks:metricBlock(data,input),lines:[
    "Artist: "+str(e.artist)+"   Track: "+str(e.title),
@@ -494,13 +608,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   if(hasScore||timeline.length>0||hasPlaybackMeasurements)
    pages.push({title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"});
  }
- pages.push({title:"A&R notes",blocks:[],lines:[
-  ...arr(a.humanListeningChecklist).map(value=>str(value,"")).filter(value=>value&&!/^not supplied$/i.test(value)).map(value=>"[ ] "+value),
-  notesContext.verdict,
-  notesContext.summary,
-  ...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),
-  "Record the A&R decision, owner, follow-up date and evidence still required."
- ],kind:"ar-notes"});
+ pages.push({title:"A&R notes",blocks:[],lines:[],kind:"ar-notes"});
  return pages;
 }
 
@@ -750,14 +858,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   }else if(spec.kind==="snapshot"){
    drawSnapshot(page,data,fonts,input);
   }else if(spec.kind==="ar-notes"){
-   const lines=spec.lines??[];
-   const decision=lines.slice(-6);
-   const checklist=lines.slice(0,Math.max(0,lines.length-6));
-   let y=H-100;
-   if(checklist.length){const h=card(page,M,y,W-2*M,"Human listening review",checklist,fonts,{accent:C.gold});y-=h+14;}
-   const context=card(page,M,y,W-2*M,"A&R decision context",decision,fonts,{accent:C.teal});
-   page.drawText("WORKING NOTES · EDITABLE IN THE PDF", {x:M,y:y-context-24,size:7,font:fonts.bold,color:C.gold});
-   page.drawText("Record the decision, owner, evidence request and next review date.",{x:M,y:y-context-38,size:6.5,font:fonts.italic,color:C.muted});
+   drawArNotesPage(page,pdf,input,data,fonts);
   }else if(spec.kind==="full-axes"){
    if(data.sonicAxes)drawSonicAxes(page,data,fonts);
    else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
@@ -875,9 +976,5 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   }
   drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
  }
- const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
- const notesPage=pdf.getPages()[pdf.getPageCount()-1]??pdf.getPages()[0];
- notes.addToPage(notesPage,{x:M,y:76,width:W-2*M,height:54,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
- notes.setFontSize(8);notes.updateAppearances(fonts.regular);
  return pdf.save();
 }
