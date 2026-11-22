@@ -97,7 +97,8 @@ for(const [name,input] of variants){
     if(!normalizedExtracted.includes(expected))throw new Error(filename+" is missing the human-readable tuning limitation: "+expected);
    }
    if(/\b14\s*\(multiple tonal windows; provisional\)/i.test(normalizedExtracted))throw new Error(filename+" exposed a raw tuning-window diagnostic instead of the human-readable limitation");
-   if(/\b128\s*BPM\b/.test(normalizedExtracted))throw new Error(filename+" exposed a zero-confidence tempo candidate");
+    if(/\b128\s*BPM\b/.test(normalizedExtracted)&&!/Tempo status:\s*UNCONFIRMED/i.test(normalizedExtracted))throw new Error(filename+" exposed a weak tempo candidate without an explicit unconfirmed status");
+    if(/\b(?:Confirmed|Measured) tempo:\s*128\s*BPM/i.test(normalizedExtracted))throw new Error(filename+" promoted a weak tempo candidate to a confirmed BPM");
    if(!normalizedExtracted.includes("Provisional tonal centre: C major."))throw new Error(filename+" failed to retain the provisional audio-derived tonic");
    if(!normalizedExtracted.includes("Candidates: C major"))throw new Error(filename+" failed to retain the provisional candidate list");
    if(!normalizedExtracted.includes("Tonal windows do not consistently support one candidate.")&&!normalizedExtracted.includes("Relative major/minor ambiguity remains."))throw new Error(filename+" omitted the human-readable tonal disambiguation reason");
