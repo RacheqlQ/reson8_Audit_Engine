@@ -417,7 +417,12 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
   const fallbackEvidence=arr(isrcStrategy.nonIsrcEvidence).filter((value):value is string=>typeof value==="string"&&value.trim().length>0);
   if(fallbackEvidence.length)lines.push("Available non-ISRC evidence: "+fallbackEvidence.join(", ")+".");
  }
- const routingActions=arr(isrcStrategy.requiredActions).filter((value):value is string=>typeof value==="string"&&value.trim().length>0).slice(0,3);
+ const suppliedRoutingActions=arr(isrcStrategy.requiredActions).filter((value):value is string=>typeof value==="string"&&value.trim().length>0).slice(0,3);
+ const routingActions=suppliedRoutingActions.length?suppliedRoutingActions:isrcStrategy.route==="ISRC_FIRST"
+  ?["Run catalog and release-reconciliation lookups keyed by the validated ISRC."]
+  :arr(isrcStrategy.conflicts).length
+   ?["Resolve conflicting valid ISRC claims before treating any catalog result as a match."]
+   :["Confirm or register the ISRC and complete rights and clearance checks before wide distribution or external pitching."];
  for(const action of routingActions)lines.push("ISRC action: "+action);
  const genre = str(evidence.genre, "");
  const genreSource = str(evidence.genreSource ?? evidence.genreProvider ?? evidence.genreProvenance, "");
