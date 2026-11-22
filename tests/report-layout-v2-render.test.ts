@@ -8,6 +8,18 @@ import { sanitizePublicReportLine } from "../src/reports/v2/public-language.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
+describe("public report language sanitization", () => {
+  it("suppresses internal vocal-analysis and model-status notices", () => {
+    for (const notice of [
+      "Vocal analysis: Not performed - Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
+      "Vocal presence/absence is unknown and is not inferred.",
+      "No vocal conclusion is available because the separation model did not complete.",
+      "Learned audio model: disabled.",
+      "Detection model status: disabled.",
+    ]) expect(sanitizePublicReportLine(notice)).toBe("");
+  });
+});
+
 describe("v2 decision and date framing", () => {
   it("uses only the supplied release-strategy recommendation or first evidence gap", () => {
     const input = structuredClone(fullAudioFixture) as any;
