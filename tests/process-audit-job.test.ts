@@ -148,7 +148,10 @@ describe("processAuditJob", () => {
       },
       saveReport: async (_jobId, _claimToken, tier, pdf, reportInput) => {
         expect(Buffer.from(pdf.subarray(0, 5)).toString("ascii")).toBe("%PDF-");
-        if (tier === "full") expect(reportInput).toMatchObject({ auditId: "job-123", executionMode: "master", realMasterContract: { schemaVersion: "1.0.0", source: { sha256: expect.stringMatching(/^[a-f0-9]{64}$/) } } });
+        if (tier === "full") {
+          expect(reportInput).toMatchObject({ auditId: "job-123", executionMode: "master", realMasterContract: { schemaVersion: "1.0.0", source: { sha256: expect.stringMatching(/^[a-f0-9]{64}$/) } } });
+          expect(reportInput?.decisionDimensions?.map(dimension => dimension.name)).toEqual(["Audio", "Identity", "Market", "Release readiness"]);
+        }
         events.push(`report-saved-${tier}`);
       },
       markCompleted: async () => events.push("completed"),
