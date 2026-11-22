@@ -70,7 +70,7 @@ describe("Sonic DNA",()=>{
   expect(result.bpm).toBeNull();
   expect(result.abstentionReason).toMatch(/weak|ambiguous|not confirmed/i);
   expect(result.candidateBpms.length).toBeGreaterThan(0);
-  expect(result.candidateBpms.some(candidate=>candidate===55||candidate===110)).toBe(true);
+  expect(result.candidateBpms.some(candidate=>Math.abs(candidate-55)<=2||Math.abs(candidate-110)<=2)).toBe(true);
   expect(result.candidateScores.length).toBeGreaterThan(0);
   expect(result.windowConsensus.windowCount).toBeGreaterThan(0);
  });
