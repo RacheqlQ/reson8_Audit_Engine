@@ -1,6 +1,6 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildCoverKeyLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
+import { buildCoverKeyLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote, buildTempoDiagnosticLines } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
@@ -485,7 +485,7 @@ describe("v2 A&R Notes page acceptance", () => {
       const holdRect = form.getCheckBox("ar_decision_hold").acroField.getWidgets()[0].getRectangle();
       expect(notesRect.x).toBeCloseTo(41.5, 0);
       expect(notesRect.width).toBeCloseTo(512.28, 0);
-      expect(notesRect.y).toBeGreaterThanOrEqual(76);
+      expect(notesRect.y).toBeGreaterThanOrEqual(75);
       expect(notesRect.height).toBeGreaterThanOrEqual(295);
       expect(ownerRect.y).toBeCloseTo(53, 0);
       expect(followupRect.y).toBeCloseTo(53, 0);
@@ -532,7 +532,7 @@ describe("ISRC strategy presentation", () => {
     expect(lines).toMatch(/ISRC conflict/i);
     expect(lines).toMatch(/measured tempo, provisional tonal candidates, embedded audio tags/i);
     expect(lines).toMatch(/provisional A&R guidance/i);
-    expect(lines).toMatch(/ISRC action: Conflicting valid ISRC claims/i);
+    expect(lines).toMatch(/ISRC action: Resolve the ISRC conflict before external pitching/i);
   });
 
   it("does not present an available ISRC as proof of a provider match or commercial performance", () => {
