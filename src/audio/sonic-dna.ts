@@ -219,7 +219,7 @@ function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate
  const beatGrid=deriveBeatGrid(novelty,bpm,sampleRate/hop);
  return {
   bpm,topCandidateBpm:bestBpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),
-  confidence,method,candidateBpms:candidates.slice(0,8),candidateScores:allCandidateScores,onsetEnvelope,
+  confidence,method,candidateBpms:candidates.slice(0,8),candidateScores:allCandidateScores,voting:voteTempoCandidates({windows:[{bpm, prominence:confidence??0, durationSeconds:samples.length/Math.max(1,sampleRate)}]}),onsetEnvelope,
   beatTimesSeconds:beatGrid.beatTimesSeconds,
   downbeatCandidateTimesSeconds:beatGrid.downbeatCandidateTimesSeconds,
   beatGridStatus:beatGrid.beatTimesSeconds.length?"tentative":"not_determined",
