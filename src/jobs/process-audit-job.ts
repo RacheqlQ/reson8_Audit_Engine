@@ -656,9 +656,12 @@ export async function processAuditJob(
     }
 
     let isrcLookup: IsrcCatalogLookup | null = null;
+    const userSuppliedIsrcCandidates = [job.catalogUrl, ...(job.catalogUrls ?? [])]
+      .map(value => typeof value === "string" ? value.match(/\\b[A-Z]{2}[A-Z0-9]{3}[0-9]{7}\\b/i)?.[0] ?? null : null);
     const isrcCandidates = [
       recognition.matched ? recognition.isrc : null,
       ...metadataSources.map((source) => source.isrc),
+      ...userSuppliedIsrcCandidates,
       masterTags?.isrc ?? null,
     ];
     let normalizedIsrc: string | null = null;
@@ -765,6 +768,8 @@ export async function processAuditJob(
 
     const identity = reconciliation.identity;
     const evidence = {
+      isrc: normalizedIsrc,
+      userInput: { isrc: userSuppliedIsrcCandidates.find((value): value is string => Boolean(value)) ?? null },
       ...(metadata ? catalogEvidence(metadata, identity) : { auditType: "MASTER-BASED AUDIT" }),
       auditType: hasMaster && hasCatalog ? "COMBINED MASTER + DSP AUDIT" : hasCatalog ? "METADATA-BASED AUDIT" : "MASTER-BASED AUDIT",
       ...recognitionEvidence(recognition),
@@ -845,6 +850,8 @@ export async function processAuditJob(
     const assessmentRecognition = recognitionEvidence(recognition);
     delete assessmentRecognition.spotifyId;
     const assessmentEvidence = {
+      isrc: normalizedIsrc,
+      userInput: { isrc: userSuppliedIsrcCandidates.find((value): value is string => Boolean(value)) ?? null },
       ...(assessmentMetadata ? catalogEvidence(assessmentMetadata, assessmentIdentity) : { auditType: evidence.auditType }),
       ...assessmentRecognition,
       ...identityEvidence(assessmentIdentity),
