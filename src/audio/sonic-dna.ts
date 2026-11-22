@@ -247,13 +247,15 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
    candidates.push({bpm:estimate.topCandidateBpm,prominence:estimate.confidence??0});
   return {bpm:estimate.bpm??undefined,prominence:estimate.confidence??undefined,durationSeconds,candidates};
  };
- votingWindows.push(toVotes(overall,Math.max(0,samples.length/Math.max(1,sampleRate))));
+ const windowVotes:Array<{bpm?:number;prominence?:number;durationSeconds:number;candidates:Array<{bpm:number;prominence:number}>}>=[];
  for(let window=0;window<windowCount;window++){
   const start=window*windowSamples;
   const estimate=estimateTempoCore(samples.subarray(start,start+windowSamples),sampleRate);
   if(estimate.bpm!==null)labels.push(String(Math.round(estimate.bpm)));
-  votingWindows.push(toVotes(estimate,8));
+  windowVotes.push(toVotes(estimate,8));
  }
+ if(windowVotes.some(item=>item.candidates.length>0||item.bpm!==undefined))votingWindows.push(...windowVotes);
+ else votingWindows.push(toVotes(overall,Math.max(0,samples.length/Math.max(1,sampleRate))));
  const voting=voteTempoCandidates({windows:votingWindows});
  const windowConsensus=bootstrapCategoricalConsensus(labels,{iterations:1000,seed:17});
  const independentEstimator=estimateLowFrequencyEnvelopeTempo(samples,sampleRate);
