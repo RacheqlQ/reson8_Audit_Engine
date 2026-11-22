@@ -261,11 +261,12 @@ function detectorNumber(value: unknown, digits = 3): string | null {
 }
 export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
  const sonic=rec(input.sonicDna),rhythm=rec(sonic.rhythmFeatures),lines:string[]=[];
- const bpm=finite(rhythm.bpm)?rhythm.bpm:finite(sonic.bpm)?sonic.bpm:null;
+ const adaptedTempo=adaptReportV2(input).tempo.value;
+ const bpm=adaptedTempo??(finite(rhythm.bpm)?rhythm.bpm:finite(sonic.bpm)?sonic.bpm:null);
  const confidence=finite(rhythm.confidence)?rhythm.confidence:finite(sonic.tempoConfidence)?sonic.tempoConfidence:null;
  const abstention=str(rhythm.abstentionReason,"");
- const confirmed=bpm!==null&&confidence!==null&&confidence>=0.5&&!abstention;
- if(confirmed)lines.push("Confirmed tempo: "+bpm.toFixed(1)+" BPM; raw confidence score "+confidence.toFixed(3)+" (not a calibrated probability).");
+ const confirmed=adaptedTempo!==null;
+ if(confirmed)lines.push("Confirmed tempo: "+bpm!.toFixed(1)+" BPM"+(confidence!==null?"; raw confidence score "+confidence.toFixed(3)+" (not a calibrated probability).":"."));
  else lines.push("Tempo status: UNCONFIRMED. No BPM is presented as a confirmed tempo.");
  const scored=arr(rhythm.candidateScores).map(value=>rec(value))
   .filter(item=>finite(item.bpm)&&item.bpm>=40&&item.bpm<=220&&finite(item.score))
