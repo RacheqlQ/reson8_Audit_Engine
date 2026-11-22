@@ -32,7 +32,7 @@ describe("audit failure classification", () => {
     expect(classifyAuditFailure(new Error("json_validate_failed: Groq evidence-score response failed"))).toBe("malformed_output");
   });
 
-  it("classifies exhausted upstream 5xx responses as provider unavailable", () => {
+  it("classifies exhausted upstream HTTP 402 billing responses as provider unavailable", () => {\n    expect(classifyAuditFailure(new Error("Ollama assessment failed with HTTP 402"))).toBe("provider_unavailable");\n  });\n\n  it("classifies exhausted upstream 5xx responses as provider unavailable", () => {
     expect(classifyAuditFailure(new Error("Gemini assessment failed with HTTP 503"))).toBe("provider_unavailable");
     expect(classifyAuditFailure(new Error("provider_error: Ollama returned HTTP 502"))).toBe("provider_unavailable");
   });
