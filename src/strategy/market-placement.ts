@@ -108,7 +108,7 @@ function collectNonIsrcEvidence(evidence:Record<string,unknown>,sonicDna:Record<
     ...(clean(evidence.title??identity.title)?["supplied track title"]:[]),
     ...(clean(evidence.artist??identity.artist)?["supplied artist name"]:[]),
     ...(clean(evidence.genre??genre.primaryGenre)?["genre or lane hypotheses"]:[]),
-    ...(clean(evidence.releaseContext??evidence.campaignContext??evidence.album??identity.album??evidence.label??evidence.releaseDate)?["supplied release or campaign context"]:[]),
+    ...([evidence.releaseContext,evidence.campaignContext,evidence.album,identity.album,evidence.label,evidence.releaseDate].some(value=>Boolean(clean(value)))?["supplied release or campaign context"]:[]),
   ]);
 }
 
