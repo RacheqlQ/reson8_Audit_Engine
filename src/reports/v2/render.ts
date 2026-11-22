@@ -112,14 +112,14 @@ function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,valu
  page.drawText(label.toUpperCase(),{x:x+24,y:y+28,size:6.5,font:fonts.bold,color:C.muted});
  drawWrapped(page,value,x+12,y+15,width-24,fonts.bold,8.2,textColor,10);
 }
-function card(page:PDFPage,x:number,top:number,width:number,title:string,body:string[],fonts:Fonts,opts:{accent?:typeof C.teal;height?:number;provenance?:string;titleColor?:typeof C.gold}={}):number{
+function card(page:PDFPage,x:number,top:number,width:number,title:string,body:string[],fonts:Fonts,opts:{accent?:typeof C.teal;height?:number;provenance?:string;titleColor?:typeof C.gold;borderWidth?:number}={}):number{
  const pad=12,titleH=14,bodyW=width-pad*2;let bodyHeight=0;
  const chunks=body.map(t=>wrap(t,fonts.regular,8.4,bodyW));
  bodyHeight=chunks.reduce((n,lines)=>n+lines.length*11+5,0);
  const provenance=opts.provenance?wrap(opts.provenance,fonts.italic,7,bodyW):[];
  const height=Math.max(opts.height??0,pad+titleH+bodyHeight+(provenance.length?provenance.length*9+6:0)+pad);
  const y=top-height;
- page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:.65});
+ page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:opts.borderWidth??.65});
  page.drawRectangle({x,y:y+height-3,width,height:3,color:opts.accent??C.gold});
  page.drawText(title.toUpperCase(),{x:x+pad,y:top-pad-8,size:7,font:fonts.bold,color:opts.titleColor??opts.accent??C.gold});
  let cy=top-pad-titleH-4;
@@ -171,7 +171,7 @@ function drawHumanReviewCard(page:PDFPage,items:string[],top:number,fonts:Fonts)
  const layouts=items.map(item=>wrap(item,fonts.regular,size,bodyWidth));
  const height=16+10+layouts.reduce((sum,lines)=>sum+lines.length*lineHeight+2,0)+6;
  if(height>112)throw new Error("A&R Notes human listening review exceeds its reserved page region.");
- card(page,M,top,width,"Human listening review",[],fonts,{accent:C.gold,height,titleColor:C.labelGold});
+ card(page,M,top,width,"Human listening review",[],fonts,{accent:C.gold,height,titleColor:C.labelGold,borderWidth:1});
  let y=top-28;
  layouts.forEach(lines=>{
   page.drawRectangle({x:M+12,y:y-2,width:8,height:8,color:C.white,borderColor:C.gold,borderWidth:.8});
@@ -194,7 +194,7 @@ function drawDecisionContextCard(page:PDFPage,context:ReturnType<typeof buildArN
  const promptLineHeight=6.5,promptHeight=Math.max(0,...promptLayouts.map(lines=>lines.length))*promptLineHeight;
  const height=16+10+8+sectionLayouts.reduce((sum,section)=>sum+7+section.lines.length*lineHeight+3,0)+5+8+promptHeight+8;
  if(height>170)throw new Error("A&R Notes decision context exceeds its reserved page region.");
- card(page,M,top,width,"A&R decision context",[],fonts,{accent:C.teal,height,titleColor:C.labelGold});
+ card(page,M,top,width,"A&R decision context",[],fonts,{accent:C.teal,height,titleColor:C.labelGold,borderWidth:1});
  let y=top-27;
  page.drawText("Current assessment: "+context.verdict+". Human sign-off remains separate from the automated assessment.",{x:M+pad,y,size:6.1,font:fonts.italic,color:C.muted});
  y-=12;
