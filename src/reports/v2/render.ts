@@ -744,7 +744,7 @@ export function partitionFullReportUnits<T>(
 
 function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,fonts:Fonts,form:ReturnType<PDFDocument["getForm"]>):void {
  const chipGap=7,chipWidth=(W-2*M-chipGap*3)/4,chipY=704;
- const colors=[C.teal,C.amber,C.coral,C.gold] as const;
+ const colors=[C.teal,C.gold,C.teal,C.gold] as const;
  data.decisionDimensions.forEach((dimension,index)=>{
   scoreChip(page,M+index*(chipWidth+chipGap),chipY,chipWidth,dimension.name.toUpperCase(),dimension.status,colors[index]??C.gold,fonts);
  });
