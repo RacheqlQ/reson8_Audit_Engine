@@ -752,7 +752,7 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
   "Review mix translation, clipping, distortion and low-frequency control.",
   "Confirm the strongest excerpt and any edit points by listening to the master."
  ];
- const reviewTop=690,reviewHeight=94,reviewBottom=reviewTop-reviewHeight;
+ const reviewTop=690,reviewHeight=94;
  card(page,M,reviewTop,W-2*M,"Human listening review",[],fonts,{height:reviewHeight,accent:C.label});
  const columns=reviewItems.length>3?2:1,rows=Math.ceil(reviewItems.length/columns);
  reviewItems.forEach((item,index)=>{
