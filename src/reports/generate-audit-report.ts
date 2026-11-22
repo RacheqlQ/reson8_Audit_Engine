@@ -151,10 +151,9 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
   .map(professionalEvidenceLanguage)
   .filter((item)=>item.trim().length>0)
   .filter((item,index,items)=>items.indexOf(item)===index)
-  .slice(0,1)
-  .map((item)=>item.length>105?item.slice(0,102)+"...":item);
+  .filter((item,index,items)=>items.indexOf(item)===index);
  const fullSummary=professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required."));
- const safeSummary=fullSummary.length>180?fullSummary.slice(0,177)+"...":fullSummary;
+ const safeSummary=fullSummary;
  const nextAction="Verify identity, rights and the submitted master before pitching.";
  return {
   heading:"DECISION CONTEXT",
