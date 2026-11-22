@@ -238,7 +238,7 @@ function drawArNotesPage(page:PDFPage,pdf:PDFDocument,input:AuditReportInput,fon
  for(let y=notesFieldY+22;y<notesFieldY+notesFieldHeight-10;y+=22)page.drawLine({start:{x:M+10,y},end:{x:W-M-10,y},color:rgb(239/255,235/255,227/255),thickness:.35});
  const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
  // Keep the widget transparent so the page-level ruled lines remain visible beneath editable text.
- notes.addToPage(page,{x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,borderWidth:0});
+ notes.addToPage(page,{x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,borderWidth:0,backgroundColor:undefined});
  notes.setFontSize(8);notes.updateAppearances(fonts.regular);
  const owner=form.createTextField("ar_owner");
  owner.addToPage(page,{x:M+34,y:53,width:105,height:14,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
