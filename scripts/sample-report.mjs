@@ -129,10 +129,11 @@ for(const [name,input] of variants){
    }
   }
   if(name==="long-form-audio"&&tier==="full"){
-   const tokens=buildArNotesDecisionContext(input).summary.split(/\s+/).map(token=>token.replace(/[^\p{L}\p{N}#'-]/gu,"")).filter(Boolean);
+   const tokens=buildArNotesDecisionContext(input).summary.split(/\s+/).map(token=>token.replace(/[^\p{L}\p{N}]/gu,"")).filter(Boolean);
+   const compactExtracted=normalizedExtracted.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,"");
    let cursor=0;
    for(const token of tokens){
-    const position=normalizedExtracted.toLocaleLowerCase().indexOf(token.toLocaleLowerCase(),cursor);
+    const position=compactExtracted.indexOf(token.toLocaleLowerCase(),cursor);
     if(position<0)throw new Error(filename+" has a missing or out-of-order A&R Notes summary token: "+token);
     cursor=position+token.length;
    }
