@@ -1,8 +1,8 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildCoverKeyLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
+import { buildCoverKeyLabel, buildCoverTempoLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
-import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
+import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2, buildCoverTempoLabel } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
 import { sanitizePublicReportLine } from "../src/reports/v2/public-language.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
@@ -111,6 +111,29 @@ describe("v2 DSP playlist provider diagnostics", () => {
       outcomes: [{ provider: "spotify", status: "no_matches", reason: "No matching public playlist metadata was returned." }]
     };
     expect(reportV2Render.buildPlaylistProviderStatusLines(input)).toEqual([]);
+  });
+});
+
+describe("v2 cover tempo label", () => {
+  it("shows the nominal middle tempo from a 46/92/184 octave vote without implying confirmation", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      ...input.sonicDna,
+      bpm: null,
+      tempoCandidateBpm: 92,
+      tempoConfidence: 0.42,
+      rhythmFeatures: {
+        ...input.sonicDna.rhythmFeatures,
+        tempoVerdict: {
+          primary_candidate_bpm: 92,
+          octave_alternatives: [46, 184],
+          confirmation_status: "CANDIDATE",
+          reason_codes: ["OCTAVE_METRICAL_AMBIGUITY"],
+        },
+      },
+    };
+    const data = adaptReportV2(input);
+    expect(buildCoverTempoLabel(data, input)).toBe("92 BPM · CANDIDATE");
   });
 });
 
