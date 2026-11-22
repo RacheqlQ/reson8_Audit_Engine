@@ -146,22 +146,27 @@ export function paginateArNotesSummary(lines:string[]):string[][] {
 }
 export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecisionContext {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
+ const completeSentence=(value:unknown,fallback:string):string=>{
+  const raw=typeof value==="string"?professionalEvidenceLanguage(value):"";
+  const cleaned=raw.replace(/\\.{3,}/g,".").replace(/\\u2026/g,".").trim();
+  const sentence=cleaned||fallback;
+  return /[.!?]$/.test(sentence)?sentence:sentence+".";
+ };
  const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[])]
   .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
-  .map(professionalEvidenceLanguage)
-  .filter((item)=>item.trim().length>0)
-  .filter((item,index,items)=>items.indexOf(item)===index)
-  .slice(0,1)
-  .map((item)=>item.length>105?item.slice(0,102)+"...":item);
- const fullSummary=professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required."));
- const safeSummary=fullSummary.length>180?fullSummary.slice(0,177)+"...":fullSummary;
- const nextAction="Verify identity, rights and the submitted master before pitching.";
+  .map(item=>completeSentence(item,""))
+  .filter(item=>item!=="")
+  .filter((item,index,items)=>items.indexOf(item)===index);
+ const basis=completeSentence(safeAssessment.executiveSummary,"The decision is based on the evidence and limitations recorded in this assessment.");
+ const openDiligence=openItems[0]??"No additional identity, rights or source gap was recorded in the assessment.";
+ const strategy=val(safeAssessment.releaseStrategy?.recommendation,"");
+ const nextAction=completeSentence(strategy,"Verify the recording identity, release metadata, rights status and final master before any external pitch.");
  return {
   heading:"DECISION CONTEXT",
   verdict:coverVerdictLabel(input).toUpperCase(),
   summary:[
-   "Decision basis: "+safeSummary,
-   "Open diligence: "+(openItems.join(" ")||"No additional diligence items were recorded."),
+   "Decision basis: "+basis,
+   "Open diligence: "+openDiligence,
    "Next action: "+nextAction,
   ].join(" "),
   prompts:[
