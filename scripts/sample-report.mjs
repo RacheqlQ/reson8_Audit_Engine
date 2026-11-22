@@ -83,9 +83,11 @@ for(const [name,input] of variants){
     if(!footerWords.includes("AUDIT"))throw new Error(filename+" is missing its V2 audit footer on page "+(pageIndex+1));
    }
   }
-  const editableFields=pdf.getForm().getFields();
-  if(editableFields.map(field=>field.getName()).join(",")!=="ar_notes")throw new Error(filename+" is missing the single editable A&R Notes field");
+  const editableFields=pdf.getForm().getFields().map(field=>field.getName()).sort();
+  const expectedArFields=["ar_notes","ar_owner","ar_followup_date","ar_decision_hold","ar_decision_reaudit","ar_decision_proceed"].sort();
+  if(JSON.stringify(editableFields)!==JSON.stringify(expectedArFields))throw new Error(filename+" has unexpected A&R Notes AcroForm fields: "+editableFields.join(", "));
   if(pdf.getForm().getTextField("ar_notes").acroField.getWidgets().length!==1)throw new Error(filename+" has an unexpected A&R Notes widget count");
+  if(!pdf.getForm().getTextField("ar_notes").isMultiline())throw new Error(filename+" A&R Notes field must be multiline");
   const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
   const chartLabels=[safeAssessment.aAndRPositioning.primaryLane,...safeAssessment.aAndRPositioning.adjacentLanes].filter(value=>typeof value==="string"&&value.trim());
   const normalizedExtracted=extracted.replace(/\s+/g," ");
