@@ -215,10 +215,11 @@ function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate
  const alternateTempo=relatedCandidate?(bpm===bestBpm?relatedCandidate.bpm:bestBpm):null;
  const candidates=selected.map(([candidate])=>candidate);
  for(const candidate of [Math.round(bpm),Math.round(bpm)-1,Math.round(bpm)+1,...related.map(item=>item.bpm)])if(candidate>=40&&candidate<=240&&!candidates.includes(candidate))candidates.push(candidate);
+ const allCandidateScores=[...candidateScores,...related.filter(item=>!candidateScores.some(existing=>existing.bpm===item.bpm)).map(item=>({bpm:item.bpm,score:Number(item.score.toFixed(6))}))].slice(0,8);
  const beatGrid=deriveBeatGrid(novelty,bpm,sampleRate/hop);
  return {
   bpm,topCandidateBpm:bestBpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),
-  confidence,method,candidateBpms:candidates.slice(0,8),candidateScores,onsetEnvelope,
+  confidence,method,candidateBpms:candidates.slice(0,8),candidateScores:allCandidateScores,onsetEnvelope,
   beatTimesSeconds:beatGrid.beatTimesSeconds,
   downbeatCandidateTimesSeconds:beatGrid.downbeatCandidateTimesSeconds,
   beatGridStatus:beatGrid.beatTimesSeconds.length?"tentative":"not_determined",
