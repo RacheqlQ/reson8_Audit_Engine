@@ -84,8 +84,16 @@ for(const [name,input] of variants){
    }
   }
   const editableFields=pdf.getForm().getFields();
-  if(editableFields.map(field=>field.getName()).join(",")!=="ar_notes")throw new Error(filename+" is missing the single editable A&R Notes field");
-  if(pdf.getForm().getTextField("ar_notes").acroField.getWidgets().length!==1)throw new Error(filename+" has an unexpected A&R Notes widget count");
+  const requiredArFields=["ar_notes","ar_owner","ar_followup_date","ar_decision_hold","ar_decision_reaudit","ar_decision_proceed"];
+  const arFieldNames=editableFields.map(field=>field.getName());
+  if(requiredArFields.some(field=>!arFieldNames.includes(field))||arFieldNames.length!==requiredArFields.length)throw new Error(filename+" is missing or has unexpected A&R Notes fields");
+  const notesWidget=pdf.getForm().getTextField("ar_notes").acroField.getWidgets()[0];
+  if(!notesWidget||notesWidget.getRectangle().height<841.89*0.35)throw new Error(filename+" A&R Notes working area is smaller than 35% of A4 page height");
+  const finalPage=extracted.split("\f").filter(page=>page.trim().length>0).at(-1)??"";
+  const normalizedFinalPage=finalPage.replace(/\s+/g," ");
+  for(const label of ["A&R NOTES","AUDIO","IDENTITY","MARKET","RELEASE READINESS","HUMAN LISTENING REVIEW","DECISION CONTEXT","WORKING NOTES","A&R OWNER","FOLLOW-UP DATE","HOLD","RE-AUDIT","PROCEED"])if(!normalizedFinalPage.toUpperCase().includes(label))throw new Error(filename+" A&R Notes page is missing "+label);
+  for(const item of Array.isArray(input.assessment?.humanListeningChecklist)?input.assessment.humanListeningChecklist:[])if(!normalizedFinalPage.includes(String(item).replace(/\s+/g," ").trim()))throw new Error(filename+" A&R Notes page omitted a complete listening-review item");
+  if(normalizedFinalPage.includes("..."))throw new Error(filename+" A&R Notes page contains truncated text: "+normalizedFinalPage.split(" ").filter(word=>word.includes("...")).join(" | "));
   const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
   const chartLabels=[safeAssessment.aAndRPositioning.primaryLane,...safeAssessment.aAndRPositioning.adjacentLanes].filter(value=>typeof value==="string"&&value.trim());
   const normalizedExtracted=extracted.replace(/\s+/g," ");

@@ -171,6 +171,33 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
   ],
  };
 }
+export function buildArNotesDecisionContextFull(input:AuditReportInput):ArNotesDecisionContext {
+ const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
+ const internalStatusNotice=/(?:vocal analysis.{0,80}(?:temporarily disabled|not performed|unavailable|disabled|not run)|vocal presence(?:\s*\/\s*absence)? is unknown|no vocal conclusion is available|learned audio model.{0,40}disabled|detection model.{0,40}disabled)/i;
+ const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[]),...(Array.isArray(safeAssessment.limitations)?safeAssessment.limitations:[])]
+  .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
+  .filter(item=>!internalStatusNotice.test(item))
+  .map(professionalEvidenceLanguage)
+  .filter((item)=>item.trim().length>0)
+  .filter((item,index,items)=>items.indexOf(item)===index);
+ const fullSummary=professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required."));
+ const nextAction="Verify identity, rights and the submitted master before pitching.";
+ return {
+  heading:"DECISION CONTEXT",
+  verdict:coverVerdictLabel(input).toUpperCase(),
+  summary:[
+   "Decision basis: "+fullSummary,
+   "Open diligence: "+(openItems.join(" ")||"No additional diligence items were recorded."),
+   "Next action: "+nextAction,
+  ].join(" "),
+  prompts:[
+   "What evidence would change the current decision?",
+   "Which identity, rights or source gaps remain unresolved?",
+   "What should be verified before any external pitch?",
+  ],
+ };
+}
+
 export function coverVerdictLabel(input:AuditReportInput):string {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
  return verdictLabel(val(safeAssessment.commercialRead?.marketability,"undetermined"));
@@ -257,7 +284,7 @@ function executiveDiagnosticMessage(code:string,message:string,metricName?:strin
  return professionalEvidenceLanguage(safe).replace(/\s+/g," ").trim();
 }
 function safeSourceFileLabel(sourceAudioPath:string):string {
- const basename=sourceAudioPath.split(/[\\/]/).filter(Boolean).pop()??"";
+ const basename=sourceAudioPath.split(/[\/]/).filter(Boolean).pop()??"";
  const safe=normalizeReportText(basename.replace(/[\u0000-\u001F\u007F]/g,"").trim()).slice(0,100);
  return safe||"Uploaded audio master";
 }

@@ -27,6 +27,11 @@ export function isReliableTempo(value: TempoEvidence): boolean {
   if (rhythm && typeof rhythm === "object") {
     const rhythmRecord = rhythm as Record<string, unknown>;
     if (rhythmRecord.status === "insufficient_evidence") return false;
+    const tempoVerdict = rhythmRecord.tempoVerdict;
+    if (tempoVerdict && typeof tempoVerdict === "object" && !Array.isArray(tempoVerdict)) {
+      const confirmationStatus = (tempoVerdict as Record<string, unknown>).confirmation_status;
+      if (confirmationStatus !== "CONFIRMED") return false;
+    }
     if (typeof rhythmRecord.abstentionReason === "string" && rhythmRecord.abstentionReason.trim()) return false;
   }
   return true;
@@ -357,6 +362,13 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   }
 
   const mutable = result as Record<string, any>;
+  // Listening checklist entries are human review prompts, not asserted findings.
+  // Preserve the supplied prompts even when their wording mentions listeners,
+  // replay or lane concepts that the claim sanitizer correctly suppresses elsewhere.
+  if (Array.isArray(assessment.humanListeningChecklist)) {
+    mutable.humanListeningChecklist = assessment.humanListeningChecklist
+      .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0);
+  }
   const scorecardDefaults = {
     tempoLaneFit: { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE },
     rhythmicConsistency: { score: null, rationale: RHYTHM_UNAVAILABLE_RATIONALE },

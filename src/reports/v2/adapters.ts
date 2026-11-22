@@ -279,17 +279,26 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const comparables = comparablesFrom(evidence);
   const moments = momentsFrom(audio, evidence);
   const notYetMeasured: string[] = [];
-  if (!tempoReliable && typeof audio?.tempoConfidence === "number" && Number.isFinite(audio.tempoConfidence) && audio.tempoConfidence > 0) {
-    const candidate = firstFinite(audio, ["tempoCandidateBpm", "bpm"]);
-    if (candidate !== null && candidate >= 40 && candidate <= 220) {
-      const alternatives = [candidate / 2, candidate * 2]
-        .filter(value => value >= 40 && value <= 220)
-        .map(value => Number(value.toFixed(1)));
+  if (!tempoReliable) {
+    const rhythm = record(audio?.rhythmFeatures);
+    const verdict = record(rhythm?.tempoVerdict);
+    const candidate = firstFinite(audio, ["tempoCandidateBpm", "bpm"]) ?? firstFinite(verdict, ["primary_candidate_bpm"]);
+    const zeroProminence = (typeof audio?.tempoConfidence === "number" && Number.isFinite(audio.tempoConfidence) && audio.tempoConfidence <= 0)
+      || (finite(verdict?.prominence_score) && verdict.prominence_score <= 0);
+    const hasPositiveProminence = typeof audio?.tempoConfidence === "number" && Number.isFinite(audio.tempoConfidence) && audio.tempoConfidence > 0;
+    const hasExplicitVote = !zeroProminence && finite(verdict?.primary_candidate_bpm) && verdict?.confirmation_status !== "UNDETERMINED";
+    if (candidate !== null && candidate >= 40 && candidate <= 220 && (hasPositiveProminence || hasExplicitVote)) {
+      const alternatives = Array.isArray(verdict?.octave_alternatives)
+        ? verdict.octave_alternatives.filter(finite).filter(value => value >= 40 && value <= 220)
+        : [candidate / 2, candidate * 2].filter(value => value >= 40 && value <= 220);
+      const reason = nonEmpty(verdict?.explanation) ?? nonEmpty(rhythm?.abstentionReason);
       notYetMeasured.push(candidate + " BPM (provisional tempo candidate" +
-        (alternatives.length ? "; plausible half/double-time alternatives: " + alternatives.join(" / ") + " BPM" : "") +
-        "; not a confirmed tempo).");
-    } else if (candidate !== null) {
+        (alternatives.length ? "; supported half/double-time alternatives: " + alternatives.join(" / ") + " BPM" : "") +
+        "; not a confirmed tempo)." + (reason ? " " + reason : ""));
+    } else if (candidate !== null && (candidate < 40 || candidate > 220)) {
       notYetMeasured.push("Tempo candidate " + candidate + " BPM abstained: outside the plausible 40–220 BPM reporting range.");
+    } else if (verdict?.confirmation_status === "UNDETERMINED") {
+      notYetMeasured.push(nonEmpty(verdict.explanation) ?? "Tempo remains undetermined; no candidate passed the voting checks.");
     }
   }
   if (!keyReliable && hasReportableKeyCandidates(audioWithResolution)) {
