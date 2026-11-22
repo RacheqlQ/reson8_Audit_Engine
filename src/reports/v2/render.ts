@@ -160,7 +160,7 @@ export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
   .slice(0,4).map(item=>String(item.bpm)+" BPM");
  if(alternatives.length)lines.push("Supported half/double-time alternatives: "+alternatives.join(" / ")+" BPM.");
  if(!candidate&&candidates.length)lines.push("Possible tempo readings: "+candidates.join("; ")+". Treat these as provisional until confirmed by listening.");
- else if(!candidate&&Array.isArray(rhythm.candidateBpms)) {
+ else if(!zeroProminence&&!candidate&&Array.isArray(rhythm.candidateBpms)) {
   const fallback=rhythm.candidateBpms.filter(value=>finite(value)&&value>=40&&value<=220).slice(0,4);
   if(fallback.length)lines.push("Possible tempo readings: "+fallback.join("; ")+" BPM. Treat these as provisional until confirmed by listening.");
  }
