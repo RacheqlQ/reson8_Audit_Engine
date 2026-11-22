@@ -54,7 +54,6 @@ describe("audit stage failure diagnostics", () => {
     expect(diagnostic.errorCode).toBe("PDF_FONT_ENCODING_ERROR");
     expect(JSON.stringify(diagnostic)).not.toContain("🎵");
   });
-});
 
   it("classifies provider HTTP 402 as a billing-related provider failure without exposing response text", () => {
     const diagnostic = buildAuditStageFailureDiagnostic(
@@ -69,3 +68,6 @@ describe("audit stage failure diagnostics", () => {
     });
     expect(JSON.stringify(diagnostic)).not.toContain("billing details");
   });
+});
+
+  
