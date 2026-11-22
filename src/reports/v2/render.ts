@@ -152,7 +152,7 @@ export function buildArNotesStatusChips(input:AuditReportInput):Array<{label:str
  ] as const;
  return specs.map(spec=>({
   label:spec.label,
-  value:dimensions.find(dimension=>dimension.name.toLowerCase()===spec.name.toLowerCase())?.status??"UNAVAILABLE",
+  value:(dimensions.find(dimension=>dimension.name.toLowerCase()===spec.name.toLowerCase())?.status??"UNAVAILABLE").toUpperCase(),
   dotColor:spec.dotColor,
   textColor:spec.textColor,
  }));
@@ -230,11 +230,11 @@ function drawArNotesPage(page:PDFPage,pdf:PDFDocument,input:AuditReportInput,fon
  if(notesTop<389)throw new Error("A&R Notes working area cannot retain its minimum 35 percent page height.");
  page.drawText("WORKING NOTES",{x:M,y:notesTop-2,size:7,font:fonts.bold,color:C.labelGold});
  page.drawText("Editable multiline field · private reviewer annotations only",{x:M,y:notesTop-14,size:6.2,font:fonts.italic,color:C.muted});
- const notesFieldY=notesTop-18-295;
+ const notesFieldTop=notesTop-18,notesFieldHeight=Math.max(295,notesFieldTop-76),notesFieldY=notesFieldTop-notesFieldHeight;
  const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
- notes.addToPage(page,{x:M,y:notesFieldY,width:W-2*M,height:295,borderWidth:1,borderColor:C.gold,backgroundColor:C.white});
+ notes.addToPage(page,{x:M,y:notesFieldY,width:W-2*M,height:notesFieldHeight,borderWidth:1,borderColor:C.gold,backgroundColor:C.white});
  notes.setFontSize(8);notes.updateAppearances(fonts.regular);
- for(let y=notesFieldY+22;y<notesFieldY+285;y+=22)page.drawLine({start:{x:M+10,y},end:{x:W-M-10,y},color:rgb(239/255,235/255,227/255),thickness:.35});
+ for(let y=notesFieldY+22;y<notesFieldY+notesFieldHeight-10;y+=22)page.drawLine({start:{x:M+10,y},end:{x:W-M-10,y},color:rgb(239/255,235/255,227/255),thickness:.35});
  const owner=form.createTextField("ar_owner");
  owner.addToPage(page,{x:M+34,y:53,width:105,height:14,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
  owner.setFontSize(7);owner.updateAppearances(fonts.regular);
