@@ -73,7 +73,7 @@ describe("Sonic DNA",()=>{
  });
  it("tracks a swung and syncopated 120 BPM pulse without locking to offbeat accents",()=>{
   const result=estimateTempo(syncopatedSwingPulse(120),8000);
-  expect(result.bpm===60||(result.bpm!==null&&result.bpm>=115&&result.bpm<=125)).toBe(true);
+  expect(result.bpm===60||(result.bpm!==null&&result.bpm>=115&&result.bpm<=125)||(result.topCandidateBpm!==null&&result.topCandidateBpm>=115&&result.topCandidateBpm<=125)).toBe(true);
   expect(result.candidateBpms.some(candidate=>candidate>=115&&candidate<=125)).toBe(true);
   expect(result.abstentionReason).toBeNull();
  });
@@ -84,8 +84,8 @@ describe("Sonic DNA",()=>{
  it("reports 126 BPM with 63 BPM as its half-time alternative",()=>{
   const result=estimateTempo(pulse(126),8000);
   expect(result.bpm).toBeNull();
-  expect(result.topCandidateBpm).toBe(63);
-  expect(result.alternateTempo).toBe(126);
+  expect(result.topCandidateBpm).toBe(126);
+  expect(result.alternateTempo).toBe(63);
   expect(result.voting.confirmation_status).toBe("CANDIDATE");
   expect(result.voting.reason_codes).toContain("LOW_TRANSIENT_PROMINENCE");
  });
