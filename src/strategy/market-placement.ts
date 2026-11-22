@@ -317,7 +317,7 @@ export function buildPlaylistMoodContext(
 
 function normalizedValidIsrc(value:unknown):string|null{
  if(typeof value!=="string")return null;
- const normalized=value.replace(/[\\s-]/g,"").toUpperCase();
+ const normalized=value.replace(/[\s-]/g,"").toUpperCase();
  return /^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/.test(normalized)?normalized:null;
 }
 function collectNonIsrcEvidence(evidence:Record<string,unknown>,sonicDna:Record<string,unknown>|null):string[]{
