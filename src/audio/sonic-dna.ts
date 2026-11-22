@@ -269,19 +269,21 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
   :voting.confirmation_status==="CONFIRMED"?null:voting.explanation;
  const gridMatchesVote=voting.primary_candidate_bpm!==null&&overall.bpm!==null
   &&Math.abs(overall.bpm-voting.primary_candidate_bpm)<=Math.max(1.5,Math.min(overall.bpm,voting.primary_candidate_bpm)*0.02);
+ const reconciledCandidate=voting.primary_candidate_bpm!==null&&gridMatchesVote&&overall.bpm!==null
+  ?Math.round(overall.bpm):voting.primary_candidate_bpm;
  return {
   ...overall,
   beatTimesSeconds:gridMatchesVote?overall.beatTimesSeconds:[],
   downbeatCandidateTimesSeconds:gridMatchesVote?overall.downbeatCandidateTimesSeconds:[],
   beatGridStatus:gridMatchesVote?overall.beatGridStatus:"not_determined",
   downbeatGridAssumption:gridMatchesVote?overall.downbeatGridAssumption:null,
-  bpm:finalStatus==="CONFIRMED"?voting.primary_candidate_bpm:null,
-  topCandidateBpm:voting.primary_candidate_bpm,
+  bpm:finalStatus==="CONFIRMED"?reconciledCandidate:null,
+  topCandidateBpm:reconciledCandidate,
   alternateTempo:voting.octave_alternatives[0]??overall.alternateTempo,
   confidence:voting.prominence_score,
   abstentionReason:reason,
   windowConsensus,independentEstimator,
-  voting:{...voting,confirmation_status:finalStatus,reason_codes:materialDisagreement?[...voting.reason_codes,"INDEPENDENT_ESTIMATOR_DISAGREEMENT"]:voting.reason_codes,explanation:reason??voting.explanation},
+  voting:{...voting,primary_candidate_bpm:reconciledCandidate,confirmation_status:finalStatus,reason_codes:materialDisagreement?[...voting.reason_codes,"INDEPENDENT_ESTIMATOR_DISAGREEMENT"]:voting.reason_codes,explanation:reason??voting.explanation},
  };
 }
 
