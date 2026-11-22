@@ -762,9 +762,14 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
   drawWrapped(page,item,x+14,y+5,columns===2?235:W-2*M-42,fonts.regular,6.6,C.ink,7.6);
  });
  const context=buildArNotesDecisionContextFull(input);
- const contextTop=578,contextHeight=126,contextBottom=contextTop-contextHeight;
+ const contextTop=578,contextHeight=150,contextBottom=contextTop-contextHeight;
  card(page,M,contextTop,W-2*M,"A&R decision context",[],fonts,{height:contextHeight,accent:C.teal});
- drawWrapped(page,context.verdict+" · "+context.summary,M+12,contextTop-33,W-2*M-24,fonts.regular,6,C.ink,7.1);
+ const contextText=context.verdict+" · "+context.summary;
+ let contextFontSize=6.2,contextLineHeight=7.2;
+ while(wrap(contextText,fonts.regular,contextFontSize,W-2*M-24).length*contextLineHeight>66&&contextFontSize>5){contextFontSize-=0.2;contextLineHeight-=0.2;}
+ const contextLineCount=wrap(contextText,fonts.regular,contextFontSize,W-2*M-24).length;
+ if(contextLineCount*contextLineHeight>66)throw new Error("A&R Notes decision context exceeds its reserved page area");
+ drawWrapped(page,contextText,M+12,contextTop-33,W-2*M-24,fonts.regular,contextFontSize,C.ink,contextLineHeight);
  const promptTop=contextBottom+28,promptGap=8,promptWidth=(W-2*M-24-promptGap*2)/3;
  context.prompts.slice(0,3).forEach((prompt,index)=>{
   const x=M+12+index*(promptWidth+promptGap);
@@ -773,7 +778,7 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  });
 
 
- const notesX=M,notesY=140,notesWidth=W-2*M,notesHeight=300;
+ const notesX=M,notesY=112,notesWidth=W-2*M,notesHeight=300;
  page.drawText("WORKING NOTES · EDITABLE",{x:notesX,y:notesY+notesHeight+10,size:7,font:fonts.bold,color:C.label});
  const notes=form.createTextField("ar_notes");
  notes.enableMultiline();
@@ -786,13 +791,13 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  }
 
  const owner=form.createTextField("ar_owner");
- owner.addToPage(page,{x:M,y:94,width:128,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
+ owner.addToPage(page,{x:M,y:78,width:128,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
  owner.setFontSize(7);owner.updateAppearances(fonts.regular);
- page.drawText("A&R OWNER",{x:M,y:116,size:6,font:fonts.bold,color:C.label});
+ page.drawText("A&R OWNER",{x:M,y:100,size:6,font:fonts.bold,color:C.label});
  const followup=form.createTextField("ar_followup_date");
- followup.addToPage(page,{x:M+150,y:94,width:88,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
+ followup.addToPage(page,{x:M+150,y:78,width:88,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
  followup.setFontSize(7);followup.updateAppearances(fonts.regular);
- page.drawText("FOLLOW-UP DATE",{x:M+150,y:116,size:6,font:fonts.bold,color:C.label});
+ page.drawText("FOLLOW-UP DATE",{x:M+150,y:100,size:6,font:fonts.bold,color:C.label});
  const decisions=[
   ["ar_decision_hold","HOLD",M+258],
   ["ar_decision_reaudit","RE-AUDIT",M+340],
@@ -800,9 +805,9 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  ] as const;
  for(const [name,label,x] of decisions){
   const field=form.createCheckBox(name);
-  field.addToPage(page,{x,y:98,width:9,height:9,borderWidth:.8,borderColor:C.gold,backgroundColor:C.white});
+  field.addToPage(page,{x,y:82,width:9,height:9,borderWidth:.8,borderColor:C.gold,backgroundColor:C.white});
 
-  page.drawText(label,{x:x+13,y:99,size:6.1,font:fonts.bold,color:C.ink});
+  page.drawText(label,{x:x+13,y:83,size:6.1,font:fonts.bold,color:C.ink});
  }
 }
 
