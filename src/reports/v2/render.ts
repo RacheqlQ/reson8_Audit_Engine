@@ -400,6 +400,14 @@ export function buildPlaylistProviderStatusLines(input: AuditReportInput): strin
 export function buildPositioningLines(input: AuditReportInput): string[] {
  const evidence = rec(input.evidence), assessment = sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence));
  const lines: string[] = [];
+ const isrcStrategy=rec(rec(input.marketPlacement).isrcStrategy);
+ if(isrcStrategy.route==="ISRC_FIRST"&&typeof isrcStrategy.isrc==="string"){
+  lines.push("ISRC routing: a validated recording code is available from "+str(isrcStrategy.source,"supplied track evidence")+". Prioritize ISRC-keyed catalog and release reconciliation; the code alone does not prove a provider match or commercial performance.");
+ }else{
+  lines.push("ISRC routing: unavailable or pending verification. Use measured audio, embedded tags and supplied release context for provisional A&R guidance; confirm or register the ISRC and complete rights checks before wide distribution or external pitching.");
+  const fallbackEvidence=arr(isrcStrategy.nonIsrcEvidence).filter((value):value is string=>typeof value==="string"&&value.trim().length>0);
+  if(fallbackEvidence.length)lines.push("Available non-ISRC evidence: "+fallbackEvidence.join(", ")+".");
+ }
  const genre = str(evidence.genre, "");
  const genreSource = str(evidence.genreSource ?? evidence.genreProvider ?? evidence.genreProvenance, "");
  if (genre) {
