@@ -269,7 +269,7 @@ export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
  const confidence=finite(rhythm.confidence)?rhythm.confidence:finite(sonic.tempoConfidence)?sonic.tempoConfidence:null;
  const abstention=str(rhythm.abstentionReason,"");
  const confirmed=adaptedTempo!==null;
- if(confirmed)lines.push("Confirmed tempo: "+bpm!.toFixed(1)+" BPM"+(confidence!==null?"; raw confidence score "+confidence.toFixed(3)+" (not a calibrated probability).":"."));
+ if(confirmed)lines.push("Confirmed tempo: "+Number(bpm).toFixed(1)+" BPM"+(confidence!==null?"; raw confidence score "+confidence.toFixed(3)+" (not a calibrated probability).":"."));
  else lines.push("Tempo status: UNCONFIRMED. No BPM is presented as a confirmed tempo.");
  const scored=arr(rhythm.candidateScores).map(value=>rec(value))
   .filter(item=>finite(item.bpm)&&item.bpm>=40&&item.bpm<=220&&finite(item.score))
