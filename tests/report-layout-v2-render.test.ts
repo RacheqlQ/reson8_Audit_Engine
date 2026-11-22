@@ -437,7 +437,7 @@ describe("v2 tempo and tonal status reporting", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.tonalResolution = {
       status: "PROVISIONAL", tonic: "D", mode: "major",
-      windowAgreement: 0.48, bootstrapShare: 0.52,
+      windowAgreement: 0.48, bootstrapShare: 0.52, validWindowCount: 4, downbeatAnchorWindowCount: 2, cadenceWeightedWindowCount: 1,
       candidates: [{ tonic: "D", mode: "major" }, { tonic: "B", mode: "minor" }],
       reasonCodes: ["LOW_WINDOW_CONSENSUS", "RELATIVE_MAJOR_MINOR_AMBIGUITY"]
     };
@@ -447,7 +447,10 @@ describe("v2 tempo and tonal status reporting", () => {
     const diagnostics = reportV2Render.buildKeyDiagnosticLines(input).join(" ");
     expect(diagnostics).toMatch(/provisional/i);
     expect(diagnostics).toMatch(/relative major\/minor/i);
-    expect(diagnostics).toMatch(/window agreement/i);
+    expect(diagnostics).toMatch(/window agreement: 48%/i);
+    expect(diagnostics).toMatch(/bootstrap rank share/i);
+    expect(diagnostics).toMatch(/bass-root anchors: 2\/4 windows/i);
+    expect(diagnostics).toMatch(/outro weighting: 1 window/i);
   });
 });
 
