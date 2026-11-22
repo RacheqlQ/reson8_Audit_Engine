@@ -760,12 +760,12 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  ];
  const reviewTop=690,reviewHeight=94;
  card(page,M,reviewTop,W-2*M,"Human listening review",[],fonts,{height:reviewHeight,accent:C.label});
- const columns=reviewItems.length>3?2:1,rows=Math.ceil(reviewItems.length/columns),rowGap=Math.min(14,50/Math.max(1,rows-1));
+ const columns=reviewItems.length>3?2:1,rows=Math.ceil(reviewItems.length/columns),rowGap=50/Math.max(1,rows-1);
  reviewItems.forEach((item,index)=>{
   const col=columns===2?Math.floor(index/rows):0,row=columns===2?index%rows:index;
   const x=M+12+col*255,y=reviewTop-34-row*rowGap;
   page.drawRectangle({x,y:y-1,width:8,height:8,borderColor:C.gold,borderWidth:.8,color:C.white});
-  drawWrapped(page,item,x+14,y+5,columns===2?235:W-2*M-42,fonts.regular,5.8,C.ink,6.4);
+  drawWrapped(page,item,x+14,y+5,columns===2?235:W-2*M-42,fonts.regular,5,C.ink,5.4);
  });
  const context=buildArNotesDecisionContextFull(input);
  const contextTop=578,contextHeight=150,contextBottom=contextTop-contextHeight;
