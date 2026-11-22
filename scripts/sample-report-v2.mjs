@@ -1,7 +1,9 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { generateAuditReportV2 } from "../dist/reports/v2/render.js";
+import { adaptReportV2 } from "../dist/reports/v2/adapters.js";
+import { buildMarketPlacementPlan } from "../dist/strategy/market-placement.js";
 import { ambiguousAudioFixture } from "./fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "./fixtures/sample-report-input.mjs";
 
@@ -84,3 +86,41 @@ const fullText=execFileSync("pdftotext",["-layout",new URL("v2-complete-syntheti
 const fullPages=fullText.split("\f").filter(page=>page.trim().length>0);
 assertArNotes(fullPdf,"v2-complete-synthetic-full",fullPages.at(-1)??"");
 process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\n");
+
+
+const audit618=JSON.parse(await readFile(new URL("./fixtures/audit-618b9b7a-sanitized.json",import.meta.url),"utf8"));
+if(audit618.auditId!=="618b9b7a-5c0c-4acf-a583-f0e4e0f58a3b")throw new Error("The persisted audit fixture ID does not match 618b9b7a");
+audit618.marketPlacement=buildMarketPlacementPlan({
+ executionMode:audit618.executionMode,
+ evidence:audit618.evidence,
+ sonicDna:audit618.sonicDna,
+ playlistDiscovery:audit618.evidence.playlistDiscovery,
+});
+audit618.decisionDimensions=adaptReportV2(audit618).decisionDimensions;
+const expectedAudit618Dimensions={audio:"MEASURED",identity:"CONFLICTS OPEN",market:"PROPOSED",releaseReadiness:"PENDING RIGHTS CHECKS"};
+for(const [dimension,expected] of Object.entries(expectedAudit618Dimensions)){
+ const actual=String(audit618.decisionDimensions?.[dimension]?.status??"").toUpperCase();
+ if(actual!==expected)throw new Error("Audit 618b9b7a "+dimension+" verdict mismatch: expected "+expected+", received "+actual);
+}
+if(audit618.marketPlacement?.isrcStrategy?.route!=="ISRC_FIRST"||audit618.marketPlacement?.isrcStrategy?.isrc!=="USSM10501515")throw new Error("Audit 618b9b7a must take the validated ISRC-first market-data route");
+for(const [tier,suffix,minPages] of [["sample","sample",8],["full","full",13]]){
+ const bytes=tier==="sample"
+  ?await generateAuditReportV2({...audit618,generatedAt:audit618.generatedAt})
+  :await generateAuditReportV2({...audit618,generatedAt:audit618.generatedAt},"full");
+ const pdf=await PDFDocument.load(bytes);
+ if(pdf.getPageCount()<minPages)throw new Error("Audit 618b9b7a "+tier+" PDF unexpectedly has only "+pdf.getPageCount()+" pages");
+ const file=new URL("audit-618b9b7a-"+suffix+".pdf",out);
+ await writeFile(file,bytes);
+ const extracted=execFileSync("pdftotext",["-layout",file.pathname,"-"],{encoding:"utf8"});
+ const pages=extracted.split("\\f").filter(page=>page.trim().length>0);
+ const notesPage=pages.at(-1)??"";
+ assertArNotes(pdf,"audit-618b9b7a-"+tier,notesPage);
+ const normalized=notesPage.replace(/\\s+/g," ").toUpperCase();
+ for(const [label,value] of [["AUDIO",expectedAudit618Dimensions.audio],["IDENTITY",expectedAudit618Dimensions.identity],["MARKET",expectedAudit618Dimensions.market],["RELEASE READINESS",expectedAudit618Dimensions.releaseReadiness]]){
+  if(!normalized.includes(label+" "+value))throw new Error("Audit 618b9b7a "+tier+" A&R Notes chip does not match persisted "+label+" verdict: "+value);
+ }
+ if(!/55\\s*BPM/i.test(extracted)||!/UNCONFIRMED/i.test(extracted)||/\\b(?:Confirmed|Measured) tempo:\\s*55\\s*BPM/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF must preserve the 55 BPM candidate as unconfirmed");
+ if(!/PROVISIONAL/i.test(extracted)||!/F#/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF must preserve provisional tonal candidates");
+ if(/\\b\\d[\\d,]*\\s*(?:streams|listeners|saves|sales|revenue)\\b/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF invented unsupported market-performance metrics");
+ process.stdout.write("audit-618b9b7a-"+tier+": "+pdf.getPageCount()+" pages; persisted verdict chips, ISRC route, audio abstention and final A&R Notes verified.\\n");
+}
