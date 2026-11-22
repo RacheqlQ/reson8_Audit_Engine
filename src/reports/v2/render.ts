@@ -160,8 +160,8 @@ export function buildArNotesStatusChips(input:AuditReportInput):Array<{label:str
 
 function notesSentence(value:unknown,fallback:string):string{
  const raw=typeof value==="string"?sanitizePublicReportLine(value).trim():"";
- const cleaned=raw.replace(/\\.{3,}/g,".").replace(/\\u2026/g,".").trim();
- if(!cleaned||/^(?:not supplied|not provided|not available)(?: in the assessment)?\\.?$/i.test(cleaned))return fallback;
+ const cleaned=raw.replace(/\.{3,}/g,".").replace(/\u2026/g,".").trim();
+ if(!cleaned||/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(cleaned))return fallback;
  return /[.!?]$/.test(cleaned)?cleaned:cleaned+".";
 }
 
