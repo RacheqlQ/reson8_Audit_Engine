@@ -166,7 +166,7 @@ function notesSentence(value:unknown,fallback:string):string{
 }
 
 function drawHumanReviewCard(page:PDFPage,items:string[],top:number,fonts:Fonts):number{
- const width=W-2*M,bodyWidth=width-48,size=7.2,lineHeight=9.1;
+ const width=W-2*M,bodyWidth=width-48,size=6.5,lineHeight=7.8;
  const layouts=items.map(item=>wrap(item,fonts.regular,size,bodyWidth));
  const height=18+12+layouts.reduce((sum,lines)=>sum+lines.length*lineHeight+4,0)+10;
  if(height>122)throw new Error("A&R Notes human listening review exceeds its reserved page region.");
@@ -181,7 +181,7 @@ function drawHumanReviewCard(page:PDFPage,items:string[],top:number,fonts:Fonts)
 }
 
 function drawDecisionContextCard(page:PDFPage,context:ReturnType<typeof buildArNotesDecisionContext>,top:number,fonts:Fonts):number{
- const width=W-2*M,pad=12,bodyWidth=width-pad*2,size=7.1,lineHeight=8.6;
+ const width=W-2*M,pad=12,bodyWidth=width-pad*2,size=6.6,lineHeight=7.6;
  const sections=[
   {label:"DECISION BASIS",value:context.decisionBasis},
   {label:"OPEN DILIGENCE",value:context.openDiligence},
@@ -189,28 +189,28 @@ function drawDecisionContextCard(page:PDFPage,context:ReturnType<typeof buildArN
  ];
  const sectionLayouts=sections.map(section=>({label:section.label,lines:wrap(section.value,fonts.regular,size,bodyWidth)}));
  const colGap=8,colWidth=(bodyWidth-colGap*2)/3;
- const promptLayouts=context.prompts.map(prompt=>wrap(prompt,fonts.regular,6.1,colWidth));
- const promptHeight=Math.max(0,...promptLayouts.map(lines=>lines.length))*7.2;
- const height=18+12+10+sectionLayouts.reduce((sum,section)=>sum+8+section.lines.length*lineHeight+5,0)+8+9+promptHeight+10;
- if(height>170)throw new Error("A&R Notes decision context exceeds its reserved page region.");
+ const promptLayouts=context.prompts.map(prompt=>wrap(prompt,fonts.regular,5.6,colWidth));
+ const promptLineHeight=6.5,promptHeight=Math.max(0,...promptLayouts.map(lines=>lines.length))*promptLineHeight;
+ const height=16+10+8+sectionLayouts.reduce((sum,section)=>sum+7+section.lines.length*lineHeight+3,0)+5+8+promptHeight+8;
+ if(height>163)throw new Error("A&R Notes decision context exceeds its reserved page region.");
  card(page,M,top,width,"A&R decision context",[],fonts,{accent:C.teal,height,titleColor:C.labelGold});
- let y=top-30;
- page.drawText("Current assessment: "+context.verdict+". Human sign-off remains separate from the automated assessment.",{x:M+pad,y,size:6.5,font:fonts.italic,color:C.muted});
- y-=15;
+ let y=top-27;
+ page.drawText("Current assessment: "+context.verdict+". Human sign-off remains separate from the automated assessment.",{x:M+pad,y,size:6.1,font:fonts.italic,color:C.muted});
+ y-=12;
  sectionLayouts.forEach(section=>{
-  page.drawText(section.label,{x:M+pad,y,size:6.2,font:fonts.bold,color:C.labelGold});y-=9;
+  page.drawText(section.label,{x:M+pad,y,size:5.9,font:fonts.bold,color:C.labelGold});y-=7;
   section.lines.forEach(line=>{page.drawText(line,{x:M+pad,y,size,font:fonts.regular,color:C.ink});y-=lineHeight;});
-  y-=4;
+  y-=3;
  });
- page.drawText("REVIEW PROMPTS",{x:M+pad,y,size:6.2,font:fonts.bold,color:C.labelGold});y-=10;
+ page.drawText("REVIEW PROMPTS",{x:M+pad,y,size:5.9,font:fonts.bold,color:C.labelGold});y-=8;
  promptLayouts.forEach((lines,index)=>{
   const x=M+pad+index*(colWidth+colGap);
-  lines.forEach(line=>page.drawText(line,{x,y:y-((promptHeight/7.2)-lines.length)*3.6,size:6.1,font:fonts.regular,color:C.ink}));
+  lines.forEach((line,lineIndex)=>page.drawText(line,{x,y:y-lineIndex*promptLineHeight,size:5.6,font:fonts.regular,color:C.ink}));
  });
  return height;
 }
 
-function drawArNotesPage(page:PDFPage,pdf:PDFDocument,input:AuditReportInput,data:ReportV2Data,fonts:Fonts):void{
+function drawArNotesPage(page:PDFPage,pdf:PDFDocument,input:AuditReportInput,fonts:Fonts):void{
  const chips=buildArNotesStatusChips(input),gap=7,chipWidth=(W-2*M-gap*3)/4,chipY=H-144;
  chips.forEach((chip,index)=>scoreChip(page,M+index*(chipWidth+gap),chipY,chipWidth,chip.label,chip.value,chip.dotColor,fonts,chip.textColor));
  const assessment=rec(input.assessment);
@@ -226,8 +226,8 @@ function drawArNotesPage(page:PDFPage,pdf:PDFDocument,input:AuditReportInput,dat
  const context=buildArNotesDecisionContext(input);
  const decisionTop=H-162-humanHeight-12;
  const decisionHeight=drawDecisionContextCard(page,context,decisionTop,fonts);
- const notesTop=decisionTop-decisionHeight-20;
- if(notesTop-(76+295)<8)throw new Error("A&R Notes working area cannot retain its minimum 35 percent page height.");
+ const notesTop=decisionTop-decisionHeight-18;
+ if(notesTop<389)throw new Error("A&R Notes working area cannot retain its minimum 35 percent page height.");
  page.drawText("WORKING NOTES",{x:M,y:notesTop-2,size:7,font:fonts.bold,color:C.labelGold});
  page.drawText("Editable multiline field · private reviewer annotations only",{x:M,y:notesTop-14,size:6.2,font:fonts.italic,color:C.muted});
  const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
@@ -244,9 +244,9 @@ function drawArNotesPage(page:PDFPage,pdf:PDFDocument,input:AuditReportInput,dat
  page.drawText("FOLLOW-UP",{x:M+147,y:57,size:6,font:fonts.bold,color:C.labelGold});
  page.drawText("DECISION",{x:M+310,y:57,size:6,font:fonts.bold,color:C.labelGold});
  const decisions=[
-  {name:"ar_decision_hold",label:"Hold",x:M+370},
-  {name:"ar_decision_reaudit",label:"Re-audit",x:M+420},
-  {name:"ar_decision_proceed",label:"Proceed",x:M+482},
+  {name:"ar_decision_hold",label:"Hold",x:M+360},
+  {name:"ar_decision_reaudit",label:"Re-audit",x:M+410},
+  {name:"ar_decision_proceed",label:"Proceed",x:M+465},
  ];
  for(const decision of decisions){
   const checkbox=form.createCheckBox(decision.name);
@@ -858,7 +858,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   }else if(spec.kind==="snapshot"){
    drawSnapshot(page,data,fonts,input);
   }else if(spec.kind==="ar-notes"){
-   drawArNotesPage(page,pdf,input,data,fonts);
+   drawArNotesPage(page,pdf,input,fonts);
   }else if(spec.kind==="full-axes"){
    if(data.sonicAxes)drawSonicAxes(page,data,fonts);
    else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
