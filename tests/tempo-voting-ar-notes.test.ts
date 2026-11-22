@@ -4,6 +4,7 @@ import { buildArNotesDecisionContext } from "../src/reports/generate-audit-repor
 import { generateAuditReportV2 } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildTempoDiagnosticLines } from "../src/reports/v2/render.js";
+import { isReliableTempo } from "../src/reports/evidence-guardrails.js";
 import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("A&R Notes report page", () => {
@@ -12,6 +13,7 @@ describe("A&R Notes report page", () => {
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
     const fields = pdf.getForm().getFields();
     const names = fields.map(field => field.getName());
+    expect(names).toHaveLength(6);
     expect(names).toEqual(expect.arrayContaining([
       "ar_notes", "ar_owner", "ar_followup_date",
       "ar_decision_hold", "ar_decision_reaudit", "ar_decision_proceed",
@@ -20,6 +22,14 @@ describe("A&R Notes report page", () => {
     const rectangle = notes.acroField.getWidgets()[0]!.getRectangle();
     expect(rectangle.height).toBeGreaterThanOrEqual(841.89 * 0.35);
     expect(pdf.getPageCount()).toBe(8);
+  });
+
+  it("never promotes a stale BPM when the explicit tempo verdict is only a candidate", () => {
+    expect(isReliableTempo({
+      bpm: 92,
+      tempoConfidence: 0.9,
+      rhythmFeatures: { status: "measured", tempoVerdict: { confirmation_status: "CANDIDATE" } },
+    })).toBe(false);
   });
 
   it("carries an unconfirmed tempo candidate and supported octave alternatives into report guidance", () => {
