@@ -72,6 +72,34 @@ describe("A&R Notes report page", () => {
     expect(context.summary).not.toMatch(/Vocal analysis: Not performed|Vocal presence\/absence is unknown|No vocal conclusion is available|Learned audio model: disabled|Detection model status: disabled/i);
   });
 
+  it("does not publish a zero-prominence tempo candidate or derived octave pulse", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      ...input.sonicDna,
+      bpm: null,
+      tempoCandidateBpm: 128,
+      tempoConfidence: 0,
+      alternateTempo: 64,
+      rhythmFeatures: {
+        tempoVerdict: {
+          primary_candidate_bpm: 128,
+          octave_alternatives: [64],
+          confirmation_status: "CANDIDATE",
+          prominence_score: 0,
+          explanation: "Transient prominence is unavailable.",
+        },
+        candidateScores: [{ bpm: 128, score: 0 }],
+        candidateBpms: [128],
+        alternateTempo: 64,
+      },
+    };
+    const diagnostics = buildTempoDiagnosticLines(input).join(" ");
+    expect(diagnostics).not.toContain("128 BPM");
+    expect(diagnostics).not.toContain("64 BPM");
+    expect(diagnostics).not.toContain("Possible tempo readings");
+    expect(diagnostics).not.toContain("Alternative pulse reading");
+  });
+
   it("keeps complete A&R decision sentences and exactly three review prompts", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.assessment = { ...input.assessment, executiveSummary: "A complete decision summary requiring human listening, source verification, identity reconciliation, rights review and release planning. ".repeat(3), evidenceGaps: ["Confirm the final master and recording identifier.", "Verify the rights and delivery records before external pitching."] };
