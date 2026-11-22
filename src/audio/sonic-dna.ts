@@ -267,8 +267,14 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const reason=materialDisagreement
   ?"Independent tempo pathways materially disagreed and the primary tempo windows were unstable; no single tempo is asserted."
   :voting.confirmation_status==="CONFIRMED"?null:voting.explanation;
+ const gridMatchesVote=voting.primary_candidate_bpm!==null&&overall.bpm!==null
+  &&Math.abs(overall.bpm-voting.primary_candidate_bpm)<=Math.max(1.5,Math.min(overall.bpm,voting.primary_candidate_bpm)*0.02);
  return {
   ...overall,
+  beatTimesSeconds:gridMatchesVote?overall.beatTimesSeconds:[],
+  downbeatCandidateTimesSeconds:gridMatchesVote?overall.downbeatCandidateTimesSeconds:[],
+  beatGridStatus:gridMatchesVote?overall.beatGridStatus:"not_determined",
+  downbeatGridAssumption:gridMatchesVote?overall.downbeatGridAssumption:null,
   bpm:finalStatus==="CONFIRMED"?voting.primary_candidate_bpm:null,
   topCandidateBpm:voting.primary_candidate_bpm,
   alternateTempo:voting.octave_alternatives[0]??overall.alternateTempo,
