@@ -41,12 +41,13 @@ describe("deterministic tempo voting", () => {
     expect(result.primary_candidate_bpm).toBe(92);
   });
 
-  it("does not confirm a tempo from a single valid window", () => {
+  it("confirms a single high-quality window only when its vote has full share and no ambiguity", () => {
     const result = voteTempoCandidates({ windows: [
       { bpm: 92, prominence: 0.95, beatStrength: 0.95, durationSeconds: 8 },
     ] });
-    expect(result.confirmation_status).toBe("CANDIDATE");
-    expect(result.reason_codes).toContain("INSUFFICIENT_WINDOW_COVERAGE");
+    expect(result.confirmation_status).toBe("CONFIRMED");
+    expect(result.vote_share).toBe(1);
+    expect(result.runner_up_margin).toBe(1);
   });
 
   it("reports tied metrical candidates as provisional rather than inventing certainty", () => {
