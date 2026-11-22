@@ -83,9 +83,11 @@ for(const [name,input] of variants){
     if(!footerWords.includes("AUDIT"))throw new Error(filename+" is missing its V2 audit footer on page "+(pageIndex+1));
    }
   }
-  const editableFields=pdf.getForm().getFields();
-  if(editableFields.map(field=>field.getName()).join(",")!=="ar_notes")throw new Error(filename+" is missing the single editable A&R Notes field");
+  const editableFields=pdf.getForm().getFields().map(field=>field.getName()).sort();
+  const expectedArFields=["ar_notes","ar_owner","ar_followup_date","ar_decision_hold","ar_decision_reaudit","ar_decision_proceed"].sort();
+  if(JSON.stringify(editableFields)!==JSON.stringify(expectedArFields))throw new Error(filename+" has unexpected A&R Notes AcroForm fields: "+editableFields.join(", "));
   if(pdf.getForm().getTextField("ar_notes").acroField.getWidgets().length!==1)throw new Error(filename+" has an unexpected A&R Notes widget count");
+  if(!pdf.getForm().getTextField("ar_notes").isMultiline())throw new Error(filename+" A&R Notes field must be multiline");
   const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
   const chartLabels=[safeAssessment.aAndRPositioning.primaryLane,...safeAssessment.aAndRPositioning.adjacentLanes].filter(value=>typeof value==="string"&&value.trim());
   const normalizedExtracted=extracted.replace(/\s+/g," ");
@@ -95,7 +97,8 @@ for(const [name,input] of variants){
     if(!normalizedExtracted.includes(expected))throw new Error(filename+" is missing the human-readable tuning limitation: "+expected);
    }
    if(/\b14\s*\(multiple tonal windows; provisional\)/i.test(normalizedExtracted))throw new Error(filename+" exposed a raw tuning-window diagnostic instead of the human-readable limitation");
-   if(/\b128\s*BPM\b/.test(normalizedExtracted))throw new Error(filename+" exposed a zero-confidence tempo candidate");
+    if(/\b128\s*BPM\b/.test(normalizedExtracted)&&!/Tempo status:\s*UNCONFIRMED/i.test(normalizedExtracted))throw new Error(filename+" exposed a weak tempo candidate without an explicit unconfirmed status");
+    if(/\b(?:Confirmed|Measured) tempo:\s*128\s*BPM/i.test(normalizedExtracted))throw new Error(filename+" promoted a weak tempo candidate to a confirmed BPM");
    if(!normalizedExtracted.includes("Provisional tonal centre: C major."))throw new Error(filename+" failed to retain the provisional audio-derived tonic");
    if(!normalizedExtracted.includes("Candidates: C major"))throw new Error(filename+" failed to retain the provisional candidate list");
    if(!normalizedExtracted.includes("Tonal windows do not consistently support one candidate.")&&!normalizedExtracted.includes("Relative major/minor ambiguity remains."))throw new Error(filename+" omitted the human-readable tonal disambiguation reason");
@@ -127,10 +130,11 @@ for(const [name,input] of variants){
    }
   }
   if(name==="long-form-audio"&&tier==="full"){
-   const tokens=buildArNotesDecisionContext(input).summary.split(/\s+/).map(token=>token.replace(/[^\p{L}\p{N}#'-]/gu,"")).filter(Boolean);
+   const tokens=buildArNotesDecisionContext(input).summary.split(/\s+/).map(token=>token.replace(/[^\p{L}\p{N}]/gu,"")).filter(Boolean);
+   const compactExtracted=normalizedExtracted.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,"");
    let cursor=0;
    for(const token of tokens){
-    const position=normalizedExtracted.toLocaleLowerCase().indexOf(token.toLocaleLowerCase(),cursor);
+    const position=compactExtracted.indexOf(token.toLocaleLowerCase(),cursor);
     if(position<0)throw new Error(filename+" has a missing or out-of-order A&R Notes summary token: "+token);
     cursor=position+token.length;
    }
@@ -208,8 +212,13 @@ try{
  if(reintroducedClaim){
   throw new Error("Generated PDF reintroduced an unsupported claim: "+reintroducedClaim);
  }
- const zeroConfidenceTempoLeak=unsafeText.match(/.{0,120}(?:\b128\s*BPM\b|half-time 64\.0 BPM).{0,120}/is);
- if(zeroConfidenceTempoLeak)throw new Error("Generated PDF exposed a zero-confidence tempo candidate or derived pulse reading: "+JSON.stringify(zeroConfidenceTempoLeak[0]));
+ const containsUnconfirmedTempoCandidate=/\b(?:Candidate\s+128\s*BPM|128\s*BPM|half-time\s+64(?:\.0)?\s*BPM)\b/i.test(unsafeText);
+ if(containsUnconfirmedTempoCandidate&&!/Tempo status:\s*UNCONFIRMED/i.test(unsafeText)){
+  throw new Error("Generated PDF retained a weak tempo candidate without an explicit unconfirmed status");
+ }
+ if(/\b(?:Confirmed|Measured) tempo:\s*(?:128|64(?:\.0)?)\s*BPM/i.test(unsafeText)){
+  throw new Error("Generated PDF promoted a weak tempo candidate to a confirmed BPM");
+ }
  if(/double-time 256\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF printed an implausible double-time candidate");
  if(!normalizedUnsafeText.includes("The supplied evidence is insufficient; track-specific conclusions are withheld")){
   throw new Error("Generated PDF lost the zero-confidence A&R Notes decision context");

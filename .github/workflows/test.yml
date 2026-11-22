@@ -43,7 +43,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run focused report-quality regressions
-        run: npx vitest run tests/charts.test.ts tests/generate-audit-report.test.ts tests/sample-report-script.test.ts
+        run: npx vitest run tests/charts.test.ts tests/generate-audit-report.test.ts tests/sample-report-script.test.ts tests/report-layout-v2-render.test.ts tests/market-placement.test.ts tests/sonic-dna.test.ts tests/process-audit-job.test.ts tests/groq-client.test.ts
       - name: Run isolated PostgreSQL worker-fencing regressions
         env:
           WORKER_FENCING_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reson8_test

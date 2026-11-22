@@ -246,6 +246,20 @@ function driversFrom(assessment: UnknownRecord | null): ReportV2Data["scoreDrive
 }
 
 /** Read-only projection for v2. Missing or malformed optional evidence is never synthesized. */
+function persistedDecisionDimensions(input:AuditReportInput):DecisionDimension[]|null{
+ const raw=(input as AuditReportInput & {decisionDimensions?:unknown}).decisionDimensions;
+ if(!Array.isArray(raw))return null;
+ const expected:DecisionDimension["name"][]=["Audio","Identity","Market","Release readiness"];
+ const resolved:DecisionDimension[]=[];
+ for(const name of expected){
+  const item=record(raw.find(value=>record(value)?.name===name));
+  const status=nonEmpty(item?.status),basis=nonEmpty(item?.basis);
+  if(!status||!basis)return null;
+  resolved.push({name,status,basis});
+ }
+ return resolved;
+}
+
 export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const audio = record(input.sonicDna);
   const evidence = record(input.evidence);
@@ -343,7 +357,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
     headlineScore: finite(assessment?.headlineScore) && assessment.headlineScore >= 0 && assessment.headlineScore <= 100 ? assessment.headlineScore : null,
     scoreDrivers: driversFrom(assessment),
     hasVerifiedCommercialEvidence: commercialEvidenceExists(evidence),
-    decisionDimensions: buildDecisionDimensions(input),
+    decisionDimensions: persistedDecisionDimensions(input) ?? buildDecisionDimensions(input),
     notYetMeasured,
   };
 }

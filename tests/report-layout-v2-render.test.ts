@@ -1,10 +1,11 @@
 import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildCoverKeyLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
+import { buildCoverKeyLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote, buildTempoDiagnosticLines } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
 import { sanitizePublicReportLine } from "../src/reports/v2/public-language.js";
+import { buildArNotesDecisionContext } from "../src/reports/generate-audit-report.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
@@ -117,7 +118,7 @@ describe("v2 DSP playlist provider diagnostics", () => {
 describe("v2 detector diagnostics", () => {
   it("renders plain-language provisional tempo readings and abstention", () => {
     const input = structuredClone(fullAudioFixture) as any;
-    input.sonicDna = { ...input.sonicDna, rhythmFeatures: {
+    input.sonicDna = { ...input.sonicDna, bpm: null, tempoConfidence: 0.7134, rhythmFeatures: {
       method: "high_frequency_transient_autocorrelation",
       candidateScores: [{ bpm: 96, score: 0.8123 }, { bpm: 192, score: 0.4012 }],
       confidence: 0.7134, alternateTempo: 192, beatGridStatus: "tentative",
@@ -126,13 +127,11 @@ describe("v2 detector diagnostics", () => {
       abstentionReason: "Window stability did not meet the reporting gate."
     }};
     const lines = reportV2Render.buildTempoDiagnosticLines(input).join(" ");
-    expect(lines).toContain("Possible tempo readings: 96 BPM; 192 BPM.");
-    expect(lines).not.toMatch(/confidence|score|probability|detector/i);
-    expect(lines).toContain("Tempo readings are broadly consistent across the analyzed sections.");
-    expect(lines).not.toContain("observed agreement");
-    expect(lines).toContain("Tempo not confirmed");
-    expect(lines).toContain("Window stability did not meet the reporting gate");
-    expect(lines).not.toMatch(/calibrated|Goertzel|harmonic|FFT/i);
+    expect(lines).toContain("Retained tempo candidates: 96 BPM (raw score 0.812); 192 BPM (raw score 0.401).");
+    expect(lines).toContain("Primary detector raw confidence: 0.713");
+    expect(lines).toContain("Candidate window consensus: 96 across 4 windows; observed agreement 75%.");
+    expect(lines).toContain("Tempo abstention: Window stability did not meet the reporting gate.");
+    expect(lines).not.toMatch(/Goertzel|harmonic|FFT/i);
   });
 
   it("renders plain-language song-key possibilities and abstention", () => {
@@ -408,5 +407,179 @@ describe("post-release campaign framing", () => {
     expect(labels.first30).toMatch(/post-release/i);
     expect(labels.days3160).toMatch(/post-release/i);
     expect(labels.days6190).toMatch(/post-release/i);
+  });
+});
+
+
+describe("v2 tempo and tonal status reporting", () => {
+  it("preserves ambiguous 55/110 BPM candidates, raw confidence and window consensus without confirming either", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna.rhythmFeatures = {
+      bpm: null,
+      candidateBpms: [55, 110],
+      candidateScores: [{ bpm: 55, score: 0.41 }, { bpm: 110, score: 0.39 }],
+      confidence: 0.24,
+      alternateTempo: 110,
+      windowConsensus: { winner: "55", windowCount: 4, observedAgreement: 0.45 },
+      abstentionReason: "Transient prominence is weak and the half/double-time candidates are unresolved."
+    };
+    input.sonicDna.bpm = null;
+    const lines = reportV2Render.buildTempoDiagnosticLines(input).join(" ");
+    expect(lines).toContain("55 BPM");
+    expect(lines).toContain("110 BPM");
+    expect(lines).toMatch(/0\.24/);
+    expect(lines).toMatch(/45%|0\.45/);
+    expect(lines).toMatch(/candidate|not confirmed|abstain/i);
+    expect(adaptReportV2(input).tempo.value).toBeNull();
+  });
+
+  it("keeps provisional tonal status and ambiguity consistent between cover, overview and diagnostics", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.tonalResolution = {
+      status: "PROVISIONAL", tonic: "D", mode: "major",
+      windowAgreement: 0.48, bootstrapShare: 0.52, validWindowCount: 4, downbeatAnchorWindowCount: 2, cadenceWeightedWindowCount: 1,
+      candidates: [{ tonic: "D", mode: "major" }, { tonic: "B", mode: "minor" }],
+      reasonCodes: ["LOW_WINDOW_CONSENSUS", "RELATIVE_MAJOR_MINOR_AMBIGUITY"]
+    };
+    const data = adaptReportV2(input);
+    expect(buildCoverKeyLabel(input, data)).toBe("Possible: D major");
+    expect(buildRecordingOverviewKeyLabel(data)).toBe("Provisional: D major");
+    const diagnostics = reportV2Render.buildKeyDiagnosticLines(input).join(" ");
+    expect(diagnostics).toMatch(/provisional/i);
+    expect(diagnostics).toMatch(/relative major\/minor/i);
+    expect(diagnostics).toMatch(/window agreement: 48%/i);
+    expect(diagnostics).toMatch(/bootstrap rank share/i);
+    expect(diagnostics).toMatch(/bass-root anchors: 2\/4 windows/i);
+    expect(diagnostics).toMatch(/outro weighting: 1 window/i);
+  });
+});
+
+describe("v2 A&R Notes page acceptance", () => {
+  it("uses complete decision sentences without ellipsis truncation", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.assessment.executiveSummary = "A long evidence-led decision summary that must wrap naturally across the available A&R Notes card width without losing the final sentence or inserting a truncation marker. The second sentence explains the actual assessment basis and should remain complete.";
+    input.assessment.evidenceGaps = ["...", ""];
+    input.assessment.risks = [];
+    input.assessment.releaseStrategy = { recommendation: "Not supplied" };
+    const context = buildArNotesDecisionContext(input);
+    expect(context.summary).not.toContain("...");
+    expect(context.summary).toMatch(/Decision basis:.*\./);
+    expect(context.summary).toMatch(/Open diligence:.*\./);
+    expect(context.summary).toMatch(/Next action:.*\./);
+    expect(context.openDiligence).toBe("No additional identity, rights or source gap was recorded in the assessment.");
+    expect(context.nextAction).not.toBe("Not supplied.");
+  });
+
+  it("renders the exact editable fields and a working-notes region at least 35 percent of A4 height in both tiers", async () => {
+    const expected = ["ar_notes", "ar_owner", "ar_followup_date", "ar_decision_hold", "ar_decision_reaudit", "ar_decision_proceed"].sort();
+    for (const tier of ["sample", "full"] as const) {
+      const pdf = await PDFDocument.load(await generateAuditReportV2(structuredClone(fullAudioFixture) as any, tier));
+      const names = pdf.getForm().getFields().map(field => field.getName()).sort();
+      expect(names).toEqual(expected);
+      const form = pdf.getForm();
+      const notesField = form.getTextField("ar_notes");
+      expect(notesField.isMultiline()).toBe(true);
+      const notesRect = notesField.acroField.getWidgets()[0].getRectangle();
+      const ownerRect = form.getTextField("ar_owner").acroField.getWidgets()[0].getRectangle();
+      const followupRect = form.getTextField("ar_followup_date").acroField.getWidgets()[0].getRectangle();
+      const holdRect = form.getCheckBox("ar_decision_hold").acroField.getWidgets()[0].getRectangle();
+      expect(notesRect.x).toBeCloseTo(42, 0);
+      expect(notesRect.width).toBeCloseTo(511.28, 0);
+      expect(notesRect.y).toBeGreaterThanOrEqual(75);
+      expect(notesRect.height).toBeGreaterThanOrEqual(295);
+      expect(ownerRect.y).toBeCloseTo(53, 0);
+      expect(followupRect.y).toBeCloseTo(53, 0);
+      expect(holdRect.y).toBeCloseTo(55, 0);
+      expect(notesRect.y).toBeGreaterThan(ownerRect.y + ownerRect.height);
+      expect(pdf.getPages().at(-1)?.getWidth()).toBeCloseTo(595.28, 1);
+      expect(pdf.getPages().at(-1)?.getHeight()).toBeCloseTo(841.89, 1);
+    }
+  });
+
+  it("uses persisted verdict dimensions for all four A&R Notes chip values", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.decisionDimensions = [
+      { name: "Audio", status: "MEASURED", basis: "Uploaded-master measurements are present." },
+      { name: "Identity", status: "CONFLICTS OPEN", basis: "Recording identity conflicts remain unresolved." },
+      { name: "Market", status: "PROPOSED", basis: "Market positioning is a provisional thesis." },
+      { name: "Release readiness", status: "PENDING RIGHTS CHECKS", basis: "Rights and clearance are not confirmed." }
+    ];
+    const chips = reportV2Render.buildArNotesStatusChips(input);
+    const verdicts = adaptReportV2(input).decisionDimensions;
+    expect(verdicts).toEqual(input.decisionDimensions);
+    expect(chips.map((chip: any) => chip.value)).toEqual(["MEASURED", "CONFLICTS OPEN", "PROPOSED", "PENDING RIGHTS CHECKS"]);
+    expect(chips.map((chip: any) => chip.value)).toEqual(verdicts.map(dimension => dimension.status));
+    expect(chips.map((chip: any) => chip.label)).toEqual(["AUDIO", "IDENTITY", "MARKET", "RELEASE READINESS"]);
+  });
+});
+
+
+describe("ISRC strategy presentation", () => {
+  it("states the unresolved identifier conflict and names the non-ISRC evidence fallback", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.marketPlacement = {
+      isrcStrategy: {
+        status: "pending_verification",
+        route: "NON_ISRC_FALLBACK",
+        isrc: null,
+        source: null,
+        conflicts: ["USSM10501515", "GBAYE0601498"],
+        nonIsrcEvidence: ["measured tempo", "provisional tonal candidates", "embedded audio tags"],
+        requiredActions: ["Resolve the ISRC conflict before external pitching."]
+      }
+    };
+    const lines = buildPositioningLines(input).join(" ");
+    expect(lines).toMatch(/ISRC conflict/i);
+    expect(lines).toMatch(/measured tempo, provisional tonal candidates, embedded audio tags/i);
+    expect(lines).toMatch(/provisional A&R guidance/i);
+    expect(lines).toMatch(/ISRC action: Resolve the ISRC conflict before external pitching/i);
+  });
+
+  it("does not present an available ISRC as proof of a provider match or commercial performance", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.marketPlacement = {
+      isrcStrategy: {
+        status: "available",
+        route: "ISRC_FIRST",
+        isrc: "USSM10501515",
+        source: "provider recognition",
+        conflicts: [],
+        nonIsrcEvidence: [],
+        requiredActions: []
+      }
+    };
+    const lines = buildPositioningLines(input).join(" ");
+    expect(lines).toMatch(/ISRC-keyed catalog and release reconciliation/i);
+    expect(lines).toMatch(/does not prove a provider match or commercial performance/i);
+    expect(lines).toMatch(/ISRC action: Run catalog and release-reconciliation lookups/i);
+  });
+});
+
+
+describe("weak tempo candidate diagnostics", () => {
+  it("keeps 55/110 half-double candidates, confidence and window consensus visibly unconfirmed", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      ...input.sonicDna,
+      bpm: null,
+      tempoConfidence: 0.1647,
+      rhythmFeatures: {
+        candidateBpms: [55, 110],
+        candidateScores: [{ bpm: 55, score: 0.82 }, { bpm: 110, score: 0.51 }],
+        confidence: 0.1647,
+        alternateTempo: 110,
+        abstentionReason: "Transient prominence is weak or ambiguous; candidates are retained for review.",
+        windowConsensus: { winner: "55", windowCount: 4, observedAgreement: 0.5 },
+        independentEstimator: { bpm: 55, score: 0.47 }
+      }
+    };
+    const lines = buildTempoDiagnosticLines(input).join(" ");
+    expect(lines).toMatch(/Tempo status: UNCONFIRMED/);
+    expect(lines).toMatch(/Retained tempo candidates: 55 BPM \(raw score 0\.820\); 110 BPM \(raw score 0\.510\)/);
+    expect(lines).toMatch(/Half\/double-time alternative: 110\.0 BPM/);
+    expect(lines).toMatch(/Independent low-frequency envelope candidate: 55\.0 BPM/);
+    expect(lines).toMatch(/observed agreement 50%/);
+    expect(lines).toMatch(/Tempo abstention: Transient prominence is weak or ambiguous/);
+    expect(lines).not.toMatch(/Confirmed tempo:/);
   });
 });

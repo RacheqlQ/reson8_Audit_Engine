@@ -9,7 +9,7 @@ import type { MarketPlacementPlan } from "../strategy/market-placement.js";
 import type { TonalResolution } from "../audio/tonal-resolution.js";
 
 export type AuditReportTier = "sample" | "full";
-export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; executionMode?:"master"|"combined"|"dsp_link"; realMasterContract?:RealMasterAuditContract; marketPlacement?:MarketPlacementPlan; tonalResolution?:TonalResolution|null; }
+export interface AuditReportInput { auditId:string; generatedAt:string; evidence:Record<string,unknown>; sonicDna:Record<string,unknown>|null; assessment:ArAssessment; executionMode?:"master"|"combined"|"dsp_link"; realMasterContract?:RealMasterAuditContract; marketPlacement?:MarketPlacementPlan; tonalResolution?:TonalResolution|null; decisionDimensions?:Array<{name:"Audio"|"Identity"|"Market"|"Release readiness";status:string;basis:string}>; }
 export interface ReportRect { x:number;y:number;width:number;height:number;id:string; }
 export interface ReportPagePlan { title:string;text:string[]; }
 const W=595.28,H=841.89,M=48,TOP=735,BOTTOM=76,AVAILABLE=TOP-BOTTOM;
@@ -133,7 +133,7 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
 }
 interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string[];}
 function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"PROPOSED A&R THESIS"};return m[v.toLowerCase()]??"PROPOSED A&R THESIS";}
-export interface ArNotesDecisionContext { heading:string; verdict:string; summary:string; prompts:string[]; }
+export interface ArNotesDecisionContext { heading:string; verdict:string; summary:string; prompts:string[]; decisionBasis:string; openDiligence:string; nextAction:string; }
 export function paginateArNotesSummary(lines:string[]):string[][] {
  const chunks:string[][]=[];let offset=0;
  while(lines.length-offset>16){
@@ -146,24 +146,34 @@ export function paginateArNotesSummary(lines:string[]):string[][] {
 }
 export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecisionContext {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
+ const completeSentence=(value:unknown,fallback:string):string=>{
+  const raw=typeof value==="string"?professionalEvidenceLanguage(value):"";
+  const cleaned=raw.replace(/\.{3,}/g,".").replace(/\u2026/g,".").trim();
+  const placeholder=/^(?:not supplied|not provided|not available|n\/a|none)(?: in the assessment)?\.?$/i.test(cleaned);
+  if(!cleaned||!cleaned.replace(/[.!?]/g,"").trim()||placeholder)return fallback;
+  const first=cleaned.match(/^(.+?[.!?])(?:\s|$)/)?.[1]??cleaned;
+  return /[.!?]$/.test(first)?first:first+".";
+ };
  const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[])]
   .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
-  .map(professionalEvidenceLanguage)
-  .filter((item)=>item.trim().length>0)
-  .filter((item,index,items)=>items.indexOf(item)===index)
-  .slice(0,1)
-  .map((item)=>item.length>105?item.slice(0,102)+"...":item);
- const fullSummary=professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required."));
- const safeSummary=fullSummary.length>180?fullSummary.slice(0,177)+"...":fullSummary;
- const nextAction="Verify identity, rights and the submitted master before pitching.";
+  .map(item=>completeSentence(item,""))
+  .filter(item=>item!=="")
+  .filter((item,index,items)=>items.indexOf(item)===index);
+ const basis=completeSentence(safeAssessment.executiveSummary,"The decision is based on the evidence and limitations recorded in this assessment.");
+ const openDiligence=openItems[0]??"No additional identity, rights or source gap was recorded in the assessment.";
+ const strategy=val(safeAssessment.releaseStrategy?.recommendation,"");
+ const nextAction=completeSentence(strategy,"Verify the recording identity, release metadata, rights status and final master before any external pitch.");
  return {
   heading:"DECISION CONTEXT",
   verdict:coverVerdictLabel(input).toUpperCase(),
   summary:[
-   "Decision basis: "+safeSummary,
-   "Open diligence: "+(openItems.join(" ")||"No additional diligence items were recorded."),
+   "Decision basis: "+basis,
+   "Open diligence: "+openDiligence,
    "Next action: "+nextAction,
   ].join(" "),
+  decisionBasis:basis,
+  openDiligence,
+  nextAction,
   prompts:[
    "What evidence would change the current decision?",
    "Which identity, rights or source gaps remain unresolved?",

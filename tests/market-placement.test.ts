@@ -198,3 +198,71 @@ describe("Phase 5 market placement strategy", () => {
   });
 
 });
+
+
+describe("ISRC-first market strategy routing", () => {
+  it("prioritizes catalog reconciliation when a valid ISRC is present in supplied evidence", () => {
+    const plan = buildMarketPlacementPlan({
+      executionMode: "combined",
+      evidence: { isrc: " ussm10501515 " },
+      sonicDna: master,
+    });
+    expect(plan.isrcStrategy).toMatchObject({
+      status: "available",
+      route: "ISRC_FIRST",
+      isrc: "USSM10501515",
+    });
+    expect(plan.isrcStrategy.requiredActions.join(" ")).toMatch(/keyed by the validated ISRC/i);
+  });
+
+  it("uses transparent non-ISRC fallback when the identifier is missing or malformed", () => {
+    const plan = buildMarketPlacementPlan({
+      executionMode: "master",
+      evidence: { isrc: "USSM1050151", title: "Supplied title", artist: "Supplied artist" },
+      sonicDna: master,
+    });
+    expect(plan.isrcStrategy).toMatchObject({
+      status: "pending_verification",
+      route: "NON_ISRC_FALLBACK",
+      isrc: null,
+    });
+    expect(plan.isrcStrategy.nonIsrcEvidence).toContain("measured tempo");
+    expect(plan.isrcStrategy.requiredActions.join(" ")).toMatch(/register the ISRC|confirm or register the ISRC/i);
+  });
+
+  it("accepts an explicitly supplied user-input ISRC without inventing a provider match", () => {
+    const plan = buildMarketPlacementPlan({
+      executionMode: "master",
+      evidence: { userInput: { isrc: "USSM10501515" } },
+      sonicDna: master,
+    });
+    expect(plan.isrcStrategy).toMatchObject({ status: "available", route: "ISRC_FIRST", source: "user input" });
+    expect(plan.playlistPresence).toEqual([]);
+    expect(plan.playlistTargets).toEqual([]);
+  });
+});
+
+
+describe("conflicting ISRC claims", () => {
+  it("withholds canonical ISRC routing and playlist targeting when supplied identifiers disagree", () => {
+    const plan = buildMarketPlacementPlan({
+      executionMode: "combined",
+      evidence: {
+        isrc: null,
+        isrcConflict: true,
+        isrcCandidates: ["USSM10501515", "GBAYE0601498"],
+        userInput: { isrc: "GBAYE0601498" },
+        identity: { isrc: "USSM10501515" },
+      },
+      sonicDna: master,
+    });
+    expect(plan.isrcStrategy).toMatchObject({
+      status: "pending_verification",
+      route: "NON_ISRC_FALLBACK",
+      isrc: null,
+      conflicts: ["USSM10501515", "GBAYE0601498"],
+    });
+    expect(plan.isrcStrategy.requiredActions.join(" ")).toMatch(/conflicting valid ISRC claims/i);
+    expect(plan.playlistTargets).toEqual([]);
+  });
+});

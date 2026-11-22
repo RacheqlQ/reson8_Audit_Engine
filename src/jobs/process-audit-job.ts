@@ -2,6 +2,7 @@ import type { AuditRecognition } from "../providers/audd/normalize.js";
 import type { CatalogMetadata } from "../providers/dsp/catalog.js";
 import type { ArAssessment } from "../providers/groq/client.js";
 import type { AuditReportInput, AuditReportTier } from "../reports/generate-audit-report.js";
+import { adaptReportV2 } from "../reports/v2/adapters.js";
 import { isPdf } from "../reports/pdf-output.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
 import { parseRealMasterAuditContract, buildUnavailableMetric, requireRealMasterInput, type RealMasterAuditContract } from "../audio/real-master-contract.js";
@@ -656,27 +657,36 @@ export async function processAuditJob(
     }
 
     let isrcLookup: IsrcCatalogLookup | null = null;
+    const userSuppliedIsrcCandidates = [job.catalogUrl, ...(job.catalogUrls ?? [])]
+      .map(value => {
+        if (typeof value !== "string") return null;
+        const match = value.match(/\b([A-Z]{2})-?([A-Z0-9]{3})-?([0-9]{2})-?([0-9]{5})\b/i);
+        return match ? match.slice(1).join("") : null;
+      });
     const isrcCandidates = [
       recognition.matched ? recognition.isrc : null,
       ...metadataSources.map((source) => source.isrc),
+      ...userSuppliedIsrcCandidates,
       masterTags?.isrc ?? null,
     ];
-    let normalizedIsrc: string | null = null;
+    const normalizedIsrcCandidates: string[] = [];
     for (const candidate of isrcCandidates) {
       if (!candidate) continue;
       try {
-        normalizedIsrc = normalizeIsrc(candidate);
-        break;
+        const normalized = normalizeIsrc(candidate);
+        if (!normalizedIsrcCandidates.includes(normalized)) normalizedIsrcCandidates.push(normalized);
       } catch {
-        // A malformed higher-priority claim must not suppress a valid lower-priority source.
+        // A malformed claim is retained as unavailable; it cannot suppress another valid source.
       }
     }
+    const normalizedIsrc: string | null = normalizedIsrcCandidates[0] ?? null;
+    const isrcConflict = normalizedIsrcCandidates.length > 1;
     const isrcLookupAvailable = Boolean(
       deps.collectIsrcCatalogMetadata
       || providerDecision("musicbrainz").enabled
       || (process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET && providerDecision("spotify").enabled),
     );
-    if (normalizedIsrc && isrcLookupAvailable) {
+    if (normalizedIsrc && !isrcConflict && isrcLookupAvailable) {
       isrcLookup = await awaitWithStage(deps, "isrc_catalog_lookup", 30_000, (signal) =>
         (deps.collectIsrcCatalogMetadata ?? collectIsrcCatalogMetadata)(normalizedIsrc!, signal),
       );
@@ -765,6 +775,12 @@ export async function processAuditJob(
 
     const identity = reconciliation.identity;
     const evidence = {
+      isrc: isrcConflict ? null : normalizedIsrc,
+      isrcCandidates: normalizedIsrcCandidates,
+      isrcConflict,
+      userInput: { isrc: userSuppliedIsrcCandidates.find((value): value is string => Boolean(value)) ?? null },
+      id3: masterTags ?? null,
+      filename: job.filename ?? null,
       ...(metadata ? catalogEvidence(metadata, identity) : { auditType: "MASTER-BASED AUDIT" }),
       auditType: hasMaster && hasCatalog ? "COMBINED MASTER + DSP AUDIT" : hasCatalog ? "METADATA-BASED AUDIT" : "MASTER-BASED AUDIT",
       ...recognitionEvidence(recognition),
@@ -845,6 +861,12 @@ export async function processAuditJob(
     const assessmentRecognition = recognitionEvidence(recognition);
     delete assessmentRecognition.spotifyId;
     const assessmentEvidence = {
+      isrc: isrcConflict ? null : normalizedIsrc,
+      isrcCandidates: normalizedIsrcCandidates,
+      isrcConflict,
+      userInput: { isrc: userSuppliedIsrcCandidates.find((value): value is string => Boolean(value)) ?? null },
+      id3: masterTags ?? null,
+      filename: job.filename ?? null,
       ...(assessmentMetadata ? catalogEvidence(assessmentMetadata, assessmentIdentity) : { auditType: evidence.auditType }),
       ...assessmentRecognition,
       ...identityEvidence(assessmentIdentity),
@@ -895,7 +917,7 @@ export async function processAuditJob(
     await awaitWithStage(deps, "assessment_persist", 15_000, (signal) => deps.saveAssessment(jobId, job.claimToken, assessment, signal));
 
     let playlistDiscovery: PlaylistDiscoveryResult | null = null;
-    if (normalizedIsrc && deps.discoverPlaylists) {
+    if (normalizedIsrc && !isrcConflict && deps.discoverPlaylists) {
       const providerMoodTags = metadataSources.flatMap((source) => source.sonicProfile?.moodTags ?? []);
       const playlistMoodContext = buildPlaylistMoodContext(providerMoodTags, masterDna);
       const playlistInput: PlaylistDiscoveryInput = {
@@ -1029,6 +1051,7 @@ export async function processAuditJob(
     }
     const marketPlacement = buildMarketPlacementPlan({ executionMode, evidence: reportEvidence, sonicDna: masterDna ? dnaEvidence(masterDna) : sonicDna, playlistDiscovery });
     const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment, executionMode, marketPlacement, tonalResolution: masterDna?.tonalResolution ?? null, ...(realMasterContract ? { realMasterContract } : {}) };
+    reportInput.decisionDimensions = adaptReportV2(reportInput).decisionDimensions;
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
