@@ -149,7 +149,8 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
  const completeSentence=(value:unknown,fallback:string):string=>{
   const raw=typeof value==="string"?professionalEvidenceLanguage(value):"";
   const cleaned=raw.replace(/\.{3,}/g,".").replace(/\u2026/g,".").trim();
-  const sentence=cleaned||fallback;
+  const placeholder=/^(?:not supplied|not provided|not available|n\/a|none)(?: in the assessment)?\.?$/i.test(cleaned);
+  const sentence=!cleaned||placeholder?fallback:cleaned;
   const first=sentence.match(/^(.+?[.!?])(?:\s|$)/)?.[1]??sentence;
   return /[.!?]$/.test(first)?first:first+".";
  };
