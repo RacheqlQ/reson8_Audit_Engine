@@ -42,6 +42,17 @@ describe("deterministic tempo voting", () => {
     expect(result.primary_candidate_bpm).toBe(92);
   });
 
+  it("ignores candidates with invalid duration or coverage weights", () => {
+    const result = voteTempoCandidates({ windows: [
+      { bpm: 92, prominence: 0.95, durationSeconds: 0 },
+      { bpm: 92, prominence: 0.95, durationSeconds: Number.NaN },
+      { bpm: 92, prominence: 0.95, coverage: Number.NaN },
+      { bpm: 92, prominence: 0.95, coverage: -0.2 },
+    ] });
+    expect(result.confirmation_status).toBe("UNDETERMINED");
+    expect(result.reason_codes).toContain("NO_VALID_TEMPO_CANDIDATES");
+  });
+
   it("confirms a single high-quality window only when its vote has full share and no ambiguity", () => {
     const result = voteTempoCandidates({ windows: [
       { bpm: 92, prominence: 0.95, beatStrength: 0.95, durationSeconds: 8 },
