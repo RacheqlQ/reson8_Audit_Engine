@@ -577,7 +577,7 @@ describe("weak tempo candidate diagnostics", () => {
     expect(lines).toMatch(/Tempo status: UNCONFIRMED/);
     expect(lines).toMatch(/Retained tempo candidates: 55 BPM \(raw score 0\.820\); 110 BPM \(raw score 0\.510\)/);
     expect(lines).toMatch(/Half\/double-time alternative: 110 BPM/);
-    expect(lines).toMatch(/Independent low-frequency envelope candidate: 55 BPM/);
+    expect(lines).toMatch(/Independent low-frequency envelope candidate: 55\\.0 BPM/);
     expect(lines).toMatch(/observed agreement 50%/);
     expect(lines).toMatch(/Tempo abstention: Transient prominence is weak or ambiguous/);
     expect(lines).not.toMatch(/Confirmed tempo:/);
