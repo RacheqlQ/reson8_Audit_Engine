@@ -72,5 +72,5 @@ const fullPdf=await PDFDocument.load(fullBytes);
 if(fullPdf.getPageCount()!==14)throw new Error("v2-complete-synthetic-full expected 14 pages (7 core + 5 narrative + 1 evidence-gated deep dive + final A&R notes); got "+fullPdf.getPageCount());
 await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
 const fullText=execFileSync("pdftotext",["-layout",new URL("v2-complete-synthetic-full.pdf",out).pathname,"-"],{encoding:"utf8"});
-assertArNotes(fullPdf,fullText.split("\\f").filter(page=>page.trim().length>0),"v2-complete-synthetic-full",complete.assessment?.humanListeningChecklist??[]);
+assertArNotes(fullPdf,fullText.split("\f").filter(page=>page.trim().length>0),"v2-complete-synthetic-full",complete.assessment?.humanListeningChecklist??[]);
 process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\n");
