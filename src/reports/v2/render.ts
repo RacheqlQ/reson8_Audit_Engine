@@ -85,7 +85,9 @@ export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):str
  return "Not determined";
 }
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
- const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna);
+ const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna),rhythm=rec(audio.rhythmFeatures),tempoVerdict=rec(rhythm.tempoVerdict);
+ const tempoCandidate=finite(tempoVerdict.primary_candidate_bpm)?tempoVerdict.primary_candidate_bpm:finite(audio.tempoCandidateBpm)?audio.tempoCandidateBpm:null;
+ const tempoDisplay=data.tempo.value!==null?data.tempo.value+" BPM":tempoCandidate!==null?"Candidate "+tempoCandidate+" BPM · not confirmed":"Not determined";
  const signed=(value:unknown)=>finite(value)?(value>0?"+":"")+value.toFixed(1):null;
  const loudness=[
   finite(audio.loudnessLufs)?signed(audio.loudnessLufs)+" LUFS":null,
@@ -94,7 +96,7 @@ function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
   finite(audio.rmsLevelDbfs)?"RMS "+signed(audio.rmsLevelDbfs)+" dBFS":null
  ].filter((value):value is string=>Boolean(value));
  return [
-  {label:"TEMPO",value:data.tempo.value===null?"Not determined":data.tempo.value+" BPM",provenance},
+  {label:"TEMPO",value:tempoDisplay,provenance},
   {label:"SONG KEY",value:buildCoverKeyLabel(input,data),provenance},
   {label:"LOUDNESS / SIGNAL",value:loudness.length?loudness.join(" · "):data.energy.value===null?"Not measured":String(data.energy.value),provenance}
  ];
@@ -409,12 +411,13 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    "Composite score: "+(data.headlineScore===null?"Not issued — validated dimension inputs do not support a composite score; no synthetic score is substituted.":data.headlineScore+"/100"),
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
    ...sanitizePublicReportLines(data.notYetMeasured).slice(0,3),
+   ...buildTempoDiagnosticLines(input),
    ...publicReportLimitations(a.limitations).slice(0,2),
    "Market proposition: "+(data.hasVerifiedCommercialEvidence?"PERFORMANCE VERIFIED — source-attributed commercial data supplied.":"PROPOSED — an evidence-informed A&R/commercial thesis; historical streams, sales, revenue, chart activity and audience demand are not asserted."),
    ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
    ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
-  {title:"A&R positioning",blocks:[],lines:buildPositioningLines(input)},
+  {title:"A&R positioning",blocks:[],lines:[...buildPositioningLines(input),...buildTempoDiagnosticLines(input)]},
   {title:"Strengths, risks and actions",blocks:[],lines:[
    "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.join("; ")||"No measured strengths supplied."),
    "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.join("; ")||"No evidenced risks supplied."),
@@ -627,7 +630,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
   ["Track length",typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?Math.floor(sonic.durationSeconds/60)+" min "+Math.round(sonic.durationSeconds%60)+" sec":""],
   ["Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):""],
   ["Song key",buildRecordingOverviewKeyLabel(data)],
-  ["Tempo",data.tempo.value===null?"Not determined":data.tempo.value+" BPM"]
+  ["Tempo",data.tempo.value!==null?data.tempo.value+" BPM":finite(rec(rec(sonic).rhythmFeatures.tempoVerdict).primary_candidate_bpm)?"Candidate "+rec(rec(sonic).rhythmFeatures.tempoVerdict).primary_candidate_bpm+" BPM · not confirmed":"Not determined"]
  ].filter((entry):entry is [string,string]=>Boolean(entry[1]));
  if(rows.length){
   const panelHeight=38+Math.ceil(rows.length/2)*23+14,top=y-8,bottom=top-panelHeight;
