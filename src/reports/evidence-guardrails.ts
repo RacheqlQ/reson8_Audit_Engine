@@ -27,6 +27,11 @@ export function isReliableTempo(value: TempoEvidence): boolean {
   if (rhythm && typeof rhythm === "object") {
     const rhythmRecord = rhythm as Record<string, unknown>;
     if (rhythmRecord.status === "insufficient_evidence") return false;
+    const tempoVerdict = rhythmRecord.tempoVerdict;
+    if (tempoVerdict && typeof tempoVerdict === "object" && !Array.isArray(tempoVerdict)) {
+      const confirmationStatus = (tempoVerdict as Record<string, unknown>).confirmation_status;
+      if (confirmationStatus !== "CONFIRMED") return false;
+    }
     if (typeof rhythmRecord.abstentionReason === "string" && rhythmRecord.abstentionReason.trim()) return false;
   }
   return true;
