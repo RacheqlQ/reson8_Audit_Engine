@@ -514,7 +514,7 @@ describe("ISRC strategy presentation", () => {
     expect(lines).toMatch(/ISRC conflict/i);
     expect(lines).toMatch(/measured tempo, provisional tonal candidates, embedded audio tags/i);
     expect(lines).toMatch(/provisional A&R guidance/i);
-    expect(lines).toMatch(/ISRC action: Resolve the ISRC conflict/i);
+    expect(lines).toMatch(/ISRC action: Conflicting valid ISRC claims/i);
   });
 
   it("does not present an available ISRC as proof of a provider match or commercial performance", () => {
