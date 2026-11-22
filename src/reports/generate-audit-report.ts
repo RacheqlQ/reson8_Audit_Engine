@@ -133,7 +133,7 @@ function cover(pdf:PDFDocument,input:AuditReportInput,f:{regular:PDFFont;bold:PD
 }
 interface Section{title:string;accent:"blue"|"violet"|"teal"|"coral";body:string[];}
 function verdictLabel(v:string):string{const m:Record<string,string>={high:"Ready to pitch",moderate:"Develop",low:"Needs work",undetermined:"PROPOSED A&R THESIS"};return m[v.toLowerCase()]??"PROPOSED A&R THESIS";}
-export interface ArNotesDecisionContext { heading:string; verdict:string; summary:string; prompts:string[]; }
+export interface ArNotesDecisionContext { heading:string; verdict:string; summary:string; prompts:string[]; decisionBasis:string; openDiligence:string; nextAction:string; }
 export function paginateArNotesSummary(lines:string[]):string[][] {
  const chunks:string[][]=[];let offset=0;
  while(lines.length-offset>16){
@@ -169,6 +169,9 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
    "Open diligence: "+openDiligence,
    "Next action: "+nextAction,
   ].join(" "),
+  decisionBasis:basis,
+  openDiligence,
+  nextAction,
   prompts:[
    "What evidence would change the current decision?",
    "Which identity, rights or source gaps remain unresolved?",
