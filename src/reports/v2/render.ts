@@ -93,8 +93,13 @@ function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
   finite(audio.truePeakDbfs)?"True peak "+signed(audio.truePeakDbfs)+" dBFS":null,
   finite(audio.rmsLevelDbfs)?"RMS "+signed(audio.rmsLevelDbfs)+" dBFS":null
  ].filter((value):value is string=>Boolean(value));
+ const rhythm=rec(audio.rhythmFeatures);
+ const tempoCandidates=arr(rhythm.candidateBpms).filter((value):value is number=>finite(value)&&value>=40&&value<=220);
+ const tempoValue=data.tempo.value===null
+  ?tempoCandidates.length?"Candidate "+tempoCandidates.slice(0,2).join(" / ")+" BPM":"Not determined"
+  :data.tempo.value+" BPM";
  return [
-  {label:"TEMPO",value:data.tempo.value===null?"Not determined":data.tempo.value+" BPM",provenance},
+  {label:"TEMPO",value:tempoValue,provenance},
   {label:"SONG KEY",value:buildCoverKeyLabel(input,data),provenance},
   {label:"LOUDNESS / SIGNAL",value:loudness.length?loudness.join(" · "):data.energy.value===null?"Not measured":String(data.energy.value),provenance}
  ];
@@ -139,24 +144,29 @@ function detectorNumber(value: unknown, digits = 3): string | null {
  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : null;
 }
 export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
- const rhythm=rec(rec(input.sonicDna).rhythmFeatures);
- const lines:string[]=[];
- const candidates=arr(rhythm.candidateScores).map(value=>rec(value))
-  .filter(item=>finite(item.bpm)&&item.bpm>=40&&item.bpm<=220)
-  .slice(0,4).map(item=>String(item.bpm)+" BPM");
- if(candidates.length)lines.push("Possible tempo readings: "+candidates.join("; ")+". Treat these as provisional until confirmed by listening.");
- else if(Array.isArray(rhythm.candidateBpms)) {
-  const fallback= rhythm.candidateBpms.filter(value=>finite(value)&&value>=40&&value<=220).slice(0,4);
-  if(fallback.length)lines.push("Possible tempo readings: "+fallback.join("; ")+" BPM. Treat these as provisional until confirmed by listening.");
- }
- if(finite(rhythm.alternateTempo)&&rhythm.alternateTempo>=40&&rhythm.alternateTempo<=220)lines.push("Alternative pulse reading: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
- const consensus=rec(rhythm.windowConsensus);
- if(finite(consensus.observedAgreement))lines.push(consensus.observedAgreement>=0.7
-  ?"Tempo readings are broadly consistent across the analyzed sections."
-  :"Tempo readings vary across the analyzed sections; no single tempo is confirmed.");
- if(arr(rhythm.beatTimesSeconds).length)lines.push("A tentative beat guide is available; confirm the beat placement by listening.");
+ const sonic=rec(input.sonicDna),rhythm=rec(sonic.rhythmFeatures),lines:string[]=[];
+ const bpm=finite(rhythm.bpm)?rhythm.bpm:finite(sonic.bpm)?sonic.bpm:null;
+ const confidence=finite(rhythm.confidence)?rhythm.confidence:finite(sonic.tempoConfidence)?sonic.tempoConfidence:null;
  const abstention=str(rhythm.abstentionReason,"");
- if(abstention&&abstention!=="Not supplied")lines.push("Tempo not confirmed: "+abstention);
+ const confirmed=bpm!==null&&confidence!==null&&confidence>=0.5&&!abstention;
+ if(confirmed)lines.push("Confirmed tempo: "+bpm.toFixed(1)+" BPM; raw confidence score "+confidence.toFixed(3)+" (not a calibrated probability).");
+ else lines.push("Tempo status: UNCONFIRMED. No BPM is presented as a confirmed tempo.");
+ const scored=arr(rhythm.candidateScores).map(value=>rec(value))
+  .filter(item=>finite(item.bpm)&&item.bpm>=40&&item.bpm<=220&&finite(item.score))
+  .slice(0,5).map(item=>String(item.bpm)+" BPM (raw score "+Number(item.score).toFixed(3)+")");
+ const fallback=arr(rhythm.candidateBpms).filter((value):value is number=>finite(value)&&value>=40&&value<=220).slice(0,5);
+ const candidates=scored.length?scored:fallback.map(value=>String(value)+" BPM");
+ if(candidates.length)lines.push("Retained tempo candidates: "+candidates.join("; ")+". These remain candidates unless the confidence and stability gates are met.");
+ if(confidence!==null&&!confirmed)lines.push("Primary detector raw confidence: "+confidence.toFixed(3)+" (not a calibrated probability; confirmation threshold 0.500).");
+ if(finite(rhythm.alternateTempo)&&rhythm.alternateTempo>=40&&rhythm.alternateTempo<=220)
+  lines.push("Half/double-time alternative: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM; alternative timing is not independently confirmed.");
+ const consensus=rec(rhythm.windowConsensus);
+ if(finite(consensus.windowCount)&&consensus.windowCount>0){
+  const agreement=finite(consensus.observedAgreement)?(consensus.observedAgreement*100).toFixed(0)+"%":"not available";
+  lines.push("Candidate window consensus: "+str(consensus.winner,"no stable candidate")+" across "+consensus.windowCount+" windows; observed agreement "+agreement+". Window stability does not convert a candidate into a confirmed BPM.");
+ }
+ if(arr(rhythm.beatTimesSeconds).length)lines.push("A tentative beat guide is available; confirm beat placement by listening.");
+ if(abstention&&abstention!=="Not supplied")lines.push("Tempo abstention: "+abstention);
  return lines.length?lines:["No tempo result is available from the supplied recording."];
 }
 export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
@@ -402,6 +412,8 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    "Composite score: "+(data.headlineScore===null?"Not issued — validated dimension inputs do not support a composite score; no synthetic score is substituted.":data.headlineScore+"/100"),
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
    ...sanitizePublicReportLines(data.notYetMeasured).slice(0,3),
+   ...buildTempoDiagnosticLines(input).slice(0,4),
+   ...buildKeyDiagnosticLines(input).slice(0,4),
    ...publicReportLimitations(a.limitations).slice(0,2),
    "Market proposition: "+(data.hasVerifiedCommercialEvidence?"PERFORMANCE VERIFIED — source-attributed commercial data supplied.":"PROPOSED — an evidence-informed A&R/commercial thesis; historical streams, sales, revenue, chart activity and audience demand are not asserted."),
    ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
