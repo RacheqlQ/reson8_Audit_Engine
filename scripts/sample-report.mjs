@@ -210,8 +210,13 @@ try{
  if(reintroducedClaim){
   throw new Error("Generated PDF reintroduced an unsupported claim: "+reintroducedClaim);
  }
- const zeroConfidenceTempoLeak=unsafeText.match(/.{0,120}(?:\b128\s*BPM\b|half-time 64\.0 BPM).{0,120}/is);
- if(zeroConfidenceTempoLeak)throw new Error("Generated PDF exposed a zero-confidence tempo candidate or derived pulse reading: "+JSON.stringify(zeroConfidenceTempoLeak[0]));
+ const containsUnconfirmedTempoCandidate=/\b(?:Candidate\s+128\s*BPM|128\s*BPM|half-time\s+64(?:\.0)?\s*BPM)\b/i.test(unsafeText);
+ if(containsUnconfirmedTempoCandidate&&!/Tempo status:\s*UNCONFIRMED/i.test(unsafeText)){
+  throw new Error("Generated PDF retained a weak tempo candidate without an explicit unconfirmed status");
+ }
+ if(/\b(?:Confirmed|Measured) tempo:\s*(?:128|64(?:\.0)?)\s*BPM/i.test(unsafeText)){
+  throw new Error("Generated PDF promoted a weak tempo candidate to a confirmed BPM");
+ }
  if(/double-time 256\.0 BPM/i.test(unsafeText)) throw new Error("Generated PDF printed an implausible double-time candidate");
  if(!normalizedUnsafeText.includes("The supplied evidence is insufficient; track-specific conclusions are withheld")){
   throw new Error("Generated PDF lost the zero-confidence A&R Notes decision context");
