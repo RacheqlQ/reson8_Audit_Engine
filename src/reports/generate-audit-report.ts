@@ -150,7 +150,6 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
   .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
   .map(professionalEvidenceLanguage)
   .filter((item)=>item.trim().length>0)
-  .filter((item,index,items)=>items.indexOf(item)===index)
   .filter((item,index,items)=>items.indexOf(item)===index);
  const fullSummary=professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required."));
  const safeSummary=fullSummary;
