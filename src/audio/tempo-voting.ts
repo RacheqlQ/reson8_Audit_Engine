@@ -63,7 +63,7 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
   const minWindowAgreement = options.minWindowAgreement ?? 0.65;
   const minProminence = options.minProminence ?? 0.5;
   const minRunnerUpMargin = options.minRunnerUpMargin ?? 0.15;
-  const octaveAmbiguityShare = options.octaveAmbiguityShare ?? 0.45;
+  const octaveAmbiguityShare = options.octaveAmbiguityShare ?? 0.65;
   const votes: Vote[] = [];
   const validWindows = new Set<number>();
 
