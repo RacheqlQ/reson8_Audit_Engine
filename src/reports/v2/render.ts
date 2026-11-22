@@ -289,13 +289,13 @@ export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
 export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
  const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution); const tonalAudio={...rec(input.sonicDna),tonalResolution:resolution};
- const lines:string[]=[];
+ const lines:string[]=[],adaptedKey=adaptReportV2(input).key.value;
  const rawCandidates=arr(resolution.candidates).length?arr(resolution.candidates):arr(harmonic.topCandidates);
  const candidates=(hasReportableKeyCandidates(tonalAudio)?rawCandidates:[]).map(value=>rec(value))
   .filter(item=>typeof (item.key??item.tonic)==="string").slice(0,4)
   .map(item=>[str(item.key??item.tonic,""),str(item.mode,"")].filter(Boolean).join(" "));
- if(resolution.status==="CONFIRMED")lines.push("Confirmed audio-derived tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+".");
- else if(resolution.status==="PROVISIONAL")lines.push("Provisional audio-derived tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+". It is not presented as confirmed.");
+ if(adaptedKey!==null)lines.push("Confirmed audio-derived tonal centre: "+adaptedKey+".");
+ else if(resolution.status==="PROVISIONAL"||resolution.status==="CONFIRMED")lines.push("Provisional audio-derived tonal centre: "+str(resolution.tonic,"")+" "+str(resolution.mode,"")+". It is not presented as confirmed by the report reliability gate.");
  else if(resolution.status==="UNAVAILABLE")lines.push("Tonal centre unavailable: stable harmonic evidence was insufficient.");
  if(candidates.length)lines.push("Possible song keys: "+candidates.join("; ")+".");
  if(harmonic.independentEstimatorDisagrees===true)lines.push("Different key readings were returned; no single key is confirmed.");
