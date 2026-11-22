@@ -6,6 +6,16 @@ import { ambiguousAudioFixture } from "./fixtures/ambiguous-audio.mjs";
 import { fullAudioFixture, metadataOnlyFixture } from "./fixtures/sample-report-input.mjs";
 
 const out=new URL("../artifacts/",import.meta.url);
+function assertArNotes(pdf, extractedPages, name) {
+ const required=["ar_notes","ar_owner","ar_followup_date","ar_decision_hold","ar_decision_reaudit","ar_decision_proceed"];
+ const names=pdf.getForm().getFields().map(field=>field.getName());
+ if(required.some(field=>!names.includes(field))||names.length!==required.length)throw new Error(name+" has missing or unexpected A&R Notes fields");
+ const notes=pdf.getForm().getTextField("ar_notes").acroField.getWidgets()[0];
+ if(!notes||notes.getRectangle().height<841.89*0.35)throw new Error(name+" A&R Notes field is smaller than 35% of A4 page height");
+ const finalPage=extractedPages.at(-1)??"";
+ for(const label of ["AUDIO","IDENTITY","MARKET","RELEASE READINESS","HUMAN LISTENING REVIEW","DECISION CONTEXT","WORKING NOTES","A&R OWNER","FOLLOW-UP DATE","HOLD","RE-AUDIT","PROCEED"])if(!finalPage.toUpperCase().includes(label))throw new Error(name+" A&R Notes page is missing "+label);
+ if(finalPage.includes("..."))throw new Error(name+" A&R Notes page contains truncated text");
+}
 await mkdir(out,{recursive:true});
 const phillo=structuredClone(ambiguousAudioFixture);
 phillo.auditId="fixture-phillo-stunixx-low-confidence";
@@ -31,6 +41,7 @@ for(const [name,input,expected] of [
  await writeFile(file,bytes);
  const extracted=execFileSync("pdftotext",["-layout",file.pathname,"-"],{encoding:"utf8"});
  const extractedPages=extracted.split("\f").filter(page=>page.trim().length>0);
+ assertArNotes(pdf,extractedPages,name);
  if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i.test(extracted))throw new Error(name+" contains a forbidden dead-end verdict or limitations section");
  if(!extractedPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error(name+" must finish with an A&R NOTES page");
  process.stdout.write(name+": "+pdf.getPageCount()+" pages; final A&R notes and verdict checks passed.\n");
@@ -44,6 +55,7 @@ const philloFullFile=new URL("v2-phillo-stunixx-full.pdf",out);
 await writeFile(philloFullFile,philloFullBytes);
 const philloFullText=execFileSync("pdftotext",["-layout",philloFullFile.pathname,"-"],{encoding:"utf8"});
 const philloFullPages=philloFullText.split("\f").filter(page=>page.trim().length>0);
+assertArNotes(philloFullPdf,philloFullPages,"v2-phillo-stunixx-full");
 if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED|NOT CLEARED/i.test(philloFullText))throw new Error("Phillo full fixture contains a forbidden dead-end verdict or limitations section");
 if(/No definitive platform-backed primary genre|Keep lane positioning unconfirmed/i.test(philloFullText))throw new Error("Phillo full fixture contains dead-end lane positioning copy");
 if(!philloFullPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error("Phillo full fixture must finish with A&R NOTES");
@@ -57,4 +69,6 @@ const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20
 const fullPdf=await PDFDocument.load(fullBytes);
 if(fullPdf.getPageCount()!==14)throw new Error("v2-complete-synthetic-full expected 14 pages (7 core + 5 narrative + 1 evidence-gated deep dive + final A&R notes); got "+fullPdf.getPageCount());
 await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
+const fullText=execFileSync("pdftotext",["-layout",new URL("v2-complete-synthetic-full.pdf",out).pathname,"-"],{encoding:"utf8"});
+assertArNotes(fullPdf,fullText.split("\\f").filter(page=>page.trim().length>0),"v2-complete-synthetic-full");
 process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\n");
