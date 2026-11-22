@@ -448,6 +448,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         // HTTP 402 is a provider billing/account gate, not a transient failure.
         // Stop selecting this provider for later jobs handled by this worker process.
         markAssessmentProviderUnavailable(providerName as "groq" | "gemini" | "ollama", "billing_required");
+      }
       if (response.status === 400) {
         try { malformedProviderOutput = (JSON.parse(errorBody) as { error?: { code?: unknown } }).error?.code === "json_validate_failed"; }
         catch { malformedProviderOutput = false; }
