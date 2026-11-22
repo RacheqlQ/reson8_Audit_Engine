@@ -554,3 +554,32 @@ describe("ISRC strategy presentation", () => {
     expect(lines).toMatch(/ISRC action: Run catalog and release-reconciliation lookups/i);
   });
 });
+
+
+describe("weak tempo candidate diagnostics", () => {
+  it("keeps 55/110 half-double candidates, confidence and window consensus visibly unconfirmed", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      ...input.sonicDna,
+      bpm: null,
+      tempoConfidence: 0.1647,
+      rhythmFeatures: {
+        candidateBpms: [55, 110],
+        candidateScores: [{ bpm: 55, score: 0.82 }, { bpm: 110, score: 0.51 }],
+        confidence: 0.1647,
+        alternateTempo: 110,
+        abstentionReason: "Transient prominence is weak or ambiguous; candidates are retained for review.",
+        windowConsensus: { winner: "55", windowCount: 4, observedAgreement: 0.5 },
+        independentEstimator: { bpm: 55, score: 0.47 }
+      }
+    };
+    const lines = buildTempoDiagnosticLines(input).join(" ");
+    expect(lines).toMatch(/Tempo status: UNCONFIRMED/);
+    expect(lines).toMatch(/Retained tempo candidates: 55 BPM \(raw score 0\.820\); 110 BPM \(raw score 0\.510\)/);
+    expect(lines).toMatch(/Half\/double-time alternative: 110 BPM/);
+    expect(lines).toMatch(/Independent low-frequency envelope candidate: 55 BPM/);
+    expect(lines).toMatch(/observed agreement 50%/);
+    expect(lines).toMatch(/Tempo abstention: Transient prominence is weak or ambiguous/);
+    expect(lines).not.toMatch(/Confirmed tempo:/);
+  });
+});
