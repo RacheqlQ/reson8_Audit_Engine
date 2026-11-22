@@ -87,79 +87,298 @@ const finite = (value: unknown): number | null =>
 const clean = (value: unknown): string => typeof value === "string" ? value.trim() : "";
 const unique = (values: string[]): string[] => [...new Set(values.filter(Boolean))];
 
-function normalizedValidIsrc(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.replace(/[\s-]/g, "").toUpperCase();
-  return /^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/.test(normalized) ? normalized : null;
+function playlistTargets(value: unknown): PlaylistTarget[] {
+  const discovery = record(value);
+  const candidates = Array.isArray(discovery.candidates) ? discovery.candidates : [];
+  const targets = candidates.flatMap((raw) => {
+    const item = record(raw);
+    const provider = clean(item.provider);
+    const name = clean(item.name);
+    const url = clean(item.url);
+    if (!provider || !name || !/^https:\/\//i.test(url)) return [];
+    const matchBasis = Array.isArray(item.matchBasis)
+      ? unique(item.matchBasis.filter((entry): entry is string => typeof entry === "string").map((entry) => entry.trim()))
+      : [];
+    const containsIsrc = item.containsIsrc === true;
+    const genreMatches = Array.isArray(item.genreMatches) ? item.genreMatches.filter((entry) => typeof entry === "string") : [];
+    const moodMatches = Array.isArray(item.moodMatches) ? item.moodMatches.filter((entry) => typeof entry === "string") : [];
+    const priorityScore = Math.min(85, (genreMatches.length ? 55 : 0) + Math.min(20, genreMatches.length * 5) + Math.min(10, moodMatches.length * 5));
+    return [{
+      rank: 0,
+      provider,
+      name,
+      url,
+      retrievedAt: clean(item.retrievedAt) || null,
+      matchStatus: containsIsrc ? "isrc_present" as const : item.containsIsrc === false ? "isrc_not_found" as const : "membership_unverified" as const,
+      priorityScore,
+      matchBasis,
+      limitations: [
+        "A catalogue match is a targeting lead, not curator interest, editorial acceptance, playlist placement or audience demand.",
+        ...(item.containsIsrc === null || item.containsIsrc === undefined ? ["Playlist membership was not verified for this provider result."] : []),
+      ],
+    }];
+  });
+  targets.sort((a, b) => b.priorityScore - a.priorityScore || a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
+  return targets.slice(0, 8).map((item, index) => ({ ...item, rank: index + 1 }));
 }
 
-function collectNonIsrcEvidence(evidence:Record<string,unknown>,sonicDna:Record<string,unknown>|null):string[]{
-  const audio=record(sonicDna),rhythm=record(audio.rhythmFeatures),harmonic=record(audio.harmonicFeatures);
-  const tags=record(evidence.id3),identity=record(evidence.identity),genre=record(evidence.genreClassification);
-  return unique([
-    ...(finite(audio.bpm)?["measured tempo"]:[]),
-    ...(Array.isArray(rhythm.candidateBpms)&&rhythm.candidateBpms.length?["provisional tempo candidates"]:[]),
-    ...(Array.isArray(harmonic.topCandidates)&&harmonic.topCandidates.length?["provisional tonal candidates"]:[]),
-    ...(finite(audio.loudnessLufs)?["integrated loudness"]:[]),
-    ...(finite(audio.loudnessRangeLu)?["loudness range"]:[]),
-    ...(finite(audio.sampleRate)?["sample rate and audio format"]:[]),
-    ...(Object.values(tags).some(value=>typeof value==="string"&&value.trim())?["embedded audio tags"]:[]),
-    ...(clean(evidence.filename)?["uploaded filename metadata"]:[]),
-    ...(clean(evidence.title??identity.title)?["supplied track title"]:[]),
-    ...(clean(evidence.artist??identity.artist)?["supplied artist name"]:[]),
-    ...(clean(evidence.genre??genre.primaryGenre)?["genre or lane hypotheses"]:[]),
-    ...([evidence.releaseContext,evidence.campaignContext,evidence.album,identity.album,evidence.label,evidence.releaseDate].some(value=>Boolean(clean(value)))?["supplied release or campaign context"]:[]),
-  ]);
+function isIsoCountryCode(value: string): boolean {
+  if (!/^[A-Z]{2}$/.test(value)) return false;
+  const name = new Intl.DisplayNames(["en"], { type: "region" }).of(value);
+  return Boolean(name && name !== value && name !== "Unknown Region");
 }
 
-export function resolveIsrcStrategyRoute(evidence:Record<string,unknown>,sonicDna:Record<string,unknown>|null):IsrcStrategyRoute{
-  const identity=record(evidence.identity),userInput=record(evidence.userInput),recognition=record(evidence.recognition);
-  const id3=record(evidence.id3),catalogMetadata=record(evidence.catalogMetadata);
-  const candidates:Array<{value:unknown;source:string}>=[
-    {value:evidence.isrc,source:clean(record(evidence.fieldProvenance).isrc)||"reconciled track evidence"},
-    {value:identity.isrc,source:"reconciled identity"},
-    {value:userInput.isrc,source:"user input"},
-    {value:recognition.isrc,source:"provider recognition"},
-    {value:catalogMetadata.isrc,source:"catalog metadata"},
-    {value:id3.isrc,source:"embedded ID3 tags"},
-  ];
-  const normalizedCandidates=unique([
-    ...candidates.map(candidate=>normalizedValidIsrc(candidate.value)??""),
-    ...(Array.isArray(evidence.isrcCandidates)?evidence.isrcCandidates.map(value=>normalizedValidIsrc(value)??""):[]),
-  ]);
-  const conflicts=normalizedCandidates.filter(Boolean);
-  const nonIsrcEvidence=collectNonIsrcEvidence(evidence,sonicDna);
-  if(evidence.isrcConflict===true||conflicts.length>1){
+function territoryPriorities(evidence: Record<string, unknown>): TerritoryPriorities {
+  const telemetry = record(evidence.audienceTelemetry);
+  const provider = clean(telemetry.provider);
+  const metric = clean(telemetry.metric);
+  const reportingPeriod = clean(telemetry.reportingPeriod);
+  const retrievedAt = clean(telemetry.retrievedAt);
+  const rawTerritories = Array.isArray(telemetry.territories) ? telemetry.territories : [];
+  const valid = telemetry.verified === true
+    && provider.length > 0
+    && metric.length > 0
+    && reportingPeriod.length > 0
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(retrievedAt)
+    && Number.isFinite(Date.parse(retrievedAt))
+    && rawTerritories.length > 0
+    && rawTerritories.every((raw) => {
+      const item = record(raw);
+      return isIsoCountryCode(clean(item.countryCode))
+        && finite(item.value) !== null
+        && (finite(item.value) as number) >= 0;
+    });
+  if (!valid) {
     return {
-      status:"pending_verification",route:"NON_ISRC_FALLBACK",isrc:null,source:null,conflicts,
-      nonIsrcEvidence,
-      requiredActions:[
-        "Conflicting valid ISRC claims were supplied; resolve the canonical recording code before treating any catalog result as a match.",
-        "Use available non-ISRC audio, metadata and campaign evidence only for provisional A&R guidance while the identifier conflict remains open.",
-        "Reconcile title, artist, label, album, release date and rights or clearance records before external pitching or wide distribution.",
-      ],
+      status: "unavailable",
+      reason: "No verified territory-level audience telemetry with a named provider, metric, reporting period and retrieval timestamp was supplied. Territory priorities are withheld rather than inferred from genre or artist location.",
+      provider: null, metric: null, reportingPeriod: null, retrievedAt: null, territories: [],
     };
   }
-  const match=candidates.map(candidate=>({...candidate,isrc:normalizedValidIsrc(candidate.value)}))
-    .find(candidate=>candidate.isrc!==null);
-  if(match?.isrc){
-    return {
-      status:"available",route:"ISRC_FIRST",isrc:match.isrc,source:match.source,conflicts:[],nonIsrcEvidence,
-      requiredActions:[
-        "Run catalog and release-reconciliation lookups keyed by the validated ISRC.",
-        "Verify title, artist, label, album and release-date variants against returned provider records.",
-        "Keep rights and clearance checks separate from identity and market-performance findings.",
-      ],
-    };
+  const territories = rawTerritories.map((raw) => ({
+    countryCode: clean(record(raw).countryCode),
+    value: finite(record(raw).value) as number,
+  })).sort((a, b) => b.value - a.value || a.countryCode.localeCompare(b.countryCode));
+  return { status: "available", reason: "Ranked by the supplied verified provider metric; values are not combined across providers or reporting periods.", provider, metric, reportingPeriod, retrievedAt, territories };
+}
+
+function shortFormHooks(sonicDna: Record<string, unknown> | null, executionMode: MarketPlacementInput["executionMode"]): ShortFormHooks {
+  const unavailable = (reason: string): ShortFormHooks => ({
+    status: "unavailable", method: "onset and signal-level review", segments: [],
+    limitations: [reason, "Candidates are edit suggestions, not confirmed musical hooks; human listening and rights review are required before publication."],
+  });
+  if (executionMode === "dsp_link" || clean(sonicDna?.provenance) !== "uploaded_audio_master") {
+    return unavailable("Timestamped excerpts require an uploaded master; catalogue metadata cannot establish audio peak locations.");
   }
+  const duration = finite(sonicDna?.durationSeconds);
+  const rhythm = record(sonicDna?.rhythmFeatures);
+  const envelope = Array.isArray(rhythm.onsetEnvelope) ? rhythm.onsetEnvelope.map(finite) : [];
+  if (duration === null || duration < 8 || envelope.length < 4 || envelope.some((value) => value === null || value < 0)) {
+    return unavailable("A usable master duration and bounded onset envelope were not available for excerpt selection.");
+  }
+  const peaks = envelope as number[];
+  if (Math.max(...peaks) <= 0) return unavailable("The onset envelope contains no positive transient peaks to prioritize.");
+  const profile = record(sonicDna?.acousticFeatureProfile);
+  const summaries = Array.isArray(profile.windowSummaries) ? profile.windowSummaries.map(record) : [];
+  const rmsValues = summaries.map((item) => finite(item.rmsDbfs)).filter((value): value is number => value !== null);
+  if (!summaries.length || !rmsValues.length) return unavailable("Windowed RMS summaries were unavailable, so onset peaks cannot be paired with energy context.");
+  const minRms = rmsValues.length ? Math.min(...rmsValues) : 0;
+  const maxRms = rmsValues.length ? Math.max(...rmsValues) : 0;
+  const energyAt = (time: number): number => {
+    if (!summaries.length || !rmsValues.length) return 0.5;
+    let nearest: Record<string, unknown> | null = null, distance = Number.POSITIVE_INFINITY;
+    for (const item of summaries) {
+      const start = finite(item.startSeconds);
+      if (start === null) continue;
+      const delta = Math.abs(start - time);
+      if (delta < distance) { distance = delta; nearest = item; }
+    }
+    const rms = nearest ? finite(nearest.rmsDbfs) : null;
+    return rms === null || maxRms === minRms ? 0.5 : Math.max(0, Math.min(1, (rms - minRms) / (maxRms - minRms)));
+  };
+  const localPeaks = peaks.map((value, index) => ({ value, index }))
+    .filter(({ value, index }) => value > 0 && value >= (peaks[index - 1] ?? -1) && value >= (peaks[index + 1] ?? -1))
+    .map(({ value, index }) => {
+      const peakTime = (index + 0.5) / peaks.length * duration;
+      const energy = energyAt(peakTime);
+      return { peakTime, score: Math.round(Math.max(0, Math.min(100, (value * 0.7 + energy * 0.3) * 100))), energy, onset: value };
+    })
+    .sort((a, b) => b.score - a.score || a.peakTime - b.peakTime);
+  const clipLength = Math.min(12, duration);
+  const segments: ShortFormHooks["segments"] = [];
+  for (const peak of localPeaks) {
+    if (segments.some((segment) => Math.abs((segment.startSeconds + segment.endSeconds) / 2 - peak.peakTime) < clipLength)) continue;
+    const startSeconds = Math.max(0, Math.min(duration - clipLength, peak.peakTime - clipLength / 2));
+    const endSeconds = startSeconds + clipLength;
+    segments.push({
+      startSeconds: Number(startSeconds.toFixed(2)),
+      endSeconds: Number(endSeconds.toFixed(2)),
+      score: peak.score,
+      scoreType: "relative_signal_peak_priority",
+      signals: unique([...(peak.onset > 0 ? ["onset/transient peak"] : []), ...(peak.energy > 0.5 ? ["higher relative windowed RMS"] : ["windowed RMS context"]) ]),
+    });
+    if (segments.length === 3) break;
+  }
+  if (!segments.length) return unavailable("No distinct local onset peaks were found in the uploaded master.");
   return {
-    status:"pending_verification",route:"NON_ISRC_FALLBACK",isrc:null,source:null,conflicts:[],nonIsrcEvidence,
-    requiredActions:[
-      "Record the ISRC as unavailable or pending verification; do not invent a catalog match.",
-      "Use only the available measured audio, embedded tags, supplied identity and campaign context for provisional A&R guidance.",
-      "Confirm or register the ISRC, reconcile release metadata, and complete rights and clearance checks before wide distribution or external pitching.",
+    status: "available", method: "Onset and relative signal-level review", segments,
+    limitations: [
+      "Priority scores are relative signal-ranking aids, not probabilities, retention predictions or proof of a memorable hook.",
+      "The downsampled onset envelope and sparse windowed RMS summaries locate candidate excerpts; human listening must confirm musical context, lyrics, clean edit boundaries and suitability.",
+      "Candidates are edit suggestions, not confirmed musical hooks; human listening and rights review are required before publication.",
     ],
   };
+}
+
+function positioning(sonicDna: Record<string, unknown> | null, evidence: Record<string, unknown>): MarketPlacementPlan["positioning"] {
+  const bpm = finite(sonicDna?.bpm);
+  const alternateTempo = finite(sonicDna?.alternateTempo);
+  const confidence = finite(sonicDna?.tempoConfidence);
+  const key = clean(sonicDna?.key);
+  const mode = clean(sonicDna?.mode);
+  const keyConfidence = finite(sonicDna?.keyConfidence);
+  const keyAgreement = finite(sonicDna?.keySegmentAgreement);
+  const rhythm = record(sonicDna?.rhythmFeatures);
+  const energy = record(record(sonicDna?.acousticFeatureProfile).predictions);
+  const energyPrediction = record(energy.energy);
+  const masterProvenance = clean(sonicDna?.provenance) === "uploaded_audio_master";
+  const reliableTempo = masterProvenance && bpm !== null && bpm >= 40 && bpm <= 240 && confidence !== null && confidence >= 0.5;
+  const beatGrid = clean(rhythm.beatGridStatus) === "tentative";
+  const energyAvailable = energyPrediction.status === "provisional" && ["low", "moderate", "high"].includes(clean(energyPrediction.label));
+  const reliableKey = masterProvenance && Boolean(key) && ["major", "minor"].includes(mode) && keyConfidence !== null && keyConfidence >= 0.8 && keyAgreement !== null && keyAgreement >= 0.8;
+  const djBasis = [ "Measured tempo: " + bpm + " BPM", "Tentative beat-grid evidence is present" ];
+  if (alternateTempo !== null && bpm !== null && alternateTempo !== bpm) djBasis.push("Alternate metrical interpretation: " + alternateTempo + " BPM; this is an alternate half/double-time reading, not a second independent tempo.");
+  if (reliableKey) djBasis.push("Harmonic estimate: " + key + " " + mode + " (key consistency across the analyzed sections).");
+  const dj: PositioningRecommendation = reliableTempo && beatGrid
+    ? { status: "review_required", reason: "The uploaded master has a reportable tempo and a tentative beat guide; audition and DJ transition testing are still required.", basis: djBasis, limitations: ["Tempo and beat-grid evidence do not establish DJ demand, mix compatibility or venue support.", ...(reliableKey ? ["The key estimate is a harmonic-mixing cue only; human confirmation is still required."] : [])] }
+    : { status: "blocked", reason: "DJ positioning requires a reliable tempo reading and a tentative beat guide.", basis: [], limitations: ["No DJ suitability claim is made from metadata-only or low-confidence tempo candidates."] };
+  const club: PositioningRecommendation = reliableTempo && beatGrid && energyAvailable
+    ? { status: "review_required", reason: "Tempo, tentative beat-grid and provisional energy evidence justify a human club-play test, not a venue or audience claim.", basis: ["Measured tempo: " + bpm + " BPM", "Provisional audio energy: " + clean(energyPrediction.label), "Tentative beat-grid evidence is present"], limitations: ["Provisional energy is heuristic, not a calibrated perceptual score; these signals are not evidence of venue demand or dancefloor response."] }
+    : { status: "blocked", reason: "Club positioning requires a reportable tempo, a tentative beat guide and a provisional energy estimate.", basis: [], limitations: ["No club-fit conclusion is inferred from genre labels or catalogue popularity alone."] };
+  const rights = clean(evidence.rightsStatus).toLowerCase();
+  const rightsCleared = ["cleared", "rights_cleared"].includes(rights);
+  const approved = evidence.masterApproved === true;
+  const sync: PositioningRecommendation = rightsCleared && approved
+    ? { status: "review_required", reason: "Rights and master-approval fields are marked complete; a human sync brief, edit/version review and chain-of-title check are still required.", basis: ["Rights status: " + rights, "Master approval: verified"], limitations: ["This is not a sync match or clearance; no brief, usage, territory, term, media or fee has been verified."] }
+    : { status: "blocked", reason: "Sync outreach is blocked until rights clearance and approved master are verified.", basis: [], limitations: ["No sync suitability or clearance is inferred from audio features, ISRC or catalogue presence."] };
+  return { dj, club, sync };
+}
+
+function rollout(targetCount: number, hooksAvailable: boolean, territoryStatus: TerritoryPriorities["status"]): MarketPlacementPlan["rollout"] {
+  return [
+    {
+      phase: "pre_release",
+      actions: [
+        "Reconfirm reconciled artist, title, ISRC, ownership, split and sample-clearance evidence before any third-party pitching.",
+        targetCount ? "Review the provider-returned playlist shortlist, eligibility rules and submission routes; treat each result as a lead, not a placement." : "Do not invent playlist targets; complete catalogue discovery only after a valid recording identity and provider access are available.",
+        hooksAvailable ? "Have a human listener audition the timestamped excerpt candidates, select clean edit boundaries and approve captions and visual assets." : "Select any short-form excerpt through human listening; no master-derived timestamp candidate is currently available.",
+      ],
+      gates: ["Rights and identity verified", "Final master and artwork approved", "No unsupported audience or placement claims"],
+    },
+    {
+      phase: "release_window",
+      actions: [
+        "Coordinate confirmed DSP delivery with artist-owned social, video, press and direct-to-fan channels using trackable campaign links.",
+        "Test DJ/club positioning only after an A&R or DJ listener reviews transitions, intro/outro structure and playback context.",
+        "Use sync outreach only against a defined brief after rights, master approval, versioning and chain-of-title checks.",
+      ],
+      gates: ["DSP delivery confirmed by distributor or platform", "Campaign assets approved", "Partner outreach recorded with source and response status"],
+    },
+    {
+      phase: "post_release",
+      actions: [
+        territoryStatus === "available" ? "Review the supplied provider-attributed territory metrics within their stated reporting period; do not combine incomparable measures." : "Collect provider-attributed territory, listener and engagement telemetry with a named reporting period before ranking markets.",
+        "Compare saves, completion, attributable visits and playlist outcomes only where platform-native reports or campaign analytics supply the measurements.",
+        "Record actual outreach, responses and campaign outcomes; update the next cycle from observed results rather than assumed conversion.",
+      ],
+      gates: ["Reporting window and provider defined", "Metrics retained with retrieval timestamps", "No inferred revenue, audience demand or campaign success"],
+    },
+  ];
+}
+
+
+export function buildPlaylistMoodContext(
+  providerMoodTags: readonly string[],
+  sonicDna: { acousticFeatureProfile?: unknown } | null,
+): { moodTags: string[]; moodSource: string | null } {
+  const providerTags = unique([...providerMoodTags]);
+  const profile = record(sonicDna?.acousticFeatureProfile);
+  const predictions = record(profile.predictions);
+  const mood = record(predictions.mood);
+  const audioTags = mood.status === "provisional" && Array.isArray(mood.labels)
+    ? mood.labels.filter((label): label is string => typeof label === "string").map((label) => label.trim()).filter(Boolean)
+    : [];
+  const sources = [
+    ...(providerTags.length ? ["DSP catalogue sonic profile"] : []),
+    ...(audioTags.length ? ["uploaded-master provisional audio_feature_heuristics_v1"] : []),
+  ];
+  return { moodTags: unique([...providerTags, ...audioTags]), moodSource: sources.length ? sources.join("; ") : null };
+}
+
+function normalizedValidIsrc(value:unknown):string|null{
+ if(typeof value!=="string")return null;
+ const normalized=value.replace(/[\\s-]/g,"").toUpperCase();
+ return /^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/.test(normalized)?normalized:null;
+}
+function collectNonIsrcEvidence(evidence:Record<string,unknown>,sonicDna:Record<string,unknown>|null):string[]{
+ const audio=record(sonicDna),rhythm=record(audio.rhythmFeatures),harmonic=record(audio.harmonicFeatures);
+ const tags=record(evidence.id3),identity=record(evidence.identity),genre=record(evidence.genreClassification);
+ return unique([
+  ...(finite(audio.bpm)?["measured tempo"]:[]),
+  ...(Array.isArray(rhythm.candidateBpms)&&rhythm.candidateBpms.length?["provisional tempo candidates"]:[]),
+  ...(Array.isArray(harmonic.topCandidates)&&harmonic.topCandidates.length?["provisional tonal candidates"]:[]),
+  ...(finite(audio.loudnessLufs)?["integrated loudness"]:[]),
+  ...(finite(audio.loudnessRangeLu)?["loudness range"]:[]),
+  ...(finite(audio.sampleRate)?["sample rate and audio format"]:[]),
+  ...(Object.values(tags).some(value=>typeof value==="string"&&value.trim())?["embedded audio tags"]:[]),
+  ...(clean(evidence.filename)?["uploaded filename metadata"]:[]),
+  ...(clean(evidence.title??identity.title)?["supplied track title"]:[]),
+  ...(clean(evidence.artist??identity.artist)?["supplied artist name"]:[]),
+  ...(clean(evidence.genre??genre.primaryGenre)?["genre or lane hypotheses"]:[]),
+  ...([evidence.releaseContext,evidence.campaignContext,evidence.album,identity.album,evidence.label,evidence.releaseDate].some(value=>Boolean(clean(value)))?["supplied release or campaign context"]:[]),
+ ]);
+}
+export function resolveIsrcStrategyRoute(evidence:Record<string,unknown>,sonicDna:Record<string,unknown>|null):IsrcStrategyRoute{
+ const identity=record(evidence.identity),userInput=record(evidence.userInput),recognition=record(evidence.recognition);
+ const id3=record(evidence.id3),catalogMetadata=record(evidence.catalogMetadata);
+ const candidates:Array<{value:unknown;source:string}>=[
+  {value:evidence.isrc,source:clean(record(evidence.fieldProvenance).isrc)||"reconciled track evidence"},
+  {value:identity.isrc,source:"reconciled identity"},
+  {value:userInput.isrc,source:"user input"},
+  {value:recognition.isrc,source:"provider recognition"},
+  {value:catalogMetadata.isrc,source:"catalog metadata"},
+  {value:id3.isrc,source:"embedded ID3 tags"},
+ ];
+ const normalizedCandidates=unique([
+  ...candidates.map(candidate=>normalizedValidIsrc(candidate.value)??""),
+  ...(Array.isArray(evidence.isrcCandidates)?evidence.isrcCandidates.map(value=>normalizedValidIsrc(value)??""):[]),
+ ]);
+ const conflicts=normalizedCandidates.filter(Boolean),nonIsrcEvidence=collectNonIsrcEvidence(evidence,sonicDna);
+ if(evidence.isrcConflict===true||conflicts.length>1)return {
+  status:"pending_verification",route:"NON_ISRC_FALLBACK",isrc:null,source:null,conflicts,nonIsrcEvidence,
+  requiredActions:[
+   "Conflicting valid ISRC claims were supplied; resolve the canonical recording code before treating any catalog result as a match.",
+   "Use available non-ISRC audio, metadata and campaign evidence only for provisional A&R guidance while the identifier conflict remains open.",
+   "Reconcile title, artist, label, album, release date and rights or clearance records before external pitching or wide distribution.",
+  ],
+ };
+ const match=candidates.map(candidate=>({...candidate,isrc:normalizedValidIsrc(candidate.value)})).find(candidate=>candidate.isrc!==null);
+ if(match?.isrc)return {
+  status:"available",route:"ISRC_FIRST",isrc:match.isrc,source:match.source,conflicts:[],nonIsrcEvidence,
+  requiredActions:[
+   "Run catalog and release-reconciliation lookups keyed by the validated ISRC.",
+   "Verify title, artist, label, album and release-date variants against returned provider records.",
+   "Keep rights and clearance checks separate from identity and market-performance findings.",
+  ],
+ };
+ return {
+  status:"pending_verification",route:"NON_ISRC_FALLBACK",isrc:null,source:null,conflicts:[],nonIsrcEvidence,
+  requiredActions:[
+   "Record the ISRC as unavailable or pending verification; do not invent a catalog match.",
+   "Use only the available measured audio, embedded tags, supplied identity and campaign context for provisional A&R guidance.",
+   "Confirm or register the ISRC, reconcile release metadata, and complete rights and clearance checks before wide distribution or external pitching.",
+  ],
+ };
 }
 
 export function buildMarketPlacementPlan(input: MarketPlacementInput): MarketPlacementPlan {
