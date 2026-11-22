@@ -471,8 +471,21 @@ describe("v2 A&R Notes page acceptance", () => {
       const pdf = await PDFDocument.load(await generateAuditReportV2(structuredClone(fullAudioFixture) as any, tier));
       const names = pdf.getForm().getFields().map(field => field.getName()).sort();
       expect(names).toEqual(expected);
-      const notesWidget = pdf.getForm().getTextField("ar_notes").acroField.getWidgets()[0];
-      expect(notesWidget.getRectangle().height).toBeGreaterThanOrEqual(295);
+      const form = pdf.getForm();
+      const notesField = form.getTextField("ar_notes");
+      expect(notesField.isMultiline()).toBe(true);
+      const notesRect = notesField.acroField.getWidgets()[0].getRectangle();
+      const ownerRect = form.getTextField("ar_owner").acroField.getWidgets()[0].getRectangle();
+      const followupRect = form.getTextField("ar_followup_date").acroField.getWidgets()[0].getRectangle();
+      const holdRect = form.getCheckBox("ar_decision_hold").acroField.getWidgets()[0].getRectangle();
+      expect(notesRect.x).toBeCloseTo(48, 0);
+      expect(notesRect.width).toBeCloseTo(499.28, 0);
+      expect(notesRect.y).toBeGreaterThanOrEqual(76);
+      expect(notesRect.height).toBeGreaterThanOrEqual(295);
+      expect(ownerRect.y).toBeCloseTo(53, 0);
+      expect(followupRect.y).toBeCloseTo(53, 0);
+      expect(holdRect.y).toBeCloseTo(55, 0);
+      expect(notesRect.y).toBeGreaterThan(ownerRect.y + ownerRect.height);
       expect(pdf.getPages().at(-1)?.getWidth()).toBeCloseTo(595.28, 1);
       expect(pdf.getPages().at(-1)?.getHeight()).toBeCloseTo(841.89, 1);
     }
