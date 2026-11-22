@@ -23,6 +23,7 @@ describe("A&R Notes report page", () => {
 
   it("keeps complete A&R decision sentences and exactly three review prompts", () => {
     const input = structuredClone(fullAudioFixture) as any;
+    input.assessment = { ...input.assessment, executiveSummary: "A complete decision summary requiring human listening, source verification, identity reconciliation, rights review and release planning. ".repeat(3), evidenceGaps: ["Confirm the final master and recording identifier.", "Verify the rights and delivery records before external pitching."] };
     const context = buildArNotesDecisionContext(input);
     expect(context.prompts).toHaveLength(3);
     expect(context.summary).not.toContain("...");
