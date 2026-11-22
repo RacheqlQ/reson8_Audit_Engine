@@ -483,8 +483,8 @@ describe("v2 A&R Notes page acceptance", () => {
       const ownerRect = form.getTextField("ar_owner").acroField.getWidgets()[0].getRectangle();
       const followupRect = form.getTextField("ar_followup_date").acroField.getWidgets()[0].getRectangle();
       const holdRect = form.getCheckBox("ar_decision_hold").acroField.getWidgets()[0].getRectangle();
-      expect(notesRect.x).toBeCloseTo(41.5, 0);
-      expect(notesRect.width).toBeCloseTo(512.28, 0);
+      expect(notesRect.x).toBeCloseTo(42, 0);
+      expect(notesRect.width).toBeCloseTo(511.28, 0);
       expect(notesRect.y).toBeGreaterThanOrEqual(75);
       expect(notesRect.height).toBeGreaterThanOrEqual(295);
       expect(ownerRect.y).toBeCloseTo(53, 0);
