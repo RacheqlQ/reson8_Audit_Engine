@@ -21,8 +21,10 @@ const HEARTBEAT_TIMEOUT_MS = 10_000;
 const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
 
-function safeFailureCategory(error: unknown): string {
+export function safeFailureCategory(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
+  if (/GROQ_PROMPT_BUDGET_EXCEEDED/i.test(message)) return "prompt_budget_exceeded";
+  if (/HTTP 402|payment required|insufficient credits|billing required/i.test(message)) return "billing_required";
   if (/capacity|429|daily.limit|TPD/i.test(message)) return "capacity";
   if (/timed out|ETIMEDOUT/i.test(message)) return "timeout";
   if (/json_validate_failed|failed to validate JSON|failed Zod validation/i.test(message)) return "json_validation";

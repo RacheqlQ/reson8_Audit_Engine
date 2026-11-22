@@ -552,3 +552,48 @@ describe("assessment provider billing availability", () => {
   clearAssessmentProviderUnavailable();
  });
 });
+
+
+describe("safe assessment validation diagnostics", () => {
+ it("records the failing section and Zod issue paths without persisting generated response text", async () => {
+  const attempts: Array<Record<string, unknown>> = [];
+  const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+   const body = JSON.parse(String(init?.body));
+   const group = JSON.parse(body.messages[1].content).sectionGroup;
+   const value = p(group);
+   if (group === "evidence-score") {
+    delete (value as Record<string, unknown>).evidenceLabels;
+   }
+   return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(value) } }] }), { status: 200 });
+  });
+  const client = new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {});
+  await expect(client.assess({
+   evidence: { privatePrompt: "must not be logged" }, sonicDna: null,
+   recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); },
+  })).rejects.toThrow("failed Zod validation");
+  const failed = attempts.find(attempt => attempt.failureKind === "schema_violation");
+  expect(failed).toMatchObject({ provider: "gemini", group: "evidence-score", failureKind: "schema_violation" });
+  expect(failed?.validationIssues).toEqual(expect.arrayContaining([
+   expect.objectContaining({ path: ["evidenceLabels"] }),
+  ]));
+  expect(JSON.stringify(attempts)).not.toContain("must not be logged");
+  expect(JSON.stringify(attempts)).not.toContain("Regression Artist");
+ });
+
+ it("records section word-count failures as threshold violations without response content", async () => {
+  const attempts: Array<Record<string, unknown>> = [];
+  const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+   const body = JSON.parse(String(init?.body));
+   const group = JSON.parse(body.messages[1].content).sectionGroup;
+   const value = p(group);
+   if (group === "evidence-score") (value as Record<string, unknown>).evidenceGaps = ["Missing audience data"];
+   return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(value) } }] }), { status: 200 });
+  });
+  const client = new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {});
+  await expect(client.assess({
+   evidence: {}, sonicDna: null,
+   recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); },
+  })).rejects.toThrow("evidence-score response failed Zod validation");
+  expect(attempts.some(attempt => attempt.group === "evidence-score" && attempt.failureKind === "threshold_violation")).toBe(true);
+ });
+});
