@@ -88,7 +88,7 @@ assertArNotes(fullPdf,"v2-complete-synthetic-full",fullPages.at(-1)??"");
 process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\n");
 
 
-const audit618=JSON.parse(await readFile(new URL("./fixtures/audit-618b9b7a-sanitized.json",import.meta.url),"utf8"));
+const audit618=JSON.parse(await readFile(new URL("../tests/fixtures/audit-618b9b7a-sanitized.json",import.meta.url),"utf8"));
 if(audit618.auditId!=="618b9b7a-5c0c-4acf-a583-f0e4e0f58a3b")throw new Error("The persisted audit fixture ID does not match 618b9b7a");
 audit618.marketPlacement=buildMarketPlacementPlan({
  executionMode:audit618.executionMode,
