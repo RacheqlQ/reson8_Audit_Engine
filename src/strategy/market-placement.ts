@@ -104,10 +104,11 @@ function collectNonIsrcEvidence(evidence:Record<string,unknown>,sonicDna:Record<
     ...(finite(audio.loudnessRangeLu)?["loudness range"]:[]),
     ...(finite(audio.sampleRate)?["sample rate and audio format"]:[]),
     ...(Object.values(tags).some(value=>typeof value==="string"&&value.trim())?["embedded audio tags"]:[]),
+    ...(clean(evidence.filename)?["uploaded filename metadata"]:[]),
     ...(clean(evidence.title??identity.title)?["supplied track title"]:[]),
     ...(clean(evidence.artist??identity.artist)?["supplied artist name"]:[]),
     ...(clean(evidence.genre??genre.primaryGenre)?["genre or lane hypotheses"]:[]),
-    ...(clean(evidence.releaseContext??evidence.campaignContext)?["supplied release or campaign context"]:[]),
+    ...(clean(evidence.releaseContext??evidence.campaignContext??evidence.album??identity.album??evidence.label??evidence.releaseDate)?["supplied release or campaign context"]:[]),
   ]);
 }
 
