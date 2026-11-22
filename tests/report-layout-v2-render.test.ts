@@ -458,11 +458,16 @@ describe("v2 A&R Notes page acceptance", () => {
   it("uses complete decision sentences without ellipsis truncation", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.assessment.executiveSummary = "A long evidence-led decision summary that must wrap naturally across the available A&R Notes card width without losing the final sentence or inserting a truncation marker. The second sentence explains the actual assessment basis and should remain complete.";
+    input.assessment.evidenceGaps = ["...", ""];
+    input.assessment.risks = [];
+    input.assessment.releaseStrategy = { recommendation: "Not supplied" };
     const context = buildArNotesDecisionContext(input);
     expect(context.summary).not.toContain("...");
     expect(context.summary).toMatch(/Decision basis:.*\./);
     expect(context.summary).toMatch(/Open diligence:.*\./);
     expect(context.summary).toMatch(/Next action:.*\./);
+    expect(context.openDiligence).toBe("No additional identity, rights or source gap was recorded in the assessment.");
+    expect(context.nextAction).not.toBe("Not supplied.");
   });
 
   it("renders the exact editable fields and a working-notes region at least 35 percent of A4 height in both tiers", async () => {
