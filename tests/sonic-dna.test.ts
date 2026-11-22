@@ -83,6 +83,7 @@ describe("Sonic DNA",()=>{
  });
  it("reports 126 BPM with 63 BPM as its half-time alternative",()=>{
   const result=estimateTempo(pulse(126),8000);
+  console.log("TEMPO_DEBUG_126",JSON.stringify({bpm:result.bpm,candidate:result.topCandidateBpm,verdict:result.voting,reason:result.abstentionReason,candidates:result.candidateBpms}));
   expect(result.bpm).toBeGreaterThanOrEqual(122);
   expect(result.bpm).toBeLessThanOrEqual(130);
   expect(result.alternateTempo).toBe(63);
@@ -161,6 +162,7 @@ describe("Sonic DNA",()=>{
   )/3);
   for(let i=0;i<samples.length;i++)samples[i]+=0.1*chordLoop[i%chordLoop.length];
   const result=analyzePcm(samples,sampleRate);
+  console.log("TEMPO_DEBUG_360",JSON.stringify({bpm:result.bpm,candidate:result.tempoCandidateBpm,confidence:result.tempoConfidence,verdict:result.rhythmFeatures.tempoVerdict}));
   expect(result.durationSeconds).toBe(360);
   expect(result.bpm).toBeGreaterThanOrEqual(115);
   expect(result.bpm).toBeLessThanOrEqual(125);
