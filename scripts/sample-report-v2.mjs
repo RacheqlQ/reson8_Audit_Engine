@@ -14,8 +14,8 @@ function assertArNotes(pdf, extractedPages, name, checklist=[]) {
  if(!notes||notes.getRectangle().height<841.89*0.35)throw new Error(name+" A&R Notes field is smaller than 35% of A4 page height");
  const finalPage=extractedPages.at(-1)??"";
  for(const label of ["AUDIO","IDENTITY","MARKET","RELEASE READINESS","HUMAN LISTENING REVIEW","DECISION CONTEXT","WORKING NOTES","A&R OWNER","FOLLOW-UP DATE","HOLD","RE-AUDIT","PROCEED"])if(!finalPage.toUpperCase().includes(label))throw new Error(name+" A&R Notes page is missing "+label);
- const normalizedFinalPage=finalPage.replace(/\\s+/g," ");
- for(const item of checklist)if(!normalizedFinalPage.includes(String(item).replace(/\\s+/g," ").trim()))throw new Error(name+" A&R Notes page omitted a complete listening-review item");
+ const normalizedFinalPage=finalPage.replace(/\s+/g," ");
+ for(const item of checklist)if(!normalizedFinalPage.includes(String(item).replace(/\s+/g," ").trim()))throw new Error(name+" A&R Notes page omitted a complete listening-review item");
  if(normalizedFinalPage.includes("..."))throw new Error(name+" A&R Notes page contains literal ellipsis text: "+normalizedFinalPage.split(" ").filter(word=>word.includes("...")).join(" | "));
 }
 await mkdir(out,{recursive:true});

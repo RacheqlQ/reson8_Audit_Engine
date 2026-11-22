@@ -90,9 +90,9 @@ for(const [name,input] of variants){
   const notesWidget=pdf.getForm().getTextField("ar_notes").acroField.getWidgets()[0];
   if(!notesWidget||notesWidget.getRectangle().height<841.89*0.35)throw new Error(filename+" A&R Notes working area is smaller than 35% of A4 page height");
   const finalPage=extracted.split("\\f").filter(page=>page.trim().length>0).at(-1)??"";
-  const normalizedFinalPage=finalPage.replace(/\\s+/g," ");
+  const normalizedFinalPage=finalPage.replace(/\s+/g," ");
   for(const label of ["A&R NOTES","AUDIO","IDENTITY","MARKET","RELEASE READINESS","HUMAN LISTENING REVIEW","DECISION CONTEXT","WORKING NOTES","A&R OWNER","FOLLOW-UP DATE","HOLD","RE-AUDIT","PROCEED"])if(!normalizedFinalPage.toUpperCase().includes(label))throw new Error(filename+" A&R Notes page is missing "+label);
-  for(const item of Array.isArray(input.assessment?.humanListeningChecklist)?input.assessment.humanListeningChecklist:[])if(!normalizedFinalPage.includes(String(item).replace(/\\s+/g," ").trim()))throw new Error(filename+" A&R Notes page omitted a complete listening-review item");
+  for(const item of Array.isArray(input.assessment?.humanListeningChecklist)?input.assessment.humanListeningChecklist:[])if(!normalizedFinalPage.includes(String(item).replace(/\s+/g," ").trim()))throw new Error(filename+" A&R Notes page omitted a complete listening-review item");
   if(normalizedFinalPage.includes("..."))throw new Error(filename+" A&R Notes page contains truncated text: "+normalizedFinalPage.split(" ").filter(word=>word.includes("...")).join(" | "));
   const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
   const chartLabels=[safeAssessment.aAndRPositioning.primaryLane,...safeAssessment.aAndRPositioning.adjacentLanes].filter(value=>typeof value==="string"&&value.trim());
