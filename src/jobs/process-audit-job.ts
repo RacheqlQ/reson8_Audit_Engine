@@ -778,6 +778,8 @@ export async function processAuditJob(
       isrcCandidates: normalizedIsrcCandidates,
       isrcConflict,
       userInput: { isrc: userSuppliedIsrcCandidates.find((value): value is string => Boolean(value)) ?? null },
+      id3: masterTags ?? null,
+      filename: job.filename ?? null,
       ...(metadata ? catalogEvidence(metadata, identity) : { auditType: "MASTER-BASED AUDIT" }),
       auditType: hasMaster && hasCatalog ? "COMBINED MASTER + DSP AUDIT" : hasCatalog ? "METADATA-BASED AUDIT" : "MASTER-BASED AUDIT",
       ...recognitionEvidence(recognition),
