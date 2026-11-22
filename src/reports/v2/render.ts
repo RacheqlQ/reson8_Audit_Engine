@@ -411,6 +411,8 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
   const fallbackEvidence=arr(isrcStrategy.nonIsrcEvidence).filter((value):value is string=>typeof value==="string"&&value.trim().length>0);
   if(fallbackEvidence.length)lines.push("Available non-ISRC evidence: "+fallbackEvidence.join(", ")+".");
  }
+ const routingActions=arr(isrcStrategy.requiredActions).filter((value):value is string=>typeof value==="string"&&value.trim().length>0).slice(0,3);
+ for(const action of routingActions)lines.push("ISRC action: "+action);
  const genre = str(evidence.genre, "");
  const genreSource = str(evidence.genreSource ?? evidence.genreProvider ?? evidence.genreProvenance, "");
  if (genre) {
