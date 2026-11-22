@@ -118,7 +118,7 @@ describe("v2 DSP playlist provider diagnostics", () => {
 describe("v2 detector diagnostics", () => {
   it("renders plain-language provisional tempo readings and abstention", () => {
     const input = structuredClone(fullAudioFixture) as any;
-    input.sonicDna = { ...input.sonicDna, rhythmFeatures: {
+    input.sonicDna = { ...input.sonicDna, bpm: null, tempoConfidence: 0.7134, rhythmFeatures: {
       method: "high_frequency_transient_autocorrelation",
       candidateScores: [{ bpm: 96, score: 0.8123 }, { bpm: 192, score: 0.4012 }],
       confidence: 0.7134, alternateTempo: 192, beatGridStatus: "tentative",
