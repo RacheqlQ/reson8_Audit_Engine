@@ -174,8 +174,7 @@ function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate
  const sortedOnsets=[...onset].sort((a,b)=>a-b);
  const onsetPeakRatio=(sortedOnsets[Math.floor((sortedOnsets.length-1)*0.99)]??0)/Math.max(EPSILON,onset.reduce((sum,value)=>sum+value,0)/onset.length);
  const onsetEnvelope=downsampleOnsetEnvelope(novelty);
- if(mean<=EPSILON||Math.sqrt(variance)/Math.max(mean,EPSILON)<0.08||onsetPeakRatio<2.5)
-  return {...emptyTempoEstimate("No sufficiently distinct transient activity was detected; sustained or noise-like signals are not assigned a tempo."),onsetEnvelope};
+ const weakTransientProminence=mean<=EPSILON||Math.sqrt(variance)/Math.max(mean,EPSILON)<0.08||onsetPeakRatio<2.5;
  const scores=new Map<number,number>();
  for(let bpm=40;bpm<=240;bpm++){
   const lag=Math.max(1,Math.round(60/bpm*sampleRate/hop));
@@ -202,21 +201,32 @@ function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate
  const sortedScores=[...scores.values()].sort((a,b)=>a-b);
  const median=sortedScores[Math.floor(sortedScores.length/2)]??0;
  const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
- if(confidence<MIN_RELIABLE_TEMPO_CONFIDENCE)
-  return {...emptyTempoEstimate("Tempo candidate prominence is too weak to support a reliable result."),topCandidateBpm:bestBpm,confidence,candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
  const related=[0.5,1/3,2,3]
   .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
   .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=240&&candidate.bpm!==bestBpm&&candidate.score>=bestScore*0.25)
-  .sort((a,b)=>b.bpm-a.bpm);
+  .sort((a,b)=>b.score-a.score||b.bpm-a.bpm);
  const relatedCandidate=related[0]??null;
  const bpm=relatedCandidate&&relatedCandidate.bpm>bestBpm?relatedCandidate.bpm:bestBpm;
  const alternateTempo=relatedCandidate?(bpm===bestBpm?relatedCandidate.bpm:bestBpm):null;
  const candidates=selected.map(([candidate])=>candidate);
- for(const candidate of [Math.round(bpm),Math.round(bpm)-1,Math.round(bpm)+1,...related.map(item=>item.bpm)])if(candidate>=40&&candidate<=240&&!candidates.includes(candidate))candidates.push(candidate);
+ for(const candidate of [bestBpm, ...related.map(item=>item.bpm), bpm, alternateTempo, bestBpm-1, bestBpm+1])
+  if(candidate!==null&&candidate>=40&&candidate<=240&&!candidates.includes(candidate))candidates.push(candidate);
+ const candidateScoreMap=new Map(candidateScores.map(item=>[item.bpm,item.score]));
+ for(const candidate of related)candidateScoreMap.set(candidate.bpm,Number(candidate.score.toFixed(6)));
+ const retainedCandidateScores=[...candidateScoreMap.entries()].map(([bpm,score])=>({bpm,score}))
+  .sort((a,b)=>b.score-a.score||a.bpm-b.bpm).slice(0,8);
+ if(weakTransientProminence||confidence<MIN_RELIABLE_TEMPO_CONFIDENCE)
+  return {
+   ...emptyTempoEstimate(weakTransientProminence
+    ? "Transient prominence is weak or ambiguous; tempo candidates are retained for review but no BPM is confirmed."
+    : "Tempo candidate prominence is too weak to support a reliable result."),
+   topCandidateBpm:bestBpm,alternateTempo,confidence,candidateBpms:candidates.slice(0,8),
+   candidateScores:retainedCandidateScores,onsetEnvelope,
+  };
  const beatGrid=deriveBeatGrid(novelty,bpm,sampleRate/hop);
  return {
   bpm,topCandidateBpm:bestBpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),
-  confidence,method,candidateBpms:candidates.slice(0,8),candidateScores,onsetEnvelope,
+  confidence,method,candidateBpms:candidates.slice(0,8),candidateScores:retainedCandidateScores,onsetEnvelope,
   beatTimesSeconds:beatGrid.beatTimesSeconds,
   downbeatCandidateTimesSeconds:beatGrid.downbeatCandidateTimesSeconds,
   beatGridStatus:beatGrid.beatTimesSeconds.length?"tentative":"not_determined",
