@@ -27,7 +27,7 @@ describe("deterministic tempo voting", () => {
     expect(result.octave_alternatives).toEqual(expect.arrayContaining([46, 184]));
     expect(result.confirmation_status).not.toBe("CONFIRMED");
     expect(result.reason_codes).toContain("OCTAVE_METRICAL_AMBIGUITY");
-    expect(result.raw_candidates).toHaveLength(3);
+    expect(result.raw_candidates).toHaveLength(4);
   });
 
   it("withholds confirmation for weak prominence and invalid votes", () => {
