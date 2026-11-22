@@ -30,6 +30,21 @@ describe("deterministic tempo voting", () => {
     expect(result.raw_candidates).toHaveLength(4);
   });
 
+  it("selects the nominal middle BPM even when a half-time or double-time estimate has the strongest weight", () => {
+    const result = voteTempoCandidates({ windows: [{
+      bpm: 46, prominence: 0.99, durationSeconds: 8,
+      candidates: [
+        { bpm: 46, prominence: 0.99 },
+        { bpm: 92, prominence: 0.62 },
+        { bpm: 184, prominence: 0.55 },
+      ],
+    }] });
+    expect(result.primary_candidate_bpm).toBe(92);
+    expect(result.octave_alternatives).toEqual(expect.arrayContaining([46, 184]));
+    expect(result.confirmation_status).toBe("CANDIDATE");
+    expect(result.reason_codes).toContain("OCTAVE_METRICAL_AMBIGUITY");
+  });
+
   it("withholds confirmation for weak prominence and invalid votes", () => {
     const result = voteTempoCandidates({ windows: [
       { bpm: 92, prominence: 0.12, durationSeconds: 8 },
