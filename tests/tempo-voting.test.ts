@@ -18,15 +18,16 @@ describe("deterministic tempo voting", () => {
   it("groups half, nominal and double time while preserving alternatives and ambiguity", () => {
     const result = voteTempoCandidates({ windows: [
       { bpm: 46, prominence: 0.9, durationSeconds: 8 },
-      { bpm: 92, prominence: 0.9, durationSeconds: 8 },
+      { bpm: 92, prominence: 0.9, durationSeconds: 8, candidates: [
+        { bpm: 92, prominence: 0.9 }, { bpm: 92.4, prominence: 0.9 },
+      ] },
       { bpm: 184, prominence: 0.9, durationSeconds: 8 },
-      { bpm: 92.4, prominence: 0.85, durationSeconds: 8 },
     ] });
     expect(result.primary_candidate_bpm).toBe(92);
     expect(result.octave_alternatives).toEqual(expect.arrayContaining([46, 184]));
     expect(result.confirmation_status).not.toBe("CONFIRMED");
     expect(result.reason_codes).toContain("OCTAVE_METRICAL_AMBIGUITY");
-    expect(result.raw_candidates).toHaveLength(4);
+    expect(result.raw_candidates).toHaveLength(3);
   });
 
   it("withholds confirmation for weak prominence and invalid votes", () => {
