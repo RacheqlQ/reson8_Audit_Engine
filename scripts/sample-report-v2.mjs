@@ -7,6 +7,16 @@ import { fullAudioFixture, metadataOnlyFixture } from "./fixtures/sample-report-
 
 const out=new URL("../artifacts/",import.meta.url);
 await mkdir(out,{recursive:true});
+const expectedArFields=["ar_notes","ar_owner","ar_followup_date","ar_decision_hold","ar_decision_reaudit","ar_decision_proceed"].sort();
+function assertArNotes(pdf,name,notesPageText){
+ const fields=pdf.getForm().getFields().map(field=>field.getName()).sort();
+ if(JSON.stringify(fields)!==JSON.stringify(expectedArFields))throw new Error(name+" has unexpected A&R Notes AcroForm fields: "+fields.join(", "));
+ const notesWidget=pdf.getForm().getTextField("ar_notes").acroField.getWidgets()[0];
+ if(notesWidget.getRectangle().height<295)throw new Error(name+" A&R working-notes field is below 35 percent of A4 page height");
+ const page=pdf.getPages().at(-1);
+ if(Math.abs(page.getWidth()-595.28)>1||Math.abs(page.getHeight()-841.89)>1)throw new Error(name+" A&R Notes page is not A4");
+ if(notesPageText.includes("...")||notesPageText.includes("…"))throw new Error(name+" A&R Notes page contains ellipsis truncation");
+}
 const phillo=structuredClone(ambiguousAudioFixture);
 phillo.auditId="fixture-phillo-stunixx-low-confidence";
 phillo.evidence={...phillo.evidence,artist:"Stunixx",title:"Phillo",album:null,isrc:null,upc:null,label:null,genre:null,releaseDate:"2025-08-24",fieldProvenance:{...phillo.evidence.fieldProvenance,releaseDate:"apple_music"},reconciliation:{conflicts:[{field:"album",values:["Hole-Hearted - EP","Hole-Hearted"]}]}};
@@ -33,6 +43,7 @@ for(const [name,input,expected] of [
  const extractedPages=extracted.split("\f").filter(page=>page.trim().length>0);
  if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i.test(extracted))throw new Error(name+" contains a forbidden dead-end verdict or limitations section");
  if(!extractedPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error(name+" must finish with an A&R NOTES page");
+ assertArNotes(pdf,name,extractedPages.at(-1)??"");
  process.stdout.write(name+": "+pdf.getPageCount()+" pages; final A&R notes and verdict checks passed.\n");
 }
 
@@ -47,6 +58,7 @@ const philloFullPages=philloFullText.split("\f").filter(page=>page.trim().length
 if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED|NOT CLEARED/i.test(philloFullText))throw new Error("Phillo full fixture contains a forbidden dead-end verdict or limitations section");
 if(/No definitive platform-backed primary genre|Keep lane positioning unconfirmed/i.test(philloFullText))throw new Error("Phillo full fixture contains dead-end lane positioning copy");
 if(!philloFullPages.at(-1)?.toUpperCase().includes("A&R NOTES"))throw new Error("Phillo full fixture must finish with A&R NOTES");
+assertArNotes(philloFullPdf,"v2-phillo-stunixx-full",philloFullPages.at(-1)??"");
 const normalizedPhilloText=philloFullText.replace(/\s+/g," ").toUpperCase().replace(/[–—]/g,"-");
 if(!normalizedPhilloText.includes("DAYS 61")||normalizedPhilloText.includes("DAYS 61-90 NOT SUPPLIED")||!normalizedPhilloText.includes("CURATOR")||!normalizedPhilloText.includes("CREATOR")||!normalizedPhilloText.includes("ISRC")||!normalizedPhilloText.includes("PERFORMANCE REVIEW"))throw new Error("Phillo full fixture is missing its complete post-release Days 61-90 plan");
 if(!normalizedPhilloText.includes("RELEASE DATE DETERMINED")||!normalizedPhilloText.includes("PRE-RELEASE STAGE (HISTORICAL; ALREADY PASSED)")||!normalizedPhilloText.includes("RELEASE WINDOW (HISTORICAL; ALREADY PASSED)")||!normalizedPhilloText.includes("POST-RELEASE GROWTH AND REACTIVATION"))throw new Error("Phillo fixture does not preserve determined post-release campaign framing");
@@ -57,4 +69,7 @@ const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20
 const fullPdf=await PDFDocument.load(fullBytes);
 if(fullPdf.getPageCount()!==14)throw new Error("v2-complete-synthetic-full expected 14 pages (7 core + 5 narrative + 1 evidence-gated deep dive + final A&R notes); got "+fullPdf.getPageCount());
 await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
+const fullText=execFileSync("pdftotext",["-layout",new URL("v2-complete-synthetic-full.pdf",out).pathname,"-"],{encoding:"utf8"});
+const fullPages=fullText.split("\\f").filter(page=>page.trim().length>0);
+assertArNotes(fullPdf,"v2-complete-synthetic-full",fullPages.at(-1)??"");
 process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; fixed full-report allocation verified.\n");
