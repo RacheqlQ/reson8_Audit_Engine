@@ -196,8 +196,22 @@ function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate
  const bestBpm=selected[0]?.[0];
  const bestScore=selected[0]?.[1]??0;
  const candidateScores=selected.map(([bpm,score])=>({bpm,score:Number(score.toFixed(6))}));
- if(bestBpm===undefined||bestScore<0.08)
-  return {...emptyTempoEstimate("Transient autocorrelation did not produce a sufficiently prominent tempo candidate."),topCandidateBpm:bestBpm??null,candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
+ if(bestBpm===undefined||bestScore<0.08){
+  const weakRelated=bestBpm===undefined?[]:[0.5,1/3,2,3]
+   .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
+   .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=220&&candidate.bpm!==bestBpm&&candidate.score>EPSILON)
+   .sort((a,b)=>b.score-a.score||b.bpm-a.bpm);
+  const weakAlternate=bestBpm===undefined?null:weakRelated.filter(candidate=>[0.5,2].some(ratio=>Math.abs(candidate.bpm/bestBpm-ratio)<=Math.max(0.03,ratio*0.03)))[0]?.bpm??null;
+  const weakScoreMap=new Map(candidateScores.map(item=>[item.bpm,item.score]));
+  for(const candidate of weakRelated)weakScoreMap.set(candidate.bpm,Number(candidate.score.toFixed(6)));
+  const retainedWeakScores=[...weakScoreMap.entries()].map(([bpm,score])=>({bpm,score}))
+   .sort((a,b)=>b.score-a.score||a.bpm-b.bpm).slice(0,8);
+  return {
+   ...emptyTempoEstimate("Transient autocorrelation did not produce a sufficiently prominent tempo candidate."),
+   topCandidateBpm:bestBpm??null,alternateTempo:weakAlternate,
+   candidateBpms:retainedWeakScores.map(item=>item.bpm),candidateScores:retainedWeakScores,onsetEnvelope,
+  };
+ }
  const sortedScores=[...scores.values()].sort((a,b)=>a-b);
  const median=sortedScores[Math.floor(sortedScores.length/2)]??0;
  const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
