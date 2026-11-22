@@ -173,8 +173,10 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
 }
 export function buildArNotesDecisionContextFull(input:AuditReportInput):ArNotesDecisionContext {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
+ const internalStatusNotice=/(?:vocal analysis.{0,80}(?:temporarily disabled|not performed|unavailable|disabled|not run)|vocal presence(?:\\s*\\/\\s*absence)? is unknown|no vocal conclusion is available|learned audio model.{0,40}disabled|detection model.{0,40}disabled)/i;
  const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[]),...(Array.isArray(safeAssessment.limitations)?safeAssessment.limitations:[])]
   .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
+  .filter(item=>!internalStatusNotice.test(item))
   .map(professionalEvidenceLanguage)
   .filter((item)=>item.trim().length>0)
   .filter((item,index,items)=>items.indexOf(item)===index);
