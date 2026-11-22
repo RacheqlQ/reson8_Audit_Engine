@@ -56,6 +56,22 @@ describe("A&R Notes report page", () => {
     expect(adaptReportV2(input).notYetMeasured.join(" ")).toContain("46 / 184 BPM");
   });
 
+  it("keeps internal analysis status notices out of the A&R Notes decision context", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.assessment = {
+      ...input.assessment,
+      limitations: [
+        "Vocal analysis: Not performed - Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
+        "Vocal presence/absence is unknown and is not inferred.",
+        "No vocal conclusion is available because the separation model did not complete.",
+        "Learned audio model: disabled.",
+        "Detection model status: disabled.",
+      ],
+    };
+    const context = buildArNotesDecisionContextFull(input);
+    expect(context.summary).not.toMatch(/Vocal analysis: Not performed|Vocal presence\\/absence is unknown|No vocal conclusion is available|Learned audio model: disabled|Detection model status: disabled/i);
+  });
+
   it("keeps complete A&R decision sentences and exactly three review prompts", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.assessment = { ...input.assessment, executiveSummary: "A complete decision summary requiring human listening, source verification, identity reconciliation, rights review and release planning. ".repeat(3), evidenceGaps: ["Confirm the final master and recording identifier.", "Verify the rights and delivery records before external pitching."] };
