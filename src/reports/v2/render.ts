@@ -625,12 +625,12 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
   page.drawText("Dip "+dip.timeSeconds.toFixed(1)+"s",{x:dipLabelX,y:plotBottom-(sameRegion?24:13),size:6,font:fonts.bold,color:C.coral});
   y-=h+12;
  }
- const sonic=rec(input.sonicDna);
+ const sonic=rec(input.sonicDna),rhythm=rec(sonic.rhythmFeatures),tempoVerdict=rec(rhythm.tempoVerdict);
  const rows:Array<[string,string]>=[
   ["Track length",typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?Math.floor(sonic.durationSeconds/60)+" min "+Math.round(sonic.durationSeconds%60)+" sec":""],
   ["Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):""],
   ["Song key",buildRecordingOverviewKeyLabel(data)],
-  ["Tempo",data.tempo.value!==null?data.tempo.value+" BPM":finite(rec(rec(sonic).rhythmFeatures.tempoVerdict).primary_candidate_bpm)?"Candidate "+rec(rec(sonic).rhythmFeatures.tempoVerdict).primary_candidate_bpm+" BPM · not confirmed":"Not determined"]
+  ["Tempo",data.tempo.value!==null?data.tempo.value+" BPM":finite(tempoVerdict.primary_candidate_bpm)?"Candidate "+tempoVerdict.primary_candidate_bpm+" BPM · not confirmed":"Not determined"]
  ].filter((entry):entry is [string,string]=>Boolean(entry[1]));
  if(rows.length){
   const panelHeight=38+Math.ceil(rows.length/2)*23+14,top=y-8,bottom=top-panelHeight;
