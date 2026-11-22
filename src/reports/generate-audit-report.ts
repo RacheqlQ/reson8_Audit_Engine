@@ -148,9 +148,10 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
  const completeSentence=(value:unknown,fallback:string):string=>{
   const raw=typeof value==="string"?professionalEvidenceLanguage(value):"";
-  const cleaned=raw.replace(/\\.{3,}/g,".").replace(/\\u2026/g,".").trim();
+  const cleaned=raw.replace(/\\.{3,}/g,".").replace(/\u2026/g,".").trim();
   const sentence=cleaned||fallback;
-  return /[.!?]$/.test(sentence)?sentence:sentence+".";
+  const first=sentence.match(/^(.+?[.!?])(?:\\s|$)/)?.[1]??sentence;
+  return /[.!?]$/.test(first)?first:first+".";
  };
  const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[])]
   .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
