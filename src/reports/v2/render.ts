@@ -732,9 +732,84 @@ export function partitionFullReportUnits<T>(
  }
  return pages.length===pageCount?pages:null;
 }
+
+function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,fonts:Fonts,form:ReturnType<PDFDocument["getForm"]>):void {
+ const chipGap=7,chipWidth=(W-2*M-chipGap*3)/4,chipY=704;
+ const colors=[C.teal,C.amber,C.coral,C.gold] as const;
+ data.decisionDimensions.forEach((dimension,index)=>{
+  scoreChip(page,M+index*(chipWidth+chipGap),chipY,chipWidth,dimension.name.toUpperCase(),dimension.status,colors[index]??C.gold,fonts);
+ });
+ const assessment=rec(input.assessment);
+ const checklist=arr(assessment.humanListeningChecklist)
+  .map(value=>str(value,"")).filter(value=>value&&value!=="Not supplied");
+ const reviewItems=checklist.length?checklist.slice(0,5):[
+  "Confirm the lead vocal performance, intelligibility and emotional delivery.",
+  "Listen for timing, groove and the intended half-time or double-time feel.",
+  "Check arrangement transitions, hook impact and section balance.",
+  "Review mix translation, clipping, distortion and low-frequency control.",
+  "Confirm the strongest excerpt and any edit points by listening to the master."
+ ];
+ const reviewTop=690,reviewHeight=94,reviewBottom=reviewTop-reviewHeight;
+ page.drawRectangle({x:M,y:reviewBottom,width:W-2*M,height:reviewHeight,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawRectangle({x:M,y:reviewTop-3,width:W-2*M,height:3,color:C.gold});
+ page.drawText("HUMAN LISTENING REVIEW",{x:M+12,y:reviewTop-17,size:7,font:fonts.bold,color:C.gold});
+ const columns=reviewItems.length>3?2:1,rows=Math.ceil(reviewItems.length/columns);
+ reviewItems.forEach((item,index)=>{
+  const col=columns===2?Math.floor(index/rows):0,row=columns===2?index%rows:index;
+  const x=M+12+col*255,y=reviewTop-34-row*17;
+  page.drawRectangle({x,y:y-1,width:8,height:8,borderColor:C.gold,borderWidth:.8,color:C.white});
+  drawWrapped(page,item,x+14,y+5,columns===2?235:W-2*M-42,fonts.regular,6.6,C.ink,7.6);
+ });
+ const context=buildArNotesDecisionContext(input);
+ const contextTop=578,contextHeight=112,contextBottom=contextTop-contextHeight;
+ page.drawRectangle({x:M,y:contextBottom,width:W-2*M,height:contextHeight,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawRectangle({x:M,y:contextTop-3,width:W-2*M,height:3,color:C.teal});
+ page.drawText(context.heading,{x:M+12,y:contextTop-17,size:7,font:fonts.bold,color:C.teal});
+ const summaryHeight=drawWrapped(page,context.verdict+" · "+context.summary,M+12,contextTop-33,W-2*M-24,fonts.regular,7.1,C.ink,9.2);
+ const promptTop=contextBottom+28,promptGap=8,promptWidth=(W-2*M-24-promptGap*2)/3;
+ context.prompts.slice(0,3).forEach((prompt,index)=>{
+  const x=M+12+index*(promptWidth+promptGap);
+  page.drawLine({start:{x,y:promptTop+10},end:{x:x+promptWidth,y:promptTop+10},color:C.line,thickness:.7});
+  drawWrapped(page,prompt,x,promptTop,promptWidth,fonts.bold,6.1,C.muted,7.2);
+ });
+ if(summaryHeight>50) page.drawText("Decision context continues in the report narrative.",{x:M+12,y:contextBottom+5,size:5.8,font:fonts.italic,color:C.muted});
+
+ const notesX=M,notesY=151,notesWidth=W-2*M,notesHeight=300;
+ page.drawText("WORKING NOTES · EDITABLE",{x:notesX,y:notesY+notesHeight+10,size:7,font:fonts.bold,color:C.gold});
+ const notes=form.createTextField("ar_notes");
+ notes.enableMultiline();
+ notes.addToPage(page,{x:notesX,y:notesY,width:notesWidth,height:notesHeight,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
+ notes.setFontSize(8);
+ notes.updateAppearances(fonts.regular);
+ for(let line=1;line<=17;line++){
+  const y=notesY+line*16;
+  page.drawLine({start:{x:notesX+9,y},end:{x:notesX+notesWidth-9,y},color:C.line,thickness:.45});
+ }
+
+ const owner=form.createTextField("ar_owner");
+ owner.addToPage(page,{x:M,y:105,width:128,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
+ owner.setFontSize(7);owner.updateAppearances(fonts.regular);
+ page.drawText("A&R OWNER",{x:M,y:127,size:6,font:fonts.bold,color:C.muted});
+ const followup=form.createTextField("ar_followup_date");
+ followup.addToPage(page,{x:M+150,y:105,width:88,height:18,borderWidth:.6,borderColor:C.line,backgroundColor:C.white});
+ followup.setFontSize(7);followup.updateAppearances(fonts.regular);
+ page.drawText("FOLLOW-UP DATE",{x:M+150,y:127,size:6,font:fonts.bold,color:C.muted});
+ const decisions=[
+  ["ar_decision_hold","HOLD",M+258],
+  ["ar_decision_reaudit","RE-AUDIT",M+340],
+  ["ar_decision_proceed","PROCEED",M+432],
+ ] as const;
+ for(const [name,label,x] of decisions){
+  const field=form.createCheckBox(name);
+  field.addToPage(page,{x,y:109,width:9,height:9,borderWidth:.8,borderColor:C.gold,backgroundColor:C.white});
+  field.updateAppearances(fonts.regular);
+  page.drawText(label,{x:x+13,y:110,size:6.1,font:fonts.bold,color:C.ink});
+ }
+}
+
 export async function generateAuditReportV2(source:AuditReportInput,tier:AuditReportTier="sample"):Promise<Uint8Array>{
  const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
- const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf);
+ const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf),form=pdf.getForm();
  const pages=buildReportSections(input,data,tier).map(spec=>({...spec,lines:sanitizePublicReportLines(spec.lines??[]),blocks:spec.blocks.map(block=>({...block,value:sanitizePublicReportLine(block.value),provenance:sanitizePublicReportLine(block.provenance??"")||"From uploaded recording",confidence:undefined}))})),total=pages.length;
  if((tier==="sample"&&pages.length!==8)||(tier==="full"&&pages.length<13))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
@@ -745,14 +820,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   }else if(spec.kind==="snapshot"){
    drawSnapshot(page,data,fonts,input);
   }else if(spec.kind==="ar-notes"){
-   const lines=spec.lines??[];
-   const decision=lines.slice(-6);
-   const checklist=lines.slice(0,Math.max(0,lines.length-6));
-   let y=H-100;
-   if(checklist.length){const h=card(page,M,y,W-2*M,"Human listening review",checklist,fonts,{accent:C.gold});y-=h+14;}
-   const context=card(page,M,y,W-2*M,"A&R decision context",decision,fonts,{accent:C.teal});
-   page.drawText("WORKING NOTES · EDITABLE IN THE PDF", {x:M,y:y-context-24,size:7,font:fonts.bold,color:C.gold});
-   page.drawText("Record the decision, owner, evidence request and next review date.",{x:M,y:y-context-38,size:6.5,font:fonts.italic,color:C.muted});
+   drawArNotesPage(page,input,data,fonts,form);
   }else if(spec.kind==="full-axes"){
    if(data.sonicAxes)drawSonicAxes(page,data,fonts);
    else card(page,M,H-105,W-2*M,"Sonic DNA dashboard",data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)).length?data.notYetMeasured.filter(value=>/Sonic DNA/i.test(value)):["NOT MEASURED: all five source-backed Sonic DNA axes are not present."],fonts,{accent:C.amber});
@@ -870,9 +938,5 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   }
   drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
  }
- const form=pdf.getForm(),notes=form.createTextField("ar_notes");notes.enableMultiline();
- const notesPage=pdf.getPages()[pdf.getPageCount()-1]??pdf.getPages()[0];
- notes.addToPage(notesPage,{x:M,y:76,width:W-2*M,height:54,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
- notes.setFontSize(8);notes.updateAppearances(fonts.regular);
  return pdf.save();
 }
