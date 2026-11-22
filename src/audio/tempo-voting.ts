@@ -27,7 +27,6 @@ export interface TempoVotingOptions {
   minProminence?: number;
   minRunnerUpMargin?: number;
   octaveAmbiguityShare?: number;
-  minimumWindowCount?: number;
 }
 export interface TempoVotingVerdict {
   primary_candidate_bpm: number | null;
@@ -65,7 +64,6 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
   const minProminence = options.minProminence ?? 0.5;
   const minRunnerUpMargin = options.minRunnerUpMargin ?? 0.15;
   const octaveAmbiguityShare = options.octaveAmbiguityShare ?? 0.45;
-  const minimumWindowCount = Number.isInteger(options.minimumWindowCount) && (options.minimumWindowCount ?? 0) >= 1 ? options.minimumWindowCount! : 2;
   const votes: Vote[] = [];
   const validWindows = new Set<number>();
 
@@ -145,7 +143,6 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
   const octaveShare = alternativeWeight / winner.weight;
 
   const reasonCodes: string[] = [];
-  if (validWindows.size < minimumWindowCount) reasonCodes.push("INSUFFICIENT_WINDOW_COVERAGE");
   if (prominenceScore < minProminence) reasonCodes.push("LOW_TRANSIENT_PROMINENCE");
   if (windowAgreement < minWindowAgreement) reasonCodes.push("UNSTABLE_WINDOW_CONSENSUS");
   if (voteShare < minVoteShare || runnerUpMargin < minRunnerUpMargin) reasonCodes.push("LOW_VOTE_CONSENSUS_OR_MARGIN");
@@ -154,7 +151,6 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
   const explanation = confirmed
     ? "Tempo is confirmed by weighted candidate consensus, signal prominence, window agreement and metrical disambiguation."
     : "Tempo remains a candidate because " + reasonCodes.map(code => ({
-      INSUFFICIENT_WINDOW_COVERAGE: "too few valid audio windows support a stable vote",
       LOW_TRANSIENT_PROMINENCE: "transient prominence is below threshold",
       UNSTABLE_WINDOW_CONSENSUS: "window agreement is below threshold",
       LOW_VOTE_CONSENSUS_OR_MARGIN: "vote consensus or the runner-up margin is below threshold",
