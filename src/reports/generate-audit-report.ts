@@ -173,7 +173,7 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
 }
 export function buildArNotesDecisionContextFull(input:AuditReportInput):ArNotesDecisionContext {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
- const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[])]
+ const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[]),...(Array.isArray(safeAssessment.limitations)?safeAssessment.limitations:[])]
   .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
   .map(professionalEvidenceLanguage)
   .filter((item)=>item.trim().length>0)
