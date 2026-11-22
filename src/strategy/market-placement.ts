@@ -134,9 +134,10 @@ export function resolveIsrcStrategyRoute(evidence: Record<string, unknown>, soni
     ...(finite(audio.loudnessRangeLu) ? ["loudness range"] : []),
     ...(finite(audio.sampleRate) ? ["sample rate and audio format"] : []),
     ...(Object.values(tags).some(value => typeof value === "string" && value.trim()) ? ["embedded audio tags"] : []),
-    ...(clean(evidence.title) ? ["supplied track title"] : []),
-    ...(clean(evidence.artist) ? ["supplied artist name"] : []),
-    ...(clean(evidence.releaseContext) ? ["supplied release or campaign context"] : []),
+    ...(clean(evidence.title ?? identity.title) ? ["supplied track title"] : []),
+    ...(clean(evidence.artist ?? identity.artist) ? ["supplied artist name"] : []),
+    ...(clean(evidence.genre ?? record(evidence.genreClassification).primaryGenre) ? ["genre or lane hypotheses"] : []),
+    ...(clean(evidence.releaseContext ?? evidence.campaignContext) ? ["supplied release or campaign context"] : []),
   ]);
   return {
     status: "pending_verification",
