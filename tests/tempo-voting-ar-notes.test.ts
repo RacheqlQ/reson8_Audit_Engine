@@ -22,6 +22,30 @@ describe("A&R Notes report page", () => {
     expect(pdf.getPageCount()).toBe(8);
   });
 
+  it("carries an unconfirmed tempo candidate and supported octave alternatives into report guidance", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      ...input.sonicDna,
+      bpm: null,
+      tempoCandidateBpm: 92,
+      tempoConfidence: 0.32,
+      rhythmFeatures: {
+        tempoVerdict: {
+          primary_candidate_bpm: 92,
+          octave_alternatives: [46, 184],
+          confirmation_status: "CANDIDATE",
+          explanation: "Half-time and double-time interpretations remain materially supported.",
+        },
+      },
+    };
+    const diagnostics = buildTempoDiagnosticLines(input).join(" ");
+    expect(diagnostics).toContain("Tempo candidate: 92 BPM; not confirmed.");
+    expect(diagnostics).toContain("46 / 184 BPM");
+    expect(diagnostics).toContain("Half-time and double-time interpretations remain materially supported.");
+    expect(adaptReportV2(input).notYetMeasured.join(" ")).toContain("92 BPM");
+    expect(adaptReportV2(input).notYetMeasured.join(" ")).toContain("46 / 184 BPM");
+  });
+
   it("keeps complete A&R decision sentences and exactly three review prompts", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.assessment = { ...input.assessment, executiveSummary: "A complete decision summary requiring human listening, source verification, identity reconciliation, rights review and release planning. ".repeat(3), evidenceGaps: ["Confirm the final master and recording identifier.", "Verify the rights and delivery records before external pitching."] };
