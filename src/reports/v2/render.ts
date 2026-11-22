@@ -801,7 +801,7 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  for(const [name,label,x] of decisions){
   const field=form.createCheckBox(name);
   field.addToPage(page,{x,y:98,width:9,height:9,borderWidth:.8,borderColor:C.gold,backgroundColor:C.white});
-  field.updateAppearances(fonts.regular);
+
   page.drawText(label,{x:x+13,y:99,size:6.1,font:fonts.bold,color:C.ink});
  }
 }
