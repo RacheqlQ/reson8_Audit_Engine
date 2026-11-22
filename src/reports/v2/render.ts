@@ -87,7 +87,7 @@ export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):str
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
  const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna),rhythm=rec(audio.rhythmFeatures),tempoVerdict=rec(rhythm.tempoVerdict);
  const tempoCandidate=finite(tempoVerdict.primary_candidate_bpm)?tempoVerdict.primary_candidate_bpm:finite(audio.tempoCandidateBpm)?audio.tempoCandidateBpm:null;
- const tempoDisplay=data.tempo.value!==null?data.tempo.value+" BPM":tempoCandidate!==null?"Candidate "+tempoCandidate+" BPM · not confirmed":"Not determined";
+ const tempoDisplay=data.tempo.value!==null?data.tempo.value+" BPM":tempoCandidate!==null?tempoCandidate+" BPM · CANDIDATE":"Not determined";
  const signed=(value:unknown)=>finite(value)?(value>0?"+":"")+value.toFixed(1):null;
  const loudness=[
   finite(audio.loudnessLufs)?signed(audio.loudnessLufs)+" LUFS":null,
@@ -630,7 +630,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
   ["Track length",typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?Math.floor(sonic.durationSeconds/60)+" min "+Math.round(sonic.durationSeconds%60)+" sec":""],
   ["Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):""],
   ["Song key",buildRecordingOverviewKeyLabel(data)],
-  ["Tempo",data.tempo.value!==null?data.tempo.value+" BPM":finite(tempoVerdict.primary_candidate_bpm)?"Candidate "+tempoVerdict.primary_candidate_bpm+" BPM · not confirmed":"Not determined"]
+  ["Tempo",data.tempo.value!==null?data.tempo.value+" BPM":finite(tempoVerdict.primary_candidate_bpm)?tempoVerdict.primary_candidate_bpm+" BPM · CANDIDATE":"Not determined"]
  ].filter((entry):entry is [string,string]=>Boolean(entry[1]));
  if(rows.length){
   const panelHeight=38+Math.ceil(rows.length/2)*23+14,top=y-8,bottom=top-panelHeight;
