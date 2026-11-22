@@ -136,7 +136,7 @@ describe("GroqClient section groups",()=>{
    });
    expect(evidenceScoreCall).toBeDefined();
    const evidenceScoreBody=JSON.parse(String(evidenceScoreCall?.[1]?.body));
-   expect(evidenceScoreBody.max_tokens).toBe(1000);
+   expect(evidenceScoreBody.max_tokens).toBe(1600);
   }
  });
  it("classifies exhausted Groq JSON-schema rejection as malformed output",async()=>{
