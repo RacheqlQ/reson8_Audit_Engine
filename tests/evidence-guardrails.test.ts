@@ -86,11 +86,13 @@ describe("Phillo evidence guardrails", () => {
       } },
     } as any).join(" ");
 
-    expect(lines).toContain("Possible tempo readings: 40 BPM; 220 BPM.");
-    expect(lines).not.toMatch(/score|confidence|probability|detector/i);
+    expect(lines).toContain("Retained tempo candidates: 40 BPM (raw score 0.800); 220 BPM (raw score 0.700). These remain candidates unless the confidence and stability gates are met.");
+    expect(lines).toContain("Primary detector raw confidence: 0.800 (not a calibrated probability; confirmation threshold 0.500).");
     expect(lines).not.toContain("39 BPM");
     expect(lines).not.toContain("221 BPM");
-    expect(lines).not.toContain("Alternate half/double-time candidate");
+    expect(lines).not.toContain("240 BPM");
+    expect(lines).not.toContain("250 BPM");
+    expect(lines).not.toContain("Half/double-time alternative");
     expect(lines).not.toContain("Independent low-frequency envelope estimate");
   });
 
