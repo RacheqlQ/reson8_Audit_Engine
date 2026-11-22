@@ -32,6 +32,20 @@ const baseAssessment = {
 };
 
 describe("Phillo evidence guardrails", () => {
+  it("preserves unscored human listening prompts when evidence sanitization removes commercial claims", () => {
+    const prompts = [
+      "Does the first section establish a clear musical reason to continue listening?",
+      "Would a listener replay or share the track, and what real listening evidence would support that judgement?",
+      "Can a first-time listener describe the lane without prompting, and which audible details support that description?",
+    ];
+    const sanitized = sanitizeAssessmentForEvidence(
+      { ...baseAssessment, humanListeningChecklist: prompts },
+      { bpm: null, tempoConfidence: 0, rhythmFeatures: { tempoVerdict: { confirmation_status: "UNDETERMINED" } } },
+      {},
+    );
+    expect(sanitized.humanListeningChecklist).toEqual(prompts);
+  });
+
   it("rejects zero-confidence tempo even when a BPM value is present", () => {
     expect(isReliableTempo({ bpm: 156, tempoConfidence: 0, rhythmFeatures: { status: "measured" } })).toBe(false);
   });
