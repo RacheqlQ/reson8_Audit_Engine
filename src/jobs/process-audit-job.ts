@@ -861,8 +861,12 @@ export async function processAuditJob(
     const assessmentRecognition = recognitionEvidence(recognition);
     delete assessmentRecognition.spotifyId;
     const assessmentEvidence = {
-      isrc: normalizedIsrc,
+      isrc: isrcConflict ? null : normalizedIsrc,
+      isrcCandidates: normalizedIsrcCandidates,
+      isrcConflict,
       userInput: { isrc: userSuppliedIsrcCandidates.find((value): value is string => Boolean(value)) ?? null },
+      id3: masterTags ?? null,
+      filename: job.filename ?? null,
       ...(assessmentMetadata ? catalogEvidence(assessmentMetadata, assessmentIdentity) : { auditType: evidence.auditType }),
       ...assessmentRecognition,
       ...identityEvidence(assessmentIdentity),
