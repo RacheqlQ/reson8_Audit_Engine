@@ -485,3 +485,43 @@ describe("v2 A&R Notes page acceptance", () => {
     expect(chips.map((chip: any) => chip.label)).toEqual(["AUDIO", "IDENTITY", "MARKET", "RELEASE READINESS"]);
   });
 });
+
+
+describe("ISRC strategy presentation", () => {
+  it("states the unresolved identifier conflict and names the non-ISRC evidence fallback", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.marketPlacement = {
+      isrcStrategy: {
+        status: "pending_verification",
+        route: "NON_ISRC_FALLBACK",
+        isrc: null,
+        source: null,
+        conflicts: ["USSM10501515", "GBAYE0601498"],
+        nonIsrcEvidence: ["measured tempo", "provisional tonal candidates", "embedded audio tags"],
+        requiredActions: ["Resolve the ISRC conflict before external pitching."]
+      }
+    };
+    const lines = buildPositioningLines(input).join(" ");
+    expect(lines).toMatch(/ISRC conflict/i);
+    expect(lines).toMatch(/measured tempo, provisional tonal candidates, embedded audio tags/i);
+    expect(lines).toMatch(/provisional A&R guidance/i);
+  });
+
+  it("does not present an available ISRC as proof of a provider match or commercial performance", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.marketPlacement = {
+      isrcStrategy: {
+        status: "available",
+        route: "ISRC_FIRST",
+        isrc: "USSM10501515",
+        source: "provider recognition",
+        conflicts: [],
+        nonIsrcEvidence: [],
+        requiredActions: []
+      }
+    };
+    const lines = buildPositioningLines(input).join(" ");
+    expect(lines).toMatch(/ISRC-keyed catalog and release reconciliation/i);
+    expect(lines).toMatch(/does not prove a provider match or commercial performance/i);
+  });
+});
