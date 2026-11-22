@@ -97,10 +97,15 @@ audit618.marketPlacement=buildMarketPlacementPlan({
  playlistDiscovery:audit618.evidence.playlistDiscovery,
 });
 audit618.decisionDimensions=adaptReportV2(audit618).decisionDimensions;
-const expectedAudit618Dimensions={audio:"MEASURED",identity:"CONFLICTS OPEN",market:"PROPOSED",releaseReadiness:"PENDING RIGHTS CHECKS"};
-for(const [dimension,expected] of Object.entries(expectedAudit618Dimensions)){
- const actual=String(audit618.decisionDimensions?.[dimension]?.status??"").toUpperCase();
- if(actual!==expected)throw new Error("Audit 618b9b7a "+dimension+" verdict mismatch: expected "+expected+", received "+actual);
+const expectedAudit618Dimensions=[
+ {name:"Audio",label:"AUDIO",status:"MEASURED"},
+ {name:"Identity",label:"IDENTITY",status:"CONFLICTS OPEN"},
+ {name:"Market",label:"MARKET",status:"PROPOSED"},
+ {name:"Release readiness",label:"RELEASE READINESS",status:"PENDING RIGHTS CHECKS"},
+];
+for(const expected of expectedAudit618Dimensions){
+ const actual=String(audit618.decisionDimensions.find(dimension=>dimension.name===expected.name)?.status??"").toUpperCase();
+ if(actual!==expected.status)throw new Error("Audit 618b9b7a "+expected.name+" verdict mismatch: expected "+expected.status+", received "+actual);
 }
 if(audit618.marketPlacement?.isrcStrategy?.route!=="ISRC_FIRST"||audit618.marketPlacement?.isrcStrategy?.isrc!=="USSM10501515")throw new Error("Audit 618b9b7a must take the validated ISRC-first market-data route");
 for(const [tier,suffix,minPages] of [["sample","sample",8],["full","full",13]]){
@@ -116,8 +121,8 @@ for(const [tier,suffix,minPages] of [["sample","sample",8],["full","full",13]]){
  const notesPage=pages.at(-1)??"";
  assertArNotes(pdf,"audit-618b9b7a-"+tier,notesPage);
  const normalized=notesPage.replace(/\s+/g," ").toUpperCase();
- for(const [label,value] of [["AUDIO",expectedAudit618Dimensions.audio],["IDENTITY",expectedAudit618Dimensions.identity],["MARKET",expectedAudit618Dimensions.market],["RELEASE READINESS",expectedAudit618Dimensions.releaseReadiness]]){
-  if(!normalized.includes(label+" "+value))throw new Error("Audit 618b9b7a "+tier+" A&R Notes chip does not match persisted "+label+" verdict: "+value);
+ for(const {label,status} of expectedAudit618Dimensions){
+  if(!normalized.includes(label+" "+status))throw new Error("Audit 618b9b7a "+tier+" A&R Notes chip does not match persisted "+label+" verdict: "+status);
  }
  if(!/55\s*BPM/i.test(extracted)||!/UNCONFIRMED/i.test(extracted)||/\b(?:Confirmed|Measured) tempo:\s*55\s*BPM/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF must preserve the 55 BPM candidate as unconfirmed");
  if(!/PROVISIONAL/i.test(extracted)||!/F#/i.test(extracted))throw new Error("Audit 618b9b7a "+tier+" PDF must preserve provisional tonal candidates");
