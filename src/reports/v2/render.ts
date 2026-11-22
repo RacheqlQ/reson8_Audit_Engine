@@ -141,15 +141,22 @@ function detectorNumber(value: unknown, digits = 3): string | null {
 export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
  const rhythm=rec(rec(input.sonicDna).rhythmFeatures);
  const lines:string[]=[];
+ const verdict=rec(rhythm.tempoVerdict);
+ const candidate=finite(verdict.primary_candidate_bpm)?verdict.primary_candidate_bpm:finite(rhythm.tempoCandidateBpm)?rhythm.tempoCandidateBpm:null;
+ const alternatives=arr(verdict.octave_alternatives).filter(finite).filter(value=>value>=40&&value<=220);
+ if(verdict.confirmation_status==="CONFIRMED"&&candidate!==null)lines.push("Confirmed tempo: "+candidate+" BPM.");
+ else if(candidate!==null)lines.push("Tempo candidate: "+candidate+" BPM; not confirmed.");
  const candidates=arr(rhythm.candidateScores).map(value=>rec(value))
   .filter(item=>finite(item.bpm)&&item.bpm>=40&&item.bpm<=220)
   .slice(0,4).map(item=>String(item.bpm)+" BPM");
- if(candidates.length)lines.push("Possible tempo readings: "+candidates.join("; ")+". Treat these as provisional until confirmed by listening.");
- else if(Array.isArray(rhythm.candidateBpms)) {
-  const fallback= rhythm.candidateBpms.filter(value=>finite(value)&&value>=40&&value<=220).slice(0,4);
+ if(alternatives.length)lines.push("Supported half/double-time alternatives: "+alternatives.join(" / ")+" BPM.");
+ if(!candidate&&candidates.length)lines.push("Possible tempo readings: "+candidates.join("; ")+". Treat these as provisional until confirmed by listening.");
+ else if(!candidate&&Array.isArray(rhythm.candidateBpms)) {
+  const fallback=rhythm.candidateBpms.filter(value=>finite(value)&&value>=40&&value<=220).slice(0,4);
   if(fallback.length)lines.push("Possible tempo readings: "+fallback.join("; ")+" BPM. Treat these as provisional until confirmed by listening.");
  }
- if(finite(rhythm.alternateTempo)&&rhythm.alternateTempo>=40&&rhythm.alternateTempo<=220)lines.push("Alternative pulse reading: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
+ if(alternatives.length===0&&finite(rhythm.alternateTempo)&&rhythm.alternateTempo>=40&&rhythm.alternateTempo<=220)lines.push("Alternative pulse reading: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
+ if(typeof verdict.explanation==="string"&&verdict.explanation.trim()&&verdict.confirmation_status!=="CONFIRMED")lines.push("Tempo confirmation reason: "+verdict.explanation);
  const consensus=rec(rhythm.windowConsensus);
  if(finite(consensus.observedAgreement))lines.push(consensus.observedAgreement>=0.7
   ?"Tempo readings are broadly consistent across the analyzed sections."
