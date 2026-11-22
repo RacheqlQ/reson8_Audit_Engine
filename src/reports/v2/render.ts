@@ -96,10 +96,10 @@ function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
   finite(audio.rmsLevelDbfs)?"RMS "+signed(audio.rmsLevelDbfs)+" dBFS":null
  ].filter((value):value is string=>Boolean(value));
  const rhythm=rec(audio.rhythmFeatures);
- const tempoCandidates=uniqueNumbers([
+ const tempoCandidates=[...new Set([
   ...arr(rhythm.candidateBpms),
   ...arr(rhythm.candidateScores).map(value=>rec(value).bpm),
- ]).filter(value=>value>=40&&value<=220).slice(0,4);
+ ].filter((value):value is number=>finite(value)&&value>=40&&value<=220))].slice(0,4);
  const tempoValue=data.tempo.value===null
   ?tempoCandidates.length?"Candidate "+tempoCandidates.slice(0,2).join(" / ")+" BPM":"Not determined"
   :data.tempo.value+" BPM";
