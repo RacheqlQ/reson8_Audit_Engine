@@ -435,7 +435,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         await recordProviderAttempt(input, {
           provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
           errorType: timedOut ? "timeout" : "provider_unavailable",
-          retryable: !signal?.aborted, attempt: networkAttempt + 1,
+          retryable: !signal?.aborted, attempt: networkAttempt + 1, group: groupName,
         });
         if (timedOut) {
           throw new Error(providerLabel + " " + groupName + " request timed out after " + requestTimeoutMs + "ms", { cause: error });
@@ -462,6 +462,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         errorType: dailyLimit ? "capacity" : malformedProviderOutput ? "malformed_output" : response.ok ? "none" : providerErrorType(response.status),
         retryable: !response.ok && !dailyLimit && (response.status === 429 || response.status >= 500),
         attempt: networkAttempt + 1,
+        group: groupName,
       });
       if (dailyLimit) {
         const tomorrow = new Date();
