@@ -104,7 +104,7 @@ function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
 function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
  page.drawRectangle({x,y,width,height:48,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawCircle({x:x+13,y:y+31,size:3.5,color});
- page.drawText(label.toUpperCase(),{x:x+24,y:y+28,size:6.5,font:fonts.bold,color:C.muted});
+ page.drawText(label.toUpperCase(),{x:x+24,y:y+28,size:6.5,font:fonts.bold,color:C.label});
  drawWrapped(page,value,x+12,y+15,width-24,fonts.bold,8.2,color,10);
 }
 function card(page:PDFPage,x:number,top:number,width:number,title:string,body:string[],fonts:Fonts,opts:{accent?:typeof C.teal;height?:number;provenance?:string}={}):number{
@@ -777,7 +777,7 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  page.drawText("WORKING NOTES · EDITABLE",{x:notesX,y:notesY+notesHeight+10,size:7,font:fonts.bold,color:C.label});
  const notes=form.createTextField("ar_notes");
  notes.enableMultiline();
- notes.addToPage(page,{x:notesX,y:notesY,width:notesWidth,height:notesHeight,borderWidth:.7,borderColor:C.gold,backgroundColor:C.white});
+ notes.addToPage(page,{x:notesX,y:notesY,width:notesWidth,height:notesHeight,borderWidth:.7,borderColor:C.gold});
  notes.setFontSize(8);
  notes.updateAppearances(fonts.regular);
  for(let line=1;line<=17;line++){
