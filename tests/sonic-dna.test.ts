@@ -72,6 +72,9 @@ describe("Sonic DNA",()=>{
   expect(result.candidateBpms.length).toBeGreaterThan(0);
   expect(result.candidateBpms.every(candidate=>candidate>=40&&candidate<=220)).toBe(true);
   expect(result.candidateScores.length).toBeGreaterThan(0);
+  expect(result.candidateBpms).toContain(55);
+  expect(result.candidateBpms).toContain(110);
+  expect(result.alternateTempo===55||result.alternateTempo===110).toBe(true);
   expect(result.windowConsensus.windowCount).toBeGreaterThan(0);
  });
  it("abstains on sustained non-rhythmic noise instead of reporting an arbitrary tempo",()=>{
