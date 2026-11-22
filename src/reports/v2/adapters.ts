@@ -293,7 +293,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       notYetMeasured.push(candidate + " BPM (provisional tempo candidate" +
         (alternatives.length ? "; supported half/double-time alternatives: " + alternatives.join(" / ") + " BPM" : "") +
         "; not a confirmed tempo)." + (reason ? " " + reason : ""));
-    } else if (candidate !== null) {
+    } else if (candidate !== null && (candidate < 40 || candidate > 220)) {
       notYetMeasured.push("Tempo candidate " + candidate + " BPM abstained: outside the plausible 40–220 BPM reporting range.");
     } else if (verdict?.confirmation_status === "UNDETERMINED") {
       notYetMeasured.push(nonEmpty(verdict.explanation) ?? "Tempo remains undetermined; no candidate passed the voting checks.");
