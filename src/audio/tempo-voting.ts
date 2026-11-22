@@ -140,10 +140,7 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
   levels.sort((a, b) => b.weight - a.weight
     || Math.abs(a.bpm - nominal) - Math.abs(b.bpm - nominal)
     || a.bpm - b.bpm);
-  const primaryValue = prominenceScore < minProminence && levels.length > 1
-    ? levels.reduce((lowest, level) => level.bpm < lowest.bpm ? level : lowest).bpm
-    : nominal >= 40 && nominal <= 220 ? nominal : levels[0]!.bpm;
-  const primary = Math.round(primaryValue);
+  const primary = Math.round(nominal >= 40 && nominal <= 220 ? nominal : levels[0]!.bpm);
   const half = Math.round(primary / 2), doubled = Math.round(primary * 2);
   const octaveAlternatives = [half, doubled].filter(value => value >= 30 && value <= 300 && levels.some(level => closeTempo(level.bpm, value, absoluteTolerance, relativeTolerance)));
   const alternativeWeight = levels.filter(level => !closeTempo(level.bpm, primary, absoluteTolerance, relativeTolerance))
