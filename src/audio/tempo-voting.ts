@@ -65,10 +65,10 @@ export function voteTempoCandidates(options: TempoVotingOptions): TempoVotingVer
   const validWindows = new Set<number>();
 
   options.windows.forEach((window, windowIndex) => {
-    const candidates = [
-      ...(finitePositive(window.bpm) ? [{ bpm: window.bpm, prominence: window.prominence, confidence: window.confidence, beatStrength: window.beatStrength }] : []),
-      ...(Array.isArray(window.candidates) ? window.candidates : []),
-    ];
+    const suppliedCandidates = Array.isArray(window.candidates) ? window.candidates : [];
+    const candidates = suppliedCandidates.length ? suppliedCandidates : (finitePositive(window.bpm)
+      ? [{ bpm: window.bpm, prominence: window.prominence, confidence: window.confidence, beatStrength: window.beatStrength }]
+      : []);
     const durationWeight = finitePositive(window.durationSeconds) ? Math.min(1, window.durationSeconds / 8) : 1;
     const coverageWeight = typeof window.coverage === "number" && Number.isFinite(window.coverage) ? clamp01(window.coverage) : 1;
     for (const candidate of candidates) {
