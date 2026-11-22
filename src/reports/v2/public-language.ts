@@ -10,6 +10,7 @@ function candidateNames(value: string): string[] {
 
 export function sanitizePublicReportLine(value: string): string {
   const line = value.trim();
+  if (/^(?:vocal analysis:\\s*not performed\\b|vocal presence\\/absence is unknown\\b|no vocal conclusion is available\\b|learned audio model:\\s*disabled\\b|detection model status:\\s*disabled\\b)/i.test(line)) return "";
   if (!line || INTERNAL_LINE.test(line) || /\bconfidence.{0,30}\d/i.test(line) || /\bconfidence score\b/i.test(line)) return "";
 
   if (/^playlist discovery not run:/i.test(line)) return "Playlist research was not available because a recording code was not supplied.";
