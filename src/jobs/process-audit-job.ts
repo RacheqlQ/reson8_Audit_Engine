@@ -686,7 +686,7 @@ export async function processAuditJob(
       || providerDecision("musicbrainz").enabled
       || (process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET && providerDecision("spotify").enabled),
     );
-    if (normalizedIsrc && isrcLookupAvailable) {
+    if (normalizedIsrc && !isrcConflict && isrcLookupAvailable) {
       isrcLookup = await awaitWithStage(deps, "isrc_catalog_lookup", 30_000, (signal) =>
         (deps.collectIsrcCatalogMetadata ?? collectIsrcCatalogMetadata)(normalizedIsrc!, signal),
       );
