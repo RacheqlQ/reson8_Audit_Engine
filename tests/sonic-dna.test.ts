@@ -234,7 +234,7 @@ describe("Sonic DNA",()=>{
   expect((result as unknown as {rmsLevelDbfs:number}).rmsLevelDbfs)
    .toBeCloseTo(20*Math.log10(result.rmsEnergy),5);
  });
- it("returns explicit rhythm and harmonic measurements while marking vocal analysis unavailable",()=>{
+ it("returns explicit rhythm, harmonic and signal-derived vocal-band measurements without claiming human vocal detection",()=>{
   const sampleRate=8000;
   const rhythm=analyzePcm(pulse(120,12,sampleRate),sampleRate);
   const harmonic=analyzePcm(chord([261.6256,329.6276,391.9954],12,sampleRate),sampleRate);
