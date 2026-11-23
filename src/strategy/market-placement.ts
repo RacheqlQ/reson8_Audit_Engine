@@ -378,7 +378,7 @@ function commercialStrategy(
   const releaseLifecycle = releaseTime === null ? "UNKNOWN" : releaseTime <= auditDate ? "POST_RELEASE" : "PRE_RELEASE";
   const genre = record(evidence.genreClassification);
   const primary = clean(genre.primaryGenre) || clean(evidence.genre) || "Unclassified sonic lane";
-  const adjacent = Array.isArray(genre.adjacentLanes) ? genre.adjacentLanes.filter((v): v is string => typeof v === "string" && v.trim()).slice(0,3) : [];
+  const adjacent = Array.isArray(genre.adjacentLanes) ? genre.adjacentLanes.filter((v): v is string => typeof v === "string" && v.trim().length > 0).slice(0,3) : [];
   const tempo = finite(sonicDna?.bpm), key = clean(sonicDna?.key), mode = clean(sonicDna?.mode);
   const profile = record(sonicDna?.acousticFeatureProfile), predictions = record(profile.predictions);
   const mood = record(predictions.mood), energy = record(predictions.energy);
