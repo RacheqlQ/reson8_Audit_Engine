@@ -371,7 +371,7 @@ function commercialStrategy(
 ): CommercialStrategy {
   const generatedAt = clean(evidence.generatedAt) || new Date().toISOString();
   const auditDate = Number.isFinite(Date.parse(generatedAt)) ? Date.parse(generatedAt) : Date.now();
-  const releaseDateConflict = [...arrayValue(record(evidence.reconciliation).conflicts), ...arrayValue(record(evidence.reconciliation).releaseContextDifferences)].some(item => clean(record(item).field) === "releaseDate");
+  const releaseDateConflict = Boolean([...arrayValue(record(evidence.reconciliation).conflicts), ...arrayValue(record(evidence.reconciliation).releaseContextDifferences)].some(item => clean(record(item).field) === "releaseDate"));
   const releaseDate = releaseDateConflict ? "" : clean(evidence.releaseDate) || clean(record(evidence.identity).releaseDate);
   const releaseDateSource = clean(record(evidence.fieldProvenance).releaseDate)
     || clean(record(record(evidence.identity).fieldProvenance).releaseDate)
