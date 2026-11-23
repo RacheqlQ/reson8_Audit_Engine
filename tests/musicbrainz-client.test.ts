@@ -26,7 +26,11 @@ describe("MusicBrainz ISRC catalogue client", () => {
           title: "Example EP",
           date: "2024-03-01",
           "label-info": [{ label: { name: "Example Records" } }],
+          "release-group": { id: "release-group-mbid", title: "Example Release Group" },
+          tags: [{ name: "afrobeats" }],
         }],
+        tags: [{ name: "afro-fusion" }],
+        relations: [{ type: "streaming", url: { resource: "https://open.spotify.com/track/spotify-track-id" } }],
       }],
     }), { status: 200, headers: { "content-type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
@@ -36,7 +40,7 @@ describe("MusicBrainz ISRC catalogue client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const requestedUrl = new URL(String(fetchMock.mock.calls[0][0]));
     expect(requestedUrl.pathname).toBe("/ws/2/isrc/GBAYE1212345");
-    expect(requestedUrl.searchParams.get("inc")).toBe("artist-credits+releases");
+    expect(requestedUrl.searchParams.get("inc")).toBe("artist-credits+releases+tags+url-rels");
     expect(requestedUrl.searchParams.get("inc")).not.toContain("labels");
     expect(requestedUrl.searchParams.get("inc")).not.toContain("recordings");
     expect(requestedUrl.searchParams.get("fmt")).toBe("json");
@@ -51,7 +55,11 @@ describe("MusicBrainz ISRC catalogue client", () => {
         title: "Example EP",
         date: "2024-03-01",
         label: "Example Records",
+        releaseGroupId: "release-group-mbid",
+        tags: ["afrobeats"],
       }],
+      tags: ["afro-fusion"],
+      externalUrls: [{ relationType: "streaming", resource: "https://open.spotify.com/track/spotify-track-id" }],
       source: "musicbrainz",
     }]);
   });
