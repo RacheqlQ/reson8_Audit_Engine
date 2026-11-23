@@ -67,6 +67,8 @@ export interface CommercialStrategy {
   audienceContexts: string[];
   shortFormAngles: string[];
   playlistPitchHooks: string[];
+  partnerFitCriteria: string[];
+  industryPractice: string[];
   syncFit: { status: "REVIEW_REQUIRED" | "BLOCKED"; rationale: string };
   readinessActions: string[];
   kpis: Array<{ metric: string; target: string; verification: string; status: "actionable" | "awaiting_telemetry" | "verify_source" }>;
@@ -392,8 +394,11 @@ function commercialStrategy(
   if (conflicts.length) readinessActions.push("Resolve release-edition metadata differences ("+conflicts.map(item => clean(record(item).field)).filter(Boolean).join(", ")+") before royalty statements and partner pitching.");
   if (!clean(evidence.rightsStatus) || !["cleared","rights_cleared"].includes(clean(evidence.rightsStatus).toLowerCase())) readinessActions.push("Document master ownership, writer/publisher splits, sample/interpolation clearance and authorized contact before commercial outreach.");
   if (!readinessActions.length) readinessActions.push("Retain the source-backed ISRC, UPC, label, release-date and rights evidence with the distributor delivery receipt.");
+  const daypart = /warm|laid.?back|mellow|intimate|reflective/i.test(moodTags.join(" ")) ? "late-evening, reflective listening"
+    : /energetic|driving|upbeat|bright|aggressive/i.test(moodTags.join(" ")) ? "commute, movement or high-energy short-form contexts"
+    : "test daytime discovery and focused listening contexts";
   const contexts = [
-    ...(moodTags.length ? ["Test mood-led contexts around the provisional audio cues: "+moodTags.join(", ")+"."] : ["Build mood/daypart context from a human listening pass; no calibrated mood model is configured."]),
+    ...(moodTags.length ? ["Audience-context hypothesis: test "+daypart+" around provisional cues "+moodTags.join(", ")+"; these are editorial contexts, not measured audience segments."] : ["Build mood/daypart context from a human listening pass; no calibrated mood model is configured."]),
     ...(tempo !== null ? ["Use "+tempo+" BPM as an editorial tempo descriptor, not a demand or danceability prediction."] : []),
     ...(key ? ["Use "+key+(mode ? " "+mode : "")+" only as a provisional harmonic descriptor for pitch notes."] : []),
   ];
@@ -424,10 +429,20 @@ function commercialStrategy(
     primaryLane:{label:primary,rationale:"Proposed from reconciled genre metadata"+(tempo!==null?", measured "+tempo+" BPM":"")+(moodTags.length?", provisional mood cues "+moodTags.join(", "):"")+(cadence?", heuristic cadence cue "+cadence:"")+". Validate with human listening and response data.",verdict:"PROPOSED"},
     adjacentLanes:adjacent.map(label=>({label,rationale:"Adjacent discovery test only; validate against the full recording, release identity and curator feedback.",verdict:"PROPOSED" as const})),
     audienceContexts:contexts,shortFormAngles,playlistPitchHooks:pitchHooks,
+    partnerFitCriteria:[
+      "Partner roster and campaign remit align with the proposed primary/adjacent lanes and the actual release stage.",
+      "Partner can document deliverables, reporting access, fees/commission, territory, term and ownership of campaign assets before engagement.",
+      "Any playlist, creator, sync or distribution claim is supported by a dated source record and written terms; no placement or reach guarantee is accepted.",
+    ],
+    industryPractice:[
+      "Prioritize identifier and rights hygiene before royalty-bearing distribution, playlist pitching or licensing outreach.",
+      "Use a small, individually qualified pitch batch with approved assets and logged responses; expand only after evidence of relevant partner engagement.",
+      "Separate catalogue availability from performance: record streams, saves, listeners and territory metrics only from authenticated DSP/distributor reporting.",
+    ],
     syncFit:{status:syncBlocked?"BLOCKED":"REVIEW_REQUIRED",rationale:fit.sync.reason+" Audio and catalogue descriptors do not constitute a sync match or rights clearance."},
     readinessActions,
     kpis,
-    limitations:["No stream, listener, chart, revenue, conversion or campaign-success values are generated from ISRC or catalogue matches.","Sonic mood, cadence and energy cues are provisional signal descriptors; they are not demographic or audience measurements.","Release-date lifecycle is determined only when a parseable source-backed release date exists; pre/post framing is relative to the recorded audit timestamp."],
+    limitations:["No stream, listener, chart, revenue, conversion or campaign-success values are generated from ISRC or catalogue matches.","Sonic mood, cadence and energy cues are provisional signal descriptors; they are not demographic or audience measurements.","Release-date lifecycle is determined only when a parseable source-backed release date exists; pre/post framing is relative to the recorded audit timestamp.","MusicBrainz catalogue details are internal evaluation evidence only until commercial-use and retention permissions are confirmed."],
   };
 }
 function recordsHaveField(evidence: Record<string, unknown>, field: string): boolean {
