@@ -715,8 +715,8 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
   if(/intro|outro/.test(value))return C.teal;
   if(/pre-chorus/.test(value))return C.gold;
   if(/chorus/.test(value))return C.coral;
-  if(/verse/.test(value))return C.blue;
-  if(/bridge/.test(value))return C.violet;
+  if(/verse/.test(value))return C.teal;
+  if(/bridge/.test(value))return C.muted;
   if(/instrumental|loop|solo/.test(value))return C.muted;
   if(/breakdown|drop/.test(value))return C.amber;
   return C.label;
