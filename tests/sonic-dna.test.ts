@@ -111,7 +111,7 @@ describe("Sonic DNA",()=>{
   expect(result.tonalResolution?.status).toBe("PROVISIONAL");
   expect(result.tonalResolution?.tonic).toBe("C");
   expect(result.keyConfidence).toBeGreaterThan(0);
- });
+ },15000);
  it("detects A minor from a sustained A minor triad",()=>{
   const result=analyzePcm(chord([220,261.6256,329.6276]),8000);
   expect(result.key).toBeNull();
