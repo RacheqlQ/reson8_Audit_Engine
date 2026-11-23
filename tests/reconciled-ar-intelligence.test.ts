@@ -13,6 +13,19 @@ describe("zero-cost reconciled A&R intelligence", () => {
     expect(result.answers.find(item => /market|territor/i.test(item.question))?.answer).toMatch(/PROPOSED|VERIFIED/);
   });
 
+  it("does not promote low-confidence tempo or key fields into confirmed A&R findings", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      bpm: 96, tempoConfidence: 0.2, key: "A", mode: "minor",
+      keyConfidence: 0.2, keySegmentAgreement: 0.2
+    };
+    const answer = buildReconciledArIntelligence(input).answers[0].answer;
+    expect(answer).toContain("Tempo is not confirmed");
+    expect(answer).toContain("Key is not confirmed");
+    expect(answer).not.toContain("96 BPM");
+    expect(answer).not.toContain("A minor");
+  });
+
   it("does not turn missing acoustic descriptors into zero-valued vocal or cadence claims", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.sonicDna = { acousticFeatureProfile: { status: "insufficient_evidence", descriptors: {} } };
