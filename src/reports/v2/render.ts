@@ -585,7 +585,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ],kind:"narrative"},
    {title:"Label and partner fit",blocks:[
     paragraph("Partner profile hypothesis",partner.partnerProfile),list("Criteria to demonstrate",arr(partner.criteriaToDemonstrate)),
-    paragraph("Commercial sync/partner gate",str(rec(input.marketPlacement?.commercialStrategy).syncFit.rationale,"Rights, master approval and a defined partner brief must be verified.")),
+    paragraph("Commercial sync/partner gate",str(rec(rec(input.marketPlacement?.commercialStrategy).syncFit).rationale,"Rights, master approval and a defined partner brief must be verified.")),
     list("Commercial partner fit criteria",arr(rec(input.marketPlacement?.commercialStrategy).partnerFitCriteria)),
     paragraph("Rights and submission diligence",partner.diligenceBeforeContact),paragraph("Industry practice",[
       ...arr(rec(input.marketPlacement?.commercialStrategy).industryPractice).map(value=>str(value,"")),
