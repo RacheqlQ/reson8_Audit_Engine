@@ -758,6 +758,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  const footerY=bottom+8;
  drawWrapped(page,"WHAT IT SHOWS: Vocal-band energy, candidate pitch region and inferred structural transitions from the uploaded master.",left,footerY+15,barWidth,fonts.regular,4.8,C.ink,5.4);
  drawWrapped(page,"WHAT IT DOES NOT SHOW: Exact section labels, singing vs. rap, lead vs. backing, singer count, lyrics, delivery quality or audience response. "+String(analysis.analysisReason??"Low vocal activity or signal quality may limit detection."),left,footerY+7,barWidth,fonts.italic,4.5,C.muted,5);
+ drawWrapped(page,"LABEL BASIS: Windowed spectral-flux novelty, RMS step changes, chroma movement and vocal-band onset/offset; labels remain provisional.",left,footerY-1,barWidth,fonts.regular,4.2,C.muted,4.8);
  return height;
 }
 function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
