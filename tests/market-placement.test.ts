@@ -187,6 +187,54 @@ describe("Phase 5 market placement strategy", () => {
     expect(plan.shortFormHooks.limitations.join(" ")).toMatch(/windowed RMS summaries were unavailable/i);
   });
 
+  it("builds ISRC-anchored coverage and measurable commercial strategy without inventing demand", () => {
+    const plan = buildMarketPlacementPlan({
+      executionMode: "combined",
+      evidence: {
+        isrc: "NGABC2600001",
+        artist: "Test Artist",
+        title: "Night Drive",
+        album: "Night Drive - EP",
+        upc: "123456789012",
+        label: "Test Label",
+        releaseDate: "2025-08-27",
+        generatedAt: "2026-11-23T12:00:00.000Z",
+        metadataSources: [
+          { platform: "musicbrainz", catalogId: "mb-rec-1", isrc: "NGABC2600001", album: "Night Drive", upc: null, label: "Test Label", externalIds: { musicbrainz: "mb-rec-1" }, raw: { recordings: [{ releases: [{ releaseId: "rel-1" }, { releaseId: "rel-2" }] }] } },
+          { platform: "spotify", catalogId: "sp-1", isrc: "NGABC2600001", album: "Night Drive - EP", upc: "123456789012", label: "Test Label", externalIds: { spotify: "sp-1" } },
+          { platform: "apple_music", catalogId: "am-1", isrc: "NGABC2600001", externalIds: { apple_music: "am-1" } },
+        ],
+        genreClassification: { primaryGenre: "Afrobeats", adjacentLanes: ["Afro-fusion", "Alt-R&B"] },
+      },
+      sonicDna: { ...master, loudnessLufs: -9.2, truePeakDbfs: -1.1, loudnessRangeLu: 5.4, vocalFeatures: { voicePresence: "undetermined", vocalPresencePct: 42, cadence: "syncopated" } },
+    });
+    expect(plan.isrcCoverage).toMatchObject({
+      status: "RESOLVED", isrc: "NGABC2600001", resolvedVia: "musicbrainz",
+      linkedReleasesCount: 2, matchedPlatforms: ["musicbrainz", "spotify", "apple_music"],
+      catalogPresenceTier: "MULTI_PLATFORM",
+    });
+    expect(plan.isrcCoverage.boundaryNote).toMatch(/not streams, listeners or commercial demand/i);
+    expect(plan.commercialStrategy).toMatchObject({
+      marketVerdict: "PROPOSED", releaseLifecycle: "POST_RELEASE",
+      primaryLane: expect.objectContaining({ label: "Afrobeats", verdict: "PROPOSED" }),
+      adjacentLanes: expect.arrayContaining([expect.objectContaining({ label: "Afro-fusion" })]),
+    });
+    expect(plan.commercialStrategy.kpis.some((kpi) => /metadata parity/i.test(kpi.metric))).toBe(true);
+    expect(plan.commercialStrategy.kpis.some((kpi) => /streams|listeners/i.test(kpi.metric) && kpi.status === "awaiting_telemetry")).toBe(true);
+    expect(JSON.stringify(plan.commercialStrategy)).not.toMatch(/streamCount|monthlyListeners|conversionRate/i);
+  });
+
+  it("marks unresolved ISRC and preserves pre-release framing with a determined date", () => {
+    const plan = buildMarketPlacementPlan({
+      executionMode: "master",
+      evidence: { releaseDate: "2027-02-01", generatedAt: "2026-11-23T12:00:00.000Z", artist: "Test Artist", title: "Future Single", metadataSources: [] },
+      sonicDna: master,
+    });
+    expect(plan.isrcCoverage).toMatchObject({ status: "ISRC_UNRESOLVED", isrc: null, matchedPlatforms: [], linkedReleasesCount: 0 });
+    expect(plan.commercialStrategy).toMatchObject({ marketVerdict: "PROPOSED", releaseDateVerdict: "DETERMINED", releaseLifecycle: "PRE_RELEASE" });
+    expect(plan.commercialStrategy.readinessActions.join(" ")).toMatch(/ISRC|UPC|label/i);
+  });
+
   it("combines provider mood tags with provisional master mood while retaining both sources", () => {
     const context = buildPlaylistMoodContext(
       ["warm", "upbeat"],
