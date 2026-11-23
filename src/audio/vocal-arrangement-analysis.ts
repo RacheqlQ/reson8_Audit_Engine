@@ -143,8 +143,9 @@ function frameF0(samples: Float32Array, start: number, sampleRate: number, frame
   let selectedLag = 0, best = 0.55;
   for (let lag = minLag + 1; lag < maxLag; lag++) {
     const value = correlations[lag]!;
-    if (value >= 0.55 && value >= correlations[lag - 1]! && value >= correlations[lag + 1]! && value > best) {
-      selectedLag = lag; best = value;
+    if (value >= 0.55 && value >= correlations[lag - 1]! && value >= correlations[lag + 1]!) {
+      selectedLag = lag;
+      break;
     }
   }
   if (!selectedLag) return null;
@@ -452,7 +453,7 @@ export function analyzeVocalArrangement(samples: Float32Array, sampleRate: numbe
       : "No windows crossed the provisional 250–3500 Hz salience and harmonicity thresholds; vocal-band activity is low or undetermined.",
     labelBasis: "Section boundaries use windowed spectral-flux novelty, RMS level changes, chroma movement and vocal-band activity changes. Labels use track position and repeated-section similarity; all labels are provisional.",
     limitations: [
-      "Vocal-band activity and 70–500 Hz F0 candidates are inferred from the mixed uploaded master; instruments can produce similar energy and periodicity.",
+      "Vocal-band activity and 70–500 Hz F0 candidates are inferred from the mixed uploaded master; this is not proof of human vocals, and instruments can produce similar energy and periodicity.",
       "No source separation or human-voice classifier is used; singing versus rap, lead versus backing, singer count, lyrics and delivery quality are not determined.",
       "Arrangement labels and transition triggers are deterministic provisional hypotheses and require human listening confirmation.",
     ],
