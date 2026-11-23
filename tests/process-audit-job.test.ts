@@ -158,9 +158,9 @@ describe("processAuditJob", () => {
     expect(events).toEqual([
       "processing",
       "dna-in-process",
-      "dna-in-process",
       "recognition",
       "isrc-catalog-lookup",
+      "dna-in-process",
       "evidence",
       "assessment",
       "assessment-saved",
