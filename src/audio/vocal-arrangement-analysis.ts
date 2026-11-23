@@ -415,15 +415,14 @@ export function analyzeVocalArrangement(samples: Float32Array, sampleRate: numbe
     const result = analyzeWindow(mono, start, rate, previousMagnitudes);
     windows.push(result.window);
     previousMagnitudes = result.magnitudes;
-    if (result.window.vocalActivity) {
-      midPowers.push(Math.pow(10, result.midRmsDbfs / 20) ** 2);
-      pitchStarts.push(start);
-    }
+    midPowers.push(Math.pow(10, result.midRmsDbfs / 20) ** 2);
+    if (result.window.vocalActivity) pitchStarts.push(start);
   }
   const intervals = detectVocalActivityIntervals(windows, durationSeconds);
   const activeWindowCount = pitchStarts.length;
   const vocalPresencePct = windows.length ? Number((activeWindowCount / windows.length * 100).toFixed(1)) : 0;
-  const midRms = midPowers.length ? Math.sqrt(midPowers.reduce((sum, value) => sum + value, 0) / midPowers.length) : null;
+  const totalMidPower = midPowers.reduce((sum, value) => sum + value, 0);
+  const midRms = midPowers.length && totalMidPower > EPSILON ? Math.sqrt(totalMidPower / midPowers.length) : null;
   const vocalBandEnergyDbfs = midRms === null ? null : Number((20 * Math.log10(Math.max(EPSILON, midRms))).toFixed(1));
   const selectedPitchStarts = pitchStarts.length <= MAX_PITCH_FRAMES
     ? pitchStarts
