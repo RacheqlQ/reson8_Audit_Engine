@@ -746,7 +746,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  });
  const intervalText=intervals.length
   ?intervals.slice(0,5).map(item=>formatSnapshotTime(Number(item.startSeconds))+"–"+formatSnapshotTime(Number(item.endSeconds))).join(" · ")+(intervals.length>5?" · +"+(intervals.length-5)+" more":"")
-  :"No timestamped activity intervals; low activity or insufficient signal.";
+  :"No active intervals · "+String(analysis.analysisReason??"Low vocal-band activity or insufficient PCM quality.").slice(0,118);
  drawWrapped(page,intervalText,left,vocalY-7,barWidth,fonts.regular,4.7,C.muted,5.3);
  const legend=[["Intro/Outro",C.teal],["Verse",C.blue],["Pre-chorus",C.gold],["Chorus",C.coral],["Bridge",{r:0.39,g:0.42,b:0.72} as typeof C.teal],["Instrumental/solo",C.muted],["Breakdown/drop",C.amber],["Vocal activity",C.teal]] as Array<[string,typeof C.teal]>;
  let legendX=left;
