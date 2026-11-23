@@ -172,10 +172,10 @@ export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
 export const GROQ_ASSESSMENT_TIMEOUT_MS = 4 * 60_000;
 export const GEMINI_ASSESSMENT_TIMEOUT_MS = 3 * 60_000;
 export const OLLAMA_ASSESSMENT_TIMEOUT_MS = 2 * 60_000;
-const MAX_COMPLETION_TOKENS = 1200;
+const MAX_COMPLETION_TOKENS = 1800;
 const MAX_GROQ_TOTAL_TOKENS = 6000;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
-  narrative: 850, positioning: 650, release: 500, "evidence-score": 1000,
+  narrative: 850, positioning: 650, release: 500, "evidence-score": 1600,
   production: 650, comparables: 450, promotion: 900, "label-fit": 650, timeline: 500,
 };
 const MIN_COMPLETION_TOKENS = 256;

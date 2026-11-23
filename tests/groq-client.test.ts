@@ -114,7 +114,7 @@ describe("GroqClient section groups",()=>{
    const body=JSON.parse(String(call[1]?.body));
    const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
-   expect(body.max_completion_tokens).toBeLessThanOrEqual(1200);
+   expect(body.max_completion_tokens).toBeLessThanOrEqual(1800);
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
  });
@@ -136,7 +136,7 @@ describe("GroqClient section groups",()=>{
    });
    expect(evidenceScoreCall).toBeDefined();
    const evidenceScoreBody=JSON.parse(String(evidenceScoreCall?.[1]?.body));
-   expect(evidenceScoreBody.max_tokens).toBe(1000);
+   expect(evidenceScoreBody.max_tokens).toBe(1600);
   }
  });
  it("classifies exhausted Groq JSON-schema rejection as malformed output",async()=>{
