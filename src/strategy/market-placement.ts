@@ -322,10 +322,23 @@ function isrcCoverage(evidence: Record<string, unknown>): IsrcCoverageSummary {
     .map(value => value.replace(/[\s-]/g,"").toUpperCase());
   const isrc = claims[0] ?? null;
   const matched = isrc ? records.filter(item => clean(item.isrc).replace(/[\s-]/g,"").toUpperCase() === isrc) : [];
-  const platforms = unique(matched.map(item => clean(item.platform)).filter(Boolean));
   const musicBrainz = matched.find(item => clean(item.platform) === "musicbrainz");
   const raw = record(musicBrainz?.raw);
   const recordings = Array.isArray(raw.recordings) ? raw.recordings : [];
+  const linkedPlatforms = recordings.flatMap(item => {
+    const links = Array.isArray(record(item).externalUrls) ? record(item).externalUrls as unknown[] : [];
+    return links.flatMap(link => {
+      const resource = clean(record(link).resource).toLowerCase();
+      if (resource.includes("spotify.com")) return ["spotify"];
+      if (resource.includes("music.apple.com") || resource.includes("itunes.apple.com")) return ["apple_music"];
+      if (resource.includes("tidal.com")) return ["tidal"];
+      if (resource.includes("deezer.com")) return ["deezer"];
+      if (resource.includes("youtube.com") || resource.includes("youtu.be")) return ["youtube_music"];
+      if (resource.includes("audiomack.com")) return ["audiomack"];
+      return [];
+    });
+  });
+  const platforms = unique([...matched.map(item => clean(item.platform)), ...linkedPlatforms].filter(Boolean));
   const releases = new Set<string>();
   for (const item of recordings) {
     const linked = Array.isArray(record(item).releases) ? record(item).releases as unknown[] : [];
