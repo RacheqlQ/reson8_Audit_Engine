@@ -42,7 +42,7 @@ describe("v2 decision and date framing", () => {
 });
 
 describe("v2 commercial strategy report integration", () => {
-  it("surfaces proposed ISRC coverage and actionable verification gates in existing report sections", () => {
+  it("surfaces proposed ISRC coverage and actionable verification gates in existing report sections", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.marketPlacement = {
       isrcCoverage: { status: "RESOLVED", isrc: "NGABC2600001", resolvedVia: "musicbrainz", linkedReleasesCount: 2, matchedPlatforms: ["musicbrainz", "spotify"], catalogPresenceTier: "MULTI_PLATFORM" },
