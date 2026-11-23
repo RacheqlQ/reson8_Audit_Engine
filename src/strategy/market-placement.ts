@@ -339,12 +339,12 @@ function isrcCoverage(evidence: Record<string, unknown>): IsrcCoverageSummary {
     : matched.some(item => ["spotify","apple_music","youtube_music","deezer","tidal","audiomack"].includes(clean(item.platform))) ? "dsp_metadata"
     : records.some(item => clean(item.platform) === "id3" && clean(item.isrc) === isrc) ? "id3_metadata"
     : "unresolved";
-  const status = isrc && (matched.length || clean(evidence.isrc) === isrc || clean(record(evidence.identity).isrc) === isrc) ? "RESOLVED" : "ISRC_UNRESOLVED";
+  const status = isrc && matched.length > 0 ? "RESOLVED" : "ISRC_UNRESOLVED";
   const tier = platforms.length > 1 ? "MULTI_PLATFORM"
     : platforms.length === 1 && platforms[0] === "musicbrainz" ? "MUSICBRAINZ_ONLY"
     : platforms.length === 1 ? "SINGLE_PLATFORM" : "NO_CATALOG_MATCH";
   return {
-    status, isrc: status === "RESOLVED" ? isrc : null, resolvedVia: status === "RESOLVED" ? resolvedVia : "unresolved",
+    status, isrc, resolvedVia: status === "RESOLVED" ? resolvedVia : "unresolved",
     linkedReleasesCount: releases.size, matchedPlatforms: platforms, catalogPresenceTier: tier,
     boundaryNote: "Catalogue presence confirms availability or metadata reconciliation only; it does not establish streams, listeners, commercial demand, playlist reach or revenue.",
   };
