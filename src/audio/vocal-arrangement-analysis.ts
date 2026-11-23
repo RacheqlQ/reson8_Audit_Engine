@@ -373,7 +373,7 @@ function analyzeWindow(samples: Float32Array, start: number, sampleRate: number,
     : 0;
   const chromaNorm = Math.sqrt(chroma.reduce((sum, value) => sum + value * value, 0));
   const normalizedChroma = chromaNorm > EPSILON ? chroma.map(value => value / chromaNorm) : chroma;
-  const vocalActivity = midBandRatio >= 0.18 && midRmsDbfs >= -48 && harmonicity >= 0.42;
+  const vocalActivity = midBandRatio >= 0.12 && midRmsDbfs >= -48 && harmonicity >= 0.42;
   return {
     window: {
       startSeconds: start / sampleRate, endSeconds: (start + FFT_SIZE) / sampleRate,
