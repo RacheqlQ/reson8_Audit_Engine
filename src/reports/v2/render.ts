@@ -652,7 +652,7 @@ function formatSnapshotTime(seconds:number):string{
  return Math.floor(safe/60)+":"+String(safe%60).padStart(2,"0");
 }
 function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:AuditReportInput):number{
- const audio=rec(input.sonicDna),vocal=rec(audio.vocalFeatures),analysis=rec(audio.vocalArrangementAnalysis??vocal);
+ const audio=rec(input.sonicDna),analysis=rec(audio.vocalArrangementAnalysis??audio.vocalFeatures);
  const sections=arr(analysis.inferredSections).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
  const transitions=arr(analysis.detectedTransitions).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds));
  const intervals=arr(analysis.vocalActivityIntervals).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
@@ -660,71 +660,83 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  const presence=finite(analysis.vocalPresencePct)?Math.max(0,Math.min(100,analysis.vocalPresencePct)):0;
  const vocalDetected=analysis.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0;
  const pitch=finite(analysis.vocalMedianF0Hz)?analysis.vocalMedianF0Hz:null;
- const range=rec(analysis.vocalF0RangeHz);
- const low=finite(range.p10)?range.p10:null,high=finite(range.p90)?range.p90:null;
+ const range=rec(analysis.vocalF0RangeHz),low=finite(range.p10)?range.p10:null,high=finite(range.p90)?range.p90:null;
  const energy=finite(analysis.vocalBandEnergyDbfs)?analysis.vocalBandEnergyDbfs:null;
- const x=M,width=W-2*M,height=238,bottom=top-height,pad=10;
+ const x=M,width=W-2*M,height=260,bottom=top-height,pad=10,left=x+pad,right=x+width-pad,barWidth=right-left;
  page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
  page.drawText("VOCAL ANALYSIS, SECTIONS AND TRANSITIONS",{x:x+pad,y:top-16,size:7,font:fonts.bold,color:C.gold});
- const status=vocalDetected?"• VOCALS DETECTED":"• INSTRUMENTAL / LOW VOCAL ACTIVITY";
- page.drawText(status,{x:x+pad,y:top-29,size:6,font:fonts.bold,color:vocalDetected?C.teal:C.amber});
- page.drawText("SIGNAL-DERIVED FROM UPLOADED MASTER",{x:x+width-174,y:top-29,size:5.6,font:fonts.bold,color:C.muted});
- const timelineTop=top-42;
- page.drawText("SONG ARRANGEMENT SECTIONS, TRANSITIONS AND VOCAL ACTIVITY",{x:x+pad,y:timelineTop,size:5.8,font:fonts.bold,color:C.ink});
- page.drawText("INFERRED · PROVISIONAL LABELS",{x:x+width-143,y:timelineTop,size:5.3,font:fonts.bold,color:C.muted});
- const left=x+pad,right=x+width-pad,barWidth=right-left,barY=timelineTop-30;
- const palette=[C.gold,C.teal,C.amber,C.coral,{r:0.39,g:0.42,b:0.72},{r:0.22,g:0.55,b:0.53} as typeof C.teal];
+ const status=vocalDetected?"• VOCALS DETECTED · INFERRED FROM UPLOADED MASTER SIGNAL":"• INSTRUMENTAL / LOW VOCAL ACTIVITY";
+ const statusWidth=Math.min(width-185,fonts.bold.widthOfTextAtSize(status,5.1)+10);
+ page.drawRectangle({x:x+pad,y:top-32,width:statusWidth,height:11,color:vocalDetected?C.amber:C.paper,borderColor:C.line,borderWidth:.35});
+ page.drawText(status,{x:x+pad+5,y:top-28.5,size:5.1,font:fonts.bold,color:vocalDetected?C.white:C.muted});
+ page.drawText("SIGNAL-DERIVED FROM UPLOADED MASTER",{x:right-164,y:top-28.5,size:5.2,font:fonts.bold,color:C.muted});
+ const timelineTop=top-43;
+ page.drawText("SONG ARRANGEMENT SECTIONS, TRANSITIONS AND VOCAL ACTIVITY",{x:left,y:timelineTop,size:5.8,font:fonts.bold,color:C.ink});
+ page.drawText("INFERRED · PROVISIONAL LABELS",{x:right-142,y:timelineTop,size:5.1,font:fonts.bold,color:C.amber});
+ const barY=timelineTop-30;
+ const colorFor=(label:string)=>{
+  const value=label.toLowerCase();
+  if(/intro|outro/.test(value))return C.teal;
+  if(/pre-chorus/.test(value))return C.gold;
+  if(/chorus/.test(value))return C.coral;
+  if(/verse/.test(value))return C.blue;
+  if(/bridge/.test(value))return {r:0.39,g:0.42,b:0.72} as typeof C.teal;
+  if(/instrumental|loop|solo/.test(value))return C.muted;
+  if(/breakdown|drop/.test(value))return C.amber;
+  return C.label;
+ };
+ page.drawRectangle({x:left,y:barY,width:barWidth,height:14,color:C.paper,borderColor:C.line,borderWidth:.4});
  if(sections.length){
   sections.forEach((section,index)=>{
    const start=Math.max(0,Number(section.startSeconds)),end=Math.min(duration,Number(section.endSeconds));
    const bx=left+start/duration*barWidth,bw=Math.max(1,(end-start)/duration*barWidth);
-   page.drawRectangle({x:bx,y:barY,width:bw,height:14,color:palette[index%palette.length]});
-   if(bw>24)page.drawText(String(section.label??("Section "+(index+1))).slice(0,16),{x:bx+2,y:barY+4,size:4.8,font:fonts.bold,color:C.white});
+   page.drawRectangle({x:bx,y:barY,width:bw,height:14,color:colorFor(str(section.label,"Section")),borderColor:C.white,borderWidth:.25});
+   if(bw>24)page.drawText(String(section.label??("Section "+(index+1))).slice(0,16),{x:bx+2,y:barY+4,size:4.7,font:fonts.bold,color:C.white});
   });
- }else{
-  page.drawRectangle({x:left,y:barY,width:barWidth,height:14,color:C.paper,borderColor:C.line,borderWidth:.5});
-  page.drawText("Section boundaries not confidently inferred",{x:left+5,y:barY+4,size:5.2,font:fonts.italic,color:C.muted});
- }
- page.drawText("0:00",{x:left,y:barY-9,size:5.2,font:fonts.regular,color:C.muted});
- page.drawText(formatSnapshotTime(duration),{x:right-22,y:barY-9,size:5.2,font:fonts.regular,color:C.muted});
- transitions.forEach((item,index)=>{
+ }else page.drawText("Section boundaries not confidently inferred",{x:left+5,y:barY+4,size:5,font:fonts.italic,color:C.muted});
+ page.drawText("0:00",{x:left,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
+ page.drawText(formatSnapshotTime(duration),{x:right-22,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
+ transitions.slice(0,16).forEach((item,index)=>{
   const tx=left+Math.max(0,Math.min(duration,Number(item.timestampSeconds)))/duration*barWidth;
-  page.drawLine({start:{x:tx,y:barY-1},end:{x:tx,y:barY+19},color:C.ink,thickness:.6});
-  page.drawText("T"+(index+1),{x:Math.max(left,Math.min(right-10,tx-4)),y:barY+17,size:4.6,font:fonts.bold,color:C.ink});
+  page.drawLine({start:{x:tx,y:barY-1},end:{x:tx,y:barY+20},color:C.ink,thickness:.6});
+  page.drawText(String(item.id??("T"+(index+1))),{x:Math.max(left,Math.min(right-12,tx-4)),y:barY+16,size:4.5,font:fonts.bold,color:C.ink});
  });
- const vocalY=barY-18;
- page.drawText("VOCAL ACTIVITY",{x:left,y:vocalY+5,size:5,font:fonts.bold,color:C.muted});
+ const vocalY=barY-20;
+ page.drawText("VOCAL ACTIVITY",{x:left,y:vocalY+6,size:4.9,font:fonts.bold,color:C.muted});
  page.drawRectangle({x:left+78,y:vocalY,width:barWidth-78,height:5,color:C.paper,borderColor:C.line,borderWidth:.4});
  intervals.forEach(interval=>{
   const start=Math.max(0,Number(interval.startSeconds)),end=Math.min(duration,Number(interval.endSeconds));
   if(end<=start)return;
   page.drawRectangle({x:left+78+start/duration*(barWidth-78),y:vocalY,width:Math.max(1,(end-start)/duration*(barWidth-78)),height:5,color:C.teal});
  });
- const legend=[["Intro/Outro",C.gold],["Verse",C.teal],["Pre-chorus",C.amber],["Chorus",C.coral],["Bridge",{r:0.39,g:0.42,b:0.72} as typeof C.teal],["Instrumental/solo",C.muted],["Breakdown/drop",C.line],["Vocal activity",C.teal]] as Array<[string,typeof C.teal]>;
+ const intervalText=intervals.length
+  ?intervals.slice(0,5).map(item=>formatSnapshotTime(Number(item.startSeconds))+"–"+formatSnapshotTime(Number(item.endSeconds))).join(" · ")+(intervals.length>5?" · +"+(intervals.length-5)+" more":"")
+  :"No timestamped activity intervals; low activity or insufficient signal.";
+ drawWrapped(page,intervalText,left,vocalY-7,barWidth,fonts.regular,4.7,C.muted,5.3);
+ const legend=[["Intro/Outro",C.teal],["Verse",C.blue],["Pre-chorus",C.gold],["Chorus",C.coral],["Bridge",{r:0.39,g:0.42,b:0.72} as typeof C.teal],["Instrumental/solo",C.muted],["Breakdown/drop",C.amber],["Vocal activity",C.teal]] as Array<[string,typeof C.teal]>;
  let legendX=left;
  legend.forEach(([label,color])=>{
-  page.drawRectangle({x:legendX,y:vocalY-12,width:5,height:5,color});
-  page.drawText(label,{x:legendX+7,y:vocalY-11,size:4.5,font:fonts.regular,color:C.muted});
-  legendX+=Math.min(66,fonts.regular.widthOfTextAtSize(label,4.5)+13);
-  if(legendX>right-55)legendX=right-55;
+  page.drawRectangle({x:legendX,y:vocalY-20,width:5,height:5,color});
+  page.drawText(label,{x:legendX+7,y:vocalY-19,size:4.35,font:fonts.regular,color:C.muted});
+  legendX+=Math.min(65,fonts.regular.widthOfTextAtSize(label,4.35)+13);
+  if(legendX>right-58)legendX=right-58;
  });
- const calloutTop=vocalY-23;
- page.drawText("TRANSITION CALLOUTS",{x:left,y:calloutTop,size:5.4,font:fonts.bold,color:C.ink});
- const calloutWidth=(barWidth-12)/3;
+ const calloutTop=vocalY-31;
+ page.drawText("TRANSITION CALLOUT GRID",{x:left,y:calloutTop,size:5.3,font:fonts.bold,color:C.ink});
+ const calloutWidth=(barWidth-12)/3,calloutHeight=27,calloutY=calloutTop-7-calloutHeight;
  if(transitions.length){
   transitions.slice(0,3).forEach((item,index)=>{
-   const cx=left+index*(calloutWidth+6),cy=calloutTop-7;
-   page.drawRectangle({x:cx,y:cy-22,width:calloutWidth,height:22,color:C.paper,borderColor:C.line,borderWidth:.4});
-   const label="T"+(index+1)+" "+formatSnapshotTime(Number(item.timestampSeconds));
-   page.drawText(label,{x:cx+4,y:cy-8,size:5.1,font:fonts.bold,color:C.ink});
-   const detail=String(item.fromLabel??"Section")+" → "+String(item.toLabel??"Section")+" · "+String(item.reason??"Spectral change");
-   drawWrapped(page,detail,cx+4,cy-16,calloutWidth-8,fonts.regular,4.5,C.muted,5.2);
+   const cx=left+index*(calloutWidth+6);
+   page.drawRectangle({x:cx,y:calloutY,width:calloutWidth,height:calloutHeight,color:C.paper,borderColor:C.line,borderWidth:.4});
+   const label=String(item.id??("T"+(index+1)))+" "+formatSnapshotTime(Number(item.timestampSeconds))+" "+String(item.fromLabel??"Section")+" → "+String(item.toLabel??"Section");
+   drawWrapped(page,label,cx+4,calloutTop-15,calloutWidth-8,fonts.bold,4.7,C.ink,5.2);
+   drawWrapped(page,"Trigger: "+String(item.reason??"Spectral change"),cx+4,calloutTop-24,calloutWidth-8,fonts.regular,4.4,C.muted,4.8);
   });
  }else{
-  page.drawText("No discrete transition trigger exceeded the provisional threshold.",{x:left,y:calloutTop-17,size:5.2,font:fonts.italic,color:C.muted});
+  page.drawText("No discrete transition trigger exceeded the provisional novelty, energy, chroma or vocal-state thresholds.",{x:left+4,y:calloutTop-19,size:4.8,font:fonts.italic,color:C.muted});
  }
- const kpiTop=calloutTop-39,kpiGap=6,kpiW=(barWidth-kpiGap*3)/4,kpiH=29;
+ const kpiTop=calloutTop-39,kpiGap=6,kpiW=(barWidth-kpiGap*3)/4,kpiH=30;
  const kpis=[
   ["VOCAL PRESENCE",presence.toFixed(1)+"%"],
   ["VOCAL-BAND ENERGY",energy===null?"NOT ANALYSED":energy.toFixed(1)+" dBFS"],
@@ -734,28 +746,28 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  kpis.forEach((item,index)=>{
   const kx=left+index*(kpiW+kpiGap),ky=kpiTop-kpiH;
   page.drawRectangle({x:kx,y:ky,width:kpiW,height:kpiH,color:C.paper,borderColor:C.line,borderWidth:.45});
-  page.drawText(item[0],{x:kx+4,y:kpiTop-9,size:4.7,font:fonts.bold,color:C.muted});
-  page.drawText(item[1],{x:kx+4,y:kpiTop-21,size:6.5,font:fonts.bold,color:C.ink});
+  page.drawText(item[0],{x:kx+4,y:kpiTop-9,size:4.6,font:fonts.bold,color:C.muted});
+  drawWrapped(page,item[1],kx+4,kpiTop-21,kpiW-8,fonts.bold,6.2,C.ink,6.8);
  });
- const rangeY=kpiTop-kpiH-13;
- page.drawText("PITCH RANGE (F0 CANDIDATES, 70–500 Hz SCALE)",{x:left,y:rangeY,size:5.3,font:fonts.bold,color:C.ink});
- const rangeX=left+165,rangeW=barWidth-170,rangeBarY=rangeY-5;
- page.drawRectangle({x:rangeX,y:rangeBarY,width:rangeW,height:5,color:C.paper,borderColor:C.line,borderWidth:.4});
+ const rangeTitleY=kpiTop-kpiH-12;
+ page.drawText("PITCH RANGE (F0 CANDIDATES, 70–500 Hz SCALE)",{x:left,y:rangeTitleY,size:5.2,font:fonts.bold,color:C.ink});
+ const rangeX=left,rangeW=barWidth,rangeBarY=rangeTitleY-10;
+ page.drawRectangle({x:rangeX,y:rangeBarY,width:rangeW,height:6,color:C.paper,borderColor:C.line,borderWidth:.4});
  if(low!==null&&high!==null){
   const lo=Math.max(70,Math.min(500,low)),hi=Math.max(lo,Math.min(500,high));
-  page.drawRectangle({x:rangeX+(lo-70)/430*rangeW,y:rangeBarY,width:Math.max(1,(hi-lo)/430*rangeW),height:5,color:C.amber});
+  page.drawRectangle({x:rangeX+(lo-70)/430*rangeW,y:rangeBarY,width:Math.max(1,(hi-lo)/430*rangeW),height:6,color:C.amber});
  }
  if(pitch!==null){
   const px=rangeX+(Math.max(70,Math.min(500,pitch))-70)/430*rangeW;
-  page.drawLine({start:{x:px,y:rangeBarY-2},end:{x:px,y:rangeBarY+9},color:C.ink,thickness:1});
+  page.drawLine({start:{x:px,y:rangeBarY-2},end:{x:px,y:rangeBarY+9},color:C.coral,thickness:1});
  }
- page.drawText("70",{x:rangeX,y:rangeBarY-9,size:4.5,font:fonts.regular,color:C.muted});
- page.drawText("500 Hz",{x:rangeX+rangeW-22,y:rangeBarY-9,size:4.5,font:fonts.regular,color:C.muted});
- page.drawText(pitch===null?"F0 candidates unavailable":"Median "+pitch.toFixed(1)+" Hz",{x:left,y:rangeBarY-9,size:4.6,font:fonts.italic,color:C.muted});
+ page.drawText("70 Hz",{x:rangeX,y:rangeBarY-9,size:4.5,font:fonts.regular,color:C.muted});
+ page.drawText(pitch===null?"F0 candidate range not analysed":"Median "+pitch.toFixed(1)+" Hz",{x:rangeX+rangeW/2-32,y:rangeBarY-9,size:4.5,font:fonts.bold,color:C.muted});
+ page.drawText("500 Hz",{x:rangeX+rangeW-24,y:rangeBarY-9,size:4.5,font:fonts.regular,color:C.muted});
  const footerY=bottom+8;
- drawWrapped(page,"WHAT IT SHOWS: Vocal-band energy, candidate pitch region and inferred structural transitions from the uploaded master.",left,footerY+15,barWidth,fonts.regular,4.8,C.ink,5.4);
- drawWrapped(page,"WHAT IT DOES NOT SHOW: Exact section labels, singing vs. rap, lead vs. backing, singer count, lyrics, delivery quality or audience response. "+String(analysis.analysisReason??"Low vocal activity or signal quality may limit detection."),left,footerY+7,barWidth,fonts.italic,4.5,C.muted,5);
- drawWrapped(page,"LABEL BASIS: Windowed spectral-flux novelty, RMS step changes, chroma movement and vocal-band onset/offset; labels remain provisional.",left,footerY-1,barWidth,fonts.regular,4.2,C.muted,4.8);
+ drawWrapped(page,"WHAT IT SHOWS: Vocal-band energy locations, candidate pitch region and inferred section transitions from the uploaded master.",left,footerY+15,barWidth,fonts.regular,4.7,C.ink,5.1);
+ drawWrapped(page,"WHAT IT DOES NOT SHOW: Exact labels, singing vs rap, lead vs backing, singer count, lyrics, delivery quality or audience response.",left,footerY+7,barWidth,fonts.italic,4.5,C.muted,4.9);
+ page.drawText(String(analysis.labelBasis??"Boundaries use signal novelty, RMS, chroma and vocal-band changes; labels remain provisional.").slice(0,142),{x:left,y:bottom+5,size:4.2,font:fonts.italic,color:C.muted});
  return height;
 }
 function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
