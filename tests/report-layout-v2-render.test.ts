@@ -314,6 +314,15 @@ describe("Page 3 vocal arrangement snapshot integration", () => {
         vocalActivityStatus: "SIGNAL_ACTIVITY_DETECTED"
       }
     };
+    const titles = reportV2Render.buildReportSectionTitles(input, "sample");
+    expect(titles[2]).toBe("Track snapshot");
+    expect(titles[3]).toBe("Evidence ledger and scorecard");
+    expect(reportV2Render.buildExecutiveSummary(input)).toContain("0:18–0:47");
+    expect(reportV2Render.buildVocalCadenceSummaryLine(input)).toContain("0:18–0:47");
+    const swotSmart = reportV2Render.buildSwotSmartLines(input).join(" ");
+    expect(swotSmart).toContain("0:18");
+    expect(swotSmart).toContain("T1 0:18");
+    expect(reportV2Render.buildMandatoryArAnswerLines(input)[1]).toContain("Intro 0:00");
     const sample = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
     const full = await PDFDocument.load(await generateAuditReportV2(input, "full"));
     expect(sample.getPageCount()).toBe(8);
