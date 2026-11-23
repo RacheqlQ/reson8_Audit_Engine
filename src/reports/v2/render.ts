@@ -361,9 +361,25 @@ export function buildSwotSmartLines(input: AuditReportInput): string[] {
  );
  return [...swot, ...smart];
 }
+export function buildCommercialStrategyLines(input: AuditReportInput): string[] {
+ const strategy=rec(input.marketPlacement?.commercialStrategy);
+ if(!Object.keys(strategy).length)return [];
+ const coverage=rec(input.marketPlacement?.isrcCoverage);
+ const primary=rec(strategy.primaryLane);
+ const adjacent=arr(strategy.adjacentLanes).map(value=>str(rec(value).label,"")).filter(Boolean);
+ const kpis=arr(strategy.kpis).map(value=>rec(value));
+ const readiness=arr(strategy.readinessActions).map(value=>str(value,"")).filter(Boolean);
+ return [
+  "Commercial thesis: PROPOSED · "+str(primary.label,"Lane not established")+"; adjacent tests: "+(adjacent.join(", ")||"not yet established")+".",
+  "ISRC/catalogue coverage: "+str(coverage.status,"ISRC_UNRESOLVED")+" · "+str(coverage.catalogPresenceTier,"NO_CATALOG_MATCH")+" · platforms "+(arr(coverage.matchedPlatforms).map(v=>str(v,"")).filter(Boolean).join(", ")||"none verified")+".",
+  "Release lifecycle: "+str(strategy.releaseLifecycle,"UNKNOWN")+" · release-date verdict "+str(strategy.releaseDateVerdict,"UNDETERMINED")+".",
+  ...(readiness.length?["Commercial readiness: "+readiness.slice(0,2).join(" ")]:[]),
+  ...(kpis.length?["Verification gates: "+kpis.slice(0,3).map(item=>str(item.metric,"Metric")+ " — "+str(item.target,"Target")).join("; ")]:[]),
+ ];
+}
 export function buildPositioningLines(input: AuditReportInput): string[] {
  const evidence = rec(input.evidence), assessment = sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence));
- const lines: string[] = [];
+ const lines: string[] = [...buildCommercialStrategyLines(input)];
  const genre = str(evidence.genre, "");
  const genreSource = str(evidence.genreSource ?? evidence.genreProvider ?? evidence.genreProvenance, "");
  if (genre) {
@@ -498,18 +514,20 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
    ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
-  {title:"A&R positioning",blocks:[],lines:[...buildMandatoryArAnswerLines(input),buildVocalCadenceSummaryLine(input)]},
+  {title:"A&R positioning",blocks:[],lines:[...buildMandatoryArAnswerLines(input),buildVocalCadenceSummaryLine(input),...buildPositioningLines(input)]},
   {title:"Strengths, risks and actions",blocks:[],lines:[
    "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.slice(0,2).map(value=>value.length>125?value.slice(0,122).trimEnd()+"...":value).join("; ")||"No measured strengths supplied.")+(buildStrengthRiskSummary(input).strengthCount>2?" · "+(buildStrengthRiskSummary(input).strengthCount-2)+" additional documented item(s).":""),
    "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.slice(0,2).map(value=>value.length>125?value.slice(0,122).trimEnd()+"...":value).join("; ")||"No evidenced risks supplied.")+(buildStrengthRiskSummary(input).riskCount>2?" · "+(buildStrengthRiskSummary(input).riskCount-2)+" additional documented item(s).":""),
 
    "Priorities: "+arr(rec(a.releaseStrategy).priorities).map(v=>str(v)).join("; ")||"No priorities supplied.",
    "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence."),
+   ...buildCommercialStrategyLines(input).slice(0,3),
    ...buildSwotSmartLines(input),
    ...(data.moments??[]).map(m=>"Flagged moment "+m.timestampSeconds.toFixed(2)+"s · "+m.tag+" · "+m.title+" — "+m.note)
   ]},
   {title:"Release and promotion plan",blocks:[],lines:[
    buildReleaseFramingLine(input),
+   ...buildCommercialStrategyLines(input).slice(0,4),
    "General guidance: "+str(a.industryPractice,"No industry guidance supplied."),
    ...(arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v,"")).filter(Boolean).length?["Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v,"")).filter(Boolean).join("; ")]:[]),
    ...(arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v,"")).filter(Boolean).length?["Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v,"")).filter(Boolean).join("; ")]:[]),
