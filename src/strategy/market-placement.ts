@@ -355,7 +355,8 @@ function commercialStrategy(
 ): CommercialStrategy {
   const generatedAt = clean(evidence.generatedAt) || new Date().toISOString();
   const auditDate = Number.isFinite(Date.parse(generatedAt)) ? Date.parse(generatedAt) : Date.now();
-  const releaseDate = clean(evidence.releaseDate) || clean(record(evidence.identity).releaseDate);
+  const releaseDateConflict = [...arr(record(evidence.reconciliation).conflicts), ...arr(record(evidence.reconciliation).releaseContextDifferences)].some(item => clean(record(item).field) === "releaseDate");
+  const releaseDate = releaseDateConflict ? "" : clean(evidence.releaseDate) || clean(record(evidence.identity).releaseDate);
   const releaseTime = releaseDate && Number.isFinite(Date.parse(releaseDate)) ? Date.parse(releaseDate) : null;
   const releaseDateVerdict = releaseTime === null ? "UNDETERMINED" : "DETERMINED";
   const releaseLifecycle = releaseTime === null ? "UNKNOWN" : releaseTime <= auditDate ? "POST_RELEASE" : "PRE_RELEASE";
@@ -394,9 +395,10 @@ function commercialStrategy(
   const metadataSources = metadataRecords(evidence);
   const fields = ["title","artist","isrc","upc","label","releaseDate","album"];
   const sourceValues = fields.map(field => new Set(metadataSources.map(item=>clean(item[field])).filter(Boolean)));
-  const parity = sourceValues.filter(values=>values.size<=1).length / fields.length * 100;
+  const comparableFields = sourceValues.filter(values=>values.size>1);
+  const parity = comparableFields.length ? comparableFields.filter(values=>values.size===1).length / comparableFields.length * 100 : 0;
   const kpis: CommercialStrategy["kpis"] = [
-    { metric:"Metadata parity across title/artist/ISRC/UPC/label/release date/album", target:"100% of populated identifiers and release fields agree or have documented edition-level differences", verification:"Compare distributor delivery sheet with each returned DSP/catalogue record; current field agreement "+Math.round(parity)+"% across the populated-source comparison.", status:"verify_source" },
+    { metric:"Metadata parity across title/artist/ISRC/UPC/label/release date/album", target:"100% of populated identifiers and release fields agree or have documented edition-level differences", verification:comparableFields.length ? "Compare distributor delivery sheet with each returned DSP/catalogue record; "+Math.round(parity)+"% of "+comparableFields.length+" fields with competing source claims agree.":"Insufficient cross-source field overlap to calculate parity; reconcile the delivery sheet against at least two independent catalogue records.", status:"verify_source" },
     { metric:"True-peak delivery headroom", target:"At or below -1.0 dBTP unless the delivery specification states otherwise", verification:peak===null?"Measure final approved master true peak; no value supplied.":"Uploaded-master true peak "+peak.toFixed(1)+" dBFS; compare against distributor/partner delivery specification.", status:peak===null?"actionable":"verify_source" },
     { metric:"Campaign asset outputs", target:"3 approved short-form edits, 1 clean instrumental if rights/production permit, 1 artwork/metadata pack", verification:"Count completed and approved deliverables in the campaign log; no output count is presumed.", status:"actionable" },
     { metric:"Partner outreach", target:"10 individually qualified curator/partner pitches with source, date and response logged", verification:"Maintain a dated outreach register; target count is an action plan, not existing reach.", status:"actionable" },
