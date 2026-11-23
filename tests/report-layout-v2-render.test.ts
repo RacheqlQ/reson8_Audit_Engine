@@ -60,8 +60,10 @@ describe("v2 commercial strategy report integration", () => {
     };
     expect(buildCommercialStrategyLines(input).join(" ")).toContain("PROPOSED");
     expect(buildCommercialStrategyLines(input).join(" ")).toContain("MULTI_PLATFORM");
-    const pdf = generateAuditReportV2(input, "full");
-    return expect(pdf).resolves.toBeInstanceOf(Uint8Array);
+    const sample = await generateAuditReportV2(input, "sample");
+    const full = await generateAuditReportV2(input, "full");
+    expect((await PDFDocument.load(sample)).getPageCount()).toBe(8);
+    expect((await PDFDocument.load(full)).getPageCount()).toBe(13);
   });
 });
 
