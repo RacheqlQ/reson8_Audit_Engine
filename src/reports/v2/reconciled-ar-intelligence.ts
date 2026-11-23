@@ -1,3 +1,4 @@
+import { isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 export type ReleaseDateStatus = {
   verdict: "DETERMINED" | "UNVERIFIED";
   context: "POST-RELEASE" | "UPCOMING" | "RELEASE DATE NOT RECONCILED";
@@ -148,8 +149,10 @@ export function buildReconciledArIntelligence(input: {
   const hookEvidence = list(audio.flaggedMoments).length > 0 || Array.isArray(audio.flaggedMoments) && audio.flaggedMoments.length > 0;
   const gaps = releaseGaps(evidence);
   const market = commercial ? "PERFORMANCE VERIFIED — a source and reporting-period backed commercial metric is present; interpret only the metric actually supplied." : "PROPOSED — no verified commercial telemetry supports a performance verdict, audience-demand claim or forecast.";
+  const tempoConfirmed = isReliableTempo(audio as Parameters<typeof isReliableTempo>[0]);
+  const keyConfirmed = isReliableKey(audio);
   const answers = [
-    { question: "1. What is the sonic and groove identity?", answer: [finite(audio.bpm) ? "Tempo field: " + audio.bpm + " BPM (report confidence rules still apply)." : "Tempo is not confirmed.", text(audio.key) ? "Key field: " + text(audio.key) + (text(audio.mode) ? " " + text(audio.mode) : "") + "." : "Key is not confirmed.", signal.findings[0]].filter(Boolean).join(" ") },
+    { question: "1. What is the sonic and groove identity?", answer: [tempoConfirmed ? "Confirmed tempo: " + audio.bpm + " BPM." : "Tempo is not confirmed.", keyConfirmed ? "Confirmed key: " + text(audio.key) + " " + text(audio.mode) + "." : "Key is not confirmed.", signal.findings[0]].filter(Boolean).join(" ") },
     { question: "2. What is the hook and arrangement arc?", answer: structure.length ? "Supplied structure markers: " + structure.join("; ") + ". Confirm hook recall and section impact by human listening." : hookEvidence ? "Timestamped moments were supplied; verify hook recall and arrangement arc by listening to those moments. No unprovided section labels are inferred." : "No validated structure or hook timestamps were supplied; hook recall and arrangement arc require human listening." },
     { question: "3. Is the mix/master release-ready?", answer: "Technical descriptors can describe the submitted signal, but they do not certify mastering quality. Check clipping, translation, balance, distortion and destination delivery specifications with a human engineer; rights and approved-master gates remain separate." },
     { question: "4. Which primary and adjacent genre lanes should be tested?", answer: "PROPOSED primary lane: " + genre + ". Treat this as a positioning hypothesis unless a provider-backed genre classification is present; test adjacent lanes against verified references rather than inventing taxonomy labels." },
