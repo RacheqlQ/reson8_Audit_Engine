@@ -314,14 +314,14 @@ export function buildSwotSmartLines(input: AuditReportInput): string[] {
  });
  const compact = (value: string, max = 68) => value.length > max ? value.slice(0, max - 3).trimEnd() + "..." : value;
  const swot = intelligence.swot.map(group =>
-  group.category.toUpperCase() + ": " + group.items.map(item => compact(item, 145)).join(" ")
+  group.category.toUpperCase() + ": " + group.items.map(item => compact(item, 112)).join(" ")
  );
  const smart = intelligence.smartActions.map(action =>
-  action.window + " — Specific: " + compact(action.specific, 64)
-  + " Measurable: " + compact(action.measurable, 64)
-  + " Achievable: " + compact(action.achievable, 48)
-  + " Relevant: " + compact(action.relevant, 48)
-  + " Time-bound: " + compact(action.timeBound, 48)
+  action.window + " — Specific: " + compact(action.specific, 54)
+  + " Measurable: " + compact(action.measurable, 54)
+  + " Achievable: " + compact(action.achievable, 38)
+  + " Relevant: " + compact(action.relevant, 38)
+  + " Time-bound: " + compact(action.timeBound, 38)
  );
  return [...swot, ...smart];
 }
@@ -464,8 +464,9 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   ]},
   {title:"A&R positioning",blocks:[],lines:[...buildMandatoryArAnswerLines(input),buildVocalCadenceSummaryLine(input)]},
   {title:"Strengths, risks and actions",blocks:[],lines:[
-   "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.join("; ")||"No measured strengths supplied."),
-   "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.join("; ")||"No evidenced risks supplied."),
+   "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.slice(0,2).map(value=>value.length>125?value.slice(0,122).trimEnd()+"...":value).join("; ")||"No measured strengths supplied.")+(buildStrengthRiskSummary(input).strengthCount>2?" · "+(buildStrengthRiskSummary(input).strengthCount-2)+" additional documented item(s).":""),
+   "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.slice(0,2).map(value=>value.length>125?value.slice(0,122).trimEnd()+"...":value).join("; ")||"No evidenced risks supplied.")+(buildStrengthRiskSummary(input).riskCount>2?" · "+(buildStrengthRiskSummary(input).riskCount-2)+" additional documented item(s).":""),
+
    "Priorities: "+arr(rec(a.releaseStrategy).priorities).map(v=>str(v)).join("; ")||"No priorities supplied.",
    "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence."),
    ...buildSwotSmartLines(input),
