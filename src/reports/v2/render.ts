@@ -278,7 +278,7 @@ function buildDerivedListeningChecks(input:AuditReportInput):string[]{
  if(signal.vocalMedianF0Hz!==null)checks.push("Check whether the median "+signal.vocalMedianF0Hz.toFixed(1)+" Hz F0 candidate is a vocal fundamental or an instrumental harmonic.");
  return checks;
 }
-function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=adaptReportV2(input)):string{
+export function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=adaptReportV2(input)):string{
  const evidence=rec(input.evidence),assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),evidence);
  const supplied=str(assessment.executiveSummary,"");
  const release=buildReleaseDateStatus(input);
@@ -749,7 +749,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
   ?intervals.slice(0,5).map(item=>formatSnapshotTime(Number(item.startSeconds))+"–"+formatSnapshotTime(Number(item.endSeconds))).join(" · ")+(intervals.length>5?" · +"+(intervals.length-5)+" more":"")
   :"No active intervals · "+String(analysis.analysisReason??"Low vocal-band activity or insufficient PCM quality.").slice(0,118);
  drawWrapped(page,intervalText,left,vocalY-7,barWidth,fonts.regular,4.7,C.muted,5.3);
- const legend=[["Intro/Outro",C.teal],["Verse",C.blue],["Pre-chorus",C.gold],["Chorus",C.coral],["Bridge",C.violet],["Instrumental/solo",C.muted],["Breakdown/drop",C.amber],["Vocal activity",C.teal]] as Array<[string,typeof C.teal]>;
+ const legend=[["Intro/Outro",C.teal],["Verse",C.teal],["Pre-chorus",C.gold],["Chorus",C.coral],["Bridge",C.muted],["Instrumental/solo",C.muted],["Breakdown/drop",C.amber],["Vocal activity",C.teal]] as Array<[string,typeof C.teal]>;
  let legendX=left;
  legend.forEach(([label,color])=>{
   page.drawRectangle({x:legendX,y:vocalY-20,width:5,height:5,color});
