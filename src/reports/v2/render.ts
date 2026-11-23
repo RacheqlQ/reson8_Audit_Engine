@@ -94,23 +94,25 @@ export function buildCoverTempoLabel(data:ReportV2Data,input:AuditReportInput):s
 }
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
  const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna),rhythm=rec(audio.rhythmFeatures),verdict=rec(rhythm.tempoVerdict);
- const tempoBase=buildCoverTempoLabel(data,input).replace(/\s*·\s*CONFIRMED$/i,"").replace(/\s*·\s*CANDIDATE$/i,"");
- const tempoStatus=data.tempo.value!==null?"CONFIRMED":finite(verdict.primary_candidate_bpm)||finite(audio.tempoCandidateBpm)||finite(audio.bpm)?"CANDIDATE":"NOT ANALYSED";
+ const candidate=finite(audio.tempoCandidateBpm)?audio.tempoCandidateBpm:finite(verdict.primary_candidate_bpm)?verdict.primary_candidate_bpm:finite(audio.bpm)?audio.bpm:null;
+ const tempoStatus=data.tempo.value!==null?"CONFIRMED":candidate!==null&&candidate>=40&&candidate<=220?"CANDIDATE":"NOT ANALYSED";
+ const tempoDisplay=data.tempo.value!==null?data.tempo.value+" BPM":tempoStatus==="CANDIDATE"?candidate!.toFixed(1)+" BPM":"Not analysed";
  const resolution=rec(data.tonalResolution??rec(audio.harmonicFeatures).tonalResolution);
  const keyBase=buildCoverKeyLabel(input,data).replace(/^Confirmed:\s*/i,"").replace(/^Possible:\s*/i,"");
  const keyStatus=resolution.status==="CONFIRMED"||data.key.value!==null?"CONFIRMED":hasReportableKeyCandidates({...audio,tonalResolution:resolution})?"CANDIDATE":"NOT ANALYSED";
  const keyDisplay=keyStatus==="CONFIRMED"?"Confirmed: "+keyBase:keyStatus==="CANDIDATE"?"Possible: "+keyBase:"Not analysed";
  const signed=(value:unknown)=>finite(value)?(value>0?"+":"")+value.toFixed(1):null;
- const loudness=[
-  finite(audio.loudnessLufs)?signed(audio.loudnessLufs)+" LUFS":null,
+ const lufs=finite(audio.loudnessLufs)?signed(audio.loudnessLufs)+" LUFS":"NOT ANALYSED";
+ const sub=[
   finite(audio.truePeakDbfs)?"True peak "+signed(audio.truePeakDbfs)+" dBFS":null,
   finite(audio.rmsLevelDbfs)?"RMS "+signed(audio.rmsLevelDbfs)+" dBFS":null,
   finite(audio.loudnessRangeLu)?"LRA "+audio.loudnessRangeLu.toFixed(1)+" LU":null
  ].filter((value):value is string=>Boolean(value));
+ const loudness=[lufs,...sub].join(" · ");
  return [
-  {label:"TEMPO",value:tempoBase,confidence:tempoStatus,provenance},
+  {label:"TEMPO",value:tempoDisplay,confidence:tempoStatus,provenance},
   {label:"SONG KEY",value:keyDisplay,confidence:keyStatus,provenance},
-  {label:"LOUDNESS / SIGNAL",value:loudness.length?loudness.join(" · "):"NOT ANALYSED",provenance}
+  {label:"LOUDNESS / SIGNAL",value:loudness,provenance}
  ];
 }
 function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
