@@ -53,7 +53,7 @@ describe("Sonic DNA",()=>{
   expect(result.zeroCrossingRate).toBeGreaterThan(0.05);
  });
  it("embeds zero-cost vocal-band and arrangement signal analysis in Sonic DNA",()=>{
-  const sampleRate=8000,samples=Float32Array.from({length:sampleRate*5},(_,i)=>0.2*Math.sin(2*Math.PI*220*i/sampleRate));
+  const sampleRate=8000,samples=Float32Array.from({length:sampleRate*5},(_,i)=>0.15*Math.sin(2*Math.PI*220*i/sampleRate)+0.08*Math.sin(2*Math.PI*440*i/sampleRate)+0.04*Math.sin(2*Math.PI*660*i/sampleRate));
   const result=analyzePcm(samples,sampleRate);
   expect(result.vocalArrangementAnalysis).toMatchObject({
    provenance:"SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
