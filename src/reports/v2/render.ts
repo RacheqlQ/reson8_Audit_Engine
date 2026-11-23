@@ -6,6 +6,7 @@ import { adaptReportV2, type ReportV2Data } from "./adapters.js";
 import { hasReportableKeyCandidates } from "../evidence-guardrails.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
 import { sanitizePublicReportLines, sanitizePublicReportLine } from "./public-language.js";
+import { buildReconciledArIntelligence } from "./reconciled-ar-intelligence.js";
 
 const W=595.28,H=841.89,M=42;
 const C={
@@ -226,15 +227,10 @@ export function buildNextActionLine(input: AuditReportInput): string {
 }
 
 export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "UPCOMING" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
- const evidence=rec(input.evidence),raw=str(evidence.releaseDate,"");
- const valid=/^\d{4}-\d{2}-\d{2}$/.test(raw)&&Number.isFinite(Date.parse(raw+"T00:00:00Z"));
- const source=metadataFieldSource(evidence,"releaseDate").replace("Field source: ","");
- const status=metadataFieldStatus(evidence,"releaseDate");
- const attributed=source!=="unavailable"&&(status.startsWith("Cross-checked")||status.startsWith("Available")||status.startsWith("Returned")||Boolean(rec(evidence.fieldProvenance).releaseDate));
- const verdict=valid&&attributed?"DETERMINED":"UNVERIFIED";
- const generated=Date.parse(String(input.generatedAt??""));
- const release=valid?Date.parse(raw+"T00:00:00Z"):NaN;
- return {verdict,context:verdict!=="DETERMINED"?"RELEASE DATE NOT RECONCILED":Number.isFinite(generated)&&release<generated?"POST-RELEASE":"UPCOMING",date:valid?raw:"Date not reconciled",source:attributed?source:"Source not reconciled"};
+ return buildReconciledArIntelligence({
+  evidence: rec(input.evidence), sonicDna: rec(input.sonicDna),
+  assessment: rec(input.assessment), generatedAt: input.generatedAt
+ }).releaseDate;
 }
 export function buildReleaseFramingLine(input: AuditReportInput): string {
  const status=buildReleaseDateStatus(input);
@@ -287,6 +283,31 @@ export function buildPlaylistProviderStatusLines(input: AuditReportInput): strin
  });
 }
 
+function buildMandatoryArAnswerLines(input: AuditReportInput): string[] {
+ const intelligence = buildReconciledArIntelligence({
+  evidence: rec(input.evidence), sonicDna: rec(input.sonicDna),
+  assessment: rec(input.assessment), generatedAt: input.generatedAt
+ });
+ return intelligence.answers.map(item => item.question + " " + item.answer);
+}
+function buildSwotSmartLines(input: AuditReportInput): string[] {
+ const intelligence = buildReconciledArIntelligence({
+  evidence: rec(input.evidence), sonicDna: rec(input.sonicDna),
+  assessment: rec(input.assessment), generatedAt: input.generatedAt
+ });
+ const compact = (value: string, max = 68) => value.length > max ? value.slice(0, max - 3).trimEnd() + "..." : value;
+ const swot = intelligence.swot.map(group =>
+  group.category.toUpperCase() + ": " + group.items.map(item => compact(item, 145)).join(" ")
+ );
+ const smart = intelligence.smartActions.map(action =>
+  action.window + " — Specific: " + compact(action.specific, 64)
+  + " Measurable: " + compact(action.measurable, 64)
+  + " Achievable: " + compact(action.achievable, 48)
+  + " Relevant: " + compact(action.relevant, 48)
+  + " Time-bound: " + compact(action.timeBound, 48)
+ );
+ return [...swot, ...smart];
+}
 export function buildPositioningLines(input: AuditReportInput): string[] {
  const evidence = rec(input.evidence), assessment = sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence));
  const lines: string[] = [];
@@ -424,12 +445,13 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
    ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
-  {title:"A&R positioning",blocks:[],lines:[...buildPositioningLines(input),...buildTempoDiagnosticLines(input)]},
+  {title:"A&R positioning",blocks:[],lines:[...buildPositioningLines(input),...buildMandatoryArAnswerLines(input),...buildReconciledArIntelligence({evidence:e,sonicDna:sonic,assessment:rec(input.assessment),generatedAt:input.generatedAt}).vocalCadence.findings,...buildTempoDiagnosticLines(input)]},
   {title:"Strengths, risks and actions",blocks:[],lines:[
    "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.join("; ")||"No measured strengths supplied."),
    "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.join("; ")||"No evidenced risks supplied."),
    "Priorities: "+arr(rec(a.releaseStrategy).priorities).map(v=>str(v)).join("; ")||"No priorities supplied.",
    "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence."),
+   ...buildSwotSmartLines(input),
    ...(data.moments??[]).map(m=>"Flagged moment "+m.timestampSeconds.toFixed(2)+"s · "+m.tag+" · "+m.title+" — "+m.note)
   ]},
   {title:"Release and promotion plan",blocks:[],lines:[
