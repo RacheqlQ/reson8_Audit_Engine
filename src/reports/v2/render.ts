@@ -288,11 +288,11 @@ export function buildPlaylistProviderStatusLines(input: AuditReportInput): strin
  });
 }
 
-function buildMandatoryArAnswerLines(input: AuditReportInput): string[] {
+export function buildMandatoryArAnswerLines(input: AuditReportInput): string[] {
  const intelligence = buildArIntelligence(input);
  return intelligence.answers.map(item => item.question + " " + item.answer);
 }
-function buildSwotSmartLines(input: AuditReportInput): string[] {
+export function buildSwotSmartLines(input: AuditReportInput): string[] {
  const intelligence = buildReconciledArIntelligence({
   evidence: rec(input.evidence), sonicDna: rec(input.sonicDna),
   assessment: rec(input.assessment), generatedAt: input.generatedAt
