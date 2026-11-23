@@ -215,5 +215,5 @@ export function buildReconciledArIntelligence(input: {
     { question: "7. What is the marketing and rollout proposition?", answer: "PROPOSED: prepare an approved, track-specific pitch pack and human-verified short-form excerpt, then test a limited curator/creator shortlist. Anchor timing to " + (release.verdict === "DETERMINED" ? release.date : "a release date that must first be reconciled") + "; report only attributable outcomes." },
     { question: "8. What is the next decision trigger?", answer: "Proceed to external pitching only when recording identity, rights, delivery and approved-master checks are evidenced; then review source-attributed response data at day 30/60/90. Hold if a material identity conflict or rights gate remains open." }
   ];
-  return { answers, releaseDate: release, marketVerdict: commercial ? "PERFORMANCE VERIFIED" : "PROPOSED", vocalCadence: signal, swot: buildSwot(assessment, evidence, signal), smartActions: buildSmartActions(release, evidence) };
+  return { answers, releaseDate: release, marketVerdict: commercial ? "PERFORMANCE VERIFIED" : "PROPOSED", vocalCadence: signal, swot: buildSwot(assessment, evidence, signal), smartActions: buildSmartActions(release, evidence, signal) };
 }
