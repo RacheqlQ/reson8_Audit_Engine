@@ -584,7 +584,7 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
  page.drawText("CIRCLE OF FIFTHS · SONG KEY MAP",{x:x+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
- const order=["C","G","D","A","E","B","F#","C#","G#","D#","A#","F"];
+ const order=["F#","B","E","A","D","G","C","F","A#","D#","G#","C#"];
  const cx=x+93,cy=top-84,radius=48;
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
  const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
@@ -636,63 +636,147 @@ function drawCompactSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts,top:num
  });
  return height;
 }
+function formatSnapshotTime(seconds:number):string{
+ const safe=Math.max(0,Math.floor(Number.isFinite(seconds)?seconds:0));
+ return Math.floor(safe/60)+":"+String(safe%60).padStart(2,"0");
+}
+function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:AuditReportInput):number{
+ const audio=rec(input.sonicDna),vocal=rec(audio.vocalFeatures),analysis=rec(audio.vocalArrangementAnalysis??vocal);
+ const sections=arr(analysis.inferredSections).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const transitions=arr(analysis.detectedTransitions).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds));
+ const intervals=arr(analysis.vocalActivityIntervals).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const duration=finite(audio.durationSeconds)&&audio.durationSeconds>0?audio.durationSeconds:Math.max(1,...sections.map(item=>Number(item.endSeconds)));
+ const presence=finite(analysis.vocalPresencePct)?Math.max(0,Math.min(100,analysis.vocalPresencePct)):0;
+ const vocalDetected=analysis.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0;
+ const pitch=finite(analysis.vocalMedianF0Hz)?analysis.vocalMedianF0Hz:null;
+ const range=rec(analysis.vocalF0RangeHz);
+ const low=finite(range.p10)?range.p10:null,high=finite(range.p90)?range.p90:null;
+ const energy=finite(analysis.vocalBandEnergyDbfs)?analysis.vocalBandEnergyDbfs:null;
+ const x=M,width=W-2*M,height=238,bottom=top-height,pad=10;
+ page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
+ page.drawText("VOCAL ANALYSIS, SECTIONS AND TRANSITIONS",{x:x+pad,y:top-16,size:7,font:fonts.bold,color:C.gold});
+ const status=vocalDetected?"• VOCALS DETECTED":"• INSTRUMENTAL / LOW VOCAL ACTIVITY";
+ page.drawText(status,{x:x+pad,y:top-29,size:6,font:fonts.bold,color:vocalDetected?C.teal:C.amber});
+ page.drawText("SIGNAL-DERIVED FROM UPLOADED MASTER",{x:x+width-174,y:top-29,size:5.6,font:fonts.bold,color:C.muted});
+ const timelineTop=top-42;
+ page.drawText("SONG ARRANGEMENT SECTIONS, TRANSITIONS AND VOCAL ACTIVITY",{x:x+pad,y:timelineTop,size:5.8,font:fonts.bold,color:C.ink});
+ page.drawText("INFERRED · PROVISIONAL LABELS",{x:x+width-143,y:timelineTop,size:5.3,font:fonts.bold,color:C.muted});
+ const left=x+pad,right=x+width-pad,barWidth=right-left,barY=timelineTop-30;
+ const palette=[C.gold,C.teal,C.amber,C.coral,{r:0.39,g:0.42,b:0.72},{r:0.22,g:0.55,b:0.53} as typeof C.teal];
+ if(sections.length){
+  sections.forEach((section,index)=>{
+   const start=Math.max(0,Number(section.startSeconds)),end=Math.min(duration,Number(section.endSeconds));
+   const bx=left+start/duration*barWidth,bw=Math.max(1,(end-start)/duration*barWidth);
+   page.drawRectangle({x:bx,y:barY,width:bw,height:14,color:palette[index%palette.length]});
+   if(bw>24)page.drawText(String(section.label??("Section "+(index+1))).slice(0,16),{x:bx+2,y:barY+4,size:4.8,font:fonts.bold,color:C.white});
+  });
+ }else{
+  page.drawRectangle({x:left,y:barY,width:barWidth,height:14,color:C.paper,borderColor:C.line,borderWidth:.5});
+  page.drawText("Section boundaries not confidently inferred",{x:left+5,y:barY+4,size:5.2,font:fonts.italic,color:C.muted});
+ }
+ page.drawText("0:00",{x:left,y:barY-9,size:5.2,font:fonts.regular,color:C.muted});
+ page.drawText(formatSnapshotTime(duration),{x:right-22,y:barY-9,size:5.2,font:fonts.regular,color:C.muted});
+ transitions.forEach((item,index)=>{
+  const tx=left+Math.max(0,Math.min(duration,Number(item.timestampSeconds)))/duration*barWidth;
+  page.drawLine({start:{x:tx,y:barY-1},end:{x:tx,y:barY+19},color:C.ink,thickness:.6});
+  page.drawText("T"+(index+1),{x:Math.max(left,Math.min(right-10,tx-4)),y:barY+17,size:4.6,font:fonts.bold,color:C.ink});
+ });
+ const vocalY=barY-18;
+ page.drawText("VOCAL ACTIVITY",{x:left,y:vocalY+5,size:5,font:fonts.bold,color:C.muted});
+ page.drawRectangle({x:left+78,y:vocalY,width:barWidth-78,height:5,color:C.paper,borderColor:C.line,borderWidth:.4});
+ intervals.forEach(interval=>{
+  const start=Math.max(0,Number(interval.startSeconds)),end=Math.min(duration,Number(interval.endSeconds));
+  if(end<=start)return;
+  page.drawRectangle({x:left+78+start/duration*(barWidth-78),y:vocalY,width:Math.max(1,(end-start)/duration*(barWidth-78)),height:5,color:C.teal});
+ });
+ const legend=[["Intro/Outro",C.gold],["Verse",C.teal],["Pre-chorus",C.amber],["Chorus",C.coral],["Bridge",{r:0.39,g:0.42,b:0.72} as typeof C.teal],["Instrumental/solo",C.muted],["Breakdown/drop",C.line],["Vocal activity",C.teal]] as Array<[string,typeof C.teal]>;
+ let legendX=left;
+ legend.forEach(([label,color])=>{
+  page.drawRectangle({x:legendX,y:vocalY-12,width:5,height:5,color});
+  page.drawText(label,{x:legendX+7,y:vocalY-11,size:4.5,font:fonts.regular,color:C.muted});
+  legendX+=Math.min(66,fonts.regular.widthOfTextAtSize(label,4.5)+13);
+  if(legendX>right-55)legendX=right-55;
+ });
+ const calloutTop=vocalY-23;
+ page.drawText("TRANSITION CALLOUTS",{x:left,y:calloutTop,size:5.4,font:fonts.bold,color:C.ink});
+ const calloutWidth=(barWidth-12)/3;
+ if(transitions.length){
+  transitions.slice(0,3).forEach((item,index)=>{
+   const cx=left+index*(calloutWidth+6),cy=calloutTop-7;
+   page.drawRectangle({x:cx,y:cy-22,width:calloutWidth,height:22,color:C.paper,borderColor:C.line,borderWidth:.4});
+   const label="T"+(index+1)+" "+formatSnapshotTime(Number(item.timestampSeconds));
+   page.drawText(label,{x:cx+4,y:cy-8,size:5.1,font:fonts.bold,color:C.ink});
+   const detail=String(item.fromLabel??"Section")+" → "+String(item.toLabel??"Section")+" · "+String(item.reason??"Spectral change");
+   drawWrapped(page,detail,cx+4,cy-16,calloutWidth-8,fonts.regular,4.5,C.muted,5.2);
+  });
+ }else{
+  page.drawText("No discrete transition trigger exceeded the provisional threshold.",{x:left,y:calloutTop-17,size:5.2,font:fonts.italic,color:C.muted});
+ }
+ const kpiTop=calloutTop-39,kpiGap=6,kpiW=(barWidth-kpiGap*3)/4,kpiH=29;
+ const kpis=[
+  ["VOCAL PRESENCE",presence.toFixed(1)+"%"],
+  ["VOCAL-BAND ENERGY",energy===null?"NOT ANALYSED":energy.toFixed(1)+" dBFS"],
+  ["MEDIAN PITCH (F0)",pitch===null?"NOT ANALYSED":pitch.toFixed(1)+" Hz"],
+  ["ACTIVITY INTERVALS",String(intervals.length)+" timestamped"],
+ ];
+ kpis.forEach((item,index)=>{
+  const kx=left+index*(kpiW+kpiGap),ky=kpiTop-kpiH;
+  page.drawRectangle({x:kx,y:ky,width:kpiW,height:kpiH,color:C.paper,borderColor:C.line,borderWidth:.45});
+  page.drawText(item[0],{x:kx+4,y:kpiTop-9,size:4.7,font:fonts.bold,color:C.muted});
+  page.drawText(item[1],{x:kx+4,y:kpiTop-21,size:6.5,font:fonts.bold,color:C.ink});
+ });
+ const rangeY=kpiTop-kpiH-13;
+ page.drawText("PITCH RANGE (F0 CANDIDATES, 70–500 Hz SCALE)",{x:left,y:rangeY,size:5.3,font:fonts.bold,color:C.ink});
+ const rangeX=left+165,rangeW=barWidth-170,rangeBarY=rangeY-5;
+ page.drawRectangle({x:rangeX,y:rangeBarY,width:rangeW,height:5,color:C.paper,borderColor:C.line,borderWidth:.4});
+ if(low!==null&&high!==null){
+  const lo=Math.max(70,Math.min(500,low)),hi=Math.max(lo,Math.min(500,high));
+  page.drawRectangle({x:rangeX+(lo-70)/430*rangeW,y:rangeBarY,width:Math.max(1,(hi-lo)/430*rangeW),height:5,color:C.amber});
+ }
+ if(pitch!==null){
+  const px=rangeX+(Math.max(70,Math.min(500,pitch))-70)/430*rangeW;
+  page.drawLine({start:{x:px,y:rangeBarY-2},end:{x:px,y:rangeBarY+9},color:C.ink,thickness:1});
+ }
+ page.drawText("70",{x:rangeX,y:rangeBarY-9,size:4.5,font:fonts.regular,color:C.muted});
+ page.drawText("500 Hz",{x:rangeX+rangeW-22,y:rangeBarY-9,size:4.5,font:fonts.regular,color:C.muted});
+ page.drawText(pitch===null?"F0 candidates unavailable":"Median "+pitch.toFixed(1)+" Hz",{x:left,y:rangeBarY-9,size:4.6,font:fonts.italic,color:C.muted});
+ const footerY=bottom+8;
+ drawWrapped(page,"WHAT IT SHOWS: Vocal-band energy, candidate pitch region and inferred structural transitions from the uploaded master.",left,footerY+15,barWidth,fonts.regular,4.8,C.ink,5.4);
+ drawWrapped(page,"WHAT IT DOES NOT SHOW: Exact section labels, singing vs. rap, lead vs. backing, singer count, lyrics, delivery quality or audience response. "+String(analysis.analysisReason??"Low vocal activity or signal quality may limit detection."),left,footerY+7,barWidth,fonts.italic,4.5,C.muted,5);
+ return height;
+}
 function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
  const blocks=metricBlock(data,input),gap=10,width=(W-2*M-gap*2)/3,top=H-92;
- const metricHeight=Math.max(...blocks.map((b,i)=>drawMetricCard(page,M+i*(width+gap),top,width,b,fonts)));
+ const metricHeight=Math.max(...blocks.map((b)=>drawMetricCard(page,M+blocks.indexOf(b)*(width+gap),top,width,b,fonts)));
  let y=top-metricHeight-12;
  const keyMapHeight=drawCircleOfFifths(page,input,data,fonts,y);
  y-=keyMapHeight+12;
- if(data.structure){
-  const height=116;card(page,M,y,W-2*M,"Structure",[],fonts,{height,accent:C.gold});
-  const left=M+14,barY=y-63,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));  const palette=[C.teal,C.gold,C.amber,C.coral];
-  page.drawText("TRACK STRUCTURE · ELAPSED TIME",{x:left,y:barY+25,size:6,font:fonts.bold,color:C.muted});
-  data.structure.forEach((s,i)=>{const x=left+(s.startSeconds/total)*barW,w=barW*(s.endSeconds-s.startSeconds)/total;page.drawRectangle({x,y:barY,width:w,height:18,color:palette[i%palette.length]});page.drawText(String(s.index),{x:x+w/2-2,y:barY+5,size:6,font:fonts.bold,color:C.white});});
-  page.drawText("0s",{x:left,y:barY-12,size:6,font:fonts.regular,color:C.muted});
-  page.drawText(total.toFixed(0)+"s",{x:left+barW-18,y:barY-12,size:6,font:fonts.regular,color:C.muted});
-  let lineY=barY-28;data.structure.forEach((s,i)=>{const label=s.index+" · "+s.label+"  "+s.startSeconds.toFixed(1)+"–"+s.endSeconds.toFixed(1)+"s";const col=i%2;drawWrapped(page,label,M+14+col*250,lineY-Math.floor(i/2)*12,238,fonts.regular,6.7,C.muted,8);});
-  y-=height+14;
- }
- if(data.energySeries){
-  const h=178,topY=y;page.drawRectangle({x:M,y:topY-h,width:W-2*M,height:h,color:C.white,borderColor:C.line,borderWidth:.7});
-  page.drawText("ENERGY THROUGH THE TRACK",{x:M+12,y:topY-16,size:7,font:fonts.bold,color:C.gold});
-  page.drawText("Relative level",{x:M+12,y:topY-29,size:6,font:fonts.italic,color:C.muted});
-  page.drawText("Track time",{x:W-M-126,y:topY-h+8,size:6,font:fonts.italic,color:C.muted});
-  const left=M+28,right=W-M-16,plotTop=topY-42,plotBottom=topY-h+32;
-  const vals=data.energySeries.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),span=max-min||1;
-  for(let g=0;g<=4;g++){const gy=plotBottom+(plotTop-plotBottom)*g/4;page.drawLine({start:{x:left,y:gy},end:{x:right,y:gy},color:C.line,thickness:.5});}
-  const t0=data.energySeries[0].timeSeconds,t1=data.energySeries[data.energySeries.length-1].timeSeconds,dt=t1-t0||1;
-  for(let i=1;i<data.energySeries.length;i++){const a=data.energySeries[i-1],b=data.energySeries[i];page.drawLine({start:{x:left+(a.timeSeconds-t0)/dt*(right-left),y:plotBottom+(a.value-min)/span*(plotTop-plotBottom)},end:{x:left+(b.timeSeconds-t0)/dt*(right-left),y:plotBottom+(b.value-min)/span*(plotTop-plotBottom)},color:C.teal,thickness:2.2});}
-  const peak=data.energySeries.reduce((a,b)=>b.value>a.value?b:a),dip=data.energySeries.reduce((a,b)=>b.value<a.value?b:a);
-  page.drawCircle({x:left+(peak.timeSeconds-t0)/dt*(right-left),y:plotBottom+(peak.value-min)/span*(plotTop-plotBottom),size:4,color:C.teal});
-  page.drawCircle({x:left+(dip.timeSeconds-t0)/dt*(right-left),y:plotBottom+(dip.value-min)/span*(plotTop-plotBottom),size:4,color:C.coral});
-  const peakX=left+(peak.timeSeconds-t0)/dt*(right-left),dipX=left+(dip.timeSeconds-t0)/dt*(right-left);
-  const peakLabelX=Math.max(left,Math.min(right-42,peakX-21)),dipLabelX=Math.max(left,Math.min(right-38,dipX-19));
-  const sameRegion=Math.abs(peakLabelX-dipLabelX)<46;
-  page.drawText("Peak "+peak.timeSeconds.toFixed(1)+"s",{x:peakLabelX,y:plotBottom-13,size:6,font:fonts.bold,color:C.teal});
-  page.drawText("Dip "+dip.timeSeconds.toFixed(1)+"s",{x:dipLabelX,y:plotBottom-(sameRegion?24:13),size:6,font:fonts.bold,color:C.coral});
-  y-=h+12;
- }
- const sonic=rec(input.sonicDna);
- const rows:Array<[string,string]>=[
-  ["Track length",typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?Math.floor(sonic.durationSeconds/60)+" min "+Math.round(sonic.durationSeconds%60)+" sec":""],
-  ["Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):""],
-  ["Song key",buildRecordingOverviewKeyLabel(data)],
-  ["Tempo",buildCoverTempoLabel(data,input)]
- ].filter((entry):entry is [string,string]=>Boolean(entry[1]));
- if(rows.length){
-  const panelHeight=38+Math.ceil(rows.length/2)*23+14,top=y-8,bottom=top-panelHeight;
-  if(bottom>=72){
-   page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
-   page.drawText("RECORDING OVERVIEW",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
-   rows.forEach(([label,value],index)=>{
-    const col=index%2,row=Math.floor(index/2),x=M+12+col*250,yy=top-34-row*23;
-    page.drawText(label,{x,y:yy,size:6.4,font:fonts.regular,color:C.muted});
-    drawWrapped(page,value,x+112,yy,120,fonts.bold,6.4,C.ink,7);
-   });
-   page.drawText("Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.",{x:M+12,y:bottom+6,size:5.8,font:fonts.italic,color:C.muted});
-   y=bottom-12;
-  }
- }
+ const vocalHeight=drawVocalArrangementCard(page,y,fonts,input);
+ y-=vocalHeight+10;
+ const sonic=rec(input.sonicDna),vocal=rec(sonic.vocalArrangementAnalysis??sonic.vocalFeatures);
+ const duration=finite(sonic.durationSeconds)?sonic.durationSeconds:null;
+ const presence=finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:0;
+ const sections=arr(vocal.inferredSections),transitions=arr(vocal.detectedTransitions);
+ const keyLabel=buildRecordingOverviewKeyLabel(data),tempoLabel=buildCoverTempoLabel(data,input);
+ const vocalStatus=vocal.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0?"Detected":"Minimal / Instrumental";
+ const rows:Array<[string,string,string,string]>=[
+  ["Track length",duration===null?"Not analysed":Math.floor(duration/60)+" min "+Math.round(duration%60)+" sec","Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):"Not analysed"],
+  ["Song key",keyLabel,"Tempo",tempoLabel],
+  ["Vocals",vocalStatus,"Vocal activity",presence.toFixed(1)+"% of track"],
+  ["Sections",sections.length+" INFERRED","Transitions",transitions.length+" detected"]
+ ];
+ const panelHeight=105,panelTop=y-8,bottom=panelTop-panelHeight;
+ page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawText("RECORDING OVERVIEW",{x:M+12,y:panelTop-14,size:7,font:fonts.bold,color:C.gold});
+ rows.forEach((row,index)=>{
+  const yy=panelTop-30-index*16;
+  page.drawText(row[0],{x:M+12,y:yy,size:5.7,font:fonts.regular,color:C.muted});
+  drawWrapped(page,row[1],M+82,yy,142,fonts.bold,5.8,C.ink,6.5);
+  page.drawText(row[2],{x:M+260,y:yy,size:5.7,font:fonts.regular,color:C.muted});
+  drawWrapped(page,row[3],M+334,yy,155,fonts.bold,5.8,C.ink,6.5);
+ });
+ page.drawText("Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.",{x:M+12,y:bottom+5,size:5.4,font:fonts.italic,color:C.muted});
 }
 function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  const axes=data.sonicAxes!;const names=Object.keys(axes) as Array<keyof typeof axes>,cx=170,cy=555,r=118;
