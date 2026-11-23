@@ -6,6 +6,7 @@ import { voteTempoCandidates, type TempoVotingVerdict } from "./tempo-voting.js"
 
 export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.5;
 import { analyzeVocalSignalDiagnostics } from "./vocal-signal-diagnostics.js";
+import { analyzeVocalArrangement, type VocalArrangementAnalysis } from "./vocal-arrangement-analysis.js";
 import { extractAcousticFeatureProfile, type AcousticFeatureProfile } from "./acoustic-features.js";
 import type { GenreFusionResult } from "../genre/fusion.js";
 export interface TempoEstimate {
@@ -28,7 +29,7 @@ export interface TempoEstimate {
 }
 export interface SonicDnaFeatures {
  acousticFeatureProfile:AcousticFeatureProfile;
- sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; bpm:number|null; tempoCandidateBpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
+ sampleRate:number; channels:number; durationSeconds:number; rhythmFeatures:Record<string,unknown>; harmonicFeatures:Record<string,unknown>; vocalFeatures:Record<string,unknown>; vocalArrangementAnalysis?:VocalArrangementAnalysis; bpm:number|null; tempoCandidateBpm:number|null; alternateTempo:number|null; tempoConfidence:number|null;
  key:string|null; mode:"major"|"minor"|null; keyConfidence:number|null; keyTuningCents:number|null; keySegmentAgreement:number|null; keyCandidates:Array<{key:string;mode:"major"|"minor";score:number}>; tonalResolution:TonalResolution; tuningEvidenceWindows:number; keyAnalysisFftButterflyCount:number; limitations:string[];
  loudnessLufs:number|null; loudnessRangeLu?:number|null; truePeakDbfs?:number|null; rmsLevelDbfs:number; rmsEnergy:number; dynamicRangeDb:number; spectralCentroidHz:number; spectralBandwidthHz:number;
  spectralRolloffHz:number; zeroCrossingRate:number; moodTags:string[]; genreContext:string[]; genreClassification?: GenreFusionResult;
@@ -291,6 +292,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  const acousticFeatureProfile=extractAcousticFeatureProfile(samples,sampleRate,channels);
  const prepared=prepareAnalysisPcm(samples,sampleRate,channels),a=prepared.samples,rate=prepared.sampleRate,energy=rms(a);
  const vocalDiagnostics=analyzeVocalSignalDiagnostics(a,rate);
+ const vocalArrangementAnalysis=analyzeVocalArrangement(a,rate,1);
  let crossings=0;
  for(let i=1;i<a.length;i++)if((a[i-1]<0&&a[i]>=0)||(a[i-1]>=0&&a[i]<0))crossings++;
  const size=2048,bins=size/2,available=Math.max(1,Math.floor((a.length-size)/(size/2))+1),count=Math.min(12,available);
@@ -337,7 +339,8 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
   sampleRate,channels:Number.isInteger(channels)&&channels>0?channels:1,durationSeconds:prepared.durationSeconds,
   rhythmFeatures:{status:tempo.bpm===null?"insufficient_evidence":"measured",bpm:tempo.bpm,tempoCandidateBpm:tempo.topCandidateBpm,confirmationStatus:tempo.voting.confirmation_status,tempoVerdict:tempo.voting,alternateTempo:tempo.alternateTempo,confidence:tempo.confidence,method:tempo.method,candidateBpms:tempo.candidateBpms,candidateScores:tempo.candidateScores,onsetEnvelope:tempo.onsetEnvelope,beatTimesSeconds:tempo.beatTimesSeconds,downbeatCandidateTimesSeconds:tempo.downbeatCandidateTimesSeconds,beatGridStatus:tempo.beatGridStatus,downbeatGridAssumption:tempo.downbeatGridAssumption,abstentionReason:tempo.abstentionReason,windowConsensus:tempo.windowConsensus,independentEstimator:tempo.independentEstimator??null},
   harmonicFeatures:{status:resolvedKey.tonalResolution.status==="UNAVAILABLE"?"insufficient_evidence":"measured",resolutionStatus:resolvedKey.tonalResolution.status,key:resolvedKey.key,mode:resolvedKey.mode,confidence:resolvedKey.confidence,confidenceSemantics:"heuristic_score_diagnostic_not_calibrated_probability",method:resolvedKey.method,tuningCents:resolvedKey.tuningCents,segmentAgreement:resolvedKey.segmentAgreement,analysisWindows:resolvedKey.analysisWindows,fftButterflyCount:resolvedKey.fftButterflyCount,segmentChroma:resolvedKey.segmentChroma,topCandidates:resolvedKey.topCandidates,tonalResolution:resolvedKey.tonalResolution,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,limitation:resolvedKey.limitation,windowConsensus:resolvedKey.windowConsensus,independentEstimator:independentKey,independentEstimatorDisagrees:independentKeyDisagrees,relativeMajorMinorAmbiguity},
-  vocalFeatures:{...vocalDiagnostics},
+  vocalFeatures:{...vocalDiagnostics,...vocalArrangementAnalysis},
+  vocalArrangementAnalysis,
   bpm:tempo.bpm,tempoCandidateBpm:tempo.topCandidateBpm,alternateTempo:tempo.alternateTempo,tempoConfidence:tempo.confidence,
   key:resolvedKey.key,mode:resolvedKey.mode,keyConfidence:resolvedKey.confidence,keyTuningCents:resolvedKey.tuningCents,keySegmentAgreement:resolvedKey.segmentAgreement,keyCandidates:resolvedKey.topCandidates,tonalResolution:resolvedKey.tonalResolution,tuningEvidenceWindows:resolvedKey.tuningEvidenceWindows,keyAnalysisFftButterflyCount:resolvedKey.fftButterflyCount,limitations,
   loudnessLufs:null,rmsLevelDbfs:20*Math.log10(Math.max(EPSILON,energy)),rmsEnergy:energy,
