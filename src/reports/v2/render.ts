@@ -226,11 +226,16 @@ export function buildNextActionLine(input: AuditReportInput): string {
  return "Recommended next step: "+(usableRecommendation||firstGap||"Confirm the recording identifier and release-version mapping, complete rights and master-clearance checks, then run a measured post-release curator and creator reactivation.");
 }
 
+function buildArIntelligence(input: AuditReportInput) {
+ const evidence=rec(input.evidence);
+ const status=metadataFieldStatus(evidence,"releaseDate");
+ const source=metadataFieldSource(evidence,"releaseDate").replace("Field source: ","");
+ const attributed=source!=="unavailable"&&(status.startsWith("Cross-checked")||status.startsWith("Available")||status.startsWith("Returned")||Boolean(rec(evidence.fieldProvenance).releaseDate));
+ const enrichedEvidence={...evidence,fieldProvenance:{...rec(evidence.fieldProvenance),releaseDate:attributed?source:""}};
+ return buildReconciledArIntelligence({evidence:enrichedEvidence,sonicDna:rec(input.sonicDna),assessment:rec(input.assessment),generatedAt:input.generatedAt});
+}
 export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "UPCOMING" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
- return buildReconciledArIntelligence({
-  evidence: rec(input.evidence), sonicDna: rec(input.sonicDna),
-  assessment: rec(input.assessment), generatedAt: input.generatedAt
- }).releaseDate;
+ return buildArIntelligence(input).releaseDate;
 }
 export function buildReleaseFramingLine(input: AuditReportInput): string {
  const status=buildReleaseDateStatus(input);
@@ -284,10 +289,7 @@ export function buildPlaylistProviderStatusLines(input: AuditReportInput): strin
 }
 
 function buildMandatoryArAnswerLines(input: AuditReportInput): string[] {
- const intelligence = buildReconciledArIntelligence({
-  evidence: rec(input.evidence), sonicDna: rec(input.sonicDna),
-  assessment: rec(input.assessment), generatedAt: input.generatedAt
- });
+ const intelligence = buildArIntelligence(input);
  return intelligence.answers.map(item => item.question + " " + item.answer);
 }
 function buildSwotSmartLines(input: AuditReportInput): string[] {
@@ -445,7 +447,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
    ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
-  {title:"A&R positioning",blocks:[],lines:[...buildPositioningLines(input),...buildMandatoryArAnswerLines(input),...buildReconciledArIntelligence({evidence:e,sonicDna:sonic,assessment:rec(input.assessment),generatedAt:input.generatedAt}).vocalCadence.findings,...buildTempoDiagnosticLines(input)]},
+  {title:"A&R positioning",blocks:[],lines:[...buildPositioningLines(input),...buildMandatoryArAnswerLines(input),...buildArIntelligence(input).vocalCadence.findings,...buildTempoDiagnosticLines(input)]},
   {title:"Strengths, risks and actions",blocks:[],lines:[
    "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.join("; ")||"No measured strengths supplied."),
    "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.join("; ")||"No evidenced risks supplied."),
