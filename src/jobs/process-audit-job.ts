@@ -1012,8 +1012,9 @@ export async function processAuditJob(
         throw error;
       }
     }
-    const marketPlacement = buildMarketPlacementPlan({ executionMode, evidence: reportEvidence, sonicDna: masterDna ? dnaEvidence(masterDna) : sonicDna, playlistDiscovery });
-    const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: reportEvidence, sonicDna, assessment, executionMode, marketPlacement, tonalResolution: masterDna?.tonalResolution ?? null, ...(realMasterContract ? { realMasterContract } : {}) };
+    const commercialEvidence = { ...reportEvidence, industryPractice: assessment.industryPractice ?? null };
+    const marketPlacement = buildMarketPlacementPlan({ executionMode, evidence: commercialEvidence, sonicDna: masterDna ? dnaEvidence(masterDna) : sonicDna, playlistDiscovery });
+    const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: commercialEvidence, sonicDna, assessment, executionMode, marketPlacement, tonalResolution: masterDna?.tonalResolution ?? null, ...(realMasterContract ? { realMasterContract } : {}) };
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
     await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
 
