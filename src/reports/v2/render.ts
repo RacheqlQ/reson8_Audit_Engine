@@ -815,8 +815,10 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
  const duration=finite(sonic.durationSeconds)?sonic.durationSeconds:null;
  const presence=finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:0;
  const sections=arr(vocal.inferredSections),transitions=arr(vocal.detectedTransitions);
- const keyLabel=buildRecordingOverviewKeyLabel(data),tempoLabel=buildCoverTempoLabel(data,input);
- const vocalStatus=vocal.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0?"Detected":"Minimal / Instrumental";
+ const keyRaw=buildRecordingOverviewKeyLabel(data),keyLabel=data.key.value!==null?"Confirmed: "+keyRaw:/^Provisional:/i.test(keyRaw)?keyRaw:keyRaw==="Unavailable"?"Unavailable":"Provisional: "+keyRaw;
+ const tempoRaw=buildCoverTempoLabel(data,input).replace(/\s*·\s*CANDIDATE$/i,"").replace(/\s*·\s*CONFIRMED$/i,"");
+ const tempoLabel=tempoRaw==="Not determined"?"Not analysed":tempoRaw+(data.tempo.value===null?" CANDIDATE":" CONFIRMED");
+ const vocalStatus=vocal.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0?"Detected (inferred)":"Minimal / Instrumental";
  const rows:Array<[string,string,string,string]>=[
   ["Track length",duration===null?"Not analysed":Math.floor(duration/60)+" min "+Math.round(duration%60)+" sec","Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):"Not analysed"],
   ["Song key",keyLabel,"Tempo",tempoLabel],
