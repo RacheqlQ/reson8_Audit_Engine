@@ -200,7 +200,7 @@ describe("Phase 5 market placement strategy", () => {
         releaseDate: "2025-08-27",
         generatedAt: "2026-11-23T12:00:00.000Z",
         metadataSources: [
-          { platform: "musicbrainz", catalogId: "mb-rec-1", isrc: "NGABC2600001", album: "Night Drive", upc: null, label: "Test Label", externalIds: { musicbrainz: "mb-rec-1" }, raw: { recordings: [{ releases: [{ releaseId: "rel-1" }, { releaseId: "rel-2" }] }] } },
+          { platform: "musicbrainz", catalogId: "mb-rec-1", isrc: "NGABC2600001", album: "Night Drive", releaseDate: "2025-08-27", upc: null, label: "Test Label", retrievedAt: "2026-11-23T12:00:00.000Z", externalIds: { musicbrainz: "mb-rec-1" }, raw: { recordings: [{ releases: [{ releaseId: "rel-1" }, { releaseId: "rel-2" }] }] } },
           { platform: "spotify", catalogId: "sp-1", isrc: "NGABC2600001", album: "Night Drive - EP", upc: "123456789012", label: "Test Label", externalIds: { spotify: "sp-1" } },
           { platform: "apple_music", catalogId: "am-1", isrc: "NGABC2600001", externalIds: { apple_music: "am-1" } },
         ],
@@ -227,7 +227,7 @@ describe("Phase 5 market placement strategy", () => {
   it("marks unresolved ISRC and preserves pre-release framing with a determined date", () => {
     const plan = buildMarketPlacementPlan({
       executionMode: "master",
-      evidence: { isrc: "NGABC2600001", releaseDate: "2027-02-01", generatedAt: "2026-11-23T12:00:00.000Z", artist: "Test Artist", title: "Future Single", metadataSources: [] },
+      evidence: { isrc: "NGABC2600001", releaseDate: "2027-02-01", fieldProvenance: { releaseDate: "musicbrainz" }, generatedAt: "2026-11-23T12:00:00.000Z", artist: "Test Artist", title: "Future Single", metadataSources: [] },
       sonicDna: master,
     });
     expect(plan.isrcCoverage).toMatchObject({ status: "ISRC_UNRESOLVED", isrc: "NGABC2600001", resolvedVia: "unresolved", matchedPlatforms: [], linkedReleasesCount: 0 });
