@@ -338,8 +338,8 @@ export function buildVocalCadenceSummaryLine(input: AuditReportInput): string {
   ??findings.find(line=>/^F0 candidates:/.test(line))
   ??findings.find(line=>!/^HEURISTIC_SIGNAL_DERIVED/.test(line))
   ??"Signal descriptors are not determined.";
- const intervals=signal.vocalActivityIntervals.map(item=>formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds));
- const transitions=signal.detectedTransitions.map(item=>item.id+" "+formatSnapshotTime(item.timestampSeconds));
+ const intervals=signal.vocalActivityIntervals.slice(0,2).map(item=>formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds));
+ const transitions=signal.detectedTransitions.slice(0,3).map(item=>item.id+" "+formatSnapshotTime(item.timestampSeconds));
  return "Signal-derived vocal/cadence proxy: "+primary+(intervals.length?" Active intervals: "+intervals.join(", ")+".":"")+(transitions.length?" Transitions: "+transitions.join(", ")+".":"")+" [HEURISTIC_SIGNAL_DERIVED; not proof of human vocals].";
 }
 export function buildSwotSmartLines(input: AuditReportInput): string[] {
