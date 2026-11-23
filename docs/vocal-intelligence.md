@@ -13,7 +13,7 @@ The zero-cost path is implemented in `src/audio/vocal-arrangement-analysis.ts` a
 - Contiguous active windows are merged into timestamped intervals.
 - Arrangement transitions are inferred from spectral-flux novelty, RMS changes, chroma movement and vocal-band activity onset/offset.
 - Section labels use deterministic position and repeated-section heuristics. They are always marked provisional.
-- Work is bounded by the existing PCM analysis sample cap and a maximum of 512 pitch frames; no neural model weights are loaded.
+- Work is bounded by the existing PCM analysis sample cap and a maximum of 96 pitch frames; no neural model weights are loaded.
 
 The persisted Sonic DNA fields are `vocalArrangementAnalysis` and the compatible `vocalFeatures` projection. The report uses the same data in the Executive Summary, A&R questions, SWOT, SMART actions, arrangement guidance and human listening checks.
 
