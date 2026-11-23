@@ -907,8 +907,18 @@ export async function processAuditJob(
       identityFieldProvenance: assessmentIdentity.fieldProvenance,
       reconciliation: assessmentReconciliationEvidence,
     });
-    const reportEvidence = { ...reportSourceEvidence, canonicalEvidence };
     const generatedAt = new Date().toISOString();
+    const reportEvidence = {
+      ...reportSourceEvidence,
+      canonicalEvidence,
+      generatedAt,
+      metadataSources: metadataSources.map(source => ({
+        platform: source.platform, catalogId: source.catalogId, canonicalUrl: source.canonicalUrl,
+        artist: source.artist, title: source.title, album: source.album, releaseDate: source.releaseDate,
+        isrc: source.isrc, upc: source.upc, label: source.label, genre: source.genre,
+        externalIds: source.externalIds, raw: source.platform === "musicbrainz" ? source.raw : {},
+      })),
+    };
     const executionMode = hasMaster && hasCatalog ? "combined" : hasMaster ? "master" : "dsp_link";
     let realMasterContract: RealMasterAuditContract | null = null;
     if (masterDna && realMasterSource) {
