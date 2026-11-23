@@ -16,6 +16,18 @@ export interface IsrcCatalogLookup {
   outcomes: IsrcProviderOutcome[];
 }
 
+function platformFromUrl(value: string): string | null {
+  try {
+    const host = new URL(value).hostname.toLowerCase().replace(/^www\./,"");
+    if (host === "open.spotify.com") return "spotify";
+    if (host === "music.apple.com" || host === "itunes.apple.com") return "apple_music";
+    if (host === "tidal.com" || host === "listen.tidal.com") return "tidal";
+    if (host === "deezer.com") return "deezer";
+    if (host === "music.youtube.com" || host === "youtube.com" || host === "youtu.be") return "youtube_music";
+    if (host === "audiomack.com") return "audiomack";
+    return null;
+  } catch { return null; }
+}
 function musicBrainzMetadata(
   isrc: string,
   recordings: Awaited<ReturnType<MusicBrainzClient["lookupIsrc"]>>,
@@ -29,6 +41,12 @@ function musicBrainzMetadata(
   const recordingId = recording?.recordingId ?? null;
   const title = recording?.title ?? null;
   const artist = recording?.artist ?? null;
+  const linkedPlatformUrls = (recording?.externalUrls ?? []).filter(item => platformFromUrl(item.resource));
+  const externalIds: Record<string,string> = recordingId ? { musicbrainz: recordingId } : {};
+  for (const item of linkedPlatformUrls) {
+    const platform = platformFromUrl(item.resource);
+    if (platform && !externalIds[platform]) externalIds[platform] = item.resource;
+  }
   return {
     platform: "musicbrainz",
     sourceUrl: `https://musicbrainz.org/ws/2/isrc/${encodeURIComponent(isrc)}`,
@@ -48,12 +66,14 @@ function musicBrainzMetadata(
     genre: null,
     artworkUrl: null,
     previewUrl: null,
-    externalIds: recordingId ? { musicbrainz: recordingId } : {},
+    externalIds,
     sonicProfile: null,
     raw: {
       provider: "musicbrainz",
       matchedRecordingCount: recordings.length,
       recordings,
+      tags: recording?.tags ?? [],
+      externalPlatformUrls: linkedPlatformUrls,
       releaseSelection: release ? "single_release_match" : "not_selected_ambiguous_or_unavailable",
     },
     evidenceStatus: uniqueIdentity && title && artist ? "recognized" : "partial",
