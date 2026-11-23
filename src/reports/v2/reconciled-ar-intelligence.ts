@@ -44,7 +44,7 @@ function verifiedCommercialEvidence(evidence: UnknownRecord): boolean {
     if (item.verified !== true || !text(item.source) || !text(item.reportingPeriod)) continue;
     const metrics = record(item.metrics ?? item);
     if (["streams", "monthlyListeners", "listeners", "saves", "sales", "revenue", "playlistAdds", "conversions", "completionRate"]
-      .some(key => finite(metrics[key]) && metrics[key] >= 0)) return true;
+      .some(key => { const value = metrics[key]; return finite(value) && value >= 0; })) return true;
   }
   return false;
 }
