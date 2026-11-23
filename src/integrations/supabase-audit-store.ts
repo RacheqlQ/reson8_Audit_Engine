@@ -542,7 +542,11 @@ export function createSupabaseAuditStore(
               tier, storagePath, sha256: digest,
               eventPayload: {
                 tier, accessStatus: "available", sha256: digest,
-                ...(tier === "full" && reportInput ? { reportInput } : {}),
+                ...(tier === "full" && reportInput ? {
+                  reportInput,
+                  isrcCoverage: reportInput.marketPlacement?.isrcCoverage ?? null,
+                  commercialStrategy: reportInput.marketPlacement?.commercialStrategy ?? null,
+                } : {}),
               },
             }, signal);
           },
