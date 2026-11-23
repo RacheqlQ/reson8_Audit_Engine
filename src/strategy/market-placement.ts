@@ -96,6 +96,7 @@ export interface MarketPlacementPlan {
   globalLimitations: string[];
 }
 
+const arrayValue = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const finite = (value: unknown): number | null =>
@@ -370,7 +371,7 @@ function commercialStrategy(
 ): CommercialStrategy {
   const generatedAt = clean(evidence.generatedAt) || new Date().toISOString();
   const auditDate = Number.isFinite(Date.parse(generatedAt)) ? Date.parse(generatedAt) : Date.now();
-  const releaseDateConflict = [...arr(record(evidence.reconciliation).conflicts), ...arr(record(evidence.reconciliation).releaseContextDifferences)].some(item => clean(record(item).field) === "releaseDate");
+  const releaseDateConflict = [...arrayValue(record(evidence.reconciliation).conflicts), ...arrayValue(record(evidence.reconciliation).releaseContextDifferences)].some(item => clean(record(item).field) === "releaseDate");
   const releaseDate = releaseDateConflict ? "" : clean(evidence.releaseDate) || clean(record(evidence.identity).releaseDate);
   const releaseTime = releaseDate && Number.isFinite(Date.parse(releaseDate)) ? Date.parse(releaseDate) : null;
   const releaseDateVerdict = releaseTime === null ? "UNDETERMINED" : "DETERMINED";
