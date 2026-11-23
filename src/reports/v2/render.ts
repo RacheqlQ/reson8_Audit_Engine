@@ -253,15 +253,37 @@ export function buildDays6190Plan(input: AuditReportInput): string {
  const anchor=release.verdict==="DETERMINED"?"the determined "+release.date+" release":"the confirmed release date once reconciled";
  return "Post-release catalog momentum, anchored to "+anchor+": review the prior release window and current catalog identity without assuming performance outcomes; refresh the curator and DSP pitch pack, then follow up only with contacts who accepted or requested material; expand approved creator/UGC excerpts and visual treatments around human-verified hook windows; lock artist, title, version, ISRC, UPC, EP-versus-album mapping, rights splits and master ownership against distributor and provider records; complete the day-90 performance review by comparing source-attributed platform reports and campaign activity with the pre-review baseline, documenting unavailable metrics rather than estimating streams, revenue, reach or conversion.";
 }
-export function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=adaptReportV2(input)):string{
+export function buildArrangementGuidanceSummary(input:AuditReportInput):string{
+ const signal=buildArIntelligence(input).vocalCadence,parts:string[]=[];
+ if(signal.vocalPresencePct!==null)parts.push("Vocal-band activity proxy: "+signal.vocalPresencePct.toFixed(1)+"% of analysis windows.");
+ if(signal.vocalMedianF0Hz!==null&&signal.vocalF0RangeHz)parts.push("F0 candidates: median "+signal.vocalMedianF0Hz.toFixed(1)+" Hz; 10th–90th percentile "+signal.vocalF0RangeHz.p10.toFixed(1)+"–"+signal.vocalF0RangeHz.p90.toFixed(1)+" Hz.");
+ if(signal.vocalActivityIntervals.length)parts.push("Active intervals: "+signal.vocalActivityIntervals.map(item=>formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds)).join(", ")+".");
+ if(signal.inferredSections.length)parts.push("Provisional sections: "+signal.inferredSections.map(item=>item.label+" "+formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds)).join("; ")+".");
+ if(signal.detectedTransitions.length)parts.push("Transitions: "+signal.detectedTransitions.map(item=>item.id+" "+formatSnapshotTime(item.timestampSeconds)+" "+item.fromLabel+" to "+item.toLabel+" ("+item.reason+")").join("; ")+".");
+ return parts.length?parts.join(" "):"Vocal-band activity, F0 and structural boundaries were not analysed or could not be determined from the available PCM.";
+}
+function buildDerivedListeningChecks(input:AuditReportInput):string[]{
+ const signal=buildArIntelligence(input).vocalCadence,checks:string[]=[];
+ for(const interval of signal.vocalActivityIntervals.slice(0,6)){
+  checks.push("Listen at "+formatSnapshotTime(interval.startSeconds)+"–"+formatSnapshotTime(interval.endSeconds)+" and confirm whether the signal-active band contains a human vocal or an instrument.");
+ }
+ for(const transition of signal.detectedTransitions.slice(0,8)){
+  checks.push("Review "+transition.id+" at "+formatSnapshotTime(transition.timestampSeconds)+" ("+transition.reason+"); confirm or revise "+transition.fromLabel+" → "+transition.toLabel+".");
+ }
+ if(signal.vocalMedianF0Hz!==null)checks.push("Check whether the "+signal.vocalMedianF0Hz.toFixed(1)+" Hz median F0 candidate corresponds to a vocal fundamental or an instrumental harmonic.");
+ if(!checks.length)checks.push("No vocal-band intervals or discrete transitions were detected; listen across the full master before assigning vocal or section labels.");
+ return checks;
+}
+function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=adaptReportV2(input)):string{
  const evidence=rec(input.evidence),assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),evidence);
  const supplied=str(assessment.executiveSummary,"");
  const release=buildReleaseDateStatus(input);
  const releaseClause=release.verdict==="DETERMINED"
   ?"Release date DETERMINED: "+release.date+" ("+release.source+"); this is a post-release catalogue and reactivation opportunity."
   :"Release-date reconciliation remains a diligence item; timing is not assumed.";
+ const signalClause="Signal-derived vocal/arrangement observations: "+buildArrangementGuidanceSummary(input)+" These are inferred from the mixed uploaded master and are not confirmation of human vocals or exact section labels.";
  if(supplied&&!/not supplied|not provided|not available|insufficient evidence/i.test(supplied))
-  return releaseClause+" "+supplied;
+  return releaseClause+" "+supplied+" "+signalClause;
  const artist=str(evidence.artist,"the submitting artist"),title=str(evidence.title,"the submitted recording"),album=str(evidence.album,"");
  const genre=str(evidence.genre,"");
  const audioDetails=[
@@ -269,7 +291,7 @@ export function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=a
   data.key.value!==null?"audio-derived key "+data.key.value:null,
   typeof rec(input.sonicDna).loudnessLufs==="number"?"integrated loudness "+Number(rec(input.sonicDna).loudnessLufs).toFixed(1)+" LUFS":null
  ].filter((value):value is string=>Boolean(value));
- return "This A&R review of "+artist+"'s "+title+(album?" from "+album:"")+" combines the supplied recording analysis with source-returned catalogue identity. "+releaseClause+" "+(genre?"The provider-returned genre context is "+genre+". ":"")+"Available audio observations include "+(audioDetails.join(", ")||"the recording descriptors available in this audit")+". The market position is a PROPOSED strategic thesis, not a claim of verified audience demand or commercial performance.";
+ return "This A&R review of "+artist+"'s "+title+(album?" from "+album:"")+" combines the supplied recording analysis with source-returned catalogue identity. "+releaseClause+" "+(genre?"The provider-returned genre context is "+genre+". ":"")+"Available audio observations include "+(audioDetails.join(", ")||"the recording descriptors available in this audit")+". "+signalClause+" The market position is a PROPOSED strategic thesis, not a claim of verified audience demand or commercial performance.";
 }
 export function buildReportSectionTitles(input:AuditReportInput,tier:AuditReportTier="sample"):string[]{
  return buildReportSections(input,adaptReportV2(input),tier).map(page=>page.title);
@@ -308,9 +330,14 @@ export function buildMandatoryArAnswerLines(input: AuditReportInput): string[] {
  });
 }
 export function buildVocalCadenceSummaryLine(input: AuditReportInput): string {
- const findings=buildArIntelligence(input).vocalCadence.findings;
- const primary=findings.find(line=>!/^HEURISTIC_SIGNAL_DERIVED/.test(line))??"Signal descriptors are not determined.";
- return "Signal-derived vocal/cadence proxy: "+primary+" [HEURISTIC_SIGNAL_DERIVED; not proof of human vocals].";
+ const signal=buildArIntelligence(input).vocalCadence,findings=signal.findings;
+ const primary=findings.find(line=>/^Vocal-band activity proxy:/.test(line))
+  ??findings.find(line=>/^F0 candidates:/.test(line))
+  ??findings.find(line=>!/^HEURISTIC_SIGNAL_DERIVED/.test(line))
+  ??"Signal descriptors are not determined.";
+ const intervals=signal.vocalActivityIntervals.map(item=>formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds));
+ const transitions=signal.detectedTransitions.map(item=>item.id+" "+formatSnapshotTime(item.timestampSeconds));
+ return "Signal-derived vocal/cadence proxy: "+primary+(intervals.length?" Active intervals: "+intervals.join(", ")+".":"")+(transitions.length?" Transitions: "+transitions.join(", ")+".":"")+" [HEURISTIC_SIGNAL_DERIVED; not proof of human vocals].";
 }
 export function buildSwotSmartLines(input: AuditReportInput): string[] {
  const intelligence = buildReconciledArIntelligence({
@@ -515,7 +542,11 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   const days90Plan=/not supplied|not provided|fixture timeline|not a confirmed release calendar/i.test(days90Text)?buildDays6190Plan(input):days90Text;
   // The five full-report narrative sections follow the seven core analytical pages.
   pages.push(
-   {title:"Production and arrangement guidance",blocks:[paragraph("Production and arrangement guidance",a.productionArrangementGuidance),list("Human listening checks",arr(a.listeningChecks))],kind:"narrative"},
+   {title:"Production and arrangement guidance",blocks:[
+    paragraph("Production and arrangement guidance",a.productionArrangementGuidance),
+    paragraph("Signal-derived vocal and arrangement observations",buildArrangementGuidanceSummary(input),"No reliable vocal or structural signal analysis was available."),
+    list("Human listening checks",[...arr(a.listeningChecks).map(value=>str(value,"")).filter(Boolean),...buildDerivedListeningChecks(input)])
+   ],kind:"narrative"},
    {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod)],kind:"narrative"},
    {title:"Promotion and campaign strategy",blocks:[
     historicalPhase(campaignLabels.preRelease,promotion.preRelease,isPostRelease?"The pre-release stage is closed for the determined "+releaseStatus.date+" release; do not schedule pre-release actions as upcoming.":"No pre-release actions were supplied."),
