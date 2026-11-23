@@ -52,6 +52,21 @@ describe("Sonic DNA",()=>{
   expect(result.spectralCentroidHz).toBeLessThan(500);
   expect(result.zeroCrossingRate).toBeGreaterThan(0.05);
  });
+ it("embeds zero-cost vocal-band and arrangement signal analysis in Sonic DNA",()=>{
+  const sampleRate=8000,samples=Float32Array.from({length:sampleRate*5},(_,i)=>0.2*Math.sin(2*Math.PI*220*i/sampleRate));
+  const result=analyzePcm(samples,sampleRate);
+  expect(result.vocalArrangementAnalysis).toMatchObject({
+   provenance:"SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+   method:"WINDOWED_FFT_MID_BAND_SALIENCE_AND_AUTOCORRELATION",
+   analysisStatus:"MEASURED_SIGNAL"
+  });
+  expect(result.vocalArrangementAnalysis?.vocalPresencePct).toBeGreaterThan(0);
+  expect(result.vocalArrangementAnalysis?.vocalMedianF0Hz).toBeGreaterThan(200);
+  expect(result.vocalFeatures).toMatchObject({
+   voicePresence:"undetermined",
+   provenance:"SIGNAL_DERIVED_FROM_UPLOADED_MASTER"
+  });
+ });
  it("uses transient-onset evidence and exposes ranked tempo candidates with an abstention diagnostic",()=>{
   const result=estimateTempo(pulse(120),8000);
   expect(result.method).toBe("high_frequency_transient_autocorrelation");
