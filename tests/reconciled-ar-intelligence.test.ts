@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildReconciledArIntelligence } from "../src/reports/v2/reconciled-ar-intelligence.js";
+import { buildMandatoryArAnswerLines, buildSwotSmartLines } from "../src/reports/v2/render.js";
 import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("zero-cost reconciled A&R intelligence", () => {
@@ -52,6 +53,22 @@ describe("zero-cost reconciled A&R intelligence", () => {
       for (const field of ["specific", "measurable", "achievable", "relevant", "timeBound"] as const) {
         expect(action[field].trim().length).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it("places all eight A&R answers and SWOT/SMART content into the existing report sections", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.evidence.fieldProvenance = { releaseDate: "apple_music" };
+    const answers = buildMandatoryArAnswerLines(input);
+    const actions = buildSwotSmartLines(input);
+    expect(answers).toHaveLength(8);
+    expect(answers.map(line => line.split(" ")[0])).toEqual(["1.", "2.", "3.", "4.", "5.", "6.", "7.", "8."]);
+    expect(actions.join(" ")).toContain("STRENGTHS:");
+    expect(actions.join(" ")).toContain("WEAKNESSES:");
+    expect(actions.join(" ")).toContain("OPPORTUNITIES:");
+    expect(actions.join(" ")).toContain("THREATS:");
+    for (const label of ["Specific:", "Measurable:", "Achievable:", "Relevant:", "Time-bound:"]) {
+      expect(actions.join(" ")).toContain(label);
     }
   });
 
