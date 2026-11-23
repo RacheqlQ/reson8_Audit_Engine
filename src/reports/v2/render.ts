@@ -93,23 +93,24 @@ export function buildCoverTempoLabel(data:ReportV2Data,input:AuditReportInput):s
  return "Not determined";
 }
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
- const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna);
- const tempoBase=buildCoverTempoLabel(data,input);
- const tempoDisplay=data.tempo.value!==null?tempoBase+" · CONFIRMED":tempoBase.includes("CANDIDATE")?tempoBase:tempoBase==="Not determined"?tempoBase:tempoBase+" · CANDIDATE";
+ const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna),rhythm=rec(audio.rhythmFeatures),verdict=rec(rhythm.tempoVerdict);
+ const tempoBase=buildCoverTempoLabel(data,input).replace(/\s*·\s*CONFIRMED$/i,"").replace(/\s*·\s*CANDIDATE$/i,"");
+ const tempoStatus=data.tempo.value!==null?"CONFIRMED":finite(verdict.primary_candidate_bpm)||finite(audio.tempoCandidateBpm)||finite(audio.bpm)?"CANDIDATE":"NOT ANALYSED";
  const resolution=rec(data.tonalResolution??rec(audio.harmonicFeatures).tonalResolution);
- const keyBase=buildCoverKeyLabel(input,data);
- const keyDisplay=resolution.status==="CONFIRMED"?"Confirmed: "+keyBase:keyBase.startsWith("Possible:")?keyBase:"Possible: "+keyBase;
+ const keyBase=buildCoverKeyLabel(input,data).replace(/^Confirmed:\s*/i,"").replace(/^Possible:\s*/i,"");
+ const keyStatus=resolution.status==="CONFIRMED"||data.key.value!==null?"CONFIRMED":hasReportableKeyCandidates({...audio,tonalResolution:resolution})?"CANDIDATE":"NOT ANALYSED";
+ const keyDisplay=keyStatus==="CONFIRMED"?"Confirmed: "+keyBase:keyStatus==="CANDIDATE"?"Possible: "+keyBase:"Not analysed";
  const signed=(value:unknown)=>finite(value)?(value>0?"+":"")+value.toFixed(1):null;
  const loudness=[
   finite(audio.loudnessLufs)?signed(audio.loudnessLufs)+" LUFS":null,
-  finite(audio.loudnessRangeLu)?"LRA "+audio.loudnessRangeLu.toFixed(1)+" LU":null,
   finite(audio.truePeakDbfs)?"True peak "+signed(audio.truePeakDbfs)+" dBFS":null,
-  finite(audio.rmsLevelDbfs)?"RMS "+signed(audio.rmsLevelDbfs)+" dBFS":null
+  finite(audio.rmsLevelDbfs)?"RMS "+signed(audio.rmsLevelDbfs)+" dBFS":null,
+  finite(audio.loudnessRangeLu)?"LRA "+audio.loudnessRangeLu.toFixed(1)+" LU":null
  ].filter((value):value is string=>Boolean(value));
  return [
-  {label:"TEMPO",value:tempoDisplay,provenance},
-  {label:"SONG KEY",value:keyDisplay,provenance},
-  {label:"LOUDNESS / SIGNAL",value:loudness.length?loudness.join(" · "):data.energy.value===null?"Not measured":String(data.energy.value),provenance}
+  {label:"TEMPO",value:tempoBase,confidence:tempoStatus,provenance},
+  {label:"SONG KEY",value:keyDisplay,confidence:keyStatus,provenance},
+  {label:"LOUDNESS / SIGNAL",value:loudness.length?loudness.join(" · "):"NOT ANALYSED",provenance}
  ];
 }
 function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
@@ -558,32 +559,28 @@ export function metricCardValueLayout(label:string):{fontSize:number;lineHeight:
  return {fontSize:14,lineHeight:17,maxLines:2,cardHeight:104};
 }
 function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Block,fonts:Fonts):number{
- const pad=12,layout=metricCardValueLayout(block.label),bodyWidth=width-pad*2;
- const isLoudness=block.label.toUpperCase()==="LOUDNESS / SIGNAL";
- const parts=block.value.split(" · ");
- const valueLines=(layout.fontSize<10
-  ?parts.flatMap(part=>wrap(part,fonts.bold,layout.fontSize,bodyWidth))
-  :wrap(block.value,fonts.bold,layout.fontSize,bodyWidth)).slice(0,layout.maxLines);
- const provenanceLines=wrap(block.provenance??"From uploaded recording",fonts.regular,7,bodyWidth).slice(0,2);
- const valueTop=top-39;
- const provenanceTop=top-79;
- const height=layout.cardHeight;
- const y=top-height;
+ const pad=12,layout=metricCardValueLayout(block.label),bodyWidth=width-pad*2,height=layout.cardHeight,y=top-height;
+ const isLoudness=block.label.toUpperCase()==="LOUDNESS / SIGNAL",parts=block.value.split(" · ");
  page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:y+height-3,width,height:3,color:C.gold});
  page.drawText(block.label,{x:x+pad,y:top-17,size:7,font:fonts.bold,color:C.muted});
  if(isLoudness){
-  const primary=parts[0]??"NOT MEASURED";
-  page.drawText(primary,{x:x+pad,y:top-49,size:12,font:fonts.bold,color:C.ink});
-  const sub=parts.slice(1);
-  sub.slice(0,3).forEach((part,index)=>{
+  page.drawText(parts[0]??"NOT ANALYSED",{x:x+pad,y:top-48,size:12,font:fonts.bold,color:C.ink});
+  parts.slice(1,4).forEach((part,index)=>{
    const col=index%2,row=Math.floor(index/2);
-   page.drawText(part,{x:x+pad+col*(width/2-8),y:top-68-row*10,size:5.8,font:fonts.regular,color:C.muted});
+   drawWrapped(page,part,x+pad+col*(bodyWidth/2+2),top-66-row*11,bodyWidth/2-4,fonts.regular,5.7,C.muted,6.3);
   });
  }else{
-  valueLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:valueTop-index*layout.lineHeight,size:layout.fontSize,font:fonts.bold,color:C.ink}));
+  const valueLines=wrap(block.value,fonts.bold,block.label==="TEMPO"?14:10.5,bodyWidth).slice(0,2);
+  valueLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:top-45-index*13,size:block.label==="TEMPO"?14:10.5,font:fonts.bold,color:C.ink}));
+  if(block.confidence){
+   const badgeWidth=fonts.bold.widthOfTextAtSize(block.confidence,5.2)+10,badgeX=x+width-pad-badgeWidth;
+   const fill=block.confidence==="CONFIRMED"?C.teal:block.confidence==="CANDIDATE"?C.amber:C.paper;
+   page.drawRectangle({x:badgeX,y:top-27,width:badgeWidth,height:10,color:fill,borderColor:C.line,borderWidth:.35});
+   page.drawText(block.confidence,{x:badgeX+5,y:top-23.8,size:5.2,font:fonts.bold,color:block.confidence==="NOT ANALYSED"?C.muted:C.white});
+  }
  }
- provenanceLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:provenanceTop-index*9,size:7,font:fonts.regular,color:C.muted}));
+ drawWrapped(page,block.provenance??"Measured from the uploaded recording",x+pad,top-91,bodyWidth,fonts.regular,6.3,C.muted,7);
  return height;
 }
 export function normalizeCircleNote(value:string):string{
