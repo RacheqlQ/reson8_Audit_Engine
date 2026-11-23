@@ -274,6 +274,75 @@ describe("v2 gated report pages", () => {
   });
 });
 
+describe("Page 3 vocal arrangement snapshot integration", () => {
+  it("renders the signal-derived vocal timeline and KPI data without changing Sample or Full page allocations", async () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      ...input.sonicDna,
+      durationSeconds: 180,
+      channels: 2,
+      vocalArrangementAnalysis: {
+        provenance: "SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+        analysisStatus: "MEASURED_SIGNAL",
+        vocalActivityStatus: "SIGNAL_ACTIVITY_DETECTED",
+        vocalPresencePct: 34.2,
+        vocalBandEnergyDbfs: -22.4,
+        vocalMedianF0Hz: 218.5,
+        vocalF0RangeHz: { p10: 142.2, p90: 388.1 },
+        vocalActivityIntervals: [
+          { startSeconds: 18, endSeconds: 47 },
+          { startSeconds: 72, endSeconds: 109 },
+          { startSeconds: 131, endSeconds: 159 }
+        ],
+        inferredSections: [
+          { index: 1, label: "Intro", startSeconds: 0, endSeconds: 18, provisional: true },
+          { index: 2, label: "Verse 1", startSeconds: 18, endSeconds: 72, provisional: true },
+          { index: 3, label: "Chorus", startSeconds: 72, endSeconds: 131, provisional: true },
+          { index: 4, label: "Outro", startSeconds: 131, endSeconds: 180, provisional: true }
+        ],
+        detectedTransitions: [
+          { id: "T1", timestampSeconds: 18, fromLabel: "Intro", toLabel: "Verse 1", reason: "Vocal onset" },
+          { id: "T2", timestampSeconds: 72, fromLabel: "Verse 1", toLabel: "Chorus", reason: "Energy rise" },
+          { id: "T3", timestampSeconds: 131, fromLabel: "Chorus", toLabel: "Outro", reason: "Vocal offset" }
+        ],
+        analysisReason: "Window-derived mid-band activity; not proof of human vocals.",
+        labelBasis: "Provisional labels from windowed novelty, RMS, chroma and vocal-band changes."
+      },
+      vocalFeatures: {
+        ...input.sonicDna.vocalFeatures,
+        vocalPresencePct: 34.2,
+        vocalActivityStatus: "SIGNAL_ACTIVITY_DETECTED"
+      }
+    };
+    const sample = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
+    const full = await PDFDocument.load(await generateAuditReportV2(input, "full"));
+    expect(sample.getPageCount()).toBe(8);
+    expect(full.getPageCount()).toBe(13);
+  });
+
+  it("keeps an explicit low-activity fallback with no fabricated pitch or blank structural timeline", async () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      ...input.sonicDna,
+      vocalArrangementAnalysis: {
+        provenance: "SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+        analysisStatus: "INSUFFICIENT_SIGNAL",
+        vocalActivityStatus: "LOW_VOCAL_ACTIVITY",
+        vocalPresencePct: 0,
+        vocalBandEnergyDbfs: null,
+        vocalMedianF0Hz: null,
+        vocalF0RangeHz: null,
+        vocalActivityIntervals: [],
+        inferredSections: [{ index: 1, label: "Section 1", startSeconds: 0, endSeconds: 180, provisional: true }],
+        detectedTransitions: [],
+        analysisReason: "Low vocal-band salience and insufficient periodicity for F0 candidates."
+      }
+    };
+    const pdf = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
+    expect(pdf.getPageCount()).toBe(8);
+  });
+});
+
 describe("v2 loudness metric card sizing", () => {
   it("keeps multi-reading loudness text compact enough to match the tempo and key cards", () => {
     const loudness = reportV2Render.metricCardValueLayout("LOUDNESS / SIGNAL");
