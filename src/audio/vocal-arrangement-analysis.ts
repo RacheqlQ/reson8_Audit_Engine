@@ -89,10 +89,11 @@ function fft(real: Float64Array, imag: Float64Array): void {
   }
 }
 
-function monoPcm(samples: Float32Array, channels: number): Float32Array {
+function monoPcm(samples: Float32Array, sampleRate: number, channels: number): { samples: Float32Array; sampleRate: number } {
   const channelCount = Number.isInteger(channels) && channels > 0 ? channels : 1;
   const frames = Math.floor(samples.length / channelCount);
   const stride = Math.max(1, Math.ceil(frames / MAX_ANALYSIS_SAMPLES));
+  if (channelCount === 1 && stride === 1 && frames === samples.length) return { samples, sampleRate };
   const output = new Float32Array(Math.ceil(frames / stride));
   for (let out = 0; out < output.length; out++) {
     const first = out * stride, last = Math.min(frames, first + stride);
@@ -107,7 +108,7 @@ function monoPcm(samples: Float32Array, channels: number): Float32Array {
     }
     output[out] = sum / Math.max(1, last - first);
   }
-  return output;
+  return { samples: output, sampleRate: sampleRate / stride };
 }
 
 function frameF0(samples: Float32Array, start: number, sampleRate: number, frameLength = FFT_SIZE): number | null {
@@ -209,7 +210,7 @@ function sectionSignature(windows: AnalysisWindow[]): number[] {
   return [...chroma, (rms + 60) / 60, vocal, harmonicity];
 }
 
-function assignSectionLabels(sections: InferredArrangementSection[], windows: AnalysisWindow[], boundaries: number[]): void {
+function assignSectionLabels(sections: InferredArrangementSection[], windows: AnalysisWindow[]): void {
   const groups = sections.map((section, index) => windows.filter(window =>
     window.startSeconds >= section.startSeconds && window.startSeconds < section.endSeconds
   ));
@@ -311,7 +312,7 @@ export function segmentArrangement(windows: AnalysisWindow[], durationSeconds: n
     index: index + 1, label: "Section " + (index + 1), startSeconds: start,
     endSeconds: boundaries[index + 1]!, provisional: true,
   }));
-  assignSectionLabels(sections, windows, boundaries);
+  assignSectionLabels(sections, windows);
   const transitions = selected.filter(item => item.time > 0 && item.time < duration).map((item, index) => ({
     id: "T" + (index + 1), timestampSeconds: item.time,
     fromLabel: sections[index]?.label ?? "Section " + (index + 1),
@@ -336,7 +337,6 @@ function analyzeWindow(samples: Float32Array, start: number, sampleRate: number,
   let totalPower = 0, midPower = 0, flatnessLog = 0, flatnessArithmetic = 0;
   let weighted = 0, totalMagnitude = 0;
   const chroma = new Array<number>(12).fill(0);
-  const nyquist = sampleRate / 2;
   for (let bin = 1; bin <= FFT_SIZE / 2; bin++) {
     const magnitude = Math.hypot(real[bin]!, imag[bin]!);
     const hz = bin * sampleRate / FFT_SIZE;
@@ -401,15 +401,16 @@ export function analyzeVocalArrangement(samples: Float32Array, sampleRate: numbe
     const duration = Number.isFinite(sampleRate) && sampleRate > 0 ? samples.length / sampleRate : 0;
     return empty(duration, "Insufficient PCM duration or sample rate for windowed vocal-band analysis.");
   }
-  const mono = monoPcm(samples, channels);
-  const durationSeconds = mono.length / sampleRate;
+  const prepared = monoPcm(samples, sampleRate, channels);
+  const mono = prepared.samples, rate = prepared.sampleRate;
+  const durationSeconds = mono.length / rate;
   if (mono.length < FFT_SIZE) return empty(durationSeconds, "Insufficient PCM after channel downmixing.");
   const windows: AnalysisWindow[] = [];
   let previousMagnitudes: number[] | null = null;
   const midPowers: number[] = [];
   const pitchStarts: number[] = [];
   for (let start = 0; start + FFT_SIZE <= mono.length; start += HOP_SIZE) {
-    const result = analyzeWindow(mono, start, sampleRate, previousMagnitudes);
+    const result = analyzeWindow(mono, start, rate, previousMagnitudes);
     windows.push(result.window);
     previousMagnitudes = result.magnitudes;
     if (result.window.vocalActivity) {
@@ -427,7 +428,7 @@ export function analyzeVocalArrangement(samples: Float32Array, sampleRate: numbe
     : Array.from({ length: MAX_PITCH_FRAMES }, (_, index) =>
       pitchStarts[Math.floor(index * (pitchStarts.length - 1) / (MAX_PITCH_FRAMES - 1))]!
     );
-  const pitches = selectedPitchStarts.map(start => frameF0(mono, start, sampleRate)).filter((value): value is number => value !== null);
+  const pitches = selectedPitchStarts.map(start => frameF0(mono, start, rate)).filter((value): value is number => value !== null);
   const vocalMedianF0Hz = percentile(pitches, 0.5);
   const p10 = percentile(pitches, 0.1), p90 = percentile(pitches, 0.9);
   const f0Range = p10 !== null && p90 !== null ? { p10: Number(p10.toFixed(1)), p90: Number(p90.toFixed(1)) } : null;
