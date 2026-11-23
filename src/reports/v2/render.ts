@@ -521,13 +521,13 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
 
    "Priorities: "+arr(rec(a.releaseStrategy).priorities).map(v=>str(v)).join("; ")||"No priorities supplied.",
    "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence."),
-   ...buildCommercialStrategyLines(input).slice(0,3),
+   ...buildCommercialStrategyLines(input).slice(3,5),
    ...buildSwotSmartLines(input),
    ...(data.moments??[]).map(m=>"Flagged moment "+m.timestampSeconds.toFixed(2)+"s · "+m.tag+" · "+m.title+" — "+m.note)
   ]},
   {title:"Release and promotion plan",blocks:[],lines:[
    buildReleaseFramingLine(input),
-   ...buildCommercialStrategyLines(input).slice(0,4),
+   ...buildCommercialStrategyLines(input).slice(2,3),
    "General guidance: "+str(a.industryPractice,"No industry guidance supplied."),
    ...(arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v,"")).filter(Boolean).length?["Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v,"")).filter(Boolean).join("; ")]:[]),
    ...(arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v,"")).filter(Boolean).length?["Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v,"")).filter(Boolean).join("; ")]:[]),
@@ -571,6 +571,12 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ],kind:"narrative"},
    {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod)],kind:"narrative"},
    {title:"Promotion and campaign strategy",blocks:[
+    paragraph("ISRC-anchored catalogue coverage",buildCommercialStrategyLines(input).slice(1,2).join(" ")),
+    paragraph("Audience and short-form strategy",[
+      ...arr(rec(input.marketPlacement?.commercialStrategy).audienceContexts).slice(0,2),
+      ...arr(rec(input.marketPlacement?.commercialStrategy).shortFormAngles).slice(0,2),
+    ].map(value=>str(value,"")).filter(Boolean).join(" ")),
+    list("Playlist and curator pitch hooks",arr(rec(input.marketPlacement?.commercialStrategy).playlistPitchHooks)),
     historicalPhase(campaignLabels.preRelease,promotion.preRelease,isPostRelease?"The pre-release stage is closed for the determined "+releaseStatus.date+" release; do not schedule pre-release actions as upcoming.":"No pre-release actions were supplied."),
     historicalPhase(campaignLabels.releaseWindow,promotion.releaseWindow,isPostRelease?"The original release window has passed; use current activity as post-release reactivation.":"No release-window actions were supplied."),
     paragraph(campaignLabels.postRelease,promotion.postRelease,"Post-release reactivation: refresh the source-backed pitch pack, follow up with responsive curators, publish approved creator assets and record only attributable platform activity."),
@@ -579,12 +585,14 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ],kind:"narrative"},
    {title:"Label and partner fit",blocks:[
     paragraph("Partner profile hypothesis",partner.partnerProfile),list("Criteria to demonstrate",arr(partner.criteriaToDemonstrate)),
+    paragraph("Commercial sync/partner gate",str(rec(input.marketPlacement?.commercialStrategy).syncFit.rationale,"Rights, master approval and a defined partner brief must be verified.")),
     paragraph("Rights and submission diligence",partner.diligenceBeforeContact),paragraph("Industry practice",partner.industryPractice)
    ],kind:"narrative"},
    {title:"30 / 60 / 90-day execution plan",blocks:[
     postReleasePhase(campaignLabels.first30,execution.days30,executionFallback("reconcile ISRC, UPC, artist/title spelling, EP-versus-album release mapping, rights splits and approved master; prepare a post-release positioning brief and verify the first curator/creator target list")),
     postReleasePhase(campaignLabels.days3160,execution.days60,executionFallback("run a controlled post-release reactivation with approved short-form excerpts, follow up on curator responses, refresh visual assets and record only source-attributed platform and campaign observations")),
-    postReleasePhase(campaignLabels.days6190,days90Plan,buildDays6190Plan(input))
+    postReleasePhase(campaignLabels.days6190,days90Plan,buildDays6190Plan(input)),
+    list("Commercial verification gates",arr(rec(input.marketPlacement?.commercialStrategy).kpis).slice(0,4).map(value=>{const item=rec(value);return str(item.metric,"Metric")+": "+str(item.target,"Target")+" — "+str(item.verification,"Verify with source records");}))
    ],kind:"narrative"}
   );
   // Deep-dive pages are evidence-gated; do not emit pages that contain only missing-data placeholders.
