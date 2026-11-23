@@ -9,6 +9,7 @@ import { sanitizePublicReportLines, sanitizePublicReportLine } from "./public-la
 import { buildReconciledArIntelligence } from "./reconciled-ar-intelligence.js";
 
 const W=595.28,H=841.89,M=42;
+const SNAPSHOT_METRIC_CARD_HEIGHT=104,SNAPSHOT_KEY_MAP_HEIGHT=154,SNAPSHOT_VOCAL_MODULE_HEIGHT=260,SNAPSHOT_OVERVIEW_HEIGHT=105;
 const C={
  paper:rgb(247/255,243/255,236/255),white:rgb(1,1,1),ink:rgb(43/255,40/255,37/255),
  muted:rgb(108/255,101/255,92/255),line:rgb(226/255,219/255,207/255),
@@ -589,8 +590,8 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
 }
 
 export function metricCardValueLayout(label:string):{fontSize:number;lineHeight:number;maxLines:number;cardHeight:number}{
- if(label.toUpperCase()==="LOUDNESS / SIGNAL")return {fontSize:7.2,lineHeight:8.5,maxLines:4,cardHeight:104};
- return {fontSize:14,lineHeight:17,maxLines:2,cardHeight:104};
+ if(label.toUpperCase()==="LOUDNESS / SIGNAL")return {fontSize:7.2,lineHeight:8.5,maxLines:4,cardHeight:SNAPSHOT_METRIC_CARD_HEIGHT};
+ return {fontSize:14,lineHeight:17,maxLines:2,cardHeight:SNAPSHOT_METRIC_CARD_HEIGHT};
 }
 function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Block,fonts:Fonts):number{
  const pad=12,layout=metricCardValueLayout(block.label),bodyWidth=width-pad*2,height=layout.cardHeight,y=top-height;
@@ -625,7 +626,7 @@ export function normalizeCircleNote(value:string):string{
  return enharmonic[note]??note;
 }
 function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Data,fonts:Fonts,top:number):number{
- const x=M,width=W-2*M,height=154,bottom=top-height;
+ const x=M,width=W-2*M,height=SNAPSHOT_KEY_MAP_HEIGHT,bottom=top-height;
  page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
  page.drawText("CIRCLE OF FIFTHS · SONG KEY MAP",{x:x+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
@@ -696,7 +697,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  const pitch=finite(analysis.vocalMedianF0Hz)?analysis.vocalMedianF0Hz:null;
  const range=rec(analysis.vocalF0RangeHz),low=finite(range.p10)?range.p10:null,high=finite(range.p90)?range.p90:null;
  const energy=finite(analysis.vocalBandEnergyDbfs)?analysis.vocalBandEnergyDbfs:null;
- const x=M,width=W-2*M,height=260,bottom=top-height,pad=10,left=x+pad,right=x+width-pad,barWidth=right-left;
+ const x=M,width=W-2*M,height=SNAPSHOT_VOCAL_MODULE_HEIGHT,bottom=top-height,pad=10,left=x+pad,right=x+width-pad,barWidth=right-left;
  page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
  page.drawText("VOCAL ANALYSIS, SECTIONS AND TRANSITIONS",{x:x+pad,y:top-16,size:7,font:fonts.bold,color:C.gold});
@@ -804,6 +805,17 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  drawWrapped(page,"WHAT IT DOES NOT SHOW: Exact labels, singing vs rap, lead vs backing, singer count, lyrics, delivery quality or audience response.",left,footerY+7,barWidth,fonts.italic,4.5,C.muted,4.9);
  return height;
 }
+export function snapshotPage3LayoutContract():{
+ pageNumber:number;metricHeight:number;keyMapHeight:number;vocalModuleHeight:number;overviewHeight:number;
+ vocalTop:number;vocalBottom:number;overviewTop:number;overviewBottom:number;bottomMargin:number;
+}{
+ const pageTop=H-92,metricHeight=SNAPSHOT_METRIC_CARD_HEIGHT,keyMapHeight=SNAPSHOT_KEY_MAP_HEIGHT;
+ const vocalModuleHeight=SNAPSHOT_VOCAL_MODULE_HEIGHT,overviewHeight=SNAPSHOT_OVERVIEW_HEIGHT;
+ const keyMapTop=pageTop-metricHeight-12;
+ const vocalTop=keyMapTop-keyMapHeight-12,vocalBottom=vocalTop-vocalModuleHeight;
+ const overviewTop=vocalBottom-10-8,overviewBottom=overviewTop-overviewHeight;
+ return {pageNumber:3,metricHeight,keyMapHeight,vocalModuleHeight,overviewHeight,vocalTop,vocalBottom,overviewTop,overviewBottom,bottomMargin:overviewBottom};
+}
 function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
  const blocks=metricBlock(data,input),gap=10,width=(W-2*M-gap*2)/3,top=H-92;
  const metricHeight=Math.max(...blocks.map((b)=>drawMetricCard(page,M+blocks.indexOf(b)*(width+gap),top,width,b,fonts)));
@@ -826,7 +838,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
   ["Vocals",vocalStatus,"Vocal activity",presence.toFixed(1)+"% of track"],
   ["Sections",sections.length+" INFERRED","Transitions",transitions.length+" detected"]
  ];
- const panelHeight=105,panelTop=y-8,bottom=panelTop-panelHeight;
+ const panelHeight=SNAPSHOT_OVERVIEW_HEIGHT,panelTop=y-8,bottom=panelTop-panelHeight;
  page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawText("RECORDING OVERVIEW",{x:M+12,y:panelTop-14,size:7,font:fonts.bold,color:C.gold});
  rows.forEach((row,index)=>{
