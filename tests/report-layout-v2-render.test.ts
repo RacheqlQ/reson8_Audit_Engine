@@ -2,7 +2,7 @@ import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
 import { buildCoverKeyLabel, buildCoverTempoLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
-import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
+import { buildPositioningLines, buildCommercialStrategyLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
 import { sanitizePublicReportLine } from "../src/reports/v2/public-language.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
@@ -38,6 +38,30 @@ describe("v2 decision and date framing", () => {
     expect(buildReleaseFramingLine(input)).toContain("UPCOMING");
     input.generatedAt = "2025-12-01T00:00:00.000Z";
     expect(buildReleaseFramingLine(input)).toContain("POST-RELEASE");
+  });
+});
+
+describe("v2 commercial strategy report integration", () => {
+  it("surfaces proposed ISRC coverage and actionable verification gates in existing report sections", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.marketPlacement = {
+      isrcCoverage: { status: "RESOLVED", isrc: "NGABC2600001", resolvedVia: "musicbrainz", linkedReleasesCount: 2, matchedPlatforms: ["musicbrainz", "spotify"], catalogPresenceTier: "MULTI_PLATFORM" },
+      commercialStrategy: {
+        marketVerdict: "PROPOSED", releaseDateVerdict: "DETERMINED", releaseLifecycle: "POST_RELEASE",
+        primaryLane: { label: "Afrobeats", verdict: "PROPOSED", rationale: "Tempo and metadata" },
+        adjacentLanes: [{ label: "Afro-fusion", verdict: "PROPOSED" }],
+        audienceContexts: ["Mood-led late-evening context hypothesis."],
+        shortFormAngles: ["Audition excerpt 00:42–00:54."],
+        playlistPitchHooks: ["Pitch the reconciled Afrobeats lane."],
+        readinessActions: ["Resolve the EP-versus-album metadata variant."],
+        syncFit: { status: "BLOCKED", rationale: "Rights clearance remains unverified." },
+        kpis: [{ metric: "Metadata parity", target: "100%", verification: "Compare source records." }],
+      },
+    };
+    expect(buildCommercialStrategyLines(input).join(" ")).toContain("PROPOSED");
+    expect(buildCommercialStrategyLines(input).join(" ")).toContain("MULTI_PLATFORM");
+    const pdf = generateAuditReportV2(input, "full");
+    return expect(pdf).resolves.toBeInstanceOf(Uint8Array);
   });
 });
 
