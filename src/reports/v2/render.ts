@@ -290,7 +290,22 @@ export function buildPlaylistProviderStatusLines(input: AuditReportInput): strin
 
 export function buildMandatoryArAnswerLines(input: AuditReportInput): string[] {
  const intelligence = buildArIntelligence(input);
- return intelligence.answers.map(item => item.question + " " + item.answer);
+ const labels = [
+  "1. Sonic/groove identity: ", "2. Hook/arrangement arc: ", "3. Mix/master readiness: ",
+  "4. Primary/adjacent lanes: ", "5. Audience/territories: ", "6. Catalogue/release status: ",
+  "7. Marketing/rollout: ", "8. Next decision trigger: "
+ ];
+ return intelligence.answers.map((item,index) => {
+  const answer=item.answer.replace(/\\s+/g," ").trim();
+  const limit=index===5?92:86;
+  const compact=answer.length>limit?answer.slice(0,limit-3).trimEnd()+"...":answer;
+  return (labels[index]??item.question+" ")+compact;
+ });
+}
+export function buildVocalCadenceSummaryLine(input: AuditReportInput): string {
+ const findings=buildArIntelligence(input).vocalCadence.findings;
+ const primary=findings.find(line=>!/^HEURISTIC_SIGNAL_DERIVED/.test(line))??"Signal descriptors are not determined.";
+ return "Signal-derived vocal/cadence proxy: "+primary+" [HEURISTIC_SIGNAL_DERIVED; not proof of human vocals].";
 }
 export function buildSwotSmartLines(input: AuditReportInput): string[] {
  const intelligence = buildReconciledArIntelligence({
@@ -447,7 +462,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
    ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
-  {title:"A&R positioning",blocks:[],lines:[...buildPositioningLines(input),...buildMandatoryArAnswerLines(input),...buildArIntelligence(input).vocalCadence.findings,...buildTempoDiagnosticLines(input)]},
+  {title:"A&R positioning",blocks:[],lines:[...buildMandatoryArAnswerLines(input),buildVocalCadenceSummaryLine(input)]},
   {title:"Strengths, risks and actions",blocks:[],lines:[
    "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.join("; ")||"No measured strengths supplied."),
    "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.join("; ")||"No evidenced risks supplied."),
