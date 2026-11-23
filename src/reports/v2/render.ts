@@ -14,7 +14,7 @@ const C={
  paper:rgb(247/255,243/255,236/255),white:rgb(1,1,1),ink:rgb(43/255,40/255,37/255),
  muted:rgb(108/255,101/255,92/255),line:rgb(226/255,219/255,207/255),
  charcoal:rgb(43/255,40/255,37/255),gold:rgb(176/255,141/255,87/255),
- teal:rgb(29/255,158/255,117/255),label:rgb(138/255,106/255,48/255),amber:rgb(239/255,159/255,39/255),coral:rgb(216/255,90/255,48/255)
+ teal:rgb(29/255,158/255,117/255),label:rgb(138/255,106/255,48/255),amber:rgb(239/255,159/255,39/255),coral:rgb(216/255,90/255,48/255),violet:rgb(99/255,107/255,184/255)
 };
 type Fonts={regular:PDFFont;bold:PDFFont;italic:PDFFont;boldItalic:PDFFont};
 type Block={label:string;value:string;provenance?:string;confidence?:string;color?:keyof typeof C};
@@ -716,7 +716,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
   if(/pre-chorus/.test(value))return C.gold;
   if(/chorus/.test(value))return C.coral;
   if(/verse/.test(value))return C.blue;
-  if(/bridge/.test(value))return {r:0.39,g:0.42,b:0.72} as typeof C.teal;
+  if(/bridge/.test(value))return C.violet;
   if(/instrumental|loop|solo/.test(value))return C.muted;
   if(/breakdown|drop/.test(value))return C.amber;
   return C.label;
@@ -749,7 +749,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
   ?intervals.slice(0,5).map(item=>formatSnapshotTime(Number(item.startSeconds))+"–"+formatSnapshotTime(Number(item.endSeconds))).join(" · ")+(intervals.length>5?" · +"+(intervals.length-5)+" more":"")
   :"No active intervals · "+String(analysis.analysisReason??"Low vocal-band activity or insufficient PCM quality.").slice(0,118);
  drawWrapped(page,intervalText,left,vocalY-7,barWidth,fonts.regular,4.7,C.muted,5.3);
- const legend=[["Intro/Outro",C.teal],["Verse",C.blue],["Pre-chorus",C.gold],["Chorus",C.coral],["Bridge",{r:0.39,g:0.42,b:0.72} as typeof C.teal],["Instrumental/solo",C.muted],["Breakdown/drop",C.amber],["Vocal activity",C.teal]] as Array<[string,typeof C.teal]>;
+ const legend=[["Intro/Outro",C.teal],["Verse",C.blue],["Pre-chorus",C.gold],["Chorus",C.coral],["Bridge",C.violet],["Instrumental/solo",C.muted],["Breakdown/drop",C.amber],["Vocal activity",C.teal]] as Array<[string,typeof C.teal]>;
  let legendX=left;
  legend.forEach(([label,color])=>{
   page.drawRectangle({x:legendX,y:vocalY-20,width:5,height:5,color});
