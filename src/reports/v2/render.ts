@@ -758,19 +758,20 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  });
  const calloutTop=vocalY-31;
  page.drawText("TRANSITION CALLOUT GRID",{x:left,y:calloutTop,size:5.3,font:fonts.bold,color:C.ink});
- const calloutWidth=(barWidth-12)/3,calloutHeight=27,calloutY=calloutTop-7-calloutHeight;
+ const calloutWidth=(barWidth-12)/3,calloutHeight=23,calloutY=calloutTop-7-calloutHeight;
  if(transitions.length){
   transitions.slice(0,3).forEach((item,index)=>{
    const cx=left+index*(calloutWidth+6);
    page.drawRectangle({x:cx,y:calloutY,width:calloutWidth,height:calloutHeight,color:C.paper,borderColor:C.line,borderWidth:.4});
    const label=String(item.id??("T"+(index+1)))+" "+formatSnapshotTime(Number(item.timestampSeconds))+" "+String(item.fromLabel??"Section")+" → "+String(item.toLabel??"Section");
-   drawWrapped(page,label,cx+4,calloutTop-15,calloutWidth-8,fonts.bold,4.7,C.ink,5.2);
-   drawWrapped(page,"Trigger: "+String(item.reason??"Spectral change"),cx+4,calloutTop-24,calloutWidth-8,fonts.regular,4.4,C.muted,4.8);
+   drawWrapped(page,label,cx+4,calloutTop-14,calloutWidth-8,fonts.bold,4.6,C.ink,5);
+   drawWrapped(page,"Trigger: "+String(item.reason??"Spectral change"),cx+4,calloutTop-21,calloutWidth-8,fonts.regular,4.2,C.muted,4.6);
   });
  }else{
   page.drawText("No discrete transition trigger exceeded the provisional novelty, energy, chroma or vocal-state thresholds.",{x:left+4,y:calloutTop-19,size:4.8,font:fonts.italic,color:C.muted});
  }
- const kpiTop=calloutTop-39,kpiGap=6,kpiW=(barWidth-kpiGap*3)/4,kpiH=30;
+ drawWrapped(page,"Label basis: windowed spectral-flux novelty, RMS steps, chroma movement and vocal-band onset/offset; labels are provisional.",left,calloutTop-38,barWidth,fonts.italic,4.4,C.muted,4.8);
+ const kpiTop=calloutTop-47,kpiGap=6,kpiW=(barWidth-kpiGap*3)/4,kpiH=30;
  const kpis=[
   ["VOCAL PRESENCE",presence.toFixed(1)+"%"],
   ["VOCAL-BAND ENERGY",energy===null?"NOT ANALYSED":energy.toFixed(1)+" dBFS"],
@@ -801,7 +802,6 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  const footerY=bottom+8;
  drawWrapped(page,"WHAT IT SHOWS: Vocal-band energy locations, candidate pitch region and inferred section transitions from the uploaded master.",left,footerY+15,barWidth,fonts.regular,4.7,C.ink,5.1);
  drawWrapped(page,"WHAT IT DOES NOT SHOW: Exact labels, singing vs rap, lead vs backing, singer count, lyrics, delivery quality or audience response.",left,footerY+7,barWidth,fonts.italic,4.5,C.muted,4.9);
- page.drawText(String(analysis.labelBasis??"Boundaries use signal novelty, RMS, chroma and vocal-band changes; labels remain provisional.").slice(0,142),{x:left,y:bottom+5,size:4.2,font:fonts.italic,color:C.muted});
  return height;
 }
 function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
