@@ -20,6 +20,18 @@ function join(...parts: Float32Array[]): Float32Array {
   return output;
 }
 
+function voicedTone(fundamentalHz: number, seconds: number, sampleRate = 16_000): Float32Array {
+  const samples = new Float32Array(Math.floor(seconds * sampleRate));
+  const harmonics = [1, 0.65, 0.38, 0.2, 0.1];
+  for (let i = 0; i < samples.length; i++) {
+    const time = i / sampleRate;
+    samples[i] = harmonics.reduce((sum, amplitude, index) =>
+      sum + amplitude * Math.sin(2 * Math.PI * fundamentalHz * (index + 1) * time), 0
+    ) * 0.08;
+  }
+  return samples;
+}
+
 describe("in-process vocal and arrangement signal analysis", () => {
   it("tracks 70–500 Hz F0 candidates and summarizes the median/range without claiming a singer", () => {
     const sampleRate = 16_000;
@@ -69,7 +81,7 @@ describe("in-process vocal and arrangement signal analysis", () => {
 
   it("returns bounded signal-derived vocal activity and candidate F0 on a tonal master", () => {
     const sampleRate = 16_000;
-    const samples = join(tone(220, 3, sampleRate), new Float32Array(sampleRate * 2));
+    const samples = join(voicedTone(220, 3, sampleRate), new Float32Array(sampleRate * 2));
     const result = analyzeVocalArrangement(samples, sampleRate, 1);
     expect(result.provenance).toBe("SIGNAL_DERIVED_FROM_UPLOADED_MASTER");
     expect(result.vocalPresencePct).toBeGreaterThan(0);
