@@ -259,21 +259,22 @@ export function buildArrangementGuidanceSummary(input:AuditReportInput):string{
  const signal=buildArIntelligence(input).vocalCadence,parts:string[]=[];
  if(signal.vocalPresencePct!==null)parts.push("Vocal-band activity proxy: "+signal.vocalPresencePct.toFixed(1)+"% of analysis windows.");
  if(signal.vocalMedianF0Hz!==null&&signal.vocalF0RangeHz)parts.push("F0 candidates: median "+signal.vocalMedianF0Hz.toFixed(1)+" Hz; 10th–90th percentile "+signal.vocalF0RangeHz.p10.toFixed(1)+"–"+signal.vocalF0RangeHz.p90.toFixed(1)+" Hz.");
- if(signal.vocalActivityIntervals.length)parts.push("Active intervals: "+signal.vocalActivityIntervals.map(item=>formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds)).join(", ")+".");
- if(signal.inferredSections.length)parts.push("Provisional sections: "+signal.inferredSections.map(item=>item.label+" "+formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds)).join("; ")+".");
- if(signal.detectedTransitions.length)parts.push("Transitions: "+signal.detectedTransitions.map(item=>item.id+" "+formatSnapshotTime(item.timestampSeconds)+" "+item.fromLabel+" to "+item.toLabel+" ("+item.reason+")").join("; ")+".");
+ if(signal.vocalActivityIntervals.length)parts.push("Timestamped active intervals ("+signal.vocalActivityIntervals.length+"): "+signal.vocalActivityIntervals.slice(0,2).map(item=>formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds)).join(", ")+(signal.vocalActivityIntervals.length>2?" and "+(signal.vocalActivityIntervals.length-2)+" more":"")+".");
+ if(signal.inferredSections.length)parts.push("Provisional sections ("+signal.inferredSections.length+"): "+signal.inferredSections.slice(0,3).map(item=>item.label+" "+formatSnapshotTime(item.startSeconds)).join("; ")+(signal.inferredSections.length>3?"; final "+signal.inferredSections[signal.inferredSections.length-1]!.label+" "+formatSnapshotTime(signal.inferredSections[signal.inferredSections.length-1]!.startSeconds):"")+".");
+ if(signal.detectedTransitions.length)parts.push("Detected transitions ("+signal.detectedTransitions.length+"): "+signal.detectedTransitions.slice(0,3).map(item=>item.id+" "+formatSnapshotTime(item.timestampSeconds)+" "+item.reason).join("; ")+".");
  return parts.length?parts.join(" "):"Vocal-band activity, F0 and structural boundaries were not analysed or could not be determined from the available PCM.";
 }
 function buildDerivedListeningChecks(input:AuditReportInput):string[]{
  const signal=buildArIntelligence(input).vocalCadence,checks:string[]=[];
- for(const interval of signal.vocalActivityIntervals.slice(0,6)){
-  checks.push("Listen at "+formatSnapshotTime(interval.startSeconds)+"–"+formatSnapshotTime(interval.endSeconds)+" and confirm whether the signal-active band contains a human vocal or an instrument.");
- }
- for(const transition of signal.detectedTransitions.slice(0,8)){
-  checks.push("Review "+transition.id+" at "+formatSnapshotTime(transition.timestampSeconds)+" ("+transition.reason+"); confirm or revise "+transition.fromLabel+" → "+transition.toLabel+".");
- }
- if(signal.vocalMedianF0Hz!==null)checks.push("Check whether the "+signal.vocalMedianF0Hz.toFixed(1)+" Hz median F0 candidate corresponds to a vocal fundamental or an instrumental harmonic.");
- if(!checks.length)checks.push("No vocal-band intervals or discrete transitions were detected; listen across the full master before assigning vocal or section labels.");
+ if(signal.vocalActivityIntervals.length){
+  const intervals=signal.vocalActivityIntervals.slice(0,3).map(item=>formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds)).join(", ");
+  checks.push("Listen to signal-active intervals "+intervals+" and decide whether each contains a human vocal or an instrument; verify the F0 candidate range.");
+ }else checks.push("No vocal-band activity interval was detected; listen across the full master before assigning a vocal label.");
+ if(signal.detectedTransitions.length){
+  const transitions=signal.detectedTransitions.slice(0,4).map(item=>item.id+" "+formatSnapshotTime(item.timestampSeconds)+" "+item.fromLabel+" to "+item.toLabel+" ("+item.reason+")").join("; ");
+  checks.push("Review transition markers "+transitions+" and confirm, revise or reject each provisional section label.");
+ }else checks.push("No discrete structural transition crossed the provisional thresholds; confirm the arrangement arc by listening.");
+ if(signal.vocalMedianF0Hz!==null)checks.push("Check whether the median "+signal.vocalMedianF0Hz.toFixed(1)+" Hz F0 candidate is a vocal fundamental or an instrumental harmonic.");
  return checks;
 }
 function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=adaptReportV2(input)):string{
