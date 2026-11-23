@@ -315,6 +315,11 @@ describe("Page 3 vocal arrangement snapshot integration", () => {
       }
     };
     const titles = reportV2Render.buildReportSectionTitles(input, "sample");
+    const geometry = reportV2Render.snapshotPage3LayoutContract();
+    expect(geometry.pageNumber).toBe(3);
+    expect(geometry.vocalTop).toBeGreaterThan(geometry.vocalBottom);
+    expect(geometry.vocalBottom).toBeGreaterThan(geometry.overviewTop);
+    expect(geometry.overviewBottom).toBeGreaterThan(42);
     expect(titles[2]).toBe("Track snapshot");
     expect(titles[3]).toBe("Evidence ledger and scorecard");
     expect(reportV2Render.buildExecutiveSummary(input)).toContain("0:18–0:47");
