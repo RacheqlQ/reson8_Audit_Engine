@@ -288,7 +288,8 @@ export function segmentArrangement(windows: AnalysisWindow[], durationSeconds: n
     let reason: DetectedArrangementTransition["reason"] | null = null;
     let strength = 0;
     if (vocalChanged) {
-      reason = current.vocalActivity ? (i > 2 ? "Vocal re-entry" : "Vocal onset") : "Vocal offset";
+      const previouslyActive = windows.slice(0, i).some(window => window.vocalActivity);
+      reason = current.vocalActivity ? (previouslyActive ? "Vocal re-entry" : "Vocal onset") : "Vocal offset";
       strength = 4;
     } else if (energyDelta >= 4) {
       reason = "Energy rise"; strength = energyDelta;
