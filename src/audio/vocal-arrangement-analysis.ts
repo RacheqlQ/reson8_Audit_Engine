@@ -140,7 +140,7 @@ function frameF0(samples: Float32Array, start: number, sampleRate: number, frame
     }
     correlations[lag] = cross / Math.sqrt(Math.max(EPSILON, left * right));
   }
-  let selectedLag = 0, best = 0.55;
+  let selectedLag = 0;
   for (let lag = minLag + 1; lag < maxLag; lag++) {
     const value = correlations[lag]!;
     if (value >= 0.55 && value >= correlations[lag - 1]! && value >= correlations[lag + 1]!) {
