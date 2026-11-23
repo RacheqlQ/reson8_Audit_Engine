@@ -5,7 +5,6 @@ import type { AuditReportInput, AuditReportTier } from "../reports/generate-audi
 import { isPdf } from "../reports/pdf-output.js";
 import type { SonicDnaFeatures } from "../audio/sonic-dna.js";
 import { parseRealMasterAuditContract, buildUnavailableMetric, requireRealMasterInput, type RealMasterAuditContract } from "../audio/real-master-contract.js";
-import { unavailableVocalAnalysis, type VocalAnalysisResult } from "../audio/vocal-analysis.js";
 import { analyzePcmWithTimeout } from "../audio/sonic-dna-worker-client.js";
 import { fuseGenreEvidence, type ProviderGenreTags } from "../genre/fusion.js";
 import { DEFAULT_GENRE_MODEL } from "../genre/model.js";
@@ -61,7 +60,6 @@ export interface AuditProcessorDependencies {
   ): Promise<void>;
   decode(bytes: Uint8Array, mimeType?: string, signal?: AbortSignal): Promise<{ samples: Float32Array; sampleRate: number; channels: number; loudnessLufs?: number | null; loudnessRangeLu?: number | null; truePeakDbfs?: number | null }>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
-  analyzeVocals?(samples: Float32Array, sampleRate: number, channels: number, signal?: AbortSignal): Promise<VocalAnalysisResult>;
   generateAssessment(input: {
     evidence: Record<string, unknown>;
     sonicDna: Record<string, unknown> | null;
@@ -513,6 +511,7 @@ function dnaEvidence(dna: SonicDnaFeatures): Record<string, unknown> {
     rhythmFeatures: dna.rhythmFeatures,
     harmonicFeatures: dna.harmonicFeatures,
     vocalFeatures: dna.vocalFeatures,
+    vocalArrangementAnalysis: dna.vocalArrangementAnalysis ?? null,
     acousticFeatureProfile: dna.acousticFeatureProfile,
     moodTags: dna.moodTags,
     genreContext: dna.genreContext,
@@ -588,7 +587,6 @@ export async function processAuditJob(
     let masterDna: SonicDnaFeatures | null = null;
     let masterMeasuredAt: string | null = null;
     let realMasterSource: { sourceAudioPath: string; sha256: string; mimeType: string; byteLength: number } | null = null;
-    let decodedMaster: Awaited<ReturnType<AuditProcessorDependencies["decode"]>> | null = null;
     let masterRecognition: AuditRecognition | null = null;
     let masterTags: ReturnType<typeof readAudioTags> | null = null;
     const attemptedRecognitionProviders = new Set<string>();
@@ -616,7 +614,6 @@ export async function processAuditJob(
         analyzePcmWithTimeout(decoded.samples, decoded.sampleRate, decoded.channels, 90_000, signal),
       );
       masterMeasuredAt = new Date().toISOString();
-      decodedMaster = decoded;
       masterDna = {
         ...dna,
         acousticFeatureProfile: { ...dna.acousticFeatureProfile, provenance: { ...dna.acousticFeatureProfile.provenance, sourceSampleRateHz: decoded.sampleRate, analysisResampling: dna.acousticFeatureProfile.provenance.analysisSampleRateHz < decoded.sampleRate ? "block_average_antialias" : "none", channels: decoded.channels, sourceAudioSha256: masterSha256, measuredAt: masterMeasuredAt } },
@@ -698,30 +695,6 @@ export async function processAuditJob(
         }
       }
       metadata = metadata ?? metadataSources[0];
-    }
-
-    if (masterDna && decodedMaster) {
-      let vocalFeatures: VocalAnalysisResult;
-      if (deps.analyzeVocals) {
-        try {
-          vocalFeatures = await awaitWithStage(deps, "vocal_analysis", 150_000, (signal) =>
-            deps.analyzeVocals!(decodedMaster!.samples, decodedMaster!.sampleRate, decodedMaster!.channels, signal),
-          );
-        } catch (error) {
-          if (deps.signal?.aborted) throw leaseLostError(deps.signal);
-          vocalFeatures = unavailableVocalAnalysis(error instanceof Error ? error.message : "Vocal analysis did not complete.");
-        }
-      } else {
-        vocalFeatures = unavailableVocalAnalysis("Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.");
-      }
-      masterDna = {
-        ...masterDna,
-        vocalFeatures: vocalFeatures as unknown as Record<string, unknown>,
-        limitations: [...masterDna.limitations, ...vocalFeatures.limitations],
-      };
-      // The vocal worker now owns the decoded PCM allocation. Do not retain
-      // the detached sample view through the report/reconciliation stages.
-      decodedMaster = null;
     }
 
     const metadataInput = {
