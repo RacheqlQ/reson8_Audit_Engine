@@ -215,7 +215,7 @@ describe("Phase 5 market placement strategy", () => {
     });
     expect(plan.isrcCoverage.boundaryNote).toMatch(/not streams, listeners or commercial demand/i);
     expect(plan.commercialStrategy).toMatchObject({
-      marketVerdict: "PROPOSED", releaseLifecycle: "POST_RELEASE",
+      marketVerdict: "PROPOSED", releaseDateVerdict: "DETERMINED", releaseLifecycle: "POST_RELEASE",
       primaryLane: expect.objectContaining({ label: "Afrobeats", verdict: "PROPOSED" }),
       adjacentLanes: expect.arrayContaining([expect.objectContaining({ label: "Afro-fusion" })]),
     });
@@ -227,10 +227,10 @@ describe("Phase 5 market placement strategy", () => {
   it("marks unresolved ISRC and preserves pre-release framing with a determined date", () => {
     const plan = buildMarketPlacementPlan({
       executionMode: "master",
-      evidence: { releaseDate: "2027-02-01", generatedAt: "2026-11-23T12:00:00.000Z", artist: "Test Artist", title: "Future Single", metadataSources: [] },
+      evidence: { isrc: "NGABC2600001", releaseDate: "2027-02-01", generatedAt: "2026-11-23T12:00:00.000Z", artist: "Test Artist", title: "Future Single", metadataSources: [] },
       sonicDna: master,
     });
-    expect(plan.isrcCoverage).toMatchObject({ status: "ISRC_UNRESOLVED", isrc: null, matchedPlatforms: [], linkedReleasesCount: 0 });
+    expect(plan.isrcCoverage).toMatchObject({ status: "ISRC_UNRESOLVED", isrc: "NGABC2600001", resolvedVia: "unresolved", matchedPlatforms: [], linkedReleasesCount: 0 });
     expect(plan.commercialStrategy).toMatchObject({ marketVerdict: "PROPOSED", releaseDateVerdict: "DETERMINED", releaseLifecycle: "PRE_RELEASE" });
     expect(plan.commercialStrategy.readinessActions.join(" ")).toMatch(/ISRC|UPC|label/i);
   });
