@@ -359,7 +359,7 @@ function isrcCoverage(evidence: Record<string, unknown>): IsrcCoverageSummary {
   return {
     status, isrc, resolvedVia: status === "RESOLVED" ? resolvedVia : "unresolved",
     linkedReleasesCount: releases.size, matchedPlatforms: platforms, catalogPresenceTier: tier,
-    boundaryNote: "Catalogue presence confirms availability or metadata reconciliation only; it does not establish streams, listeners, commercial demand, playlist reach or revenue.",
+    boundaryNote: "Catalogue presence indicates availability/reconciliation only—not streams, listeners, commercial demand, playlist reach or revenue.",
   };
 }
 function commercialStrategy(
