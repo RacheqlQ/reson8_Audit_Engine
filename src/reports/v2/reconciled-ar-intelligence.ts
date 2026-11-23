@@ -151,23 +151,30 @@ function buildSwot(assessment: UnknownRecord, evidence: UnknownRecord, signal: R
   const risks = list(assessment.risks).filter(cleanPlaceholder).slice(0, 3);
   const gaps = releaseGaps(evidence);
   const measuredSignal = signal.findings.filter(line => !/Insufficient measured descriptors|HEURISTIC_SIGNAL_DERIVED/.test(line));
+  const signalRisks = [
+    signal.vocalActivityIntervals.length ? "Signal-active intervals " + signal.vocalActivityIntervals.map(item => formatSeconds(item.startSeconds) + "–" + formatSeconds(item.endSeconds)).join(", ") + " require listening confirmation; the proxy does not identify a human voice." : null,
+    signal.vocalMedianF0Hz !== null ? "F0 median " + signal.vocalMedianF0Hz.toFixed(1) + " Hz is a periodicity candidate, not a validated singer pitch." : null,
+    signal.detectedTransitions.length ? "Section labels and transition markers " + signal.detectedTransitions.map(item => item.id + " " + formatSeconds(item.timestampSeconds)).join(", ") + " remain provisional until human-reviewed." : null
+  ].filter((item): item is string => item !== null);
   const fixture = evidence.fixture === true;
   const safeStrengths = fixture ? [] : strengths;
   const safeRisks = fixture ? [] : risks;
   return [
-    { category: "Strengths", items: safeStrengths.length ? safeStrengths : measuredSignal.length ? measuredSignal.slice(0, 2) : ["No track-specific strength is asserted beyond the supplied, source-attributed evidence."] },
-    { category: "Weaknesses", items: safeRisks.length ? safeRisks : ["A human listening review is still required for hook recall, arrangement impact, vocal performance and mix translation."] },
-    { category: "Opportunities", items: ["[PROPOSED] Test the primary and adjacent lane hypotheses against independently verified reference recordings and human-reviewed curator feedback.", "[PROPOSED] Build an approved short-form content test around a timestamp confirmed by listening; measure only attributable responses."] },
+    { category: "Strengths", items: safeStrengths.length ? [...safeStrengths, ...measuredSignal].slice(0, 4) : measuredSignal.length ? measuredSignal.slice(0, 3) : ["No track-specific strength is asserted beyond the supplied, source-attributed evidence."] },
+    { category: "Weaknesses", items: [...(safeRisks.length ? safeRisks : ["A human listening review is still required for hook recall, arrangement impact, vocal performance and mix translation."]), ...signalRisks].slice(0, 4) },
+    { category: "Opportunities", items: ["[PROPOSED] Test the primary and adjacent lane hypotheses against independently verified reference recordings and human-reviewed curator feedback.", "[PROPOSED] Review the inferred vocal intervals and T-markers, then build an approved short-form content test around a human-confirmed excerpt; measure only attributable responses."] },
     { category: "Threats", items: [gaps.length ? "Release identity and delivery diligence remains open for: " + gaps.join(", ") + "." : "Rights, delivery and master approval must remain source-verified before external pitching.", "Unverified audience demand or commercial performance must not be used to justify spend, partner claims or forecast outcomes."] }
   ];
 }
-function buildSmartActions(release: ReleaseDateStatus, evidence: UnknownRecord): SmartAction[] {
+function buildSmartActions(release: ReleaseDateStatus, evidence: UnknownRecord, signal: ReconciledArIntelligence["vocalCadence"]): SmartAction[] {
   const releaseAnchor = release.verdict === "DETERMINED" ? "the reconciled " + release.date + " release" : "the release date once independently reconciled";
   const gaps = releaseGaps(evidence);
+  const intervalTimes = signal.vocalActivityIntervals.map(item => formatSeconds(item.startSeconds) + "–" + formatSeconds(item.endSeconds));
+  const transitionTimes = signal.detectedTransitions.map(item => item.id + " " + formatSeconds(item.timestampSeconds));
   return [
     { window: "Days 1–14", specific: "Reconcile artist, track, version, album/EP, ISRC, UPC, label and release-date records against distributor and DSP source records.", measurable: "Record a source and outcome for 100% of the listed identity fields; leave unresolved fields explicitly open.", achievable: "Use the provider records already returned and request only missing distributor documentation.", relevant: "A stable recording/release identity is required before pitching, rights review or campaign attribution.", timeBound: "Complete the reconciliation log by day 14; current open fields: " + (gaps.join(", ") || "none recorded") + "." },
     { window: "Days 15–30", specific: "Complete rights, ownership, approved-master, artwork and delivery checks for " + releaseAnchor + ".", measurable: "Attach dated evidence for each required gate and mark each gate verified or pending; do not use estimated completion.", achievable: "Assign one owner per missing document and escalate only unresolved items.", relevant: "Prevents external pitching or spend against an uncleared or incorrectly mapped release.", timeBound: "Close or formally hold each gate by day 30." },
-    { window: "Days 31–60", specific: "Human-review the inferred vocal-band intervals and arrangement transitions, then prepare one approved excerpt and positioning test.", measurable: "Log a listening decision for each detected interval and T-marker; record which section labels were confirmed, revised or rejected.", achievable: "Use the existing master and the timestamped analysis output; no stem-separation service or paid tooling is required.", relevant: "Turns provisional signal observations into verified arrangement guidance before pitching.", timeBound: "Complete the timestamp review and test log by day 60." },
+    { window: "Days 31–60", specific: "Human-review vocal intervals " + (intervalTimes.join(", ") || "none detected") + " and transitions " + (transitionTimes.join(", ") || "none detected") + "; approve one excerpt for testing.", measurable: "Log a decision for all " + intervalTimes.length + " intervals and " + transitionTimes.length + " T-markers; confirm, revise or reject each section label.", achievable: "Use the existing master and timestamped output; no stem-separation service or paid tooling is required.", relevant: "Turns provisional signal observations into verified arrangement guidance before pitching.", timeBound: "Complete the timestamp review and test log by day 60." },
     { window: "Days 61–90", specific: "Review the test, refresh only responsive curator/creator follow-ups and decide whether to continue, revise or pause the proposition.", measurable: "Compare like-for-like source reports and document available saves, listeners, streams or conversions only when provider-sourced; list unavailable metrics separately.", achievable: "Use platform-native exports and the day-30 baseline; do not estimate missing results.", relevant: "Creates a defensible next-step decision for " + releaseAnchor + " without fabricating commercial performance.", timeBound: "Document the decision, owner and evidence still required by day 90." }
   ];
 }
