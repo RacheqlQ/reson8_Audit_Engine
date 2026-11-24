@@ -135,6 +135,7 @@ function safeAuditErrorMessage(error: unknown): string {
   return raw
     .replace(/[\r\n\t]+/g, " ")
     .replace(/https?:\/\/[^\s)]+/gi, "[url]")
+    .replace(/\b[\w.-]+(?:[\\/][\w.-]+)+/g, "[path]")
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
     .replace(/(?:[A-Z]:\\|\/)(?:[^\s"'<>]+[\\/])*[^\s"'<>]*/g, "[path]")
     .replace(/\b(token|secret|authorization|api[_-]?key)(?:\s*[:=]\s*|\s+)[^\s,;]+/gi, "$1=[redacted]")
