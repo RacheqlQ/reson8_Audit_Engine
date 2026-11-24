@@ -142,6 +142,8 @@ const NARRATIVE_SYSTEM_PROMPT = [
   "Do not score hook, originality, production quality, replay value or lane clarity; keep each in the unscored human-listening checklist. Return JSON only and obey schema/word limits."
 ].join(" ");
 
+const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS do not prove mastering readiness; do not recommend loudness changes without a measured fault and target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.";
+
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
   "Use supplied facts only; never invent streams, sales, playlists, curators, audience metrics, label interest, placements or external facts.",
   "Always include the evidenceLabels array; each item has label, claim and actual source. OBSERVED=uploaded-master measurement; RECOGNIZED=one provider; RECONCILED=2+ agreeing independent providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=industry_practice guidance, not track fact.",
@@ -316,7 +318,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     delete projected.sourceCombination;
     if (group === "narrative") delete projected.masterAudio;
   }
-  if (["evidence-score", "narrative", "positioning", "release"].includes(group)) {
+  if (["evidence-score", "narrative", "positioning", "release", "production"].includes(group)) {
     // Keep source/provenance facts; only evidence-score drops duplicate summaries.
     if (group === "evidence-score") {
       delete projected.genres;
@@ -325,7 +327,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     }
     // Narrative receives the same bounded string/array envelope as evidence-score;
     // source identities and normalized values above remain intact.
-    const compacted = compactEvidenceScoreValue(projected, 0, group === "evidence-score" ? 40 : 72, group === "evidence-score" ? 2 : 3) as Record<string, unknown>;
+    const compacted = compactEvidenceScoreValue(projected, 0, ["evidence-score", "production"].includes(group) ? 40 : 72, ["evidence-score", "production"].includes(group) ? 2 : 3) as Record<string, unknown>;
     if (compacted.fieldProvenance && typeof compacted.fieldProvenance === "object") {
       compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, 12));
     }
@@ -445,7 +447,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
       ? compactEvidenceScoreValue(value, 0, group === "production" ? 48 : 72, 3)
       : compactPromptValue(value);
   }
-  if (group === "evidence-score" && compacted.vocalArrangementAnalysis && typeof compacted.vocalArrangementAnalysis === "object" && !Array.isArray(compacted.vocalArrangementAnalysis)) {
+  if (["evidence-score", "production"].includes(group) && compacted.vocalArrangementAnalysis && typeof compacted.vocalArrangementAnalysis === "object" && !Array.isArray(compacted.vocalArrangementAnalysis)) {
     // Vocal scalar measurements and provenance live in vocalFeatures. Keep a compact
     // arrangement summary, not a second copy of the full 128-window timeline.
     const arrangement = compacted.vocalArrangementAnalysis as Record<string, unknown>;
@@ -468,7 +470,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
       ...(Array.isArray(arrangement.sections) ? { sections: compactItems(rawSections, ["label", "startSeconds", "endSeconds", "provisional"]) } : {}),
     };
   }
-  if (["narrative", "positioning", "release", "evidence-score"].includes(group)) {
+  if (["narrative", "positioning", "release", "evidence-score", "production"].includes(group)) {
     // The narrative needs the complete acoustic descriptor summary, not the
     // 128-window raw summary series. Median/p10/p90 preserve measured spread;
     // vocal intervals retain representative first/middle/last observations.
@@ -623,7 +625,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? " The user payload includes outputSchema, the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value, array bound and minimum length. Return one complete JSON object only. Do not include outputSchema in the returned object. Local Zod and section word-count validation are mandatory."
       : "";
     const messages = [
-      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : ["narrative", "positioning", "release"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
+      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
       {
         role: "user",
         content: JSON.stringify({
