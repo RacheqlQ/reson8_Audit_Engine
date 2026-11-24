@@ -1057,8 +1057,8 @@ describe("nine-section report-readiness integration", () => {
     expect(Object.values(assessment.generationProvenance.fieldGroups)).toEqual(expect.arrayContaining([
       "narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline",
     ]));
-    expect(assessment.aAndRPositioning.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
-    expect(assessment.commercialRead.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.aAndRPositioning.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
     const reportData = adaptReportV2({
       auditId: "nine-section-readiness-fixture",
       generatedAt: "2026-11-24T00:00:00.000Z",
@@ -1084,8 +1084,8 @@ describe("nine-section report-readiness integration", () => {
     const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
       .assess({ evidence: {}, sonicDna: null });
     expect(assessment.confidence).toBe(0);
-    expect(assessment.aAndRPositioning.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
-    expect(assessment.commercialRead.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.aAndRPositioning.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
   });
 });
 
@@ -1117,8 +1117,8 @@ describe("positioning contract and provider recovery regressions", () => {
       expect(positioningInstructions).toContain("aAndRPositioning.rationale");
       expect(positioningInstructions).toContain("commercialRead.rationale");
       expect(positioningInstructions).toContain("at least 40 words");
-      expect(result.aAndRPositioning.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
-      expect(result.commercialRead.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
+      expect(result.aAndRPositioning.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+      expect(result.commercialRead.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
       const failed = attempts.find(attempt => attempt.group === "positioning" && attempt.failureKind === "threshold_violation");
       expect(failed).toMatchObject({
         validationField: field,
