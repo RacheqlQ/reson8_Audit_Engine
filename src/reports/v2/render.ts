@@ -812,7 +812,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  page.drawText(hasMasterAudio?"SIGNAL-DERIVED FROM UPLOADED MASTER":"MASTER SIGNAL NOT SUPPLIED",{x:right-164,y:top-28.5,size:5.2,font:fonts.bold,color:C.muted});
  const timelineTop=top-43;
  page.drawText("SONG ARRANGEMENT SECTIONS, TRANSITIONS AND VOCAL ACTIVITY",{x:left,y:timelineTop,size:5.8,font:fonts.bold,color:C.ink});
- page.drawText("INFERRED · PROVISIONAL LABELS",{x:right-142,y:timelineTop,size:5.1,font:fonts.bold,color:C.amber});
+ page.drawText(hasMasterAudio?"INFERRED · PROVISIONAL LABELS":"NOT ANALYSED · MASTER NOT SUPPLIED",{x:right-142,y:timelineTop,size:5.1,font:fonts.bold,color:C.amber});
  const barY=timelineTop-30;
  const colorFor=(label:string)=>{
   const value=label.toLowerCase();
@@ -834,8 +834,8 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
    if(bw>24)page.drawText(String(section.label??("Section "+(index+1))).slice(0,16),{x:bx+2,y:barY+4,size:4.7,font:fonts.bold,color:C.white});
   });
  }else page.drawText(hasMasterAudio?"Section boundaries not confidently inferred":"Not analysed — no uploaded master signal supplied",{x:left+5,y:barY+4,size:5,font:fonts.italic,color:C.muted});
- page.drawText("0:00",{x:left,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
- page.drawText(formatSnapshotTime(duration),{x:right-22,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
+ page.drawText(hasMasterAudio?"0:00":"Time unavailable",{x:left,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
+ page.drawText(hasMasterAudio?formatSnapshotTime(duration):"Not analysed",{x:right-42,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
  transitions.slice(0,16).forEach((item,index)=>{
   const tx=left+Math.max(0,Math.min(duration,Number(item.timestampSeconds)))/duration*barWidth;
   page.drawLine({start:{x:tx,y:barY-1},end:{x:tx,y:barY+20},color:C.ink,thickness:.6});
@@ -873,9 +873,9 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
    drawWrapped(page,"Trigger: "+String(item.reason??"Spectral change"),cx+4,calloutTop-21,calloutWidth-8,fonts.regular,4.2,C.muted,4.6);
   });
  }else{
-  page.drawText("No discrete transition trigger exceeded the provisional novelty, energy, chroma or vocal-state thresholds.",{x:left+4,y:calloutTop-19,size:4.8,font:fonts.italic,color:C.muted});
+  page.drawText(hasMasterAudio?"No discrete transition trigger exceeded the provisional novelty, energy, chroma or vocal-state thresholds.":"Not analysed — no uploaded master signal supplied.",{x:left+4,y:calloutTop-19,size:4.8,font:fonts.italic,color:C.muted});
  }
- drawWrapped(page,"Label basis: windowed spectral-flux novelty, RMS steps, chroma movement and vocal-band onset/offset; labels are provisional.",left,calloutTop-38,barWidth,fonts.italic,4.4,C.muted,4.8);
+ drawWrapped(page,hasMasterAudio?"Label basis: windowed spectral-flux novelty, RMS steps, chroma movement and vocal-band onset/offset; labels are provisional.":"Label basis: no uploaded master signal supplied; sections and transitions are not analysed.",left,calloutTop-38,barWidth,fonts.italic,4.4,C.muted,4.8);
  const kpiTop=calloutTop-47,kpiGap=6,kpiW=(barWidth-kpiGap*3)/4,kpiH=30;
  const kpis=[
   ["VOCAL PRESENCE",presence===null?"NOT ANALYSED":presence.toFixed(1)+"%"],
@@ -953,7 +953,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
   page.drawText(row[2],{x:M+260,y:yy,size:5.7,font:fonts.regular,color:C.muted});
   drawWrapped(page,row[3],M+334,yy,155,fonts.bold,5.8,C.ink,6.5);
  });
- page.drawText("Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.",{x:M+12,y:bottom+5,size:5.4,font:fonts.italic,color:C.muted});
+ page.drawText(hasMasterAudio?"Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.":"No uploaded master audio supplied; master-derived descriptors are not measured.",{x:M+12,y:bottom+5,size:5.4,font:fonts.italic,color:C.muted});
 }
 function drawExecutionMilestoneTrack(page:PDFPage,top:number,fonts:Fonts,labels:string[]):void{
  const required=["Days 1–30","Days 31–60","Days 61–90"],x=M+18,width=W-2*M-36,y=top-22,step=width/3;
