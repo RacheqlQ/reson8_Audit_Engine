@@ -4,7 +4,7 @@ import { AuddClient } from "../providers/audd/client.js";
 import { getAssessmentProviderReadiness, providerDecision } from "../providers/provider-policy.js";
 import { collectCatalogMetadata } from "../providers/dsp/catalog.js";
 import { discoverPlaylistCandidates } from "../providers/dsp/playlist-discovery.js";
-import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, type ProviderAttemptDiagnostic } from "../providers/groq/client.js";
 import { ensurePdfReport } from "../reports/pdf-output.js";
 import { createSupabaseAuditStore } from "../integrations/supabase-audit-store.js";
 import { processAuditJob, type AuditProcessorDependencies } from "./process-audit-job.js";
@@ -36,15 +36,15 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
   if (signal?.aborted) return null;
   const store = createSupabaseAuditStore();
   if (signal?.aborted) return null;
-  // Any enabled and credentialed provider can serve as the first provider in the chain.
+  // Groq is primary and Gemini is the sole automatic fallback. Ollama billing
+  // is intentionally not part of the production assessment chain.
   const readiness = getAssessmentProviderReadiness();
-  if (!readiness.some((provider) => provider.usable)) {
+  if (!readiness.some((provider) => (provider.provider === "groq" || provider.provider === "gemini") && provider.usable)) {
     console.error(JSON.stringify({ worker: "audit", event: "provider_chain_unavailable", code: "AI_PROVIDERS_UNAVAILABLE", providers: readiness.map(({ provider, model, reason }) => ({ provider, model, reason })) }));
     throw new Error("AI_PROVIDERS_UNAVAILABLE: no enabled assessment provider has usable credentials");
   }
   const groq = readiness.find((provider) => provider.provider === "groq")?.usable ? new GroqClient() : null;
   const gemini = readiness.find((provider) => provider.provider === "gemini")?.usable ? new GeminiClient() : null;
-  const ollama = readiness.find((provider) => provider.provider === "ollama")?.usable ? new OllamaClient() : null;
   let job: Awaited<ReturnType<typeof store.claimNextQueuedJob>>;
   try {
     await store.failExpiredProcessingJobs?.();
@@ -117,7 +117,6 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       const providers = [
         { provider: "groq" as const, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, client: groq },
         { provider: "gemini" as const, model: readiness.find((item) => item.provider === "gemini")?.model ?? "gemini-3.5-flash-lite", client: gemini },
-        { provider: "ollama" as const, model: process.env.OLLAMA_MODEL ?? "gemma4:31b", client: ollama },
       ];
       return runAssessmentProviderChain(providers, assessmentInput, signal, {
         onSkipped: async (candidate) => {
