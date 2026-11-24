@@ -544,6 +544,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    const candidate=/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(rendered)?fallback:sanitizePublicReportLine(rendered);
    return {label,value:candidate||fallback};
   };
+  const compact=(value:unknown,max=220):string=>{const clean=str(value,"");if(clean.length<=max)return clean;const shortened=clean.slice(0,max-1).replace(/\s+\S*$/,"").trimEnd();return (shortened||clean.slice(0,max-1).trimEnd())+"…";};
   const list=(label:string,value:unknown[],fallback="Not supplied in the assessment."):Block=>{
    const items=value.map(item=>sanitizePublicReportLine(str(item,""))).filter(Boolean);
    return {label,value:items.join("\n\n")||fallback};
@@ -571,17 +572,17 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ],kind:"narrative"},
    {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod)],kind:"narrative"},
    {title:"Promotion and campaign strategy",blocks:[
-    paragraph("ISRC-anchored catalogue coverage",buildCommercialStrategyLines(input).slice(1,2).join(" ")),
+    paragraph("ISRC-anchored catalogue coverage",compact(buildCommercialStrategyLines(input).slice(1,2).join(" "),210)),
     paragraph("Audience and short-form strategy",[
-      ...arr(rec(input.marketPlacement?.commercialStrategy).audienceContexts).slice(0,2),
-      ...arr(rec(input.marketPlacement?.commercialStrategy).shortFormAngles).slice(0,2),
-    ].map(value=>str(value,"")).filter(Boolean).join(" ")),
-    list("Playlist and curator pitch hooks",arr(rec(input.marketPlacement?.commercialStrategy).playlistPitchHooks)),
-    historicalPhase(campaignLabels.preRelease,promotion.preRelease,isPostRelease?"The pre-release stage is closed for the determined "+releaseStatus.date+" release; do not schedule pre-release actions as upcoming.":"No pre-release actions were supplied."),
-    historicalPhase(campaignLabels.releaseWindow,promotion.releaseWindow,isPostRelease?"The original release window has passed; use current activity as post-release reactivation.":"No release-window actions were supplied."),
-    paragraph(campaignLabels.postRelease,promotion.postRelease,"Post-release reactivation: refresh the source-backed pitch pack, follow up with responsive curators, publish approved creator assets and record only attributable platform activity."),
-    list("Content concepts",arr(promotion.contentIdeas)),list("Pitching angles",arr(promotion.pitchingAngles)),
-    list("DSP playlist archetypes to investigate",arr(promotion.playlistCategories)),paragraph("Industry practice",promotion.industryPractice)
+      ...arr(rec(input.marketPlacement?.commercialStrategy).audienceContexts).slice(0,1),
+      ...arr(rec(input.marketPlacement?.commercialStrategy).shortFormAngles).slice(0,2).map(value=>compact(value,130)),
+    ].map(value=>compact(value,130)).filter(Boolean).join(" ")),
+    list("Playlist and curator pitch hooks",arr(rec(input.marketPlacement?.commercialStrategy).playlistPitchHooks).slice(0,2).map(value=>compact(value,120))),
+    historicalPhase(campaignLabels.preRelease,isPostRelease?"Closed — the determined "+releaseStatus.date+" release has already passed; this is historical context, not an upcoming action.":promotion.preRelease,"No pre-release actions were supplied."),
+    historicalPhase(campaignLabels.releaseWindow,isPostRelease?"Passed — focus current activity on post-release reactivation.":promotion.releaseWindow,"No release-window actions were supplied."),
+    paragraph(campaignLabels.postRelease,isPostRelease?[compact(promotion.postRelease,210),"PROPOSED continuation: re-frame the human-confirmed hook; create rights-approved short-form and visual cutdowns; reconcile ISRC/UPC, version and credits; re-pitch lane-matched curators; schedule one catalyst drop; measure attributable response only."].filter(Boolean).join(" "):compact(promotion.postRelease,360),"Post-release reactivation: refresh the source-backed pitch pack, follow up with responsive curators, publish approved creator assets and record only attributable platform activity."),
+    list("Content concepts",arr(promotion.contentIdeas).slice(0,3).map(value=>compact(value,100))),list("Pitching angles",arr(promotion.pitchingAngles).slice(0,3).map(value=>compact(value,100))),
+    list("DSP playlist archetypes to investigate",arr(promotion.playlistCategories).slice(0,3).map(value=>compact(value,70))),paragraph("Industry practice",compact(promotion.industryPractice,260))
    ],kind:"narrative"},
    {title:"Label and partner fit",blocks:[
     paragraph("Partner profile hypothesis",partner.partnerProfile),list("Criteria to demonstrate",arr(partner.criteriaToDemonstrate)),
