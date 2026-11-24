@@ -3,7 +3,7 @@ import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails
 import { sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
 import { markAssessmentProviderUnavailable } from "../provider-policy.js";
 
-export const GROQ_PROMPT_VERSION = "audit-ar-v7-evidence-budget-2026-11-24";
+export const GROQ_PROMPT_VERSION = "audit-ar-v8-narrative-contract-2026-11-24";
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 
 const EvidenceLabelSchema = z.object({
@@ -138,6 +138,7 @@ const NARRATIVE_SYSTEM_PROMPT = [
   "Use vocals only when status=analyzed; otherwise infer no voice, delivery, layering or lyrics. Sections require explicit boundaries.",
   "Use reconciled identity, provenance, catalogSources and provider records; preserve ISRC conflicts/ambiguity. DSP/catalog links are not audio; never claim OBSERVED audio from links. No external stem, separation or render workers.",
   "Ground strengths, risks and actions in supplied sonic, vocal, genre and catalog facts. Label general guidance INDUSTRY PRACTICE; do not invent comparables.",
+  "Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each item must be a complete, specific statement tied to a supplied fact or an explicitly stated evidence limitation. Do not pad counts with repeated or generic claims.",
   "Without verified commercial performance, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise.",
   "Do not score hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return JSON only; obey schema/word limits."
 ].join(" ");
