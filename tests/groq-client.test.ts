@@ -266,7 +266,7 @@ describe("GroqClient section groups",()=>{
   expect(mock).toHaveBeenCalledTimes(9);
   expect(payloads).toHaveLength(1);
   expect(Object.keys(payloads[0].catalogMetadata)).toHaveLength(4);
-  expect(payloads[0].catalogMetadata.provider0.length).toBeLessThanOrEqual(252);
+  expect(payloads[0].catalogMetadata.provider0.length).toBeLessThanOrEqual(212);
  });
  it("keeps Gemini and Ollama module output budgets independent of Groq's TPM ceiling",async()=>{
   const identity=Object.fromEntries(Array.from({length:20},(_,index)=>["sourceField"+index,"verified source provenance detail ".repeat(25)]));
@@ -591,10 +591,10 @@ describe("GroqClient section groups",()=>{
   expect(requests.every(request=>request.total<=6000)).toBe(true);
   const narrative=requests.find(request=>request.group==="narrative")!;
   expect(narrative.payload.sonicDna).not.toHaveProperty("vocalArrangementAnalysis");
-  expect(Object.keys(narrative.payload.evidence.fieldProvenance)).toHaveLength(16);
+  expect(Object.keys(narrative.payload.evidence.fieldProvenance)).toHaveLength(12);
   expect(narrative.payload.evidence.fieldProvenance.field0).not.toHaveProperty("detail");
   const evidenceScore=requests.find(request=>request.group==="evidence-score")!;
-  expect(evidenceScore.payload.sonicDna.vocalArrangementAnalysis.segments).toHaveLength(8);
+  expect(evidenceScore.payload.sonicDna.vocalArrangementAnalysis.segments).toHaveLength(6);
  });
 
 });
