@@ -21,7 +21,7 @@ describe("A&R Notes report page", () => {
     const notes = pdf.getForm().getTextField("ar_notes");
     const rectangle = notes.acroField.getWidgets()[0]!.getRectangle();
     expect(rectangle.height).toBeGreaterThanOrEqual(841.89 * 0.35);
-    expect(pdf.getPageCount()).toBe(8);
+    expect(pdf.getPageCount()).toBe(7);
   });
 
   it("never promotes a stale BPM when the explicit tempo verdict is only a candidate", () => {
