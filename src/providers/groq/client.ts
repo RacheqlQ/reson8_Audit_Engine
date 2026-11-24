@@ -468,7 +468,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   }
 
   const compacted = (["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
-    ? compactEvidenceScoreValue(compact, 0, group === "production" ? 40 : 72, group === "evidence-score" ? 4 : group === "production" ? 2 : 3)
+    ? compactEvidenceScoreValue(compact, 0, group === "production" ? 40 : 72, group === "evidence-score" ? 3 : group === "production" ? 2 : 3)
     : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
