@@ -355,7 +355,8 @@ function compactEvidenceScoreValue(value: unknown, depth = 0, stringLimit = 112,
 function compactStructuredSchema(schema: unknown): unknown {
   if (Array.isArray(schema)) return schema.map(compactStructuredSchema);
   if (!schema || typeof schema !== "object") return schema;
-  const omitted = new Set(["$schema", "title", "description", "minLength", "maxLength", "minItems", "maxItems"]);
+  // Local Zod validation remains authoritative for numeric and length bounds.
+  const omitted = new Set(["$schema", "title", "description", "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems"]);
   return Object.fromEntries(Object.entries(schema as Record<string, unknown>)
     .filter(([key]) => !omitted.has(key))
     .map(([key, value]) => [key, compactStructuredSchema(value)]));
