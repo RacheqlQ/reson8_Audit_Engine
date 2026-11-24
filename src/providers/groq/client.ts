@@ -367,9 +367,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
-    if (value !== undefined && value !== null && typeof value === "object") {
-      compacted[key] = compactPromptValue(value);
-    }
+    if (value !== undefined) compacted[key] = compactPromptValue(value);
   }
   return compacted;
 }
