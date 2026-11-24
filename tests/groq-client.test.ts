@@ -599,6 +599,89 @@ describe("GroqClient section groups",()=>{
 
 
 
+describe("evidence-score prompt budget compaction", () => {
+  it("keeps the three previously failing large-context profiles below the 5,000-token engineering target", async () => {
+    const profiles = [
+      { name: "prior-5991", provenance: 14, conflicts: 12, segments: 24 },
+      { name: "prior-6152", provenance: 32, conflicts: 28, segments: 48 },
+      { name: "prior-6255", provenance: 48, conflicts: 40, segments: 60 },
+    ];
+    const observed: Array<{ name: string; estimated: number; completion: number; schemaBytes: number }> = [];
+    for (const profile of profiles) {
+      const detail = "Verbose provider commentary repeated for this fixture; source and normalized value remain independently retained. ".repeat(8);
+      const evidence = {
+        auditType: "full_a_and_r", artist: "Fixture Artist", title: profile.name,
+        releaseDate: "2026-10-18", sourceProviders: ["musicbrainz", "spotify", "apple_music", "youtube"],
+        fieldProvenance: Object.fromEntries(Array.from({ length: profile.provenance }, (_, i) => ["field" + i, {
+          source: ["musicbrainz", "spotify", "apple_music"][i % 3], status: "recognized",
+          confidence: 0.82, value: "normalized identity value " + i, detail, rawPayload: detail,
+        }])),
+        identity: { artist: "Fixture Artist", title: profile.name, isrc: "USAAA2600001", matchStatus: "reconciled" },
+        reconciliation: { status: "partial", matchedFields: ["artist", "title", "isrc"],
+          conflicts: Array.from({ length: profile.conflicts }, (_, i) => "Conflict " + i + ": " + detail) },
+        genreClassification: { primaryGenre: "Contemporary R&B", genres: ["Contemporary R&B"], abstained: false },
+        commercialEvidence: { verified: false, reason: detail },
+        releaseStatus: { status: "released", releaseDate: "2026-10-18" },
+      };
+      const sonicDna = {
+        provenance: "uploaded_audio_master", evidenceClass: "OBSERVED", analysisVersion: "sonic-dna-v1",
+        sourceProviders: ["essentia"], confidence: 0.82, warnings: [detail], limitations: [detail],
+        bpm: 95, tempoConfidence: 0.82, key: "A", mode: "minor",
+        tonalResolution: { status: "CONFIRMED", tonic: "A", mode: "minor", confidence: 0.88, voteConsensus: 0.82 },
+        rhythmFeatures: { status: "measured", candidateScores: [{ bpm: 95, score: 0.8 }], windowConsensus: 0.82 },
+        harmonicFeatures: { status: "measured", topCandidates: [{ key: "A", mode: "minor" }], windowConsensus: 0.82 },
+        vocalArrangementAnalysis: { status: "analyzed", segments: Array.from({ length: profile.segments }, (_, i) => ({
+          startSeconds: i * 3, endSeconds: (i + 1) * 3, role: i % 2 ? "lead" : "backing", description: detail,
+        })) },
+      };
+      const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        const payload = JSON.parse(body.messages[1].content);
+        const estimated = Math.ceil(new TextEncoder().encode(JSON.stringify({
+          messages: body.messages, response_format: body.response_format,
+        })).length / 2) + 256;
+        if (payload.sectionGroup === "evidence-score") {
+          observed.push({ name: profile.name, estimated, completion: body.max_completion_tokens,
+            schemaBytes: new TextEncoder().encode(JSON.stringify(body.response_format.json_schema.schema)).length });
+        }
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      });
+      await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence, sonicDna });
+    }
+    expect(observed).toHaveLength(3);
+    for (const item of observed) {
+      expect(item.estimated, item.name).toBeLessThanOrEqual(5000);
+      expect(item.completion, item.name).toBeGreaterThanOrEqual(256);
+      expect(item.estimated + item.completion, item.name).toBeLessThanOrEqual(6000);
+      expect(item.schemaBytes, item.name).toBeLessThan(2200);
+    }
+  });
+
+  it("retains the evidence-score verdict and provenance invariants in its compact system instructions", async () => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "evidence-score") {
+        const system = body.messages[0].content;
+        for (const invariant of ["CONFIRMED", "voting/window-consensus-stabilized", "DETERMINED",
+          "PRE_RELEASE/POST_RELEASE", "PROPOSED", "DSP/catalog links are not audio",
+          "No external stem/separation/render workers", "OBSERVED", "RECONCILED", "industry_practice"]) {
+          expect(system).toContain(invariant);
+        }
+        const schema = body.response_format.json_schema.schema;
+        expect(schema.required).toEqual(expect.arrayContaining(["evidenceGaps", "confidence", "limitations", "scorecard", "humanListeningChecklist", "evidenceLabels"]));
+        expect(schema.properties.scorecard.properties.rhythmicConsistency).toBeDefined();
+        expect(schema.properties.evidenceLabels.items.properties.source).toBeDefined();
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null });
+    expect(mock).toHaveBeenCalledTimes(9);
+  });
+});
+
 describe("GroqClient cancellation", () => {
   it("aborts an in-flight provider request when the audit signal is aborted", async () => {
     const controller = new AbortController();
