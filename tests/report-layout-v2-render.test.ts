@@ -644,6 +644,15 @@ describe("v2 PDF renderer with verbose assessment context", () => {
     ] as const) {
       const input = structuredClone(fixture) as any;
       input.executionMode = source === "dsp-link" ? "dsp_link" : "master";
+      if (source === "uploaded-master") {
+        const energyOverTime = Array.from({ length: 100_000 }, (_, index) => ({
+          timeSeconds: index / 10,
+          value: Math.sin(index / 37) * 4,
+        }));
+        energyOverTime[12_345]!.value = -80;
+        energyOverTime[54_321]!.value = 95;
+        input.sonicDna = { ...input.sonicDna, energyOverTime };
+      }
       input.assessment.executiveSummary = Array.from({ length: 80 }, (_, index) =>
         `Decision evidence detail ${index + 1}: the supplied material requires source verification and a human listening review before any external pitch.`
       ).join(" ");
