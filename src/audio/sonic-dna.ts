@@ -277,14 +277,17 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const octaveMultiple=tempoRatio!==null&&[0.5,2].some(ratio=>Math.abs(tempoRatio-ratio)<=Math.max(0.03,ratio*0.03));
  const unstableWindows=windowConsensus.windowCount>=3&&(windowConsensus.winner===null||(windowConsensus.observedAgreement??0)<0.6);
  const materialDisagreement=voting.confirmation_status==="CONFIRMED"&&voting.primary_candidate_bpm!==null&&independentEstimator.bpm!==null&&!octaveRelated&&independentEstimator.score>=0.4&&unstableWindows;
- const finalStatus=materialDisagreement?"CANDIDATE":voting.confirmation_status;
+ const retainedUnconfirmedCandidates=overall.bpm===null&&overall.candidateBpms.length>0;
+ const finalStatus=materialDisagreement||(voting.confirmation_status==="UNDETERMINED"&&retainedUnconfirmedCandidates)
+  ?"CANDIDATE":voting.confirmation_status;
  const reason=materialDisagreement
   ?"Independent tempo pathways materially disagreed and the primary tempo windows were unstable; no single tempo is asserted."
-  :voting.confirmation_status==="CONFIRMED"?null:voting.explanation;
+  :voting.confirmation_status==="CONFIRMED"?null:overall.abstentionReason??voting.explanation;
  const gridMatchesVote=voting.primary_candidate_bpm!==null&&overall.bpm!==null
   &&Math.abs(overall.bpm-voting.primary_candidate_bpm)<=Math.max(1.5,Math.min(overall.bpm,voting.primary_candidate_bpm)*0.02);
- const reconciledCandidate=voting.primary_candidate_bpm!==null&&gridMatchesVote&&overall.bpm!==null
-  ?Math.round(overall.bpm):voting.primary_candidate_bpm;
+ const reconciledCandidate=voting.primary_candidate_bpm===null
+  ?overall.topCandidateBpm
+  :gridMatchesVote&&overall.bpm!==null?Math.round(overall.bpm):voting.primary_candidate_bpm;
  return {
   ...overall,
   beatTimesSeconds:gridMatchesVote?overall.beatTimesSeconds:[],
@@ -300,7 +303,10 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
   confidence:voting.prominence_score,
   abstentionReason:reason,
   windowConsensus,independentEstimator,
-  voting:{...voting,primary_candidate_bpm:reconciledCandidate,confirmation_status:finalStatus,reason_codes:materialDisagreement?[...voting.reason_codes,"INDEPENDENT_ESTIMATOR_DISAGREEMENT"]:voting.reason_codes,explanation:reason??voting.explanation},
+  voting:{...voting,primary_candidate_bpm:reconciledCandidate,confirmation_status:finalStatus,
+   reason_codes:materialDisagreement?[...voting.reason_codes,"INDEPENDENT_ESTIMATOR_DISAGREEMENT"]
+    :retainedUnconfirmedCandidates&&voting.reason_codes.includes("NO_VALID_TEMPO_CANDIDATES")?["LOW_TRANSIENT_PROMINENCE"]:voting.reason_codes,
+   explanation:reason??voting.explanation},
  };
 }
 
