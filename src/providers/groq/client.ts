@@ -307,7 +307,7 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 10)
       .filter(([, item]) => item === null || typeof item !== "object"));
   }
-  if (Array.isArray(value)) return sample(value, 6).map((item) => compactPromptValue(item, depth + 1));
+  if (Array.isArray(value)) return sample(value, 4).map((item) => compactPromptValue(item, depth + 1));
   const entries = Object.entries(value as Record<string, unknown>);
   const scalarEntries = entries.filter(([, item]) => item === null || typeof item !== "object");
   const nestedEntries = entries.filter(([, item]) => item !== null && typeof item === "object");
