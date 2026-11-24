@@ -451,7 +451,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     const arrangement = compacted.vocalArrangementAnalysis as Record<string, unknown>;
     const rawSegments = Array.isArray(arrangement.segments) ? arrangement.segments : [];
     const rawSections = Array.isArray(arrangement.sections) ? arrangement.sections : [];
-    const selectFour = (items: unknown[]) => items.length <= 2 ? items : [items[0], items[items.length - 1]];
+    const selectFour = (items: unknown[]) => items.length <= 4 ? items : [items[0], items[Math.round((items.length - 1) / 3)], items[Math.round(2 * (items.length - 1) / 3)], items[items.length - 1]];
     const compactItems = (items: unknown[], fields: string[]) => selectFour(items).map(segment => {
       if (!segment || typeof segment !== "object" || Array.isArray(segment)) return null;
       const item = segment as Record<string, unknown>;
