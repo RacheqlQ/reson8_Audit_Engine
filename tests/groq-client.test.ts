@@ -980,6 +980,64 @@ describe("safe assessment validation diagnostics", () => {
  });
 });
 
+describe("Groq narrative token projection regression", () => {
+  it("keeps a production-shaped verbose evidence payload under the unchanged 6,000-token ceiling", async () => {
+    const logs: string[] = [];
+    const info = vi.spyOn(console, "info").mockImplementation((message?: unknown) => { if (typeof message === "string") logs.push(message); });
+    try {
+      const fieldProvenance = Object.fromEntries(Array.from({ length: 12 }, (_, index) => [
+        "field" + index,
+        {
+          source: "MusicBrainz catalogue source " + index,
+          provider: "musicbrainz",
+          status: "verified",
+          confidence: 0.82,
+          evidenceClass: "RECONCILED",
+          value: "Verified source value with descriptive provenance details ".repeat(5),
+          normalizedValue: "Normalized source value with matching evidence details ".repeat(5),
+          matchStatus: "matched",
+        },
+      ]));
+      const evidence = {
+        auditType: "MASTER-BASED AUDIT", artist: "Fixture Artist", title: "Fixture Track",
+        album: "Fixture Album", releaseDate: "2025-08-27", label: "Fixture Label",
+        isrc: "NGABC2600001", upc: "123456789012", genres: ["Afrobeats", "Alternative R&B"],
+        sourceProviders: ["musicbrainz", "audd", "spotify"], fieldProvenance,
+        identity: { artist: "Fixture Artist", title: "Fixture Track", album: "Fixture Album", releaseDate: "2025-08-27" },
+        reconciliation: { status: "reconciled", matchedFields: Array.from({ length: 20 }, (_, i) => "field-" + i), conflicts: [] },
+        genreClassification: { primaryGenre: "Afrobeats", confidence: 0.82, source: "provider-reconciled" },
+        catalogSources: Array.from({ length: 12 }, (_, i) => ({ platform: "catalog-" + i, provider: "provider-" + i, status: "available", description: "Catalog metadata detail ".repeat(8) })),
+        commercialEvidence: { verified: false, reason: "No source-attributed commercial telemetry was supplied." },
+        fixture: true,
+      };
+      const sonicDna = {
+        provenance: "uploaded_audio_master", evidenceClass: "OBSERVED", analysisVersion: "fixture-v1",
+        sourceProviders: ["essentia", "librosa"], confidence: 0.82, bpm: 95, tempoConfidence: 0.82,
+        key: "A", mode: "minor", moodTags: ["Moderate Energy", "Bright Timbre"],
+        warnings: Array.from({ length: 24 }, (_, i) => "Analysis warning " + i + ": " + "supporting detail ".repeat(8)),
+        limitations: ["No commercial demand inference."],
+        acousticFeatureProfile: {
+          status: "measured", provenance: { featureVersion: "v1", algorithm: "fixture", sourceSampleRateHz: 44100, analysisSampleRateHz: 22050, windowCount: 128 },
+          descriptors: Object.fromEntries(Array.from({ length: 20 }, (_, i) => ["descriptor" + i, { median: i, p10: i - 1, p90: i + 1, unit: "normalized" }])),
+          predictions: { mood: { status: "heuristic", method: "fixture", probability: 0.4 }, energy: { status: "heuristic", method: "fixture", probability: 0.5 } },
+          abstentionReasons: ["Insufficient context ".repeat(8)],
+        },
+        vocalFeatures: { status: "analyzed", summary: "Vocal signal summary ".repeat(30), intervals: Array.from({ length: 128 }, (_, i) => ({ startSeconds: i, endSeconds: i + 1, confidence: 0.7, role: "unknown" })) },
+      };
+      const { mock } = fetchMock();
+      await new GroqClient("test-groq-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence, sonicDna });
+      const narrativeBudget = logs.map(line => JSON.parse(line) as Record<string, unknown>)
+        .find(line => line.event === "request_budget" && line.group === "narrative");
+      expect(narrativeBudget).toMatchObject({ maxTotalTokens: 6000 });
+      expect(Number(narrativeBudget?.estimatedTotalTokens)).toBeLessThanOrEqual(6000);
+      expect(Number(narrativeBudget?.maxCompletionTokens)).toBeGreaterThanOrEqual(256);
+    } finally {
+      info.mockRestore();
+    }
+  });
+});
+
 describe("nine-section report-readiness integration", () => {
   it("runs every assessment section and renders the report-ready sample PDF", async () => {
     const { mock } = fetchMock();
