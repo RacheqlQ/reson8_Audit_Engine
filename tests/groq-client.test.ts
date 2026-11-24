@@ -1081,8 +1081,8 @@ describe("nine-section report-readiness integration", () => {
     const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
       .assess({ evidence: {}, sonicDna: null });
     expect(assessment.confidence).toBe(0);
-    expect(assessment.aAndRPositioning.rationale.trim().split(/\\s+/).length).toBeGreaterThanOrEqual(40);
-    expect(assessment.commercialRead.rationale.trim().split(/\\s+/).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.aAndRPositioning.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
   });
 });
 
