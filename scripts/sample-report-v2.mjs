@@ -80,4 +80,4 @@ const confirmedCount=(normalizedCover.match(/\bCONFIRMED\b/g)??[]).length;
 if(!normalizedCover.includes("96 BPM")||confirmedCount<2)throw new Error("Full-report cover must label voting-stabilized tempo and key CONFIRMED.");
 if(!normalizedCover.includes("Confirmed: A minor"))throw new Error("Full-report cover must show the confirmed consensus-stabilized key.");
 if(fullText.toUpperCase().includes("EVIDENCE LEDGER AND SCORECARD"))throw new Error("The removed evidence ledger and scorecard page must not be rendered.");
-process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; cover tempo/key confirmations and evidence-ledger consistency verified.\n");
+process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; cover tempo/key confirmations and removed-page contract verified.\n");
