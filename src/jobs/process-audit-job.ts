@@ -106,7 +106,7 @@ function safeAuditErrorCode(error: unknown): string {
     [/Full report content cannot fit the approved 12-page V2 allocation/i, "PDF_FULL_REPORT_ALLOCATION_UNFIT"],
     [/Full report section heading exceeds its allocated v2 page/i, "PDF_FULL_REPORT_HEADING_OVERFLOW"],
     [/Full report content exceeds its existing page allocation/i, "PDF_FULL_REPORT_CONTENT_OVERFLOW"],
-    [/A\\&R Notes decision context exceeds its reserved page area/i, "PDF_AR_NOTES_CONTEXT_OVERFLOW"],
+    [/A&R Notes decision context exceeds its reserved page area/i, "PDF_AR_NOTES_CONTEXT_OVERFLOW"],
     [/Report v2 narrative page content exceeds safe footer clearance/i, "PDF_NARRATIVE_CONTENT_OVERFLOW"],
     [/Report v2 page content exceeds available A4 space/i, "PDF_PAGE_CONTENT_OVERFLOW"],
     [/Chart data reconciliation failed/i, "PDF_CHART_RECONCILIATION_FAILED"],
