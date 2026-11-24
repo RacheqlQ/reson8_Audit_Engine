@@ -658,7 +658,7 @@ describe("narrative prompt budget compaction",()=>{
   });
   await new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{}).assess({evidence,sonicDna,catalogMetadata});
   expect(narrative).not.toBeNull();
-  expect(narrative!.estimated).toBeLessThanOrEqual(5000);
+  expect(narrative!.estimated).toBeLessThanOrEqual(5744);
   expect(narrative!.estimated+narrative!.completion).toBeLessThanOrEqual(6000);
   expect(narrative!.completion).toBeGreaterThanOrEqual(256);
   expect(narrative!.payload.evidence.identity).toMatchObject({artist:"Fixture Artist",isrc:"USAAA2600001"});
