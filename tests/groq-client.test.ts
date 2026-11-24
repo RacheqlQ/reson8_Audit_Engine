@@ -230,6 +230,12 @@ describe("GroqClient section groups",()=>{
   });
   expect(evidenceScorePayloads[0].evidence).not.toHaveProperty("genres");
   expect(evidenceScorePayloads[0].evidence).not.toHaveProperty("catalogSources");
+  expect(evidenceScorePayloads[0].evidence).toMatchObject({
+   identity:{artist:"Fixture Artist",isrc:"USAAA2600001"},
+   reconciliation:{status:"partial"},
+   fieldProvenance:expect.objectContaining({field0:expect.objectContaining({source:"musicbrainz"})})
+  });
+  expect(evidenceScorePayloads[0].catalogMetadata).toBeNull();
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
    const estimatedInputTokens=Math.ceil(new TextEncoder().encode(JSON.stringify({
