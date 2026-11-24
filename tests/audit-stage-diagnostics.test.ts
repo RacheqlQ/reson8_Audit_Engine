@@ -36,6 +36,7 @@ describe("audit stage failure diagnostics", () => {
       timedOut: true,
       errorCode: "UNCLASSIFIED_STAGE_ERROR",
       stackFingerprint: expect.stringMatching(/^stk-[a-f0-9]{8}$/),
+      stackFrames: expect.arrayContaining([expect.any(String)]),
     });
   });
 
