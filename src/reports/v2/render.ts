@@ -1289,6 +1289,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     if(b.arrangementBar?.length){const barHeight=drawProposedArrangementBar(page,y,b.arrangementBar,fonts);y-=barHeight+5;}
    }
    if(y<76)throw new Error("Report v2 narrative page content exceeds safe footer clearance: "+spec.title);
+   chartCursor=y-14;
   }else if(spec.kind==="axes"||spec.kind==="comparables"||spec.kind==="moments"){
    let y=H-92;for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:spec.kind==="moments"?(b.label.includes("Risk")?C.coral:C.teal):C.gold,provenance:b.provenance});y-=h+8;}
   }else{
@@ -1302,8 +1303,8 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   }
   const legacyChartSection: Record<string,string> = {
    "Identity and source reconciliation":"Identity and source reconciliation",
-   "Evidence ledger and scorecard":"Evidence ledger and provenance",
    "A&R positioning":"Creative identity and A&R positioning",
+   "Production and arrangement guidance":"Evidence ledger and provenance",
    "Strengths, risks and actions":"Strengths and creative leverage",
    "Release and promotion plan":"Promotion plan"
   };
