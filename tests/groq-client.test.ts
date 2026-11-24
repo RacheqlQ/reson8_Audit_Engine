@@ -164,7 +164,7 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
+   const estimatedInputBytes=new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length+256;
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
    expect(body.max_completion_tokens).toBeLessThanOrEqual(1200);
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
@@ -238,9 +238,7 @@ describe("GroqClient section groups",()=>{
   expect(evidenceScorePayloads[0].catalogMetadata).toBeNull();
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   const estimatedInputTokens=Math.ceil(new TextEncoder().encode(JSON.stringify({
-    messages:body.messages,response_format:body.response_format
-   })).length/3)+256;
+   const estimatedInputTokens=new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length+256;
    expect(estimatedInputTokens).toBeGreaterThan(256);
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
    expect(estimatedInputTokens+body.max_completion_tokens).toBeLessThanOrEqual(6000);
@@ -581,7 +579,7 @@ describe("GroqClient section groups",()=>{
   mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
    const body=JSON.parse(String(init?.body));
    const payload=JSON.parse(body.messages[1].content);
-   const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
+   const estimated=new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length+256;
    requests.push({group:payload.sectionGroup,payload,total:estimated+body.max_completion_tokens});
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
   });
