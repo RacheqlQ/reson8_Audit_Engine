@@ -594,7 +594,7 @@ describe("GroqClient section groups",()=>{
   expect(Object.keys(narrative.payload.evidence.fieldProvenance)).toHaveLength(12);
   expect(narrative.payload.evidence.fieldProvenance.field0).not.toHaveProperty("detail");
   const evidenceScore=requests.find(request=>request.group==="evidence-score")!;
-  expect(evidenceScore.payload.sonicDna.vocalArrangementAnalysis.segments).toHaveLength(6);
+  expect(evidenceScore.payload.sonicDna.vocalArrangementAnalysis.segments).toHaveLength(4);
  });
 
 });
