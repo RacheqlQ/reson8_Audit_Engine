@@ -141,7 +141,7 @@ export function buildProposedArrangement(input:AuditReportInput,chartSeries?:Tim
  const segments=labels.map((label,index)=>{
   const startPct=cursor;cursor+=weights[index]!/total*100;const endPct=cursor,centerPct=(startPct+endPct)/2;
   const time=duration===null?null:duration*centerPct/100;
-  const nearest=time===null?null:energySeries.reduce((best,item)=>Math.abs(Number(item.timeSeconds??item.time)-time)<(best===null?Infinity:Math.abs(Number(best.timeSeconds??best.time)-time))?item:best,null as Record<string,unknown>|null);
+  const nearest=time===null?null:energySeries.reduce((best,item)=>Math.abs(item.timeSeconds-time)<(best===null?Infinity:Math.abs(best.timeSeconds-time))?item:best,null as TimedPoint|null);
   const rawEnergy=nearest?nearest.value:null;
   const energyLevel=rawEnergy===null||energyMax===energyMin?null:.25+.75*(rawEnergy-energyMin)/(energyMax-energyMin);
   const segmentStart=duration===null?null:duration*startPct/100,segmentEnd=duration===null?null:duration*endPct/100;
