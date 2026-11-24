@@ -130,28 +130,27 @@ const SYSTEM_PROMPT = [
 ].join(" ");
 
 const NARRATIVE_SYSTEM_PROMPT = [
-  "You are the A&R analyst. Use supplied evidence only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or external facts.",
-  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=general craft guidance from industry_practice, never a track fact. Name only providers with returned records.",
-  "Preserve provider genre labels exactly; separate scene tags; null primary genre means no confirmed lane. Tempo contributes <=15% to genre scoring and never proves genre.",
-  "Report BPM/use tempo only when confirmed and confidence >=0.5. Otherwise omit BPM and speed/energy inference and scoring. If confirmed tempo is null, describe candidate/window/estimator evidence as provisional; never promote it.",
-  "Key/mode are CONFIRMED only by supplied voting/window-consensus-stabilized results. Null stays provisional; preserve disagreement.",
-  "Mood/energy are provisional signal heuristics, not probabilities, listener emotion or demand. Energy only as supplied low/moderate/high label and score/100.",
-  "Use vocals only when status=analyzed; report measured activity/pitch with limits. Otherwise do not infer voice, delivery, layering or lyrics. Song sections require explicit boundaries.",
-  "Use reconciled identity, provenance, catalogSources and provider records; preserve ISRC conflicts/ambiguous matches. DSP links are not audio: never claim OBSERVED audio or infer audio from links. No external stem/separation/render workers.",
-  "Ground strengths/risks/actions in supplied sonic, vocal, genre and catalog facts. Distinguish unavailable from low-confidence. Recommendations must be evidence-grounded or labelled INDUSTRY PRACTICE. No invented comparables; give verification criteria.",
-  "Without verified commercial performance, marketability is undetermined. Release date is DETERMINED only from verified supplied evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise.",
-  "Do not score hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return JSON only; obey schema and word limits."
+  "A&R narrative: supplied evidence only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or external facts.",
+  "Evidence labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=general guidance from industry_practice, never track fact. Name only providers with returned records.",
+  "Preserve exact provider genre labels and separate scene tags; null primary genre means no confirmed lane. Tempo contributes <=15% to genre scoring and never proves genre.",
+  "Use BPM only when confirmed with confidence >=0.5; otherwise omit BPM, speed/energy inference and tempo scoring. Null confirmed tempo means candidate/window evidence stays provisional.",
+  "Key/mode are CONFIRMED only by supplied voting/window-consensus-stabilized results; null and disagreement stay provisional. Mood/energy are signal heuristics, not probabilities, listener emotion or demand; energy uses only supplied low/moderate/high and score/100.",
+  "Use vocals only when status=analyzed; otherwise do not infer voice, delivery, layering or lyrics. Song sections require explicit boundaries.",
+  "Use reconciled identity, provenance, catalogSources and actual provider records; preserve ISRC conflicts and ambiguous matches. DSP links are not audio; never claim OBSERVED audio or infer audio from links. No external stem, separation or render workers.",
+  "Ground strengths, risks and actions in supplied sonic, vocal, genre and catalog facts; distinguish unavailable from low-confidence. Label general recommendations INDUSTRY PRACTICE. No invented comparables; give verification criteria.",
+  "Without verified commercial performance, marketability is undetermined. Release date is DETERMINED only from verified supplied evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise.",
+  "Do not score hook, originality, production quality, replay value or lane clarity; keep each in the unscored human-listening checklist. Return JSON only and obey schema/word limits."
 ].join(" ");
 
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
   "A&R evidence scorer: use supplied facts only; never invent streams, sales, playlists, curators, audience metrics, label interest, placements or external facts.",
-  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=general guidance from industry_practice, not track fact. Always include the evidenceLabels array; each item needs label, claim and actual source.",
-  "DSP links are not audio. Without uploaded-master provenance, make no OBSERVED audio claim or infer BPM, key, vocals, lyrics, arrangement or sections. No external stem, separation or render workers.",
-  "Tempo/key are CONFIRMED only from supplied voting/window-consensus-stabilized results. Null values and candidates remain provisional; preserve disagreement. Missing tempo or confidence <0.5 means no BPM, tempoLaneFit or rhythmicConsistency score. BPM contributes <=15% to genre scoring; preserve provider genre labels and separate scene tags.",
-  "Mood/energy are provisional signal heuristics, not probabilities, listener emotion or demand. Use vocals only when analyzed and sections only with explicit boundaries. Preserve provider names, identity conflicts, ISRC ambiguity and provenance; never name a provider without its record.",
-  "Without verified commercial evidence, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise. Never infer demand from genre, tempo, popularity or metadata.",
-  "Every evidenceGaps and limitations item needs at least 8 words; null scores mean insufficient evidence. RMS/dBFS do not prove mastering readiness; no delivery score without destination targets; no loudness change without measured fault and target; centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
-  "Do not score hook, originality, production quality, replay value or lane clarity; keep each in the unscored human-listening checklist with a distinct first-listen check. scorecard.rhythmicConsistency.rationale needs at least 25 words even when null; explicitly populate scorecard.rhythmicConsistency.rationale with a complete 25-word explanation of missing master-timing evidence when null. Separate track evidence from INDUSTRY PRACTICE. Return JSON only; local Zod and word-count validation are authoritative."
+  "Labels OBSERVED=uploaded-master measurement, RECOGNIZED=one named provider, RECONCILED=2+ independent agreeing providers, INFERRED=groq_assessment hypothesis, INDUSTRY PRACTICE=industry_practice guidance, never a track fact. Include evidenceLabels; every item needs label, claim and actual source.",
+  "DSP/catalog links are not audio. Without uploaded-master provenance, make no OBSERVED audio claim or infer BPM, key, vocals, lyrics, arrangement or sections. No external stem/separation/render workers.",
+  "Tempo/key are CONFIRMED only from supplied voting/window-consensus-stabilized results; null/candidates remain provisional and disagreement stays visible. Missing tempo or confidence <0.5 means no BPM, tempoLaneFit or rhythmicConsistency score. BPM contributes <=15% to genre scoring; preserve exact provider genre labels and separate scene tags.",
+  "Mood/energy are signal heuristics, not probabilities, listener emotion or demand. Use vocals only when analyzed and sections only with explicit boundaries. Preserve provider names, identity conflicts, ISRC ambiguity and provenance; name providers only with returned records.",
+  "Without verified commercial evidence, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise; never infer demand from genre, tempo, popularity or metadata.",
+  "Every evidenceGaps and limitations item needs at least 8 words; null scores mean insufficient evidence. RMS/dBFS do not prove mastering readiness; no delivery score without destination targets; no loudness change without measured fault and target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
+  "Do not score hook, originality, production quality, replay value or lane clarity; keep each in the unscored human-listening checklist with a distinct first-listen check. scorecard.rhythmicConsistency.rationale must contain at least 25 words even when null. Separate track evidence from INDUSTRY PRACTICE. Return JSON only; local Zod and word-count validation are authoritative."
 ].join(" ");
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
@@ -440,7 +439,14 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     // arrangement summary, not a second copy of the full 128-window timeline.
     const arrangement = compacted.vocalArrangementAnalysis as Record<string, unknown>;
     const rawSegments = Array.isArray(arrangement.segments) ? arrangement.segments : [];
-    const selected = rawSegments.length <= 3 ? rawSegments : [rawSegments[0], rawSegments[Math.floor((rawSegments.length - 1) / 2)], rawSegments[rawSegments.length - 1]];
+    const rawSections = Array.isArray(arrangement.sections) ? arrangement.sections : [];
+    const selectFour = (items: unknown[]) => items.length <= 4 ? items
+      : [items[0], items[Math.round((items.length - 1) / 3)], items[Math.round(2 * (items.length - 1) / 3)], items[items.length - 1]];
+    const compactItems = (items: unknown[], fields: string[]) => selectFour(items).map(segment => {
+      if (!segment || typeof segment !== "object" || Array.isArray(segment)) return null;
+      const item = segment as Record<string, unknown>;
+      return Object.fromEntries(fields.filter(key => item[key] !== undefined).map(key => [key, item[key]]));
+    }).filter(Boolean);
     compacted.vocalArrangementAnalysis = {
       status: arrangement.status,
       method: arrangement.method,
@@ -448,12 +454,8 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
         ? Object.fromEntries(["name", "version"].filter(key => (arrangement.model as Record<string, unknown>)[key] !== undefined)
           .map(key => [key, (arrangement.model as Record<string, unknown>)[key]])) : undefined,
       segmentCount: rawSegments.length,
-      segments: selected.map(segment => {
-        if (!segment || typeof segment !== "object" || Array.isArray(segment)) return null;
-        const item = segment as Record<string, unknown>;
-        return Object.fromEntries(["startSeconds", "endSeconds", "role", "confidence"].filter(key => item[key] !== undefined)
-          .map(key => [key, item[key]]));
-      }).filter(Boolean),
+      ...(Array.isArray(arrangement.segments) ? { segments: compactItems(rawSegments, ["startSeconds", "endSeconds", "role", "confidence"]) } : {}),
+      ...(Array.isArray(arrangement.sections) ? { sections: compactItems(rawSections, ["label", "startSeconds", "endSeconds", "provisional"]) } : {}),
     };
   }
   if (["narrative", "positioning", "release", "evidence-score"].includes(group)) {
