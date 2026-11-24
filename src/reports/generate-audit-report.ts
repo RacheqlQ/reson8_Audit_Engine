@@ -162,7 +162,7 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
   verdict:coverVerdictLabel(input).toUpperCase(),
   summary:[
    "Decision basis: "+safeSummary,
-   "Open diligence: "+(openItems.join(" ")||"No additional diligence items were recorded."),
+   "Open diligence: "+(openDiligence||"No additional diligence items were recorded."),
    "Next action: "+nextAction,
   ].join(" "),
   prompts:[
@@ -175,13 +175,20 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
 export function buildArNotesDecisionContextFull(input:AuditReportInput):ArNotesDecisionContext {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
  const internalStatusNotice=/(?:vocal analysis.{0,80}(?:temporarily disabled|not performed|unavailable|disabled|not run)|vocal presence(?:\s*\/\s*absence)? is unknown|no vocal conclusion is available|learned audio model.{0,40}disabled|detection model.{0,40}disabled)/i;
+ // The A&R Notes panel is a concise decision brief, not a second copy of the
+ // complete assessment. Keep its text bounded so unusually verbose provider output
+ // cannot make the PDF renderer fail; the complete evidence remains in the report's
+ // dedicated evidence, SWOT and action sections.
  const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[]),...(Array.isArray(safeAssessment.limitations)?safeAssessment.limitations:[])]
   .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
   .filter(item=>!internalStatusNotice.test(item))
   .map(professionalEvidenceLanguage)
   .filter((item)=>item.trim().length>0)
   .filter((item,index,items)=>items.indexOf(item)===index);
- const fullSummary=professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required."));
+ const compact=(value:string,max:number)=>value.length<=max?value:value.slice(0,max-3).replace(/\\s+\\S*$/,"").trimEnd()+"...";
+ const selectedOpenItems=openItems.slice(0,2).map(item=>compact(item,140));
+ const openDiligence=selectedOpenItems.join(" ")+(openItems.length>selectedOpenItems.length?" "+(openItems.length-selectedOpenItems.length)+" additional diligence item(s) are detailed in the evidence and action sections.":"");
+ const fullSummary=compact(professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required.")),360);
  const nextAction="Verify identity, rights and the submitted master before pitching.";
  return {
   heading:"DECISION CONTEXT",
