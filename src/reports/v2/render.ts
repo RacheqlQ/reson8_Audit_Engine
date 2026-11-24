@@ -3,7 +3,7 @@ import { buildArNotesDecisionContext, buildArNotesDecisionContextFull, chartsFor
 import { loadReportFonts } from "../fonts.js";
 import { chartEvidenceIntegrityErrors, chartPanelHeight, countEvidenceLayers, drawChartPanel, draw3DSolidBar, draw3DSolidSphere } from "../charts.js";
 import { reconcileChartCrossChecks, reconcileChartSeriesAndLabels } from "../chart-reconciliation.js";
-import { adaptReportV2, type ReportV2Data } from "./adapters.js";
+import { adaptReportV2, type ReportV2Data, type TimedPoint } from "./adapters.js";
 import { hasReportableKeyCandidates, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
 import { sanitizePublicReportLines, sanitizePublicReportLine } from "./public-language.js";
@@ -118,7 +118,7 @@ export function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
   {label:"LOUDNESS / SIGNAL",value:loudness,provenance}
  ];
 }
-export function buildProposedArrangement(input:AuditReportInput):{summary:string;segments:ProposedArrangementSegment[]}{
+export function buildProposedArrangement(input:AuditReportInput,chartSeries?:TimedPoint[]|null):{summary:string;segments:ProposedArrangementSegment[]}{
  const evidence=rec(input.evidence),assessment=rec(input.assessment),position=rec(assessment.aAndRPositioning),audio=rec(input.sonicDna);
  const lane=str(evidence.genre,str(position.primaryLane,"genre lane to validate"));
  const genre=lane.toLowerCase();
@@ -130,9 +130,10 @@ export function buildProposedArrangement(input:AuditReportInput):{summary:string
  const emotions=["Set the scene","Establish identity","Build anticipation","Release and memorability","Renew momentum","Reinforce the hook","Contrast and emotional turn","Peak resolution","Intentional tail"];
  const total=weights.reduce((sum,value)=>sum+value,0);let cursor=0;
  const duration=finite(audio.durationSeconds)&&audio.durationSeconds>0?audio.durationSeconds:null;
- const energySeries=arr(audio.energyOverTime??audio.energySeries).map(value=>rec(value)).filter(item=>finite(item.timeSeconds??item.time)&&finite(item.value??item.energy??item.loudness));
- const energyValues=energySeries.map(item=>Number(item.value??item.energy??item.loudness));
- const energyMin=energyValues.length?Math.min(...energyValues):0,energyMax=energyValues.length?Math.max(...energyValues):0;
+ const energySeries:TimedPoint[]=chartSeries!==undefined?(chartSeries??[]):arr(audio.energyOverTime??audio.energySeries).map(value=>rec(value)).filter(item=>finite(item.timeSeconds??item.time)&&finite(item.value??item.energy??item.loudness)).map(item=>({timeSeconds:Number(item.timeSeconds??item.time),value:Number(item.value??item.energy??item.loudness)}));
+ let energyMin=Infinity,energyMax=-Infinity;
+ for(const point of energySeries){if(point.value<energyMin)energyMin=point.value;if(point.value>energyMax)energyMax=point.value;}
+ if(!Number.isFinite(energyMin)||!Number.isFinite(energyMax)){energyMin=0;energyMax=0;}
  const vocal=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis),intervals=arr(vocal.vocalActivityIntervals).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
  const tonal=rec(input.tonalResolution??audio.tonalResolution??rec(audio.harmonicFeatures).tonalResolution);
  const mode=tonal.mode==="major"||tonal.mode==="minor"?String(tonal.mode):"";
@@ -141,7 +142,7 @@ export function buildProposedArrangement(input:AuditReportInput):{summary:string
   const startPct=cursor;cursor+=weights[index]!/total*100;const endPct=cursor,centerPct=(startPct+endPct)/2;
   const time=duration===null?null:duration*centerPct/100;
   const nearest=time===null?null:energySeries.reduce((best,item)=>Math.abs(Number(item.timeSeconds??item.time)-time)<(best===null?Infinity:Math.abs(Number(best.timeSeconds??best.time)-time))?item:best,null as Record<string,unknown>|null);
-  const rawEnergy=nearest?Number(nearest.value??nearest.energy??nearest.loudness):null;
+  const rawEnergy=nearest?nearest.value:null;
   const energyLevel=rawEnergy===null||energyMax===energyMin?null:.25+.75*(rawEnergy-energyMin)/(energyMax-energyMin);
   const segmentStart=duration===null?null:duration*startPct/100,segmentEnd=duration===null?null:duration*endPct/100;
   const hasVocalCue=segmentStart!==null&&segmentEnd!==null&&intervals.some(item=>Number(item.startSeconds)<segmentEnd&&Number(item.endSeconds)>segmentStart);
@@ -569,7 +570,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   {title:"Identity and source reconciliation",kind:"identity",blocks:[]},
   {title:"Track snapshot",kind:"snapshot",blocks:metricBlock(data,input),lines:[
    ...(data.structure?["STRUCTURE — "+data.structure.map(s=>s.index+". "+s.label+" ("+s.startSeconds+"–"+s.endSeconds+"s)").join(" | ")]:[]),
-   ...(data.energySeries?["ENERGY SERIES — "+data.energySeries.length+" timestamped points; peak/dip derived from supplied series."]:[]),
+   ...(data.energySeries?["ENERGY SERIES — "+(data.energySeriesPointCount??data.energySeries.length)+" timestamped source points; chart preserves extrema using "+data.energySeries.length+" plotted points."]:[]),
    ...(data.sonicAxes?["SONIC DNA AXES — "+Object.entries(data.sonicAxes).map(([name,axis])=>name+" "+axis.value+"/100"+(axis.note?" ("+axis.note+")":"")).join("; ")]:[])
   ]},
   {title:"Evidence ledger and scorecard",blocks:[],lines:[
@@ -640,7 +641,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
     paragraph("Signal-derived vocal and arrangement observations",buildArrangementGuidanceSummary(input),"No reliable vocal or structural signal analysis was available."),
     list("Human listening checks",[...arr(a.listeningChecks).map(value=>str(value,"")).filter(Boolean),...buildDerivedListeningChecks(input)])
    ],kind:"narrative"},
-   {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod),(()=>{const proposal=buildProposedArrangement(input);return {label:"PROPOSED ARRANGEMENT & EMOTIONAL ARC",value:proposal.summary,arrangementBar:proposal.segments,provenance:"PROPOSED · creative arrangement guidance; human listening required"};})()],kind:"narrative"},
+   {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod),(()=>{const proposal=buildProposedArrangement(input,data.energySeries);return {label:"PROPOSED ARRANGEMENT & EMOTIONAL ARC",value:proposal.summary,arrangementBar:proposal.segments,provenance:"PROPOSED · creative arrangement guidance; human listening required"};})()],kind:"narrative"},
    {title:"Promotion and campaign strategy",blocks:[
     paragraph("ISRC-anchored catalogue coverage",compact(buildCommercialStrategyLines(input).slice(1,2).join(" "),210)),
     paragraph("Audience and short-form strategy",[
@@ -789,9 +790,9 @@ function formatSnapshotTime(seconds:number):string{
 }
 function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:AuditReportInput):number{
  const audio=rec(input.sonicDna),analysis=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis??audio.vocalFeatures);
- const sections=arr(analysis.inferredSections).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
- const transitions=arr(analysis.detectedTransitions).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds));
- const intervals=arr(analysis.vocalActivityIntervals).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const sections=arr(analysis.inferredSections).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const transitions=arr(analysis.detectedTransitions).slice(0,16).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds));
+ const intervals=arr(analysis.vocalActivityIntervals).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
  const duration=finite(audio.durationSeconds)&&audio.durationSeconds>0?audio.durationSeconds:Math.max(1,...sections.map(item=>Number(item.endSeconds)));
  const presence=finite(analysis.vocalPresencePct)?Math.max(0,Math.min(100,analysis.vocalPresencePct)):0;
  const vocalDetected=analysis.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0;
@@ -1185,7 +1186,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     page.drawRectangle({x:M,y:top-height,width:W-2*M,height,color:C.white,borderColor:C.line,borderWidth:.7});
     page.drawText("ENERGY SPECTRUM · SOURCE VALUES",{x:M+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
     const series=reconcileChartSeriesAndLabels({rows:data.energySeries.map(point=>({label:point.timeSeconds.toFixed(1)+" s",value:point.value})),endpointAvailable:true,metricAvailable:true,derivedInProcess:true,provenance:"SIGNAL-DERIVED · TIMESTAMPED UPLOADED-MASTER SERIES"});
-    const values=series.rows.map(row=>typeof row.value==="number"?row.value:0),min=Math.min(...values),max=Math.max(...values),span=max-min||1;
+    let min=Infinity,max=-Infinity;for(const row of series.rows){if(typeof row.value!=="number")continue;if(row.value<min)min=row.value;if(row.value>max)max=row.value;}if(!Number.isFinite(min)||!Number.isFinite(max)){min=0;max=0;}const span=max-min||1;
     const t0=data.energySeries[0].timeSeconds,t1=data.energySeries[data.energySeries.length-1].timeSeconds,dt=t1-t0||1;
     for(let i=0;i<series.rows.length;i++){
      const value=typeof series.rows[i]!.value==="number"?Number(series.rows[i]!.value):null;
