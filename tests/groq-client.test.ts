@@ -581,7 +581,7 @@ describe("GroqClient section groups",()=>{
   expect(requests.every(request=>request.total<=6000)).toBe(true);
   const narrative=requests.find(request=>request.group==="narrative")!;
   expect(narrative.payload.sonicDna).not.toHaveProperty("vocalArrangementAnalysis");
-  expect(Object.keys(narrative.payload.evidence.fieldProvenance)).toHaveLength(24);
+  expect(Object.keys(narrative.payload.evidence.fieldProvenance)).toHaveLength(20);
   expect(narrative.payload.evidence.fieldProvenance.field0).not.toHaveProperty("detail");
   const evidenceScore=requests.find(request=>request.group==="evidence-score")!;
   expect(evidenceScore.payload.sonicDna.vocalArrangementAnalysis.segments).toHaveLength(10);
