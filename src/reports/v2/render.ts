@@ -134,7 +134,7 @@ export function buildProposedArrangement(input:AuditReportInput,chartSeries?:Tim
  let energyMin=Infinity,energyMax=-Infinity;
  for(const point of energySeries){if(point.value<energyMin)energyMin=point.value;if(point.value>energyMax)energyMax=point.value;}
  if(!Number.isFinite(energyMin)||!Number.isFinite(energyMax)){energyMin=0;energyMax=0;}
- const vocal=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis),intervals=arr(vocal.vocalActivityIntervals).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const vocal=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis),intervals=arr(vocal.vocalActivityIntervals).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
  const tonal=rec(input.tonalResolution??audio.tonalResolution??rec(audio.harmonicFeatures).tonalResolution);
  const mode=tonal.mode==="major"||tonal.mode==="minor"?String(tonal.mode):"";
  const emotionalFrame=mode==="minor"?"tension-to-release":mode==="major"?"bright lift-to-release":"contrast-to-payoff";
