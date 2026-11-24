@@ -3,7 +3,7 @@ import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails
 import { sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
 import { markAssessmentProviderUnavailable } from "../provider-policy.js";
 
-export const GROQ_PROMPT_VERSION = "audit-ar-v8-narrative-contract-2026-11-24";
+export const GROQ_PROMPT_VERSION = "audit-ar-v9-positioning-reliability-2026-11-24";
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 
 const EvidenceLabelSchema = z.object({
@@ -102,6 +102,10 @@ export interface ProviderAttemptDiagnostic {
   group?: string;
   failureKind?: "empty_content" | "invalid_json" | "schema_violation" | "threshold_violation" | "prompt_budget_exceeded";
   validationIssues?: Array<{ code: string; path: string[] }>;
+  validationField?: string;
+  validationRule?: "minimum_word_count";
+  minimumWords?: number;
+  actualWords?: number;
 }
 export interface GroqAssessmentInput {
   evidence: Record<string, unknown>;
@@ -141,7 +145,9 @@ const NARRATIVE_SYSTEM_PROMPT = [
   "Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each item must be a complete, specific statement tied to a supplied fact or an explicitly stated evidence limitation. Do not pad counts with repeated or generic claims.",
   "Without verified commercial performance, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise.",
   "Do not score hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return JSON only; obey schema/word limits."
-].join(" ");
+ ].join(" ");
+
+const POSITIONING_INSTRUCTIONS = "For aAndRPositioning.rationale and commercialRead.rationale, each must contain at least 40 words (>= 40 words each). Give one concise, evidence-bounded rationale per field; cite supplied evidence or explicitly name the evidence gap. Never pad, repeat boilerplate, or infer commercial demand without verified commercial telemetry. Keep marketability undetermined when such telemetry is absent.";
 
 const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS do not prove mastering readiness; do not recommend loudness changes without a measured fault and target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.";
 
@@ -156,7 +162,28 @@ const EVIDENCE_SCORE_SYSTEM_PROMPT = [
   "Do not score hook, originality, production quality, replay value or lane clarity; keep them unscored with distinct listening checks. scorecard.rhythmicConsistency.rationale must contain at least 25 words even when null. Separate track evidence from INDUSTRY PRACTICE. JSON only; local Zod/word-count validation is authoritative."
 ].join(" ");
 
-function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
+function words(value: string): number { return value.trim().split(/\\s+/).filter(Boolean).length; }
+function safeThresholdDiagnostic(group: string, value: unknown, message: string): Pick<ProviderAttemptDiagnostic, "validationField" | "validationRule" | "minimumWords" | "actualWords"> {
+  const d = value as Record<string, any>;
+  const match = message.match(/^(.+?) must contain at least (\\d+) words\\./);
+  const label = match?.[1] ?? "unknown";
+  const minimumWords = Number(match?.[2] ?? 0);
+  const fieldMap: Record<string, string> = {
+    "positioning rationale": "aAndRPositioning.rationale",
+    "commercial rationale": "commercialRead.rationale",
+    executiveSummary: "executiveSummary", creativeIdentity: "creativeIdentity",
+    recommendation: "releaseStrategy.recommendation",
+    productionArrangementGuidance: "productionArrangementGuidance",
+    industryPractice: group === "production" ? "industryPractice" : group === "promotion" ? "promotionPlan.industryPractice" : "labelPartnerFit.industryPractice",
+    laneHypothesis: "laneHypothesis", verificationMethod: "verificationMethod",
+    preRelease: "promotionPlan.preRelease", releaseWindow: "promotionPlan.releaseWindow", postRelease: "promotionPlan.postRelease",
+    partnerProfile: "labelPartnerFit.partnerProfile", diligenceBeforeContact: "labelPartnerFit.diligenceBeforeContact",
+    days30: "executionPlan.days30", days60: "executionPlan.days60", days90: "executionPlan.days90",
+  };
+  const validationField = fieldMap[label] ?? label;
+  const actual = validationField.split(/[.\\[\\]]/).filter(Boolean).reduce((current: any, key) => current?.[/^\\d+$/.test(key) ? Number(key) : key], d);
+  return { validationField, validationRule: "minimum_word_count", minimumWords, actualWords: typeof actual === "string" ? words(actual) : 0 };
+}
 function thresholdError(name: string, value: unknown): string | null {
   const d = value as Record<string, any>;
   const text = (label: string, v: unknown, min: number) => typeof v === "string" && words(v) >= min ? null : label + " must contain at least " + min + " words.";
@@ -359,7 +386,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     }
     // Narrative receives the same bounded string/array envelope as evidence-score;
     // source identities and normalized values above remain intact.
-    const compacted = compactEvidenceScoreValue(projected, 0, ["evidence-score", "production"].includes(group) ? 40 : 72, ["evidence-score", "production"].includes(group) ? 2 : 3) as Record<string, unknown>;
+    const compacted = compactEvidenceScoreValue(projected, 0, ["evidence-score", "production", "narrative"].includes(group) ? 48 : 72, ["evidence-score", "production", "narrative"].includes(group) ? 2 : 3) as Record<string, unknown>;
     if (compacted.fieldProvenance && typeof compacted.fieldProvenance === "object") {
       compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, 12));
     }
@@ -469,14 +496,14 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   }
 
   const compacted = (["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
-    ? compactEvidenceScoreValue(compact, 0, group === "production" ? 40 : 72, group === "evidence-score" ? 3 : group === "production" ? 2 : 3)
+    ? compactEvidenceScoreValue(compact, 0, group === "production" ? 40 : group === "narrative" ? 48 : 72, ["evidence-score", "production", "narrative"].includes(group) ? 2 : 3)
     : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
     if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
-      ? compactEvidenceScoreValue(value, 0, group === "production" ? 40 : 72, group === "evidence-score" ? 4 : group === "production" ? 2 : 3)
+      ? compactEvidenceScoreValue(value, 0, group === "production" ? 40 : group === "narrative" ? 48 : 72, group === "narrative" ? 3 : group === "evidence-score" ? 4 : 3)
       : compactPromptValue(value);
   }
   if (["evidence-score", "production"].includes(group) && compacted.vocalArrangementAnalysis && typeof compacted.vocalArrangementAnalysis === "object" && !Array.isArray(compacted.vocalArrangementAnalysis)) {
@@ -892,7 +919,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 
     const wordError = thresholdError(groupName, result.data);
     if (wordError) {
-      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "threshold_violation" });
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "threshold_violation", ...safeThresholdDiagnostic(groupName, result.data, wordError) });
       if (scheduleCorrection(wordError + " Repair the exact field and preserve the evidence-bounded meaning.")) continue;
       break;
     }
@@ -968,7 +995,7 @@ export class GroqClient implements GroqAssessmentClient {
     };
     const tasks=[
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"positioning","Write evidence-bounded A&R positioning and commercial read.",PositioningSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"positioning",POSITIONING_INSTRUCTIONS,PositioningSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"release","Write a grounded release recommendation and priorities.",ReleaseSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"evidence-score","Score only evidence-derivable dimensions; return evidenceLabels and the unscored checklist. Follow local word-count minima, including the 25-word null rhythmicConsistency rationale. Repair only named fields; preserve evidence meaning.",EvidenceScoreSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"production","Give actionable production and arrangement guidance. Separate lane-general craft as INDUSTRY PRACTICE.",ProductionSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
