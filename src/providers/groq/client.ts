@@ -283,14 +283,15 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   const common = new Set([
     "provenance", "evidenceClass", "analysisVersion", "sourceProviders",
     "confidence", "warnings", "bpm", "tempoConfidence", "key", "mode",
-    "moodTags", "genreTags", "genreClassification",
+    "moodTags", "genreTags", "genreContext", "limitations", "keyCandidates", "genreClassification",
+    "tonalResolution", "vocalArrangementAnalysis",
   ]);
   const featureFamilies: Record<string, string[]> = {
     narrative: ["acousticFeatureProfile", "vocalFeatures"],
     positioning: ["acousticFeatureProfile", "vocalFeatures"],
     release: ["acousticFeatureProfile", "rhythmFeatures", "harmonicFeatures"],
-    "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
-    production: ["acousticFeatureProfile", "vocalFeatures", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
+    "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
+    production: ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
     comparables: [],
     promotion: ["acousticFeatureProfile"],
     "label-fit": [],
