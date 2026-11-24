@@ -165,7 +165,7 @@ const EVIDENCE_SCORE_SYSTEM_PROMPT = [
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
 function safeThresholdDiagnostic(group: string, value: unknown, message: string): Pick<ProviderAttemptDiagnostic, "validationField" | "validationRule" | "minimumWords" | "actualWords"> {
   const d = value as Record<string, any>;
-  const match = message.match(/^(.+?) must contain at least (\d+) words\\./);
+  const match = message.match(/^(.+?) must contain at least ([0-9]+) words/);
   const label = match?.[1] ?? "unknown";
   const minimumWords = Number(match?.[2] ?? 0);
   const fieldMap: Record<string, string> = {
