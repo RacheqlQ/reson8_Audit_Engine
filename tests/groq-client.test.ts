@@ -164,7 +164,7 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
+   const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
    expect(body.max_completion_tokens).toBeLessThanOrEqual(1200);
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
@@ -238,25 +238,33 @@ describe("GroqClient section groups",()=>{
   expect(evidenceScorePayloads[0].catalogMetadata).toBeNull();
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   const estimatedInputTokens=Math.ceil(new TextEncoder().encode(JSON.stringify({
-    messages:body.messages,response_format:body.response_format
-   })).length/3)+256;
+   const estimatedInputTokens=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
    expect(estimatedInputTokens).toBeGreaterThan(256);
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
    expect(estimatedInputTokens+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
  });
- it("rejects a catalog payload above the Groq request budget before contacting the provider",async()=>{
+ it("bounds oversized catalog metadata before sending a Groq request",async()=>{
   const oversizedCatalog=Object.fromEntries(Array.from({length:40},(_,index)=>[
    "provider"+index,"catalog evidence detail ".repeat(60)
   ]));
-  const mock=vi.fn(async()=>new Response("unexpected provider request",{status:500}));
+  const {mock}=fetchMock();
+  const payloads:Array<Record<string,any>>=[];
+  mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body));
+   const payload=JSON.parse(body.messages[1].content);
+   if(payload.sectionGroup==="narrative")payloads.push(payload);
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
+  });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
-  await expect(client.assess({
+  await client.assess({
    evidence:{artist:"Fixture Artist",title:"Oversized metadata fixture"},
    sonicDna:null,catalogMetadata:oversizedCatalog
-  })).rejects.toThrow("GROQ_PROMPT_BUDGET_EXCEEDED");
-  expect(mock).not.toHaveBeenCalled();
+  });
+  expect(mock).toHaveBeenCalledTimes(9);
+  expect(payloads).toHaveLength(1);
+  expect(Object.keys(payloads[0].catalogMetadata)).toHaveLength(4);
+  expect(payloads[0].catalogMetadata.provider0.length).toBeLessThanOrEqual(212);
  });
  it("keeps Gemini and Ollama module output budgets independent of Groq's TPM ceiling",async()=>{
   const identity=Object.fromEntries(Array.from({length:20},(_,index)=>["sourceField"+index,"verified source provenance detail ".repeat(25)]));
@@ -540,9 +548,140 @@ describe("GroqClient section groups",()=>{
   expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
 
+ it("bounds production-sized provenance and vocal timelines without breaching Groq's 6,000-token request ceiling",async()=>{
+  const detail="Provider-returned reconciliation commentary with repeated raw source context that is not needed to preserve the actual source, status, confidence or normalized field value. ".repeat(8);
+  const fieldProvenance=Object.fromEntries(Array.from({length:48},(_,index)=>["field"+index,{
+   source:["musicbrainz","spotify","apple_music"][index%3],status:"recognized",confidence:0.82,
+   value:"normalized identity value "+index,detail,rawPayload:detail
+  }]));
+  const evidence={
+   auditType:"full_a_and_r",artist:"Fixture Artist",title:"Production-sized evidence fixture",
+   sourceProviders:["musicbrainz","spotify","apple_music","youtube"],fieldProvenance,
+   identity:{artist:"Fixture Artist",title:"Production-sized evidence fixture",isrc:"USAAA2600001",matchStatus:"reconciled"},
+   reconciliation:{status:"partial",matchedFields:["artist","title","isrc"],conflicts:Array.from({length:40},(_,index)=>"Conflict "+index+": "+detail)},
+   genreClassification:{primaryGenre:"Contemporary R&B",genres:["Contemporary R&B"],abstained:false},
+   commercialEvidence:{verified:false,reason:detail},rightsStatus:{status:"unverified",notes:detail}
+  };
+  const sonicDna={
+   provenance:"uploaded_audio_master",evidenceClass:"OBSERVED",analysisVersion:"sonic-dna-v1",
+   sourceProviders:["essentia"],confidence:0.82,warnings:[detail],limitations:[detail],
+   bpm:95,tempoConfidence:0.82,key:"A",mode:"minor",moodTags:["reflective"],genreTags:["Contemporary R&B"],
+   genreClassification:{primaryGenre:"Contemporary R&B",genres:["Contemporary R&B"],abstained:false},
+   vocalArrangementAnalysis:{status:"analyzed",segments:Array.from({length:60},(_,index)=>({
+    startSeconds:index*3,endSeconds:(index+1)*3,role:index%2?"lead":"backing",description:detail
+   }))}
+  };
+  const catalogMetadata=Object.fromEntries(Array.from({length:32},(_,index)=>["provider"+index,{
+   status:"matched",source:"catalog provider "+index,detail
+  }]));
+  const {mock}=fetchMock();
+  const requests:Array<{group:string;payload:Record<string,any>;total:number}>=[];
+  mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body));
+   const payload=JSON.parse(body.messages[1].content);
+   const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
+   requests.push({group:payload.sectionGroup,payload,total:estimated+body.max_completion_tokens});
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  await client.assess({evidence,sonicDna,catalogMetadata});
+  expect(requests).toHaveLength(9);
+  expect(requests.every(request=>request.total<=6000)).toBe(true);
+  const narrative=requests.find(request=>request.group==="narrative")!;
+  expect(narrative.payload.sonicDna).not.toHaveProperty("vocalArrangementAnalysis");
+  expect(Object.keys(narrative.payload.evidence.fieldProvenance)).toHaveLength(12);
+  expect(narrative.payload.evidence.fieldProvenance.field0).not.toHaveProperty("detail");
+  const evidenceScore=requests.find(request=>request.group==="evidence-score")!;
+  expect(evidenceScore.payload.sonicDna.vocalArrangementAnalysis.segments).toHaveLength(4);
+ });
+
 });
 
 
+
+describe("evidence-score prompt budget compaction", () => {
+  it("keeps the three previously failing large-context profiles below the 5,000-token engineering target", async () => {
+    const profiles = [
+      { name: "prior-5991", provenance: 14, conflicts: 12, segments: 24 },
+      { name: "prior-6152", provenance: 32, conflicts: 28, segments: 48 },
+      { name: "prior-6255", provenance: 48, conflicts: 40, segments: 60 },
+    ];
+    const observed: Array<{ name: string; estimated: number; completion: number; schemaBytes: number }> = [];
+    for (const profile of profiles) {
+      const detail = "Verbose provider commentary repeated for this fixture; source and normalized value remain independently retained. ".repeat(8);
+      const evidence = {
+        auditType: "full_a_and_r", artist: "Fixture Artist", title: profile.name,
+        releaseDate: "2026-10-18", sourceProviders: ["musicbrainz", "spotify", "apple_music", "youtube"],
+        fieldProvenance: Object.fromEntries(Array.from({ length: profile.provenance }, (_, i) => ["field" + i, {
+          source: ["musicbrainz", "spotify", "apple_music"][i % 3], status: "recognized",
+          confidence: 0.82, value: "normalized identity value " + i, detail, rawPayload: detail,
+        }])),
+        identity: { artist: "Fixture Artist", title: profile.name, isrc: "USAAA2600001", matchStatus: "reconciled" },
+        reconciliation: { status: "partial", matchedFields: ["artist", "title", "isrc"],
+          conflicts: Array.from({ length: profile.conflicts }, (_, i) => "Conflict " + i + ": " + detail) },
+        genreClassification: { primaryGenre: "Contemporary R&B", genres: ["Contemporary R&B"], abstained: false },
+        commercialEvidence: { verified: false, reason: detail },
+        releaseStatus: { status: "released", releaseDate: "2026-10-18" },
+      };
+      const sonicDna = {
+        provenance: "uploaded_audio_master", evidenceClass: "OBSERVED", analysisVersion: "sonic-dna-v1",
+        sourceProviders: ["essentia"], confidence: 0.82, warnings: [detail], limitations: [detail],
+        bpm: 95, tempoConfidence: 0.82, key: "A", mode: "minor",
+        tonalResolution: { status: "CONFIRMED", tonic: "A", mode: "minor", confidence: 0.88, voteConsensus: 0.82 },
+        rhythmFeatures: { status: "measured", candidateScores: [{ bpm: 95, score: 0.8 }], windowConsensus: 0.82 },
+        harmonicFeatures: { status: "measured", topCandidates: [{ key: "A", mode: "minor" }], windowConsensus: 0.82 },
+        vocalArrangementAnalysis: { status: "analyzed", segments: Array.from({ length: profile.segments }, (_, i) => ({
+          startSeconds: i * 3, endSeconds: (i + 1) * 3, role: i % 2 ? "lead" : "backing", description: detail,
+        })) },
+      };
+      const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        const payload = JSON.parse(body.messages[1].content);
+        const estimated = Math.ceil(new TextEncoder().encode(JSON.stringify({
+          messages: body.messages, response_format: body.response_format,
+        })).length / 2) + 256;
+        if (payload.sectionGroup === "evidence-score") {
+          observed.push({ name: profile.name, estimated, completion: body.max_completion_tokens,
+            schemaBytes: new TextEncoder().encode(JSON.stringify(body.response_format.json_schema.schema)).length });
+        }
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      });
+      await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence, sonicDna });
+    }
+    expect(observed).toHaveLength(3);
+    console.info("EVIDENCE_SCORE_BUDGET_FIXTURES", JSON.stringify(observed));
+    for (const item of observed) {
+      expect(item.estimated, item.name).toBeLessThanOrEqual(5000);
+      expect(item.completion, item.name).toBeGreaterThanOrEqual(256);
+      expect(item.estimated + item.completion, item.name).toBeLessThanOrEqual(6000);
+      expect(item.schemaBytes, item.name).toBeLessThan(2200);
+    }
+  });
+
+  it("retains the evidence-score verdict and provenance invariants in its compact system instructions", async () => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "evidence-score") {
+        const system = body.messages[0].content;
+        for (const invariant of ["CONFIRMED", "voting/window-consensus-stabilized", "DETERMINED",
+          "PRE_RELEASE/POST_RELEASE", "PROPOSED", "DSP/catalog links are not audio",
+          "No external stem/separation/render workers", "OBSERVED", "RECONCILED", "industry_practice"]) {
+          expect(system).toContain(invariant);
+        }
+        const schema = body.response_format.json_schema.schema;
+        expect(schema.required).toEqual(expect.arrayContaining(["evidenceGaps", "confidence", "limitations", "scorecard", "humanListeningChecklist", "evidenceLabels"]));
+        expect(schema.properties.scorecard.properties.rhythmicConsistency).toBeDefined();
+        expect(schema.properties.evidenceLabels.items.properties.source).toBeDefined();
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null });
+    expect(mock).toHaveBeenCalledTimes(9);
+  });
+});
 
 describe("GroqClient cancellation", () => {
   it("aborts an in-flight provider request when the audit signal is aborted", async () => {
