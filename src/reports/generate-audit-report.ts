@@ -185,10 +185,19 @@ export function buildArNotesDecisionContextFull(input:AuditReportInput):ArNotesD
   .map(professionalEvidenceLanguage)
   .filter((item)=>item.trim().length>0)
   .filter((item,index,items)=>items.indexOf(item)===index);
- const compact=(value:string,max:number)=>value.length<=max?value:value.slice(0,max-3).replace(/\\s+\\S*$/,"").trimEnd()+"...";
- const selectedOpenItems=openItems.slice(0,2).map(item=>compact(item,140));
+ const boundedSentences=(value:string,max:number,fallback:string)=>{
+  const sentences=value.match(/[^.!?]+[.!?]+/g)??[];
+  let result="";
+  for(const sentence of sentences){
+   const next=(result?" ":"")+sentence.trim();
+   if(result.length+next.length>max)break;
+   result+=next;
+  }
+  return result||fallback;
+ };
+ const selectedOpenItems=openItems.slice(0,2).map(item=>boundedSentences(item,140,"Further diligence detail is included in the evidence and action sections."));
  const openDiligence=selectedOpenItems.join(" ")+(openItems.length>selectedOpenItems.length?" "+(openItems.length-selectedOpenItems.length)+" additional diligence item(s) are detailed in the evidence and action sections.":"");
- const fullSummary=compact(professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required.")),360);
+ const fullSummary=boundedSentences(professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required.")),480,"Full decision basis is detailed in the report's narrative assessment sections.");
  const nextAction="Verify identity, rights and the submitted master before pitching.";
  return {
   heading:"DECISION CONTEXT",
