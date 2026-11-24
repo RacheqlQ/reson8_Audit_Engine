@@ -646,13 +646,13 @@ describe("narrative prompt budget compaction",()=>{
   };
   const catalogMetadata=Object.fromEntries(Array.from({length:32},(_,i)=>["provider"+i,{status:"matched",source:"catalog provider "+i,detail,rawPayload:detail}]));
   const {mock}=fetchMock();
-  let narrative:{payload:Record<string,any>;estimated:number;completion:number}|null=null;
+  let narrative:{payload:Record<string,any>;system:string;estimated:number;completion:number}|null=null;
   mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
    const body=JSON.parse(String(init?.body));
    const payload=JSON.parse(body.messages[1].content);
    if(payload.sectionGroup==="narrative"){
     const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
-    narrative={payload,estimated,completion:body.max_completion_tokens};
+    narrative={payload,system:body.messages[0].content,estimated,completion:body.max_completion_tokens};
    }
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
   });
@@ -666,6 +666,9 @@ describe("narrative prompt budget compaction",()=>{
   expect(narrative!.payload.sonicDna.acousticFeatureProfile.descriptors.spectralCentroidHz).toMatchObject({median:0.42,unit:"ratio"});
   expect(narrative!.payload.sonicDna.vocalFeatures).toMatchObject({status:"analyzed",voicePresence:"likely_present"});
   expect(narrative!.payload.catalogMetadata).toBeNull();
+  for(const invariant of ["CONFIRMED","voting/window-consensus-stabilized","DETERMINED","PRE_RELEASE versus POST_RELEASE","PROPOSED","DSP/catalog links are not audio","No external stem, separation or render workers","OBSERVED","RECONCILED","industry_practice"]){
+   expect(narrative!.system).toContain(invariant);
+  }
  });
 });
 
