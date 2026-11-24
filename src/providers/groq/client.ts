@@ -258,6 +258,29 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
   };
   const allowed = new Set([...common, ...(groupFields[group] ?? [])]);
   const projected = Object.fromEntries(Object.entries(evidence).filter(([key]) => allowed.has(key)));
+
+  // Provider provenance often contains verbose raw response descriptions.
+  // Keep the source/status/confidence facts for every field, not duplicated
+  // free-form payload text that can crowd out the actual assessment request.
+  const provenance = projected.fieldProvenance;
+  if (provenance && typeof provenance === "object" && !Array.isArray(provenance)) {
+    projected.fieldProvenance = Object.fromEntries(
+      Object.entries(provenance as Record<string, unknown>).slice(0, 24).map(([field, raw]) => {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [field, compactPromptValue(raw)];
+        const record = raw as Record<string, unknown>;
+        const retained = ["source", "provider", "status", "confidence", "evidenceClass", "value", "normalizedValue", "matchStatus"];
+        return [field, Object.fromEntries(retained.filter((key) => record[key] !== undefined)
+          .map((key) => [key, compactPromptValue(record[key])]))];
+      }),
+    );
+  }
+
+  // Preserve reconciliation outcomes and conflicts, but bound optional provider
+  // commentary. Identity values and source names remain available to the model.
+  for (const key of ["identity", "reconciliation", "genreClassification", "masterAudio", "sourceCombination"]) {
+    if (projected[key] !== undefined) projected[key] = compactPromptValue(projected[key]);
+  }
+
   if (group === "evidence-score") {
     // The normalized provenance/reconciliation fields above are the canonical
     // evidence-score inputs. These duplicate summaries are already represented
@@ -266,20 +289,26 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     delete projected.catalogSources;
     delete projected.sourceCombination;
   }
-  return projected;
+  return compactPromptValue(projected) as Record<string, unknown>;
 }
 
 function compactPromptValue(value: unknown, depth = 0): unknown {
   if (value === null || typeof value !== "object") {
-    return typeof value === "string" && value.length > 1200 ? value.slice(0, 1200) + " [truncated]" : value;
+    return typeof value === "string" && value.length > 480 ? value.slice(0, 480) + " [truncated]" : value;
   }
-  if (depth >= 5) {
-    if (Array.isArray(value)) return value.slice(0, 8).filter((item) => item === null || typeof item !== "object");
-    return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 20)
+  const sample = (items: unknown[], limit: number): unknown[] => {
+    if (items.length <= limit) return items;
+    if (limit <= 1) return [items[0]];
+    // Evenly retain the full timeline, including its first and final observations.
+    return Array.from({ length: limit }, (_, index) => items[Math.round(index * (items.length - 1) / (limit - 1))]);
+  };
+  if (depth >= 4) {
+    if (Array.isArray(value)) return sample(value, 8).filter((item) => item === null || typeof item !== "object");
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 12)
       .filter(([, item]) => item === null || typeof item !== "object"));
   }
-  if (Array.isArray(value)) return value.slice(0, 16).map((item) => compactPromptValue(item, depth + 1));
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 40)
+  if (Array.isArray(value)) return sample(value, 12).map((item) => compactPromptValue(item, depth + 1));
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 24)
     .map(([key, item]) => [key, compactPromptValue(item, depth + 1)]));
 }
 
@@ -293,7 +322,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     "provenance", "evidenceClass", "analysisVersion", "sourceProviders",
     "confidence", "warnings", "bpm", "tempoConfidence", "key", "mode",
     "moodTags", "genreTags", "genreContext", "limitations", "keyCandidates", "genreClassification",
-    "tonalResolution", "vocalArrangementAnalysis",
+    "tonalResolution",
   ]);
   const featureFamilies: Record<string, string[]> = {
     narrative: ["acousticFeatureProfile", "vocalFeatures"],
