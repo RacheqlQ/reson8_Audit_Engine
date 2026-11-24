@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { PDFDocument } from "@cantoo/pdf-lib";
+import { generateAuditReportV2 } from "../src/reports/v2/render.js";
 import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
 import { clearAssessmentProviderUnavailable, getAssessmentProviderReadiness } from "../src/providers/provider-policy.js";
 
@@ -976,6 +978,35 @@ describe("safe assessment validation diagnostics", () => {
   })).rejects.toThrow("evidence-score response failed Zod validation");
   expect(attempts.some(attempt => attempt.group === "evidence-score" && attempt.failureKind === "threshold_violation")).toBe(true);
  });
+});
+
+describe("nine-section report-readiness integration", () => {
+  it("runs every assessment section and renders the report-ready sample PDF", async () => {
+    const { mock } = fetchMock();
+    const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: { artist: "Fixture Artist", title: "Fixture Track", fixture: true }, sonicDna: null });
+    const groups = new Set(mock.mock.calls.map(call => {
+      const body = JSON.parse(String(call[1]?.body));
+      return JSON.parse(body.messages[1].content).sectionGroup;
+    }));
+    expect(groups).toEqual(new Set(["narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline"]));
+    expect(Object.values(assessment.generationProvenance.fieldGroups)).toEqual(expect.arrayContaining([
+      "narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline",
+    ]));
+    expect(assessment.aAndRPositioning.rationale.trim().split(/\\s+/).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.trim().split(/\\s+/).length).toBeGreaterThanOrEqual(40);
+    const pdfBytes = await generateAuditReportV2({
+      auditId: "nine-section-readiness-fixture",
+      generatedAt: "2026-11-24T00:00:00.000Z",
+      evidence: { artist: "Fixture Artist", title: "Fixture Track", fixture: true },
+      sonicDna: null,
+      assessment,
+      executionMode: "dsp_link",
+    }, "sample");
+    expect(Buffer.from(pdfBytes.subarray(0, 5)).toString("ascii")).toBe("%PDF-");
+    const pdf = await PDFDocument.load(pdfBytes);
+    expect(pdf.getPageCount()).toBe(7);
+  });
 });
 
 describe("positioning contract and provider recovery regressions", () => {
