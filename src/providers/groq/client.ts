@@ -149,7 +149,7 @@ const EVIDENCE_SCORE_SYSTEM_PROMPT = [
   "Tempo/key are CONFIRMED only by voting/window-consensus-stabilized results; null/candidates stay provisional and disagreement visible. Missing tempo or confidence <0.5 means no BPM, tempoLaneFit or rhythmicConsistency score. Tempo is <=15% of genre scoring; preserve provider genres and separate scene tags.",
   "Mood/energy are heuristics, not probability, emotion or demand. Use vocals only when analyzed; sections need explicit boundaries. Preserve provider names, identity conflicts, ISRC ambiguity and provenance; name only providers with returned records.",
   "Without verified commercial evidence, marketability is undetermined. Release date DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict PROPOSED unless deterministic rules establish otherwise; never infer demand from genre, tempo, popularity or metadata.",
-  "Each evidenceGaps/limitations item needs >=8 words; null scores mean insufficient evidence. RMS/dBFS do not prove mastering readiness; no delivery score without destination targets or loudness change without measured fault/target. Centroid <=2,000 Hz is not bright; mono is risk, not incompatibility.",
+  "Each evidenceGaps and limitations item must contain at least 8 words; null scores mean insufficient evidence. RMS/dBFS do not prove mastering readiness; no delivery score without destination targets or loudness change without measured fault/target. Centroid <=2,000 Hz is not bright; mono is risk, not incompatibility.",
   "Do not score hook, originality, production quality, replay value or lane clarity; keep them unscored with distinct listening checks. scorecard.rhythmicConsistency.rationale must contain at least 25 words even when null. Separate track evidence from INDUSTRY PRACTICE. JSON only; local Zod/word-count validation is authoritative."
 ].join(" ");
 
@@ -434,15 +434,15 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     compact.harmonicFeatures = summary;
   }
 
-  const compacted = (["evidence-score", "narrative", "positioning"].includes(group)
-    ? compactEvidenceScoreValue(compact, 0, group === "evidence-score" ? 40 : 72, group === "evidence-score" ? 2 : 3)
+  const compacted = (["evidence-score", "narrative", "positioning", "production"].includes(group)
+    ? compactEvidenceScoreValue(compact, 0, group === "evidence-score" ? 40 : group === "production" ? 48 : 72, 3)
     : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
-    if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning"].includes(group)
-      ? compactEvidenceScoreValue(value, 0, 72, 3)
+    if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning", "production"].includes(group)
+      ? compactEvidenceScoreValue(value, 0, group === "production" ? 48 : 72, 3)
       : compactPromptValue(value);
   }
   if (group === "evidence-score" && compacted.vocalArrangementAnalysis && typeof compacted.vocalArrangementAnalysis === "object" && !Array.isArray(compacted.vocalArrangementAnalysis)) {
