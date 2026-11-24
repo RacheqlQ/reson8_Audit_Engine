@@ -95,7 +95,7 @@ describe("GroqClient section groups",()=>{
    harmonicFeatures:{status:"measured",key:"A",segmentChroma:Array(100).fill(0.1)},
    acousticFeatureProfile:{predictions:{energy:{status:"provisional",score:62}}},
    vocalFeatures:{status:"analyzed",activity:0.7},
-   vocalArrangementAnalysis:{status:"analyzed"},
+   vocalArrangementAnalysis:{status:"analyzed",sections:[{label:"verse",startSeconds:0,endSeconds:12}]},
    dynamicRangeDb:8.2, rmsLevelDbfs:-12, sampleRate:44100, channels:2,
    privateRawWaveform:Array(1000).fill(0.2),
   };
