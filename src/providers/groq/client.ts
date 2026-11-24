@@ -447,14 +447,14 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   }
 
   const compacted = (["evidence-score", "narrative", "positioning", "production"].includes(group)
-    ? compactEvidenceScoreValue(compact, 0, ["evidence-score", "production"].includes(group) ? 40 : 72, ["evidence-score", "production"].includes(group) ? 2 : 3)
+    ? compactEvidenceScoreValue(compact, 0, ["evidence-score", "production"].includes(group) ? 40 : 72, group === "evidence-score" ? 4 : group === "production" ? 2 : 3)
     : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
     if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning", "production"].includes(group)
-      ? compactEvidenceScoreValue(value, 0, ["evidence-score", "production"].includes(group) ? 40 : 72, ["evidence-score", "production"].includes(group) ? 2 : 3)
+      ? compactEvidenceScoreValue(value, 0, ["evidence-score", "production"].includes(group) ? 40 : 72, group === "evidence-score" ? 4 : group === "production" ? 2 : 3)
       : compactPromptValue(value);
   }
   if (["evidence-score", "production"].includes(group) && compacted.vocalArrangementAnalysis && typeof compacted.vocalArrangementAnalysis === "object" && !Array.isArray(compacted.vocalArrangementAnalysis)) {
