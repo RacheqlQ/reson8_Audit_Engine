@@ -185,7 +185,7 @@ function safeThresholdDiagnostic(group: string, value: unknown, message: string)
     days30: "executionPlan.days30", days60: "executionPlan.days60", days90: "executionPlan.days90",
   };
   const validationField = fieldMap[label] ?? label;
-  const actual = validationField.replace(/\\[([0-9]+)\\]/g, ".$1").split(".").filter(Boolean).reduce((current: any, key) => current?.[/^[0-9]+$/.test(key) ? Number(key) : key], d);
+  const actual = validationField.replace(/\[([0-9]+)\]/g, ".$1").split(".").filter(Boolean).reduce((current: any, key) => current?.[/^[0-9]+$/.test(key) ? Number(key) : key], d);
   if (itemMatch) return { validationField, validationRule: "minimum_item_count", minimumItems: minimum, actualItems: Array.isArray(actual) ? actual.length : 0 };
   return { validationField, validationRule: "minimum_word_count", minimumWords: minimum, actualWords: typeof actual === "string" ? words(actual) : 0 };
 }
