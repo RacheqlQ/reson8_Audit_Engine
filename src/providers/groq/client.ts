@@ -330,11 +330,23 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   return compactPromptValue(compact) as Record<string, unknown>;
 }
 
-function compactCatalogMetadataForGroup(value: Record<string, unknown> | null | undefined, group: string): Record<string, unknown> | null {
-  // Evidence-score receives the normalized identity, field provenance,
-  // provider list and reconciliation from evidence. Re-sending the raw catalog
-  // payload duplicates those same records and consumes completion headroom.
-  if (!value || !["narrative", "positioning", "label-fit"].includes(group)) return null;
+function compactCatalogMetadataForGroup(
+  value: Record<string, unknown> | null | undefined,
+  group: string,
+  evidence: Record<string, unknown>,
+): Record<string, unknown> | null {
+  if (!value || !["narrative", "positioning", "evidence-score", "label-fit"].includes(group)) return null;
+  if (group === "evidence-score") {
+    const hasNormalizedCatalogEvidence = Boolean(
+      evidence.identity && typeof evidence.identity === "object"
+      && evidence.fieldProvenance && typeof evidence.fieldProvenance === "object"
+      && evidence.reconciliation && typeof evidence.reconciliation === "object"
+      && Array.isArray(evidence.sourceProviders) && evidence.sourceProviders.length > 0
+    );
+    // Prefer the canonical normalized catalog evidence when it is complete.
+    // Keep provider records for sparse inputs that do not carry those fields.
+    if (hasNormalizedCatalogEvidence) return null;
+  }
   return compactPromptValue(value) as Record<string, unknown>;
 }
 
@@ -417,7 +429,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           sectionGroup: groupName,
           evidence: compactPromptValue(compactEvidenceForGroq(input.evidence, groupName)),
           sonicDna: compactSonicDnaForGroq(input.sonicDna, groupName),
-          catalogMetadata: compactCatalogMetadataForGroup(input.catalogMetadata, groupName),
+          catalogMetadata: compactCatalogMetadataForGroup(input.catalogMetadata, groupName, input.evidence),
           correction: attempt === 0 ? null : lastError,
           ...(fallbackMode ? { outputSchema } : {}),
         }),
