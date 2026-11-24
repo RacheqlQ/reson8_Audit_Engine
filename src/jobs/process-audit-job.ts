@@ -1015,8 +1015,32 @@ export async function processAuditJob(
     const commercialEvidence = { ...reportEvidence, industryPractice: assessment.industryPractice ?? null };
     const marketPlacement = buildMarketPlacementPlan({ executionMode, evidence: commercialEvidence, sonicDna: masterDna ? dnaEvidence(masterDna) : sonicDna, playlistDiscovery });
     const reportInput: AuditReportInput = { auditId: jobId, generatedAt, evidence: commercialEvidence, sonicDna, assessment, executionMode, marketPlacement, tonalResolution: masterDna?.tonalResolution ?? null, vocalAndSectionPageData: masterDna?.vocalArrangementAnalysis ?? null, ...(realMasterContract ? { realMasterContract } : {}) };
-    await generateAndSaveReport(jobId, job.claimToken, reportInput, "sample", deps);
-    await generateAndSaveReport(jobId, job.claimToken, reportInput, "full", deps);
+    // Report tiers are independent deliverables. A failure in one renderer or
+    // storage write must not prevent the other tier from being generated.
+    // Keep generation sequential to avoid doubling peak PDF memory on the worker.
+    const reportFailures: Array<{ tier: AuditReportTier; error: unknown }> = [];
+    for (const tier of ["sample", "full"] as const) {
+      try {
+        await generateAndSaveReport(jobId, job.claimToken, reportInput, tier, deps);
+      } catch (error) {
+        assertLeaseActive(deps);
+        reportFailures.push({ tier, error });
+        const diagnostic = buildAuditStageFailureDiagnostic(tier + "_pdf_report", error);
+        deps.onStageFailure?.(diagnostic);
+        console.error(JSON.stringify({
+          worker: "audit",
+          event: "audit_report_tier_failed",
+          auditId: jobId,
+          tier,
+          errorCode: diagnostic.errorCode,
+          errorName: diagnostic.errorName,
+          stackFingerprint: diagnostic.stackFingerprint,
+        }));
+      }
+    }
+    if (reportFailures.length === 2) {
+      throw new Error("Both sample and full PDF reports failed to generate or persist");
+    }
 
     await awaitWithStage(deps, "job_completion", 15_000, (signal) => deps.markCompleted(jobId, job.claimToken, signal));
     return { status: "completed" };

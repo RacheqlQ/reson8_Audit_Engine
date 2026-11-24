@@ -1,5 +1,5 @@
 import { normalizeReportAccessKey, readPdfResponse, selectReportAccessKey, triggerPdfDownload } from "./report-download.js?v=20261121-9";
-import { createAuditPoller } from "./audit-polling.js?v=20261121-1";
+import { createAuditPoller } from "./audit-polling.js?v=20261124-1";
 import { detectTrackPlatform } from "./dsp-url.js?v=20261116-2";
 const input=document.querySelector("#audioFile"),dropzone=document.querySelector("#dropzone"),filePanel=document.querySelector("#filePanel"),fileName=document.querySelector("#fileName"),fileDetails=document.querySelector("#fileDetails"),removeFile=document.querySelector("#removeFile"),submit=document.querySelector("#submitAudit"),actionMessage=document.querySelector("#actionMessage"),preflightState=document.querySelector("#preflightState"),resultPanel=document.querySelector("#resultPanel"),resultName=document.querySelector("#resultName"),jobId=document.querySelector("#jobId"),serverHash=document.querySelector("#serverHash");
 const auditStatus=document.querySelector("#auditStatus"),resultMessage=document.querySelector("#resultMessage"),reportActions=document.querySelector("#reportActions"),sampleReportButton=document.querySelector("#sampleReportButton"),reportDownloadMessage=document.querySelector("#reportDownloadMessage"),evidenceChain=document.querySelector("#evidenceChain"),accessTokenDisplay=document.querySelector("#accessTokenDisplay"),revealAccessTokenButton=document.querySelector("#revealAccessTokenButton"),copyAccessTokenButton=document.querySelector("#copyAccessTokenButton"),fullReportAccessKey=document.querySelector("#fullReportAccessKey"),unlockFullReportButton=document.querySelector("#unlockFullReportButton"),tokenSaveMessage=document.querySelector("#tokenSaveMessage"),unlockAuditId=document.querySelector("#unlockAuditId");
@@ -124,14 +124,22 @@ function stopPolling(){auditPoller.stop();}
 function applyAuditPayload(payload){
   currentAuditPayload={...payload,displayName:currentAuditPayload?.displayName??payload.displayName};
   renderCatalogStatuses(payload);
-  unlockFullReportButton.disabled=!(payload.status==="completed"&&payload.full?.available);
+  const sampleAvailable=payload.sample?.available===true;
+  const fullAvailable=payload.full?.available===true;
+  sampleReportButton.disabled=!sampleAvailable;
+  unlockFullReportButton.disabled=!fullAvailable;
+  reportActions.classList.toggle("hidden",!(sampleAvailable||fullAvailable));
   renderEvidenceChain(payload.progress,payload.currentStepIndex ?? (payload.status==="completed" ? 5 : 0));
   auditStatus.textContent=(payload.status||"unknown").toUpperCase();
   auditStatus.className=payload.status==="failed"?"failed":payload.status==="completed"?"completed":"queued";
-  if(payload.status==="completed"&&payload.full?.available){
-    reportActions.classList.remove("hidden");
-    sampleReportButton.disabled=false;
-    resultMessage.textContent="Audit complete. Your sample report is available through the private access token issued for this audit.";
+  if(payload.status==="completed"){
+    resultMessage.textContent=sampleAvailable&&fullAvailable
+      ?"Audit complete. Sample and Full PDF reports are ready for download."
+      :sampleAvailable||fullAvailable
+        ?"Audit complete. One PDF report is ready for download."
+        :"Audit completed, but no PDF report is currently available.";
+  }else if(payload.status==="failed"&&(sampleAvailable||fullAvailable)){
+    resultMessage.textContent="Report processing ended with a partial result. Download any report marked available below.";
   }
 }
 const auditPoller=createAuditPoller({onPayload:applyAuditPayload,onMessage:message=>{resultMessage.textContent=message;}});

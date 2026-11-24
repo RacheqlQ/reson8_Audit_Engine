@@ -141,6 +141,7 @@ describe("processAuditJob", () => {
           expect.objectContaining({ name: "calibrated_key_mode_probability", status: "unavailable" }),
         ]));
         events.push(`report-${tier}`);
+        if (tier === "sample") throw new Error("sample renderer fixture failure");
         return new Uint8Array([37, 80, 68, 70, 45]);
       },
       saveReport: async (_jobId, _claimToken, tier, pdf, reportInput) => {
@@ -166,7 +167,6 @@ describe("processAuditJob", () => {
       "assessment-saved",
       "playlist-discovery",
       "report-sample",
-      "report-saved-sample",
       "report-full",
       "report-saved-full",
       "completed",
