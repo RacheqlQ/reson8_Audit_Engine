@@ -312,8 +312,8 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
   const scalarEntries = entries.filter(([, item]) => item === null || typeof item !== "object");
   const nestedEntries = entries.filter(([, item]) => item !== null && typeof item === "object");
   const selectedEntries = [
-    ...scalarEntries.slice(0, 16),
-    ...nestedEntries.slice(0, Math.max(0, 16 - Math.min(16, scalarEntries.length))),
+    ...scalarEntries.slice(0, 20),
+    ...nestedEntries.slice(0, Math.max(0, 20 - Math.min(20, scalarEntries.length))),
   ];
   return Object.fromEntries(selectedEntries.map(([key, item]) => [key, compactPromptValue(item, depth + 1)]));
 }
