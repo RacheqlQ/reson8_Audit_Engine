@@ -257,7 +257,16 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     timeline: ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
   };
   const allowed = new Set([...common, ...(groupFields[group] ?? [])]);
-  return Object.fromEntries(Object.entries(evidence).filter(([key]) => allowed.has(key)));
+  const projected = Object.fromEntries(Object.entries(evidence).filter(([key]) => allowed.has(key)));
+  if (group === "evidence-score") {
+    // The normalized provenance/reconciliation fields above are the canonical
+    // evidence-score inputs. These duplicate summaries are already represented
+    // there and need not be serialized a second time.
+    delete projected.genres;
+    delete projected.catalogSources;
+    delete projected.sourceCombination;
+  }
+  return projected;
 }
 
 function compactPromptValue(value: unknown, depth = 0): unknown {
@@ -322,7 +331,10 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
 }
 
 function compactCatalogMetadataForGroup(value: Record<string, unknown> | null | undefined, group: string): Record<string, unknown> | null {
-  if (!value || !["narrative", "positioning", "evidence-score", "label-fit"].includes(group)) return null;
+  // Evidence-score receives the normalized identity, field provenance,
+  // provider list and reconciliation from evidence. Re-sending the raw catalog
+  // payload duplicates those same records and consumes completion headroom.
+  if (!value || !["narrative", "positioning", "label-fit"].includes(group)) return null;
   return compactPromptValue(value) as Record<string, unknown>;
 }
 
