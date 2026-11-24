@@ -147,7 +147,7 @@ const TEMPO_UNAVAILABLE_RATIONALE = "Not scored: the uploaded-master tempo estim
 const RHYTHM_UNAVAILABLE_RATIONALE = "Not scored: a provisional beat guide is available, but its timing has not been confirmed by listening across the recording, so rhythmic consistency cannot yet be assessed reliably for this release.";
 
 const GENRE_UNCONFIRMED_RATIONALE =
-  "No definitive provider-backed primary genre is available because the supplied genre classification abstained or lacks a supported primary genre. Keep lane positioning unconfirmed until named source evidence supports a cautious hypothesis.";
+  "No definitive provider-backed primary genre is available because the supplied genre classification abstained or lacks a supported primary genre. Keep lane positioning unconfirmed until named source evidence supports a cautious hypothesis; adjacent lanes should remain unassigned pending corroboration from provider records and human listening.";
 
 const ALBUM_CONFLICT_RATIONALE =
  "Album metadata is present but conflicting across supplied sources. Preserve the source-specific values and reconcile them before treating the album field as complete; do not describe the field as missing.";
@@ -524,7 +524,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   if (!hasVerifiedCommercialMetrics(evidence) && mutable.commercialRead) {
     mutable.commercialRead = {
       marketability: "undetermined",
-      rationale: "ISRC-linked catalogue evidence supports recording identity, release context, label and DSP availability where returned. It does not establish audience or campaign performance: streams, listeners, saves, sales, revenue, playlist conversion and campaign outcomes require verified DSP analytics for a defined reporting period.",
+      rationale: "ISRC-linked catalogue evidence supports recording identity, release context, label and DSP availability where returned. It does not establish audience or campaign performance: streams, listeners, saves, sales, revenue, playlist conversion and campaign outcomes require verified DSP analytics for a defined reporting period. Marketability remains undetermined until such source-attributed metrics are available.",
     };
   }
   if (zeroConfidence) {
