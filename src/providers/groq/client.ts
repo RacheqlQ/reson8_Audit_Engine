@@ -497,7 +497,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     }
     // prompt_only deliberately omits response_format. The exact schema is still
     // supplied to the model, and no response is accepted without local Zod checks.
-    const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 3) + 256;
+    // UTF-8 byte length is a conservative upper bound for byte-pair token counts.
+    // The extra 256 tokens cover provider-side framing/estimator uncertainty.
+    const estimatedInputTokens = new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length + 256;
     const sectionOutputBudget = Math.floor(Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600) * (providerName === "groq" ? groqCompletionBudgetScale : 1));
     const groqTpmBudgetApplies = providerName === "groq";
     // The 6,000-token ceiling is a Groq TPM safeguard, not a global model
