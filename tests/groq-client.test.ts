@@ -599,6 +599,77 @@ describe("GroqClient section groups",()=>{
 
 
 
+describe("narrative prompt budget compaction",()=>{
+ it("keeps production-sized uploaded-master narrative context below the Groq TPM ceiling without dropping canonical evidence",async()=>{
+  const detail="Provider-returned descriptive commentary that repeats source context while the normalized field value and provenance remain separately available. ".repeat(6);
+  const evidence={
+   auditType:"full_a_and_r",artist:"Fixture Artist",title:"Production-sized narrative fixture",releaseDate:"2026-10-18",
+   sourceProviders:["musicbrainz","spotify","apple_music","youtube"],
+   fieldProvenance:Object.fromEntries(Array.from({length:48},(_,i)=>["field"+i,{
+    source:["musicbrainz","spotify","apple_music"][i%3],status:"recognized",confidence:0.82,
+    value:"normalized identity value "+i,detail,rawPayload:detail
+   }])),
+   identity:{artist:"Fixture Artist",title:"Production-sized narrative fixture",isrc:"USAAA2600001",matchStatus:"reconciled"},
+   reconciliation:{status:"partial",matchedFields:["artist","title","isrc"],conflicts:Array.from({length:40},(_,i)=>"Conflict "+i+": "+detail)},
+   genreClassification:{primaryGenre:"Contemporary R&B",genres:["Contemporary R&B"],abstained:false},
+   catalogSources:["musicbrainz","spotify","apple_music"].map((platform)=>({platform,status:"matched",canonicalUrl:"https://example.invalid/"+platform})),
+   commercialEvidence:{verified:false,reason:detail},commercialPerformance:{status:"unavailable",reason:detail},
+   commercialMetrics:{streams:null,sales:null,reason:detail},audienceTelemetry:{status:"unavailable",reason:detail},
+   catalogPopularity:{status:"unavailable",reason:detail},rightsStatus:{status:"unverified",notes:detail},
+   deliveryStatus:{status:"unverified",notes:detail},releaseStatus:{status:"released",releaseDate:"2026-10-18"},masterApproved:false
+  };
+  const descriptors=Object.fromEntries(["rmsDbfs","peakDbfs","crestFactorDb","spectralCentroidHz","spectralBandwidthHz","spectralRolloff85Hz","spectralFlatness","spectralFlux","zeroCrossingRate","lowBandEnergyRatio","midBandEnergyRatio","highBandEnergyRatio"].map((name)=>[name,{
+   median:0.42,p10:0.21,p90:0.78,unit:"ratio",method:"windowed_fft_measurement"
+  }]));
+  const sonicDna={
+   provenance:"uploaded_audio_master",evidenceClass:"OBSERVED",analysisVersion:"sonic-dna-v1",
+   sourceProviders:["essentia"],confidence:0.82,warnings:[detail],limitations:[detail],
+   bpm:95,tempoConfidence:0.82,key:"A",mode:"minor",moodTags:["reflective","warm"],genreTags:["Contemporary R&B"],
+   acousticFeatureProfile:{
+    schemaVersion:"1.0.0",status:"measured",
+    provenance:{featureVersion:"acoustic-profile-v1",sourceAudioSha256:"a".repeat(64),algorithm:"reson8-windowed-radix2-fft",
+     sourceSampleRateHz:48000,analysisSampleRateHz:24000,analysisResampling:"block_average_antialias",channels:2,
+     downmix:"arithmetic_mean",durationSeconds:210,sourceStartSeconds:0,sourceEndSeconds:210,
+     windowSizeSamples:2048,hopSizeSamples:1024,windowCount:128,aggregation:"median_and_percentiles",maxWindowsApplied:true},
+    descriptors,
+    windowSummaries:Array.from({length:128},(_,i)=>({startSeconds:i*1.5,endSeconds:(i+1)*1.5,rmsDbfs:-18+i/10,spectralCentroidHz:1800+i,spectralFlatness:0.2})),
+    predictions:{mood:{status:"provisional",labels:["warm","reflective"],scores:{bright:40,dark:60,driving:30,calm:70,tense:20,warm:80},method:"audio_feature_heuristics_v1",probability:null},
+     energy:{status:"provisional",label:"moderate",score:54,method:"audio_feature_heuristics_v1",probability:null}},
+    abstentionReasons:[detail]
+   },
+   vocalFeatures:{status:"analyzed",method:"open_unmix_umxhq_vocal_stem",
+    model:{name:"Open-Unmix UMX-HQ vocals",artifactSha256:"f".repeat(64)},
+    voicePresence:"likely_present",vocalStemRmsDbfs:-18.4,vocalEnergyShare:0.12,vocalActivityRatio:0.35,activeDurationSeconds:42,
+    activitySegments:Array.from({length:128},(_,i)=>({startSeconds:i*1.5,endSeconds:(i+1)*1.5,meanLevelDbfs:-19.2,peakLevelDbfs:-12.4,description:detail})),
+    pitchSegments:Array.from({length:128},(_,i)=>({startSeconds:i*1.5,endSeconds:(i+1)*1.5,medianHz:220+i,confidence:0.82,method:"pitch_tracking"})),
+    limitations:[detail]}
+  };
+  const catalogMetadata=Object.fromEntries(Array.from({length:32},(_,i)=>["provider"+i,{status:"matched",source:"catalog provider "+i,detail,rawPayload:detail}]));
+  const {mock}=fetchMock();
+  let narrative:{payload:Record<string,any>;estimated:number;completion:number}|null=null;
+  mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body));
+   const payload=JSON.parse(body.messages[1].content);
+   if(payload.sectionGroup==="narrative"){
+    const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
+    narrative={payload,estimated,completion:body.max_completion_tokens};
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
+  });
+  await new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{}).assess({evidence,sonicDna,catalogMetadata});
+  expect(narrative).not.toBeNull();
+  expect(narrative!.estimated).toBeLessThanOrEqual(5000);
+  expect(narrative!.estimated+narrative!.completion).toBeLessThanOrEqual(6000);
+  expect(narrative!.completion).toBeGreaterThanOrEqual(256);
+  expect(narrative!.payload.evidence.identity).toMatchObject({artist:"Fixture Artist",isrc:"USAAA2600001"});
+  expect(narrative!.payload.evidence.fieldProvenance.field0).toMatchObject({source:"musicbrainz",value:"normalized identity value 0"});
+  expect(narrative!.payload.sonicDna.acousticFeatureProfile.descriptors.spectralCentroidHz).toMatchObject({median:0.42,unit:"ratio"});
+  expect(narrative!.payload.sonicDna.vocalFeatures).toMatchObject({status:"analyzed",voicePresence:"likely_present"});
+  expect(narrative!.payload.catalogMetadata).toBeNull();
+ });
+});
+
+
 describe("evidence-score prompt budget compaction", () => {
   it("keeps the three previously failing large-context profiles below the 5,000-token engineering target", async () => {
     const profiles = [
