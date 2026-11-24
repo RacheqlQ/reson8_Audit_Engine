@@ -575,18 +575,6 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...(data.energySeries?["ENERGY SERIES — "+(data.energySeriesPointCount??data.energySeries.length)+" timestamped source points; chart preserves extrema using "+data.energySeries.length+" plotted points."]:[]),
    ...(data.sonicAxes?["SONIC DNA AXES — "+Object.entries(data.sonicAxes).map(([name,axis])=>name+" "+axis.value+"/100"+(axis.note?" ("+axis.note+")":"")).join("; ")]:[])
   ]},
-  {title:"Evidence ledger and scorecard",blocks:[],lines:[
-   buildEvidenceLedgerSummary(arr(a.evidenceLabels).map(value => rec(value) as { label: string })),
-   "Composite score: "+(data.headlineScore===null?"Not issued — validated dimension inputs do not support a composite score; no synthetic score is substituted.":data.headlineScore+"/100"),
-   ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
-   ...sanitizePublicReportLines(data.notYetMeasured).slice(0,3),
-   ...buildTempoDiagnosticLines(input),
-   ...buildConfirmedAudioEvidenceLines(data),
-   ...publicReportLimitations(a.limitations).slice(0,2),
-   "Market proposition: "+(data.hasVerifiedCommercialEvidence?"PERFORMANCE VERIFIED — source-attributed commercial data supplied.":"PROPOSED — an evidence-informed A&R/commercial thesis; historical streams, sales, revenue, chart activity and audience demand are not asserted."),
-   ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
-   ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
-  ]},
   {title:"A&R positioning",blocks:[],lines:[...buildMandatoryArAnswerLines(input),buildVocalCadenceSummaryLine(input),...buildPositioningLines(input)]},
   {title:"Strengths, risks and actions",blocks:[],lines:[
    "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.slice(0,2).map(value=>value.length>125?value.slice(0,122).trimEnd()+"...":value).join("; ")||"No measured strengths supplied.")+(buildStrengthRiskSummary(input).strengthCount>2?" · "+(buildStrengthRiskSummary(input).strengthCount-2)+" additional documented item(s).":""),
@@ -1167,7 +1155,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
  });
  if(consistencyErrors.length)throw new Error("Chart data reconciliation failed: "+consistencyErrors.join(" "));
 
- if((tier==="sample"&&pages.length!==8)||(tier==="full"&&pages.length<13))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
+ if((tier==="sample"&&pages.length!==7)||(tier==="full"&&pages.length<12))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,tier==="full"&&index===0?"Full A&R report":spec.title,fonts);
   let chartCursor=H-380;
