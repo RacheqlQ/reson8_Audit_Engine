@@ -650,6 +650,7 @@ describe("evidence-score prompt budget compaction", () => {
         .assess({ evidence, sonicDna });
     }
     expect(observed).toHaveLength(3);
+    console.info("EVIDENCE_SCORE_BUDGET_FIXTURES", JSON.stringify(observed));
     for (const item of observed) {
       expect(item.estimated, item.name).toBeLessThanOrEqual(5000);
       expect(item.completion, item.name).toBeGreaterThanOrEqual(256);
