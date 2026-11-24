@@ -345,7 +345,7 @@ describe("GroqClient section groups",()=>{
   expect(result.evidenceLabels[0].label).toBe("INDUSTRY PRACTICE");expect(result.humanListeningChecklist.length).toBeGreaterThanOrEqual(5);
   expect(result.productionArrangementGuidance).toBeTruthy();expect(result.promotionPlan.playlistCategories.length).toBeGreaterThanOrEqual(3);expect(result.promotionPlan.pitchingAngles.length).toBeGreaterThanOrEqual(3);
   expect(result.generationProvenance).toMatchObject({provider:"groq",model:DEFAULT_GROQ_MODEL,promptVersion:GROQ_PROMPT_VERSION});expect(result.generationProvenance.fieldGroups.executiveSummary).toBe("narrative");expect(result.generationProvenance.fieldGroups.scorecard).toBe("evidence-score");expect(result.generationProvenance.fieldGroups.executionPlan).toBe("timeline");expect(Number.isNaN(Date.parse(result.generationProvenance.generatedAt))).toBe(false);
-  for(const call of mock.mock.calls){const body=JSON.parse(String(call[1]?.body));expect(body.model).toBe(DEFAULT_GROQ_MODEL);expect(body.response_format.type).toBe("json_schema");expect(body.messages[0].content).toContain("Never invent streams");expect(body.messages[1].content).toContain(GROQ_PROMPT_VERSION);}
+  for(const call of mock.mock.calls){const body=JSON.parse(String(call[1]?.body));expect(body.model).toBe(DEFAULT_GROQ_MODEL);expect(body.response_format.type).toBe("json_schema");expect(body.messages[0].content.toLowerCase()).toContain("never invent streams");expect(body.messages[1].content).toContain(GROQ_PROMPT_VERSION);}
  });
  it("leaves metadata and release scores null when identity evidence is absent",async()=>{
   const {mock}=fetchMock();const client=new GroqClient("test-key","test-model",mock as typeof fetch);
