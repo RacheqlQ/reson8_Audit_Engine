@@ -376,7 +376,11 @@ function compactCatalogMetadataForGroup(
     // Keep provider records for sparse inputs that do not carry those fields.
     if (hasNormalizedCatalogEvidence) return null;
   }
-  return compactPromptValue(value) as Record<string, unknown>;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  // Retain a bounded set of named provider records; long descriptions/raw
+  // responses are already represented by normalized evidence and provenance.
+  return Object.fromEntries(Object.entries(value).slice(0, 12)
+    .map(([provider, record]) => [provider, compactPromptValue(record)])) as Record<string, unknown>;
 }
 
 async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
