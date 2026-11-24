@@ -131,16 +131,16 @@ const SYSTEM_PROMPT = [
 
 const NARRATIVE_SYSTEM_PROMPT = [
   "You are the A&R analyst. Use supplied evidence only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or external facts.",
-  "Evidence labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=two or more independent agreeing providers; INFERRED=hypothesis (source groq_assessment); INDUSTRY PRACTICE=general craft guidance (source industry_practice), never a track fact. Name only providers that returned records.",
-  "Keep provider genre labels exact and scene tags separate. Null primary genre means no confirmed A&R lane. Tempo contributes at most 15% to genre scoring and never establishes genre alone.",
-  "Tempo is reportable only when confirmed and tempoConfidence >=0.5. Otherwise do not state BPM, infer speed/energy, or use tempo in scoring or recommendations. If candidate/window/independent-estimator evidence exists while confirmed tempo is null, describe provisional evidence and its consensus limitation without promoting a candidate.",
-  "Key and mode are CONFIRMED only from supplied voting/window-consensus-stabilized results. Null confirmed values stay provisional; preserve candidate disagreement and never promote a candidate.",
-  "Mood and energy tags are provisional signal heuristics, not calibrated probabilities, listener emotion or demand. Report energy only as its supplied low/moderate/high label and score out of 100.",
-  "Use vocalFeatures only when status=analyzed; report measured activity/pitch with limitations. Otherwise abstain and never infer voice presence, delivery, layering or lyrics. Discuss song sections only when explicit structure boundaries are supplied.",
-  "Use reconciled identity, field provenance, catalogSources and provider records; preserve ISRC conflicts and ambiguous matches. DSP/catalog links are not audio: never claim OBSERVED audio measurements or invent audio analysis from a link. No external stem, separation or render workers.",
-  "Ground strengths, risks and actions in supplied sonic, vocal, genre and catalog evidence. Distinguish unavailable analysis from low-confidence candidates. Recommendations must be evidence-grounded or separately labelled INDUSTRY PRACTICE. Never invent named comparables; provide verification criteria.",
-  "Without verified commercial-performance evidence, marketability is undetermined. Release date is DETERMINED only from supplied verified date evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict remains PROPOSED unless deterministic evidence rules establish otherwise.",
-  "Do not score taste: hook, originality, production quality, replay value and lane clarity belong only in the unscored human listening checklist. Return JSON only: one complete JSON object, and obey every schema and local word-count requirement."
+  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=general craft guidance from industry_practice, never a track fact. Name only providers with returned records.",
+  "Preserve provider genre labels exactly; separate scene tags; null primary genre means no confirmed lane. Tempo contributes <=15% to genre scoring and never proves genre.",
+  "Report BPM/use tempo only when confirmed and confidence >=0.5. Otherwise omit BPM and speed/energy inference and scoring. If confirmed tempo is null, describe candidate/window/estimator evidence as provisional; never promote it.",
+  "Key/mode are CONFIRMED only by supplied voting/window consensus. Null stays provisional; preserve disagreement.",
+  "Mood/energy are provisional signal heuristics, not probabilities, listener emotion or demand. Energy only as supplied low/moderate/high label and score/100.",
+  "Use vocals only when status=analyzed; report measured activity/pitch with limits. Otherwise do not infer voice, delivery, layering or lyrics. Song sections require explicit boundaries.",
+  "Use reconciled identity, provenance, catalogSources and provider records; preserve ISRC conflicts/ambiguous matches. DSP links are not audio: never claim OBSERVED audio or infer audio from links. No external stem/separation/render workers.",
+  "Ground strengths/risks/actions in supplied sonic, vocal, genre and catalog facts. Distinguish unavailable from low-confidence. Recommendations must be evidence-grounded or labelled INDUSTRY PRACTICE. No invented comparables; give verification criteria.",
+  "Without verified commercial performance, marketability is undetermined. Release date is DETERMINED only from verified supplied evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise.",
+  "Do not score hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return JSON only; obey schema and word limits."
 ].join(" ");
 
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
@@ -315,7 +315,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     // source identities and normalized values above remain intact.
     const compacted = compactEvidenceScoreValue(projected, 0, 72, 3) as Record<string, unknown>;
     if (compacted.fieldProvenance && typeof compacted.fieldProvenance === "object") {
-      compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, 12));
+      compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, group === "narrative" ? 8 : 12));
     }
     return compacted;
   }
@@ -403,7 +403,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   };
   const allowed = new Set([...common, ...(featureFamilies[group] ?? [])]);
   const compact = Object.fromEntries(Object.entries(sonicDna).filter(([key, value]) =>
-    allowed.has(key) || (value === null || typeof value !== "object")
+    allowed.has(key) || (!["narrative", "positioning"].includes(group) && (value === null || typeof value !== "object"))
   )) as Record<string, unknown>;
 
   const rhythm = compact.rhythmFeatures;
