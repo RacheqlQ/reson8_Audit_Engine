@@ -34,7 +34,7 @@ describe("voting-backed confirmation and report consistency", () => {
     const data = adaptReportV2(input);
     expect(data.tempo.value).toBe(120);
     expect(data.key.value).toBe("A minor");
-    expect(buildCoverTempoLabel(data, input)).toBe("120 BPM");
+    expect(buildCoverTempoLabel(data, input)).toBe("120 BPM · CONFIRMED");
     expect(buildCoverKeyLabel(input, data)).toBe("A minor");
     expect(metricBlock(data, input).find(item => item.label === "TEMPO")?.confidence).toBe("CONFIRMED");
     expect(metricBlock(data, input).find(item => item.label === "SONG KEY")?.confidence).toBe("CONFIRMED");
@@ -49,6 +49,21 @@ describe("voting-backed confirmation and report consistency", () => {
     expect(assessment.scorecard.tonalConsensus.score).toBeGreaterThan(0);
     expect(assessment.scorecard.tonalConsensus.rationale).toContain("CONFIRMED tonal centre");
     expect(assessment.scorecard.tonalConsensus.rationale).toContain("not artistic quality");
+  });
+
+  it("keeps cover key confirmation when the adapted tonal state is supplied on the audit input", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = { ...input.sonicDna, harmonicFeatures: undefined };
+    const adapted = adaptReportV2(input);
+    const data = {
+      ...adapted,
+      tonalResolution: null,
+      key: { ...adapted.key, value: null }
+    };
+    const keyBlock = metricBlock(data, input).find(item => item.label === "SONG KEY");
+    expect(buildCoverKeyLabel(input, data)).toBe("A minor");
+    expect(keyBlock?.confidence).toBe("CONFIRMED");
+    expect(keyBlock?.value).toBe("Confirmed: A minor");
   });
 
   it("removes the bracketed genre placeholder from positioning language", () => {

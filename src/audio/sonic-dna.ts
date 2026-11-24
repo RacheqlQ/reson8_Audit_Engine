@@ -177,8 +177,7 @@ function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate
  const sortedOnsets=[...onset].sort((a,b)=>a-b);
  const onsetPeakRatio=(sortedOnsets[Math.floor((sortedOnsets.length-1)*0.99)]??0)/Math.max(EPSILON,onset.reduce((sum,value)=>sum+value,0)/onset.length);
  const onsetEnvelope=downsampleOnsetEnvelope(novelty);
- if(mean<=EPSILON||Math.sqrt(variance)/Math.max(mean,EPSILON)<0.08||onsetPeakRatio<2.5)
-  return {...emptyTempoEstimate("No sufficiently distinct transient activity was detected; sustained or noise-like signals are not assigned a tempo."),onsetEnvelope};
+ const weakTransientProminence=mean<=EPSILON||Math.sqrt(variance)/Math.max(mean,EPSILON)<0.08||onsetPeakRatio<2.5;
  const scores=new Map<number,number>();
  for(let bpm=40;bpm<=240;bpm++){
   const lag=Math.max(1,Math.round(60/bpm*sampleRate/hop));
@@ -200,27 +199,38 @@ function estimateTempoCore(samples:Float32Array,sampleRate:number):TempoEstimate
  const bestBpm=selected[0]?.[0];
  const bestScore=selected[0]?.[1]??0;
  const candidateScores=selected.map(([bpm,score])=>({bpm,score:Number(score.toFixed(6))}));
- if(bestBpm===undefined||bestScore<0.08)
-  return {...emptyTempoEstimate("Transient autocorrelation did not produce a sufficiently prominent tempo candidate."),topCandidateBpm:bestBpm??null,candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
- const sortedScores=[...scores.values()].sort((a,b)=>a-b);
- const median=sortedScores[Math.floor(sortedScores.length/2)]??0;
- const confidence=clamp((bestScore-median)/Math.max(EPSILON,1-median));
- if(confidence<MIN_RELIABLE_TEMPO_CONFIDENCE)
-  return {...emptyTempoEstimate("Tempo candidate prominence is too weak to support a reliable result."),topCandidateBpm:bestBpm,confidence,candidateBpms:selected.map(([bpm])=>bpm),candidateScores,onsetEnvelope};
  const related=[0.5,1/3,2,3]
-  .map(ratio=>({bpm:Math.round(bestBpm*ratio),score:scores.get(Math.round(bestBpm*ratio))??0}))
-  .filter(candidate=>candidate.bpm>=40&&candidate.bpm<=240&&candidate.bpm!==bestBpm&&candidate.score>=bestScore*0.25)
-  .sort((a,b)=>b.bpm-a.bpm);
+  .map(ratio=>({bpm:Math.round((bestBpm??0)*ratio),score:scores.get(Math.round((bestBpm??0)*ratio))??0}))
+  .filter(candidate=>bestBpm!==undefined&&candidate.bpm>=40&&candidate.bpm<=240&&candidate.bpm!==bestBpm&&candidate.score>=Math.max(EPSILON,bestScore*0.25))
+  .sort((a,b)=>b.score-a.score||b.bpm-a.bpm);
  const relatedCandidate=related[0]??null;
- const bpm=relatedCandidate&&relatedCandidate.bpm>bestBpm?relatedCandidate.bpm:bestBpm;
+ const bpm=bestBpm===undefined?null:(relatedCandidate&&relatedCandidate.bpm>bestBpm?relatedCandidate.bpm:bestBpm);
  const alternateTempo=relatedCandidate?(bpm===bestBpm?relatedCandidate.bpm:bestBpm):null;
  const candidates=selected.map(([candidate])=>candidate);
- for(const candidate of [Math.round(bpm),Math.round(bpm)-1,Math.round(bpm)+1,...related.map(item=>item.bpm)])if(candidate>=40&&candidate<=240&&!candidates.includes(candidate))candidates.push(candidate);
- const allCandidateScores=[...candidateScores,...related.filter(item=>!candidateScores.some(existing=>existing.bpm===item.bpm)).map(item=>({bpm:item.bpm,score:Number(item.score.toFixed(6))}))].slice(0,8);
- const beatGrid=deriveBeatGrid(novelty,bpm,sampleRate/hop);
+ for(const candidate of [bestBpm,...related.map(item=>item.bpm),bpm,alternateTempo,bestBpm===undefined?null:bestBpm-1,bestBpm===undefined?null:bestBpm+1])
+  if(candidate!==null&&candidate!==undefined&&candidate>=40&&candidate<=240&&!candidates.includes(candidate))candidates.push(candidate);
+ const candidateScoreMap=new Map(candidateScores.map(item=>[item.bpm,item.score]));
+ for(const candidate of related)candidateScoreMap.set(candidate.bpm,Number(candidate.score.toFixed(6)));
+ const allCandidateScores=[...candidateScoreMap.entries()].map(([candidateBpm,score])=>({bpm:candidateBpm,score}))
+  .sort((a,b)=>b.score-a.score||a.bpm-b.bpm).slice(0,8);
+ const sortedScores=[...scores.values()].sort((a,b)=>a-b);
+ const median=sortedScores[Math.floor(sortedScores.length/2)]??0;
+ const confidence=bestBpm===undefined?null:clamp((bestScore-median)/Math.max(EPSILON,1-median));
+ if(bestBpm===undefined||bestScore<0.08||weakTransientProminence||confidence===null||confidence<MIN_RELIABLE_TEMPO_CONFIDENCE){
+  const reason=bestBpm===undefined||bestScore<0.08
+   ?"Transient autocorrelation did not produce a sufficiently prominent tempo candidate."
+   :weakTransientProminence
+    ?"Transient prominence is weak or ambiguous; tempo candidates are retained for review but no BPM is confirmed."
+    :"Tempo candidate prominence is too weak to support a reliable result.";
+  return {
+   ...emptyTempoEstimate(reason),topCandidateBpm:bestBpm??null,alternateTempo,
+   confidence,candidateBpms:candidates.slice(0,8),candidateScores:allCandidateScores,onsetEnvelope,
+  };
+ }
+ const beatGrid=deriveBeatGrid(novelty,bpm!,sampleRate/hop);
  return {
-  bpm,topCandidateBpm:bestBpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),
-  confidence,method,candidateBpms:candidates.slice(0,8),candidateScores:allCandidateScores,voting:voteTempoCandidates({windows:[{bpm, prominence:confidence??0, durationSeconds:samples.length/Math.max(1,sampleRate)}]}),onsetEnvelope,
+  bpm:bpm!,topCandidateBpm:bestBpm,alternateTempo:alternateTempo===null?null:(bpm===bestBpm?alternateTempo:bestBpm),
+  confidence,method,candidateBpms:candidates.slice(0,8),candidateScores:allCandidateScores,voting:voteTempoCandidates({windows:[{bpm:bpm!, prominence:confidence??0, durationSeconds:samples.length/Math.max(1,sampleRate)}]}),onsetEnvelope,
   beatTimesSeconds:beatGrid.beatTimesSeconds,
   downbeatCandidateTimesSeconds:beatGrid.downbeatCandidateTimesSeconds,
   beatGridStatus:beatGrid.beatTimesSeconds.length?"tentative":"not_determined",
@@ -252,7 +262,8 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  for(let window=0;window<windowCount;window++){
   const start=window*windowSamples;
   const estimate=estimateTempoCore(samples.subarray(start,start+windowSamples),sampleRate);
-  if(estimate.bpm!==null)labels.push(String(Math.round(estimate.bpm)));
+  const windowCandidate=estimate.bpm??estimate.topCandidateBpm;
+   if(windowCandidate!==null)labels.push(String(Math.round(windowCandidate)));
   windowVotes.push(toVotes(estimate,8));
  }
  if(windowVotes.some(item=>item.candidates.length>0||item.bpm!==undefined))votingWindows.push(...windowVotes);
@@ -260,18 +271,23 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
  const voting=voteTempoCandidates({windows:votingWindows});
  const windowConsensus=bootstrapCategoricalConsensus(labels,{iterations:1000,seed:17});
  const independentEstimator=estimateLowFrequencyEnvelopeTempo(samples,sampleRate);
- const tempoRatio=voting.primary_candidate_bpm!==null&&independentEstimator.bpm!==null?voting.primary_candidate_bpm/independentEstimator.bpm:null;
+ const tempoAnchor=voting.primary_candidate_bpm??overall.topCandidateBpm;
+ const tempoRatio=tempoAnchor!==null&&independentEstimator.bpm!==null?tempoAnchor/independentEstimator.bpm:null;
  const octaveRelated=tempoRatio!==null&&[0.5,1,2].some(ratio=>Math.abs(tempoRatio-ratio)<=Math.max(0.03,ratio*0.03));
+ const octaveMultiple=tempoRatio!==null&&[0.5,2].some(ratio=>Math.abs(tempoRatio-ratio)<=Math.max(0.03,ratio*0.03));
  const unstableWindows=windowConsensus.windowCount>=3&&(windowConsensus.winner===null||(windowConsensus.observedAgreement??0)<0.6);
  const materialDisagreement=voting.confirmation_status==="CONFIRMED"&&voting.primary_candidate_bpm!==null&&independentEstimator.bpm!==null&&!octaveRelated&&independentEstimator.score>=0.4&&unstableWindows;
- const finalStatus=materialDisagreement?"CANDIDATE":voting.confirmation_status;
+ const retainedUnconfirmedCandidates=overall.bpm===null&&overall.candidateBpms.length>0;
+ const finalStatus=materialDisagreement||(voting.confirmation_status==="UNDETERMINED"&&retainedUnconfirmedCandidates)
+  ?"CANDIDATE":voting.confirmation_status;
  const reason=materialDisagreement
   ?"Independent tempo pathways materially disagreed and the primary tempo windows were unstable; no single tempo is asserted."
-  :voting.confirmation_status==="CONFIRMED"?null:voting.explanation;
+  :voting.confirmation_status==="CONFIRMED"?null:overall.abstentionReason??voting.explanation;
  const gridMatchesVote=voting.primary_candidate_bpm!==null&&overall.bpm!==null
   &&Math.abs(overall.bpm-voting.primary_candidate_bpm)<=Math.max(1.5,Math.min(overall.bpm,voting.primary_candidate_bpm)*0.02);
- const reconciledCandidate=voting.primary_candidate_bpm!==null&&gridMatchesVote&&overall.bpm!==null
-  ?Math.round(overall.bpm):voting.primary_candidate_bpm;
+ const reconciledCandidate=voting.primary_candidate_bpm===null
+  ?overall.topCandidateBpm
+  :gridMatchesVote&&overall.bpm!==null?Math.round(overall.bpm):voting.primary_candidate_bpm;
  return {
   ...overall,
   beatTimesSeconds:gridMatchesVote?overall.beatTimesSeconds:[],
@@ -281,10 +297,16 @@ export function estimateTempo(samples:Float32Array,sampleRate:number):TempoEstim
   bpm:finalStatus==="CONFIRMED"?reconciledCandidate:null,
   topCandidateBpm:reconciledCandidate,
   alternateTempo:voting.octave_alternatives[0]??overall.alternateTempo,
+  candidateBpms:overall.bpm===null&&octaveMultiple&&independentEstimator.bpm!==null
+   ?[...new Set([...overall.candidateBpms,independentEstimator.bpm])].filter(value=>value>=40&&value<=220).slice(0,8)
+   :overall.candidateBpms,
   confidence:voting.prominence_score,
   abstentionReason:reason,
   windowConsensus,independentEstimator,
-  voting:{...voting,primary_candidate_bpm:reconciledCandidate,confirmation_status:finalStatus,reason_codes:materialDisagreement?[...voting.reason_codes,"INDEPENDENT_ESTIMATOR_DISAGREEMENT"]:voting.reason_codes,explanation:reason??voting.explanation},
+  voting:{...voting,primary_candidate_bpm:reconciledCandidate,confirmation_status:finalStatus,
+   reason_codes:materialDisagreement?[...voting.reason_codes,"INDEPENDENT_ESTIMATOR_DISAGREEMENT"]
+    :retainedUnconfirmedCandidates&&voting.reason_codes.includes("NO_VALID_TEMPO_CANDIDATES")?["LOW_TRANSIENT_PROMINENCE"]:voting.reason_codes,
+   explanation:reason??voting.explanation},
  };
 }
 

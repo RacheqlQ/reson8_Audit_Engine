@@ -250,8 +250,16 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const audio = record(input.sonicDna);
   const evidence = record(input.evidence);
   const assessment = record(input.assessment);
-  const tempoConfidence = confidence(audio?.tempoConfidence);
-  const tempoReliable = isReliableTempo(audio as Parameters<typeof isReliableTempo>[0]);
+  const rhythm = record(audio?.rhythmFeatures);
+  const tempoVerdict = record(rhythm?.tempoVerdict);
+  const verdictTempo = tempoVerdict?.confirmation_status === "CONFIRMED" && finite(tempoVerdict.primary_candidate_bpm)
+    ? tempoVerdict.primary_candidate_bpm : null;
+  const tempoBpm = verdictTempo ?? (finite(audio?.bpm) ? audio.bpm : null);
+  const tempoConfidenceValue = tempoVerdict?.confirmation_status === "CONFIRMED" && finite(tempoVerdict.prominence_score)
+    ? tempoVerdict.prominence_score : finite(audio?.tempoConfidence) ? audio.tempoConfidence : null;
+  const tempoConfidence = confidence(tempoConfidenceValue);
+  const tempoEvidence = audio ? { ...audio, bpm: tempoBpm, tempoConfidence: tempoConfidenceValue } : null;
+  const tempoReliable = isReliableTempo(tempoEvidence as Parameters<typeof isReliableTempo>[0]);
   const keyConfidence = confidence(audio?.keyConfidence);
   const harmonic = record(audio?.harmonicFeatures);
   // AuditReportInput is the persisted report boundary; prefer its explicit
@@ -330,7 +338,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   if (!moments) notYetMeasured.push("Flagged moments — no valid timestamped Strength, Risk or Check moments supplied.");
   return {
     tempo: {
-      value: tempoReliable ? audio?.bpm as number : null,
+      value: tempoReliable ? tempoBpm as number : null,
       confidence: tempoConfidence,
       method: methodOf(record(audio?.rhythmFeatures), ["method"]) ?? methodOf(audio, ["tempoMethod", "method"]),
       evidence: (tempoReliable ? "CONFIRMED · voting consensus" : "Unconfirmed · candidate evidence") + " · " + sourceLine(record(audio?.rhythmFeatures), "Uploaded-master tempo evidence"),
