@@ -395,7 +395,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       method: energyMethod,
       evidence: sourceLine(audio, "Uploaded-master energy evidence"),
     },
-    structure, energySeries, sonicAxes, comparables, moments,
+    structure, energySeries, energySeriesPointCount, sonicAxes, comparables, moments,
     headlineScore: finite(assessment?.headlineScore) && assessment.headlineScore >= 0 && assessment.headlineScore <= 100 ? assessment.headlineScore : null,
     scoreDrivers: driversFrom(assessment),
     hasVerifiedCommercialEvidence: commercialEvidenceExists(evidence),
