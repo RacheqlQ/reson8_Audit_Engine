@@ -977,3 +977,62 @@ describe("safe assessment validation diagnostics", () => {
   expect(attempts.some(attempt => attempt.group === "evidence-score" && attempt.failureKind === "threshold_violation")).toBe(true);
  });
 });
+
+describe("positioning contract and provider recovery regressions", () => {
+  it.each(["aAndRPositioning.rationale", "commercialRead.rationale"])(
+    "reports the exact %s word-count threshold and recovers with a corrected response",
+    async (field) => {
+      const attempts: Array<Record<string, unknown>> = [];
+      let positioningCalls = 0;
+      const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        const payload = JSON.parse(body.messages[1].content);
+        if (payload.sectionGroup === "positioning") {
+          positioningCalls++;
+          if (positioningCalls === 1) {
+            const invalid = p("positioning") as any;
+            const short = "The supplied evidence supports this limited positioning hypothesis while important source limitations remain and require verification before any external decision is made.";
+            invalid[field === "aAndRPositioning.rationale" ? "aAndRPositioning" : "commercialRead"].rationale = short;
+            return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(invalid) } }] }), { status: 200 });
+          }
+        }
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      });
+      const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+      expect(positioningCalls).toBe(2);
+      expect(result.aAndRPositioning.rationale.trim().split(/\\s+/)).toHaveLength(expect.any(Number));
+      const failed = attempts.find(attempt => attempt.group === "positioning" && attempt.failureKind === "threshold_violation");
+      expect(failed).toMatchObject({
+        validationField: field,
+        validationRule: "minimum_word_count",
+        minimumWords: 40,
+      });
+      expect(typeof failed?.actualWords).toBe("number");
+      expect(JSON.stringify(attempts)).not.toContain("supplied evidence supports this limited positioning hypothesis");
+    },
+  );
+
+  it.each(["narrative", "positioning"])(
+    "recovers the %s section after transient Gemini HTTP 503 responses",
+    async (targetGroup) => {
+      let calls = 0;
+      const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        const payload = JSON.parse(body.messages[1].content);
+        if (payload.sectionGroup === targetGroup && calls++ < 2) {
+          return new Response(JSON.stringify({ error: { message: "temporarily unavailable" } }), { status: 503 });
+        }
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      });
+      const attempts: Array<Record<string, unknown>> = [];
+      const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+      expect(result.assessmentVersion).toBe("3.0");
+      expect(calls).toBe(3);
+      expect(attempts.filter(attempt => attempt.group === targetGroup && attempt.status === 503)).toHaveLength(2);
+      expect(mock.mock.calls.filter(call => JSON.parse(String(call[1]?.body)).messages[1].content.includes('"sectionGroup":"' + targetGroup + '"'))).toHaveLength(3);
+    },
+  );
+});
+\n
