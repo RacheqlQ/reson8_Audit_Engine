@@ -1,81 +1,63 @@
-# Vocal analysis — evidence and runtime boundaries
+# Vocal-band and arrangement analysis — signal evidence boundaries
 
-## Implemented acoustic path
+## In-process PCM path
 
-For an uploaded master, the existing Node worker now runs a vocal-only source-separation model against the decoded PCM before Sonic DNA is persisted and before metadata reconciliation is written.
+The production audit pipeline derives vocal-band and arrangement descriptors directly from the decoded uploaded master. It does not invoke Demucs, Spleeter, Open-Unmix, an ONNX separation model, an external vocal worker, or an external PDF-render worker.
 
-- **Model:** Open-Unmix UMX-HQ vocals ONNX, exported from the published UMX-HQ vocals weights.
-- **Artifact:** `MixDirective/open-unmix-umxhq-vocals-onnx/model.onnx`
-- **Expected size:** 35,623,512 bytes.
-- **Pinned SHA-256:** `f27742bb52b24cb039614dc76d0764e279df3eb2a9d6daa82c6daee3369ec747`. The runtime refuses an artifact with a different size or hash.
-- **Runtime:** Node ONNX Runtime CPU, with a 20-second inference chunk and 2-second overlap. The model input is resampled to 44.1 kHz stereo and returned at the decoded master's sample rate.
-- **Memory policy:** CPU memory arena and memory pattern pooling are disabled; the vocal-only path uses one multichannel Wiener refinement iteration with 120-frame windows to balance reconstruction quality and peak allocation on the existing Render worker. Actual production RAM and latency still require measurement against real masters.
-- **Cache:** the verified model is stored under `AUDIO_NEURAL_CACHE` or `~/.cache/audiojs/neural`; no model weights are committed to the repository.
+The zero-cost path is implemented in `src/audio/vocal-arrangement-analysis.ts` and is called by the existing Sonic DNA PCM analysis:
 
-The result records model provenance, vocal-stem energy ratio, estimated activity ratio and timestamps, vocal-stem RMS, a conservative fundamental-frequency range/contour, and explicit limitations. The result is persisted as part of Sonic DNA before reconciliation.
+- Bounded mono PCM is processed in overlapping 2,048-sample Hann windows with a 1,024-sample hop.
+- A radix-2 FFT estimates 250–3,500 Hz band-energy salience and spectral flatness/harmonicity.
+- Vocal-band activity is a thresholded signal proxy, not a human-voice classifier.
+- Candidate F0 is estimated with lightweight autocorrelation in the 70–500 Hz range on selected active windows. The median and 10th–90th percentile range are reported only when enough candidates exist.
+- Contiguous active windows are merged into timestamped intervals.
+- Arrangement transitions are inferred from spectral-flux novelty, RMS changes, chroma movement and vocal-band activity onset/offset.
+- Section labels use deterministic position and repeated-section heuristics. They are always marked provisional.
+- Work is bounded by the existing PCM analysis sample cap and a maximum of 96 pitch frames; no neural model weights are loaded.
 
-## What the result means
+The persisted Sonic DNA fields are `vocalArrangementAnalysis` and the compatible `vocalFeatures` projection. The report uses the same data in the Executive Summary, A&R questions, SWOT, SMART actions, arrangement guidance and human listening checks.
 
-`voicePresence` is one of `likely_present`, `not_detected`, or `uncertain`. It is a conservative interpretation of a separated stem plus energy and periodic-pitch evidence. It is **not a calibrated probability or a proof** that a human voice is present or absent. Harmonic instruments can leak into the vocal stem; some vocal material can be suppressed by source separation.
+## What the measurements mean
 
-The report deliberately does not claim capabilities this model path does not provide:
+- `vocalPresencePct` is the percentage of analysis windows that cross the configured 250–3,500 Hz salience and harmonicity thresholds. It is not a calibrated probability of human vocals.
+- `vocalBandEnergyDbfs` is an estimated whole-master vocal-band RMS descriptor.
+- `vocalMedianF0Hz` and `vocalF0RangeHz` are periodicity-derived F0 candidates from active windows, not validated singer pitches.
+- `vocalActivityIntervals` are timestamps where the signal proxy is active.
+- `inferredSections` and `detectedTransitions` are structural hypotheses, not verified musical form.
 
-- Singing versus speech/rap is not classified.
-- Lead versus backing vocals, doubles, choir count, speaker count and diarization are not classified.
-- Vocal effects, intelligibility, language and lyric content are not analysed.
-- No lyric transcription is requested or generated.
-- The model's estimated vocal stem is not a substitute for a human listening review.
+Periodic instruments, synths, guitars, bass harmonics and resonant percussion can satisfy similar thresholds. The system therefore does not assert that every active interval contains a human voice.
 
-Automated results carry `reviewStatus: not_human_reviewed`. Curator targeting remains gated until vocal evidence has been human-reviewed; a machine-generated stem estimate alone does not qualify a track for a vocal-specific curator pitch.
+The report explicitly does not determine:
 
-## Model and package licensing
+- Exact section labels or whether a section is a verse, pre-chorus, chorus, bridge or outro.
+- Singing versus speech/rap; lead versus backing; singer/speaker count; doubles or choir count.
+- Lyrics, language, intelligibility, delivery quality or emotional intent.
+- Mix/master readiness, audience response or commercial performance.
 
-The ONNX package and the UMX-HQ vocals artifact identify their code/weights as MIT-licensed. The artifact is hash-pinned at runtime. This does not grant rights to the submitted recording or clear every possible use of source-separated audio; users remain responsible for having rights to the uploaded master and any downstream use. Re-check the upstream model card and notices before changing the artifact or model revision.
+Human listening is required to confirm or revise each timestamp, F0 candidate and section label. No stem is created or claimed.
 
-Implementation dependencies are pinned in `package.json` and `package-lock.json`: `@audio/neural-separate@0.7.1`, `@audio/neural-runtime@0.2.1`, and `onnxruntime-node@1.31.1`. The selected ONNX Runtime version and its resolved dependency tree were checked for known advisories; no known vulnerabilities were returned for the pinned tree. Its native runtime installation script is still a lifecycle-script risk surface and is not treated as risk-free.
+## Runtime and deployment boundary
 
-## Verification required before production acceptance
+The queue worker calls the in-process Sonic DNA analysis and persists its result before A&R assessment and PDF generation. The optional `ENABLE_VOCAL_ANALYSIS` stem-separation hook has been removed from the production worker dependency path. Legacy separation modules and package entries are not invoked by this pipeline.
 
-- Unit tests cover activity intervals, pitch estimation, abstention, the actual separation pipeline with a deterministic ONNX session double, report rendering, and the evidence-chain ordering.
-- Pre-merge CI passed install, the full test suite, TypeScript build and sample-report inspection on feature head `10f8b570f1f2b341ff346e9f751e6bc014029be3`.
-- All five pre-merge acceptance passes completed successfully on that same feature head. Post-merge main-branch workflows are tracked separately.
-- A real submitted master must be analysed to inspect stem leakage, false vocal activity, timestamps and pitch output. No such real-master validation is claimed by synthetic tests.
-- Render CPU/RAM, cold model download time, warm-cache inference time and timeout behaviour must be measured before deployment. Do not change Render plans, environment variables, Supabase or the separate worker as part of this feature.
+The report continues to use the existing PDF renderer and the existing Full/Sample page allocations. No additional page, external render service, database migration, Render configuration change or secret change is required by this implementation.
+
+## Verification
+
+Unit tests cover F0 candidate tracking, vocal activity interval merging, structural transition segmentation, low-signal abstention and report layout/page-count preservation. CI must also run the full suite, TypeScript build, sample report generation and the five acceptance passes.
+
+A real uploaded master is required for final signal-quality review. The recorded Phillo master is:
+- Audit: `503069b9-3f2c-40c0-af8b-8c0540a7e4ab`
+- File: `Phillo - Stunixx.mp3`
+- Duration: 192.048 seconds
+- SHA-256: `fdc5d99c701e44063b31d512dbab29929a24ca9f1044dc1484f91d16715c89a4`
+
+The source object remains in the private `audit-audio` bucket. This document does not claim that the new code has already been run against that object. Production deployment remains separate and requires explicit authorization.
 
 ## Evidence status
 
-- Acoustic vocal-stem extraction and measurements: merged in main at `ab0f9f564c50c05e9c4e8d371a8866a8d67b5942`; pre-merge CI and all five acceptance passes passed. Real-master validation remains pending.
-- Human review and calibrated vocal-presence accuracy: not implemented.
-- Singing/speech/rap and lead/backing classification: not implemented.
+- In-process vocal-band and F0 candidate extraction: implemented; CI and synthetic signal tests pending for this revision.
+- In-process arrangement boundary/transition hypotheses: implemented; CI and synthetic signal tests pending for this revision.
+- Human vocal classification, source separation and calibrated vocal-presence accuracy: not implemented.
+- Human review of Phillo timestamps/labels: pending.
 - Production deployment: not performed.
-
-## Queue-worker integration
-
-The production queue worker exposes the existing isolated vocal-analysis worker through the
-`ENABLE_VOCAL_ANALYSIS=true` feature gate. The default remains off because model inference
-adds CPU and resident-memory pressure on the Render worker. When the flag is off, the audit
-records vocal analysis as unavailable rather than inferring vocal presence or delivery.
-
-When the flag is explicitly enabled, a conservative admission check runs before loading the
-vocal worker. It reads the cgroup v2 memory limit/current usage, falls back to cgroup v1,
-and then falls back to OS total/available memory if no cgroup limit is exposed. The estimate
-compares current process RSS plus two PCM-sized working allocations and a 192 MiB model/runtime
-reserve against both the effective memory ceiling and currently available headroom. It also
-records decoded duration and sample rate for preflight validation. If the estimate exceeds
-either bound or the readings are invalid, the worker returns a precise skip reason (including
-estimated additional MB, effective limit MB, and available MB) and the main audit continues.
-The inference remains chunked (20-second chunks with 2-second overlap) and is isolated in a
-worker thread in the built runtime; timeout, worker failure, or out-of-memory termination
-degrades to an unavailable/not-analysed result rather than a vocal conclusion.
-
-This is still a conservative preflight estimate, not a measured peak-RSS guarantee. CI has not
-yet measured peak RSS on the requested four-minute, 48 kHz stereo fixture, so no minimum safe
-RAM figure is claimed. It does not authorize enabling the feature in production.
-
-Do not enable this flag in production until a real-master run has recorded peak RSS, elapsed
-time, timeout behavior, and successful persistence of the final vocal result. No production
-environment setting is changed by this code change.
-
-Track-structure and section-boundary analysis is not implemented in the current Node.js
-pipeline. Reports must explicitly abstain from verse/chorus/bridge claims until a separately
-validated section-segmentation stage is implemented and evaluated.

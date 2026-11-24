@@ -2,7 +2,7 @@ import { PDFDocument } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
 import { buildCoverKeyLabel, buildCoverTempoLabel, buildRecordingOverviewKeyLabel, normalizeCircleNote } from "../src/reports/v2/render.js";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
-import { buildPositioningLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
+import { buildPositioningLines, buildCommercialStrategyLines, buildNextActionLine, buildReleaseFramingLine, buildIdentityReconciliationRows, generateAuditReportV2 } from "../src/reports/v2/render.js";
 import * as reportV2Render from "../src/reports/v2/render.js";
 import { sanitizePublicReportLine } from "../src/reports/v2/public-language.js";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
@@ -38,6 +38,32 @@ describe("v2 decision and date framing", () => {
     expect(buildReleaseFramingLine(input)).toContain("UPCOMING");
     input.generatedAt = "2025-12-01T00:00:00.000Z";
     expect(buildReleaseFramingLine(input)).toContain("POST-RELEASE");
+  });
+});
+
+describe("v2 commercial strategy report integration", () => {
+  it("surfaces proposed ISRC coverage and actionable verification gates in existing report sections", async () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.marketPlacement = {
+      isrcCoverage: { status: "RESOLVED", isrc: "NGABC2600001", resolvedVia: "musicbrainz", linkedReleasesCount: 2, matchedPlatforms: ["musicbrainz", "spotify"], catalogPresenceTier: "MULTI_PLATFORM" },
+      commercialStrategy: {
+        marketVerdict: "PROPOSED", releaseDateVerdict: "DETERMINED", releaseLifecycle: "POST_RELEASE",
+        primaryLane: { label: "Afrobeats", verdict: "PROPOSED", rationale: "Tempo and metadata" },
+        adjacentLanes: [{ label: "Afro-fusion", verdict: "PROPOSED" }],
+        audienceContexts: ["Mood-led late-evening context hypothesis."],
+        shortFormAngles: ["Audition excerpt 00:42–00:54."],
+        playlistPitchHooks: ["Pitch the reconciled Afrobeats lane."],
+        readinessActions: ["Resolve the EP-versus-album metadata variant."],
+        syncFit: { status: "BLOCKED", rationale: "Rights clearance remains unverified." },
+        kpis: [{ metric: "Metadata parity", target: "100%", verification: "Compare source records." }],
+      },
+    };
+    expect(buildCommercialStrategyLines(input).join(" ")).toContain("PROPOSED");
+    expect(buildCommercialStrategyLines(input).join(" ")).toContain("MULTI_PLATFORM");
+    const sample = await generateAuditReportV2(input, "sample");
+    const full = await generateAuditReportV2(input, "full");
+    expect((await PDFDocument.load(sample)).getPageCount()).toBe(8);
+    expect((await PDFDocument.load(full)).getPageCount()).toBe(13);
   });
 });
 
@@ -271,6 +297,89 @@ describe("v2 gated report pages", () => {
   it("omits every gated page for a minimal audio-only fixture", async () => {
     const input = { ...metadataOnlyFixture, evidence: { fixture: true, auditType: "AUDIO-ONLY", artist: null, title: null }, sonicDna: { provenance: "fixture", bpm: null, key: null, mode: null, tempoConfidence: 0, keyConfidence: 0 } };
     expect((await PDFDocument.load(await generateAuditReportV2(input as any))).getPageCount()).toBe(8);
+  });
+});
+
+describe("Page 3 vocal arrangement snapshot integration", () => {
+  it("renders the signal-derived vocal timeline and KPI data without changing Sample or Full page allocations", async () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      ...input.sonicDna,
+      durationSeconds: 180,
+      channels: 2,
+      vocalArrangementAnalysis: {
+        provenance: "SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+        analysisStatus: "MEASURED_SIGNAL",
+        vocalActivityStatus: "SIGNAL_ACTIVITY_DETECTED",
+        vocalPresencePct: 34.2,
+        vocalBandEnergyDbfs: -22.4,
+        vocalMedianF0Hz: 218.5,
+        vocalF0RangeHz: { p10: 142.2, p90: 388.1 },
+        vocalActivityIntervals: [
+          { startSeconds: 18, endSeconds: 47 },
+          { startSeconds: 72, endSeconds: 109 },
+          { startSeconds: 131, endSeconds: 159 }
+        ],
+        inferredSections: [
+          { index: 1, label: "Intro", startSeconds: 0, endSeconds: 18, provisional: true },
+          { index: 2, label: "Verse 1", startSeconds: 18, endSeconds: 72, provisional: true },
+          { index: 3, label: "Chorus", startSeconds: 72, endSeconds: 131, provisional: true },
+          { index: 4, label: "Outro", startSeconds: 131, endSeconds: 180, provisional: true }
+        ],
+        detectedTransitions: [
+          { id: "T1", timestampSeconds: 18, fromLabel: "Intro", toLabel: "Verse 1", reason: "Vocal onset" },
+          { id: "T2", timestampSeconds: 72, fromLabel: "Verse 1", toLabel: "Chorus", reason: "Energy rise" },
+          { id: "T3", timestampSeconds: 131, fromLabel: "Chorus", toLabel: "Outro", reason: "Vocal offset" }
+        ],
+        analysisReason: "Window-derived mid-band activity; not proof of human vocals.",
+        labelBasis: "Provisional labels from windowed novelty, RMS, chroma and vocal-band changes."
+      },
+      vocalFeatures: {
+        ...input.sonicDna.vocalFeatures,
+        vocalPresencePct: 34.2,
+        vocalActivityStatus: "SIGNAL_ACTIVITY_DETECTED"
+      }
+    };
+    const titles = reportV2Render.buildReportSectionTitles(input, "sample");
+    const geometry = reportV2Render.snapshotPage3LayoutContract();
+    expect(geometry.pageNumber).toBe(3);
+    expect(geometry.vocalTop).toBeGreaterThan(geometry.vocalBottom);
+    expect(geometry.vocalBottom).toBeGreaterThan(geometry.overviewTop);
+    expect(geometry.overviewBottom).toBeGreaterThan(42);
+    expect(titles[2]).toBe("Track snapshot");
+    expect(titles[3]).toBe("Evidence ledger and scorecard");
+    expect(reportV2Render.buildExecutiveSummary(input)).toContain("0:18–0:47");
+    expect(reportV2Render.buildVocalCadenceSummaryLine(input)).toContain("0:18–0:47");
+    const swotSmart = reportV2Render.buildSwotSmartLines(input).join(" ");
+    expect(swotSmart).toContain("0:18");
+    expect(swotSmart).toContain("T1 0:18");
+    expect(reportV2Render.buildMandatoryArAnswerLines(input)[1]).toContain("Intro 0:00");
+    const sample = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
+    const full = await PDFDocument.load(await generateAuditReportV2(input, "full"));
+    expect(sample.getPageCount()).toBe(8);
+    expect(full.getPageCount()).toBe(13);
+  });
+
+  it("keeps an explicit low-activity fallback with no fabricated pitch or blank structural timeline", async () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    input.sonicDna = {
+      ...input.sonicDna,
+      vocalArrangementAnalysis: {
+        provenance: "SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+        analysisStatus: "INSUFFICIENT_SIGNAL",
+        vocalActivityStatus: "LOW_VOCAL_ACTIVITY",
+        vocalPresencePct: 0,
+        vocalBandEnergyDbfs: null,
+        vocalMedianF0Hz: null,
+        vocalF0RangeHz: null,
+        vocalActivityIntervals: [],
+        inferredSections: [{ index: 1, label: "Section 1", startSeconds: 0, endSeconds: 180, provisional: true }],
+        detectedTransitions: [],
+        analysisReason: "Low vocal-band salience and insufficient periodicity for F0 candidates."
+      }
+    };
+    const pdf = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
+    expect(pdf.getPageCount()).toBe(8);
   });
 });
 

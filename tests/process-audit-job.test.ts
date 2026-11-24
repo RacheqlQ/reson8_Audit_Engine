@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { AI_ASSESSMENT_STAGE_TIMEOUT_MS, AUDIT_JOB_DEADLINE_MS, classifyAuditFailure, processAuditJob } from "../src/jobs/process-audit-job.js";
-import { analyzeVocalStem } from "../src/audio/vocal-analysis.js";
 
 const assessment = {} as import("../src/providers/groq/client.js").ArAssessment;
 
@@ -89,20 +88,14 @@ describe("processAuditJob", () => {
         sampleRate: 44100,
         channels: 2,
       }),
-      analyzeVocals: async () => {
-        events.push("vocal-analysis");
-        const sampleRate = 8000;
-        const mix = Float32Array.from({ length: sampleRate }, (_, i) => 0.5 * Math.sin(2 * Math.PI * 220 * i / sampleRate));
-        const vocal = Float32Array.from({ length: sampleRate }, (_, i) => 0.25 * Math.sin(2 * Math.PI * 220 * i / sampleRate));
-        return analyzeVocalStem([vocal], [mix], sampleRate);
-      },
       saveSonicDna: async (_jobId, _claimToken, dna) => {
         persistedDna = dna as unknown as Record<string, unknown>;
-        const hasVocalResult = (dna.vocalFeatures as { status?: string }).status === "analyzed";
-        events.push(hasVocalResult ? "dna-final" : "dna-base");
-        if (hasVocalResult) {
-          expect(dna.vocalFeatures).toMatchObject({ status: "analyzed", voicePresence: "likely_present" });
-        }
+        events.push("dna-in-process");
+        expect(dna.vocalArrangementAnalysis).toMatchObject({
+          provenance: "SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+          analysisStatus: "INSUFFICIENT_SIGNAL",
+          vocalPresencePct: 0,
+        });
         expect(dna.sampleRate).toBe(44100);
         expect(dna.channels).toBe(2);
         expect(dna.durationSeconds).toBe(4 / 44100);
@@ -164,11 +157,10 @@ describe("processAuditJob", () => {
     expect(Number.isNaN(Date.parse(signalMeasurementTimestamp!))).toBe(false);
     expect(events).toEqual([
       "processing",
-      "dna-base",
+      "dna-in-process",
       "recognition",
       "isrc-catalog-lookup",
-      "vocal-analysis",
-      "dna-final",
+      "dna-in-process",
       "evidence",
       "assessment",
       "assessment-saved",

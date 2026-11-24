@@ -3,6 +3,8 @@ export interface MusicBrainzReleaseEvidence {
   title: string | null;
   date: string | null;
   label: string | null;
+  releaseGroupId: string | null;
+  tags: string[];
 }
 
 export interface MusicBrainzRecordingEvidence {
@@ -10,6 +12,8 @@ export interface MusicBrainzRecordingEvidence {
   title: string | null;
   artist: string | null;
   releases: MusicBrainzReleaseEvidence[];
+  tags: string[];
+  externalUrls: Array<{ relationType: string | null; resource: string }>;
   source: "musicbrainz";
 }
 
@@ -77,18 +81,41 @@ function normalizeRecording(value: unknown): MusicBrainzRecordingEvidence | null
       const release = entry as Record<string, unknown>;
       const releaseId = stringValue(release.id);
       if (!releaseId) return [];
+      const releaseGroup = release["release-group"] && typeof release["release-group"] === "object"
+        ? release["release-group"] as Record<string, unknown> : {};
       return [{
         releaseId,
         title: stringValue(release.title),
         date: stringValue(release.date),
         label: firstLabel(release),
+        releaseGroupId: stringValue(releaseGroup.id),
+        tags: (Array.isArray(release.tags) ? release.tags : []).flatMap(tag => {
+          if (!tag || typeof tag !== "object") return [];
+          const name = stringValue((tag as Record<string, unknown>).name);
+          return name ? [name] : [];
+        }),
       }];
     });
+  const tags = (Array.isArray(recording.tags) ? recording.tags : []).flatMap(tag => {
+    if (!tag || typeof tag !== "object") return [];
+    const name = stringValue((tag as Record<string, unknown>).name);
+    return name ? [name] : [];
+  });
+  const externalUrls = (Array.isArray(recording.relations) ? recording.relations : []).flatMap(relation => {
+    if (!relation || typeof relation !== "object") return [];
+    const item = relation as Record<string, unknown>;
+    const url = item.url && typeof item.url === "object" ? item.url as Record<string, unknown> : {};
+    const resource = stringValue(url.resource);
+    if (!resource || !/^https:\/\//i.test(resource)) return [];
+    return [{ relationType: stringValue(item.type), resource }];
+  });
   return {
     recordingId,
     title: stringValue(recording.title),
     artist: artistName(recording),
     releases,
+    tags,
+    externalUrls,
     source: "musicbrainz",
   };
 }
@@ -128,7 +155,7 @@ export class MusicBrainzClient {
     // includes are artist-credits and releases; `recordings` and `labels`
     // are invalid here and cause MusicBrainz to reject the request with HTTP 400.
     // Release labels require a separate /release/{mbid}?inc=labels lookup.
-    url.searchParams.set("inc", "artist-credits+releases");
+    url.searchParams.set("inc", "artist-credits+releases+tags+url-rels");
     url.searchParams.set("fmt", "json");
 
     const response = await fetch(url, {

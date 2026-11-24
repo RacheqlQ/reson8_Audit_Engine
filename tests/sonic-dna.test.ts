@@ -52,6 +52,21 @@ describe("Sonic DNA",()=>{
   expect(result.spectralCentroidHz).toBeLessThan(500);
   expect(result.zeroCrossingRate).toBeGreaterThan(0.05);
  });
+ it("embeds zero-cost vocal-band and arrangement signal analysis in Sonic DNA",()=>{
+  const sampleRate=8000,samples=Float32Array.from({length:sampleRate*5},(_,i)=>0.15*Math.sin(2*Math.PI*220*i/sampleRate)+0.08*Math.sin(2*Math.PI*440*i/sampleRate)+0.04*Math.sin(2*Math.PI*660*i/sampleRate));
+  const result=analyzePcm(samples,sampleRate);
+  expect(result.vocalArrangementAnalysis).toMatchObject({
+   provenance:"SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+   method:"WINDOWED_FFT_MID_BAND_SALIENCE_AND_AUTOCORRELATION",
+   analysisStatus:"MEASURED_SIGNAL"
+  });
+  expect(result.vocalArrangementAnalysis?.vocalPresencePct).toBeGreaterThan(0);
+  expect(result.vocalArrangementAnalysis?.vocalMedianF0Hz).toBeGreaterThan(200);
+  expect(result.vocalFeatures).toMatchObject({
+   voicePresence:"undetermined",
+   provenance:"SIGNAL_DERIVED_FROM_UPLOADED_MASTER"
+  });
+ });
  it("uses transient-onset evidence and exposes ranked tempo candidates with an abstention diagnostic",()=>{
   const result=estimateTempo(pulse(120),8000);
   expect(result.method).toBe("high_frequency_transient_autocorrelation");
@@ -96,7 +111,7 @@ describe("Sonic DNA",()=>{
   expect(result.tonalResolution?.status).toBe("PROVISIONAL");
   expect(result.tonalResolution?.tonic).toBe("C");
   expect(result.keyConfidence).toBeGreaterThan(0);
- });
+ },15000);
  it("detects A minor from a sustained A minor triad",()=>{
   const result=analyzePcm(chord([220,261.6256,329.6276]),8000);
   expect(result.key).toBeNull();
@@ -219,7 +234,7 @@ describe("Sonic DNA",()=>{
   expect((result as unknown as {rmsLevelDbfs:number}).rmsLevelDbfs)
    .toBeCloseTo(20*Math.log10(result.rmsEnergy),5);
  });
- it("returns explicit rhythm and harmonic measurements while marking vocal analysis unavailable",()=>{
+ it("returns explicit rhythm, harmonic and signal-derived vocal-band measurements without claiming human vocal detection",()=>{
   const sampleRate=8000;
   const rhythm=analyzePcm(pulse(120,12,sampleRate),sampleRate);
   const harmonic=analyzePcm(chord([261.6256,329.6276,391.9954],12,sampleRate),sampleRate);

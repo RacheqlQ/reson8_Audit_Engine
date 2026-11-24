@@ -6,13 +6,15 @@ import { adaptReportV2, type ReportV2Data } from "./adapters.js";
 import { hasReportableKeyCandidates } from "../evidence-guardrails.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
 import { sanitizePublicReportLines, sanitizePublicReportLine } from "./public-language.js";
+import { buildReconciledArIntelligence } from "./reconciled-ar-intelligence.js";
 
 const W=595.28,H=841.89,M=42;
+const SNAPSHOT_METRIC_CARD_HEIGHT=104,SNAPSHOT_KEY_MAP_HEIGHT=154,SNAPSHOT_VOCAL_MODULE_HEIGHT=260,SNAPSHOT_OVERVIEW_HEIGHT=105;
 const C={
  paper:rgb(247/255,243/255,236/255),white:rgb(1,1,1),ink:rgb(43/255,40/255,37/255),
  muted:rgb(108/255,101/255,92/255),line:rgb(226/255,219/255,207/255),
  charcoal:rgb(43/255,40/255,37/255),gold:rgb(176/255,141/255,87/255),
- teal:rgb(29/255,158/255,117/255),label:rgb(138/255,106/255,48/255),amber:rgb(239/255,159/255,39/255),coral:rgb(216/255,90/255,48/255)
+ teal:rgb(29/255,158/255,117/255),label:rgb(138/255,106/255,48/255),amber:rgb(239/255,159/255,39/255),coral:rgb(216/255,90/255,48/255),violet:rgb(99/255,107/255,184/255)
 };
 type Fonts={regular:PDFFont;bold:PDFFont;italic:PDFFont;boldItalic:PDFFont};
 type Block={label:string;value:string;provenance?:string;confidence?:string;color?:keyof typeof C};
@@ -92,19 +94,26 @@ export function buildCoverTempoLabel(data:ReportV2Data,input:AuditReportInput):s
  return "Not determined";
 }
 function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
- const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna);
- const tempoDisplay=buildCoverTempoLabel(data,input);
+ const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna),rhythm=rec(audio.rhythmFeatures),verdict=rec(rhythm.tempoVerdict);
+ const candidate=finite(audio.tempoCandidateBpm)?audio.tempoCandidateBpm:finite(verdict.primary_candidate_bpm)?verdict.primary_candidate_bpm:finite(audio.bpm)?audio.bpm:null;
+ const tempoStatus=data.tempo.value!==null?"CONFIRMED":candidate!==null&&candidate>=40&&candidate<=220?"CANDIDATE":"NOT ANALYSED";
+ const tempoDisplay=data.tempo.value!==null?data.tempo.value+" BPM":tempoStatus==="CANDIDATE"?candidate!.toFixed(1)+" BPM":"Not analysed";
+ const resolution=rec(data.tonalResolution??rec(audio.harmonicFeatures).tonalResolution);
+ const keyBase=buildCoverKeyLabel(input,data).replace(/^Confirmed:\s*/i,"").replace(/^Possible:\s*/i,"");
+ const keyStatus=resolution.status==="CONFIRMED"||data.key.value!==null?"CONFIRMED":hasReportableKeyCandidates({...audio,tonalResolution:resolution})?"CANDIDATE":"NOT ANALYSED";
+ const keyDisplay=keyStatus==="CONFIRMED"?"Confirmed: "+keyBase:keyStatus==="CANDIDATE"?"Possible: "+keyBase:"Not analysed";
  const signed=(value:unknown)=>finite(value)?(value>0?"+":"")+value.toFixed(1):null;
- const loudness=[
-  finite(audio.loudnessLufs)?signed(audio.loudnessLufs)+" LUFS":null,
-  finite(audio.loudnessRangeLu)?"LRA "+audio.loudnessRangeLu.toFixed(1)+" LU":null,
+ const lufs=finite(audio.loudnessLufs)?signed(audio.loudnessLufs)+" LUFS":"NOT ANALYSED";
+ const sub=[
   finite(audio.truePeakDbfs)?"True peak "+signed(audio.truePeakDbfs)+" dBFS":null,
-  finite(audio.rmsLevelDbfs)?"RMS "+signed(audio.rmsLevelDbfs)+" dBFS":null
+  finite(audio.rmsLevelDbfs)?"RMS "+signed(audio.rmsLevelDbfs)+" dBFS":null,
+  finite(audio.loudnessRangeLu)?"LRA "+audio.loudnessRangeLu.toFixed(1)+" LU":null
  ].filter((value):value is string=>Boolean(value));
+ const loudness=[lufs,...sub].join(" · ");
  return [
-  {label:"TEMPO",value:tempoDisplay,provenance},
-  {label:"SONG KEY",value:buildCoverKeyLabel(input,data),provenance},
-  {label:"LOUDNESS / SIGNAL",value:loudness.length?loudness.join(" · "):data.energy.value===null?"Not measured":String(data.energy.value),provenance}
+  {label:"TEMPO",value:tempoDisplay,confidence:tempoStatus,provenance},
+  {label:"SONG KEY",value:keyDisplay,confidence:keyStatus,provenance},
+  {label:"LOUDNESS / SIGNAL",value:loudness,provenance}
  ];
 }
 function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
@@ -225,16 +234,16 @@ export function buildNextActionLine(input: AuditReportInput): string {
  return "Recommended next step: "+(usableRecommendation||firstGap||"Confirm the recording identifier and release-version mapping, complete rights and master-clearance checks, then run a measured post-release curator and creator reactivation.");
 }
 
-export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "UPCOMING" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
- const evidence=rec(input.evidence),raw=str(evidence.releaseDate,"");
- const valid=/^\d{4}-\d{2}-\d{2}$/.test(raw)&&Number.isFinite(Date.parse(raw+"T00:00:00Z"));
- const source=metadataFieldSource(evidence,"releaseDate").replace("Field source: ","");
+function buildArIntelligence(input: AuditReportInput) {
+ const evidence=rec(input.evidence);
  const status=metadataFieldStatus(evidence,"releaseDate");
+ const source=metadataFieldSource(evidence,"releaseDate").replace("Field source: ","");
  const attributed=source!=="unavailable"&&(status.startsWith("Cross-checked")||status.startsWith("Available")||status.startsWith("Returned")||Boolean(rec(evidence.fieldProvenance).releaseDate));
- const verdict=valid&&attributed?"DETERMINED":"UNVERIFIED";
- const generated=Date.parse(String(input.generatedAt??""));
- const release=valid?Date.parse(raw+"T00:00:00Z"):NaN;
- return {verdict,context:verdict!=="DETERMINED"?"RELEASE DATE NOT RECONCILED":Number.isFinite(generated)&&release<generated?"POST-RELEASE":"UPCOMING",date:valid?raw:"Date not reconciled",source:attributed?source:"Source not reconciled"};
+ const enrichedEvidence={...evidence,fieldProvenance:{...rec(evidence.fieldProvenance),releaseDate:attributed?source:""}};
+ return buildReconciledArIntelligence({evidence:enrichedEvidence,sonicDna:rec(input.sonicDna),assessment:rec(input.assessment),generatedAt:input.generatedAt});
+}
+export function buildReleaseDateStatus(input: AuditReportInput): { verdict: "DETERMINED" | "UNVERIFIED"; context: "POST-RELEASE" | "UPCOMING" | "RELEASE DATE NOT RECONCILED"; date: string; source: string } {
+ return buildArIntelligence(input).releaseDate;
 }
 export function buildReleaseFramingLine(input: AuditReportInput): string {
  const status=buildReleaseDateStatus(input);
@@ -247,6 +256,28 @@ export function buildDays6190Plan(input: AuditReportInput): string {
  const anchor=release.verdict==="DETERMINED"?"the determined "+release.date+" release":"the confirmed release date once reconciled";
  return "Post-release catalog momentum, anchored to "+anchor+": review the prior release window and current catalog identity without assuming performance outcomes; refresh the curator and DSP pitch pack, then follow up only with contacts who accepted or requested material; expand approved creator/UGC excerpts and visual treatments around human-verified hook windows; lock artist, title, version, ISRC, UPC, EP-versus-album mapping, rights splits and master ownership against distributor and provider records; complete the day-90 performance review by comparing source-attributed platform reports and campaign activity with the pre-review baseline, documenting unavailable metrics rather than estimating streams, revenue, reach or conversion.";
 }
+export function buildArrangementGuidanceSummary(input:AuditReportInput):string{
+ const signal=buildArIntelligence(input).vocalCadence,parts:string[]=[];
+ if(signal.vocalPresencePct!==null)parts.push("Vocal-band activity proxy: "+signal.vocalPresencePct.toFixed(1)+"% of analysis windows.");
+ if(signal.vocalMedianF0Hz!==null&&signal.vocalF0RangeHz)parts.push("F0 candidates: median "+signal.vocalMedianF0Hz.toFixed(1)+" Hz; 10th–90th percentile "+signal.vocalF0RangeHz.p10.toFixed(1)+"–"+signal.vocalF0RangeHz.p90.toFixed(1)+" Hz.");
+ if(signal.vocalActivityIntervals.length)parts.push("Timestamped active intervals ("+signal.vocalActivityIntervals.length+"): "+signal.vocalActivityIntervals.slice(0,2).map(item=>formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds)).join(", ")+(signal.vocalActivityIntervals.length>2?" and "+(signal.vocalActivityIntervals.length-2)+" more":"")+".");
+ if(signal.inferredSections.length)parts.push("Provisional sections ("+signal.inferredSections.length+"): "+signal.inferredSections.slice(0,3).map(item=>item.label+" "+formatSnapshotTime(item.startSeconds)).join("; ")+(signal.inferredSections.length>3?"; final "+signal.inferredSections[signal.inferredSections.length-1]!.label+" "+formatSnapshotTime(signal.inferredSections[signal.inferredSections.length-1]!.startSeconds):"")+".");
+ if(signal.detectedTransitions.length)parts.push("Detected transitions ("+signal.detectedTransitions.length+"): "+signal.detectedTransitions.slice(0,3).map(item=>item.id+" "+formatSnapshotTime(item.timestampSeconds)+" "+item.reason).join("; ")+".");
+ return parts.length?parts.join(" "):"Vocal-band activity, F0 and structural boundaries were not analysed or could not be determined from the available PCM.";
+}
+function buildDerivedListeningChecks(input:AuditReportInput):string[]{
+ const signal=buildArIntelligence(input).vocalCadence,checks:string[]=[];
+ if(signal.vocalActivityIntervals.length){
+  const intervals=signal.vocalActivityIntervals.slice(0,3).map(item=>formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds)).join(", ");
+  checks.push("Listen to signal-active intervals "+intervals+" and decide whether each contains a human vocal or an instrument; verify the F0 candidate range.");
+ }else checks.push("No vocal-band activity interval was detected; listen across the full master before assigning a vocal label.");
+ if(signal.detectedTransitions.length){
+  const transitions=signal.detectedTransitions.slice(0,4).map(item=>item.id+" "+formatSnapshotTime(item.timestampSeconds)+" "+item.fromLabel+" to "+item.toLabel+" ("+item.reason+")").join("; ");
+  checks.push("Review transition markers "+transitions+" and confirm, revise or reject each provisional section label.");
+ }else checks.push("No discrete structural transition crossed the provisional thresholds; confirm the arrangement arc by listening.");
+ if(signal.vocalMedianF0Hz!==null)checks.push("Check whether the median "+signal.vocalMedianF0Hz.toFixed(1)+" Hz F0 candidate is a vocal fundamental or an instrumental harmonic.");
+ return checks;
+}
 export function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=adaptReportV2(input)):string{
  const evidence=rec(input.evidence),assessment=sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),evidence);
  const supplied=str(assessment.executiveSummary,"");
@@ -254,8 +285,9 @@ export function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=a
  const releaseClause=release.verdict==="DETERMINED"
   ?"Release date DETERMINED: "+release.date+" ("+release.source+"); this is a post-release catalogue and reactivation opportunity."
   :"Release-date reconciliation remains a diligence item; timing is not assumed.";
+ const signalClause="Signal-derived vocal/arrangement observations: "+buildArrangementGuidanceSummary(input)+" These are inferred from the mixed uploaded master and are not confirmation of human vocals or exact section labels.";
  if(supplied&&!/not supplied|not provided|not available|insufficient evidence/i.test(supplied))
-  return releaseClause+" "+supplied;
+  return releaseClause+" "+supplied+" "+signalClause;
  const artist=str(evidence.artist,"the submitting artist"),title=str(evidence.title,"the submitted recording"),album=str(evidence.album,"");
  const genre=str(evidence.genre,"");
  const audioDetails=[
@@ -263,7 +295,7 @@ export function buildExecutiveSummary(input:AuditReportInput,data:ReportV2Data=a
   data.key.value!==null?"audio-derived key "+data.key.value:null,
   typeof rec(input.sonicDna).loudnessLufs==="number"?"integrated loudness "+Number(rec(input.sonicDna).loudnessLufs).toFixed(1)+" LUFS":null
  ].filter((value):value is string=>Boolean(value));
- return "This A&R review of "+artist+"'s "+title+(album?" from "+album:"")+" combines the supplied recording analysis with source-returned catalogue identity. "+releaseClause+" "+(genre?"The provider-returned genre context is "+genre+". ":"")+"Available audio observations include "+(audioDetails.join(", ")||"the recording descriptors available in this audit")+". The market position is a PROPOSED strategic thesis, not a claim of verified audience demand or commercial performance.";
+ return "This A&R review of "+artist+"'s "+title+(album?" from "+album:"")+" combines the supplied recording analysis with source-returned catalogue identity. "+releaseClause+" "+(genre?"The provider-returned genre context is "+genre+". ":"")+"Available audio observations include "+(audioDetails.join(", ")||"the recording descriptors available in this audit")+". "+signalClause+" The market position is a PROPOSED strategic thesis, not a claim of verified audience demand or commercial performance.";
 }
 export function buildReportSectionTitles(input:AuditReportInput,tier:AuditReportTier="sample"):string[]{
  return buildReportSections(input,adaptReportV2(input),tier).map(page=>page.title);
@@ -287,9 +319,67 @@ export function buildPlaylistProviderStatusLines(input: AuditReportInput): strin
  });
 }
 
+export function buildMandatoryArAnswerLines(input: AuditReportInput): string[] {
+ const intelligence = buildArIntelligence(input);
+ const labels = [
+  "1. Sonic/groove identity: ", "2. Hook/arrangement arc: ", "3. Mix/master readiness: ",
+  "4. Primary/adjacent lanes: ", "5. Audience/territories: ", "6. Catalogue/release status: ",
+  "7. Marketing/rollout: ", "8. Next decision trigger: "
+ ];
+ return intelligence.answers.map((item,index) => {
+  const answer=item.answer.replace(/\\s+/g," ").trim();
+  const limit=index===5?92:86;
+  const compact=answer.length>limit?answer.slice(0,limit-3).trimEnd()+"...":answer;
+  return (labels[index]??item.question+" ")+compact;
+ });
+}
+export function buildVocalCadenceSummaryLine(input: AuditReportInput): string {
+ const signal=buildArIntelligence(input).vocalCadence,findings=signal.findings;
+ const primary=findings.find(line=>/^Vocal-band activity proxy:/.test(line))
+  ??findings.find(line=>/^F0 candidates:/.test(line))
+  ??findings.find(line=>!/^HEURISTIC_SIGNAL_DERIVED/.test(line))
+  ??"Signal descriptors are not determined.";
+ const intervals=signal.vocalActivityIntervals.slice(0,2).map(item=>formatSnapshotTime(item.startSeconds)+"–"+formatSnapshotTime(item.endSeconds));
+ const transitions=signal.detectedTransitions.slice(0,3).map(item=>item.id+" "+formatSnapshotTime(item.timestampSeconds));
+ return "Signal-derived vocal/cadence proxy: "+primary+(intervals.length?" Active intervals: "+intervals.join(", ")+".":"")+(transitions.length?" Transitions: "+transitions.join(", ")+".":"")+" [HEURISTIC_SIGNAL_DERIVED; not proof of human vocals].";
+}
+export function buildSwotSmartLines(input: AuditReportInput): string[] {
+ const intelligence = buildReconciledArIntelligence({
+  evidence: rec(input.evidence), sonicDna: rec(input.sonicDna),
+  assessment: rec(input.assessment), generatedAt: input.generatedAt
+ });
+ const compact = (value: string, max = 68) => value.length > max ? value.slice(0, max - 3).trimEnd() + "..." : value;
+ const swot = intelligence.swot.map(group =>
+  group.category.toUpperCase() + ": " + group.items.map(item => compact(item, 112)).join(" ")
+ );
+ const smart = intelligence.smartActions.map(action =>
+  action.window + " — Specific: " + compact(action.specific, 54)
+  + " Measurable: " + compact(action.measurable, 54)
+  + " Achievable: " + compact(action.achievable, 38)
+  + " Relevant: " + compact(action.relevant, 38)
+  + " Time-bound: " + compact(action.timeBound, 38)
+ );
+ return [...swot, ...smart];
+}
+export function buildCommercialStrategyLines(input: AuditReportInput): string[] {
+ const strategy=rec(input.marketPlacement?.commercialStrategy);
+ if(!Object.keys(strategy).length)return [];
+ const coverage=rec(input.marketPlacement?.isrcCoverage);
+ const primary=rec(strategy.primaryLane);
+ const adjacent=arr(strategy.adjacentLanes).map(value=>str(rec(value).label,"")).filter(Boolean);
+ const kpis=arr(strategy.kpis).map(value=>rec(value));
+ const readiness=arr(strategy.readinessActions).map(value=>str(value,"")).filter(Boolean);
+ return [
+  "Commercial thesis: PROPOSED · "+str(primary.label,"Lane not established")+"; adjacent tests: "+(adjacent.join(", ")||"not yet established")+".",
+  "ISRC/catalogue coverage: "+str(coverage.status,"ISRC_UNRESOLVED")+" · "+str(coverage.catalogPresenceTier,"NO_CATALOG_MATCH")+" · platforms "+(arr(coverage.matchedPlatforms).map(v=>str(v,"")).filter(Boolean).join(", ")||"none verified")+".",
+  "Release lifecycle: "+str(strategy.releaseLifecycle,"UNKNOWN")+" · release-date verdict "+str(strategy.releaseDateVerdict,"UNDETERMINED")+".",
+  ...(readiness.length?["Commercial readiness: "+readiness.slice(0,2).join(" ")]:[]),
+  ...(kpis.length?["Verification gates: "+kpis.slice(0,3).map(item=>str(item.metric,"Metric")+ " — "+str(item.target,"Target")).join("; ")]:[]),
+ ];
+}
 export function buildPositioningLines(input: AuditReportInput): string[] {
  const evidence = rec(input.evidence), assessment = sanitizeAssessmentForEvidence(rec(input.assessment),rec(input.sonicDna),rec(input.evidence));
- const lines: string[] = [];
+ const lines: string[] = [...buildCommercialStrategyLines(input)];
  const genre = str(evidence.genre, "");
  const genreSource = str(evidence.genreSource ?? evidence.genreProvider ?? evidence.genreProvenance, "");
  if (genre) {
@@ -424,16 +514,20 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
    ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
   ]},
-  {title:"A&R positioning",blocks:[],lines:[...buildPositioningLines(input),...buildTempoDiagnosticLines(input)]},
+  {title:"A&R positioning",blocks:[],lines:[...buildMandatoryArAnswerLines(input),buildVocalCadenceSummaryLine(input),...buildPositioningLines(input)]},
   {title:"Strengths, risks and actions",blocks:[],lines:[
-   "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.join("; ")||"No measured strengths supplied."),
-   "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.join("; ")||"No evidenced risks supplied."),
+   "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.slice(0,2).map(value=>value.length>125?value.slice(0,122).trimEnd()+"...":value).join("; ")||"No measured strengths supplied.")+(buildStrengthRiskSummary(input).strengthCount>2?" · "+(buildStrengthRiskSummary(input).strengthCount-2)+" additional documented item(s).":""),
+   "Risks ("+buildStrengthRiskSummary(input).riskCount+" documented): "+(buildStrengthRiskSummary(input).risks.slice(0,2).map(value=>value.length>125?value.slice(0,122).trimEnd()+"...":value).join("; ")||"No evidenced risks supplied.")+(buildStrengthRiskSummary(input).riskCount>2?" · "+(buildStrengthRiskSummary(input).riskCount-2)+" additional documented item(s).":""),
+
    "Priorities: "+arr(rec(a.releaseStrategy).priorities).map(v=>str(v)).join("; ")||"No priorities supplied.",
    "Readiness: "+str(a.releaseReadiness,"Pending — no supplied readiness evidence."),
+   ...buildCommercialStrategyLines(input).slice(3,5),
+   ...buildSwotSmartLines(input),
    ...(data.moments??[]).map(m=>"Flagged moment "+m.timestampSeconds.toFixed(2)+"s · "+m.tag+" · "+m.title+" — "+m.note)
   ]},
   {title:"Release and promotion plan",blocks:[],lines:[
    buildReleaseFramingLine(input),
+   ...buildCommercialStrategyLines(input).slice(2,3),
    "General guidance: "+str(a.industryPractice,"No industry guidance supplied."),
    ...(arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v,"")).filter(Boolean).length?["Content concepts: "+arr(rec(a.promotionPlan).contentIdeas).map(v=>str(v,"")).filter(Boolean).join("; ")]:[]),
    ...(arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v,"")).filter(Boolean).length?["Playlist categories to investigate: "+arr(rec(a.promotionPlan).playlistCategories).map(v=>str(v,"")).filter(Boolean).join("; ")]:[]),
@@ -450,6 +544,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    const candidate=/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(rendered)?fallback:sanitizePublicReportLine(rendered);
    return {label,value:candidate||fallback};
   };
+  const compact=(value:unknown,max=220):string=>{const clean=str(value,"");if(clean.length<=max)return clean;const shortened=clean.slice(0,max-1).replace(/\s+\S*$/,"").trimEnd();return (shortened||clean.slice(0,max-1).trimEnd())+"…";};
   const list=(label:string,value:unknown[],fallback="Not supplied in the assessment."):Block=>{
    const items=value.map(item=>sanitizePublicReportLine(str(item,""))).filter(Boolean);
    return {label,value:items.join("\n\n")||fallback};
@@ -470,23 +565,39 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   const days90Plan=/not supplied|not provided|fixture timeline|not a confirmed release calendar/i.test(days90Text)?buildDays6190Plan(input):days90Text;
   // The five full-report narrative sections follow the seven core analytical pages.
   pages.push(
-   {title:"Production and arrangement guidance",blocks:[paragraph("Production and arrangement guidance",a.productionArrangementGuidance),list("Human listening checks",arr(a.listeningChecks))],kind:"narrative"},
+   {title:"Production and arrangement guidance",blocks:[
+    paragraph("Production and arrangement guidance",a.productionArrangementGuidance),
+    paragraph("Signal-derived vocal and arrangement observations",buildArrangementGuidanceSummary(input),"No reliable vocal or structural signal analysis was available."),
+    list("Human listening checks",[...arr(a.listeningChecks).map(value=>str(value,"")).filter(Boolean),...buildDerivedListeningChecks(input)])
+   ],kind:"narrative"},
    {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod)],kind:"narrative"},
    {title:"Promotion and campaign strategy",blocks:[
-    historicalPhase(campaignLabels.preRelease,promotion.preRelease,isPostRelease?"The pre-release stage is closed for the determined "+releaseStatus.date+" release; do not schedule pre-release actions as upcoming.":"No pre-release actions were supplied."),
-    historicalPhase(campaignLabels.releaseWindow,promotion.releaseWindow,isPostRelease?"The original release window has passed; use current activity as post-release reactivation.":"No release-window actions were supplied."),
-    paragraph(campaignLabels.postRelease,promotion.postRelease,"Post-release reactivation: refresh the source-backed pitch pack, follow up with responsive curators, publish approved creator assets and record only attributable platform activity."),
-    list("Content concepts",arr(promotion.contentIdeas)),list("Pitching angles",arr(promotion.pitchingAngles)),
-    list("DSP playlist archetypes to investigate",arr(promotion.playlistCategories)),paragraph("Industry practice",promotion.industryPractice)
+    paragraph("ISRC-anchored catalogue coverage",compact(buildCommercialStrategyLines(input).slice(1,2).join(" "),210)),
+    paragraph("Audience and short-form strategy",[
+      ...arr(rec(input.marketPlacement?.commercialStrategy).audienceContexts).slice(0,1),
+      ...arr(rec(input.marketPlacement?.commercialStrategy).shortFormAngles).slice(0,2).map(value=>compact(value,130)),
+    ].map(value=>compact(value,130)).filter(Boolean).join(" ")),
+    list("Playlist and curator pitch hooks",arr(rec(input.marketPlacement?.commercialStrategy).playlistPitchHooks).slice(0,2).map(value=>compact(value,120))),
+    historicalPhase(campaignLabels.preRelease,isPostRelease?"Closed — the determined "+releaseStatus.date+" release has already passed; this is historical context, not an upcoming action.":promotion.preRelease,"No pre-release actions were supplied."),
+    historicalPhase(campaignLabels.releaseWindow,isPostRelease?"Passed — focus current activity on post-release reactivation.":promotion.releaseWindow,"No release-window actions were supplied."),
+    paragraph(campaignLabels.postRelease,isPostRelease?[compact(promotion.postRelease,210),"PROPOSED continuation: re-frame the human-confirmed hook; create rights-approved short-form and visual cutdowns; reconcile ISRC/UPC, version and credits; re-pitch lane-matched curators; schedule one catalyst drop; measure attributable response only."].filter(Boolean).join(" "):compact(promotion.postRelease,360),"Post-release reactivation: refresh the source-backed pitch pack, follow up with responsive curators, publish approved creator assets and record only attributable platform activity."),
+    list("Content concepts",arr(promotion.contentIdeas).slice(0,3).map(value=>compact(value,100))),list("Pitching angles",arr(promotion.pitchingAngles).slice(0,3).map(value=>compact(value,100))),
+    list("DSP playlist archetypes to investigate",arr(promotion.playlistCategories).slice(0,3).map(value=>compact(value,70))),paragraph("Industry practice",compact(promotion.industryPractice,260))
    ],kind:"narrative"},
    {title:"Label and partner fit",blocks:[
     paragraph("Partner profile hypothesis",partner.partnerProfile),list("Criteria to demonstrate",arr(partner.criteriaToDemonstrate)),
-    paragraph("Rights and submission diligence",partner.diligenceBeforeContact),paragraph("Industry practice",partner.industryPractice)
+    paragraph("Commercial sync/partner gate",str(rec(rec(input.marketPlacement?.commercialStrategy).syncFit).rationale,"Rights, master approval and a defined partner brief must be verified.")),
+    list("Commercial partner fit criteria",arr(rec(input.marketPlacement?.commercialStrategy).partnerFitCriteria).slice(0,2)),
+    paragraph("Rights and submission diligence",partner.diligenceBeforeContact),paragraph("Industry practice",[
+      ...arr(rec(input.marketPlacement?.commercialStrategy).industryPractice).slice(0,1).map(value=>str(value,"")),
+      str(partner.industryPractice,""),
+    ].filter(Boolean).join(" "))
    ],kind:"narrative"},
    {title:"30 / 60 / 90-day execution plan",blocks:[
     postReleasePhase(campaignLabels.first30,execution.days30,executionFallback("reconcile ISRC, UPC, artist/title spelling, EP-versus-album release mapping, rights splits and approved master; prepare a post-release positioning brief and verify the first curator/creator target list")),
     postReleasePhase(campaignLabels.days3160,execution.days60,executionFallback("run a controlled post-release reactivation with approved short-form excerpts, follow up on curator responses, refresh visual assets and record only source-attributed platform and campaign observations")),
-    postReleasePhase(campaignLabels.days6190,days90Plan,buildDays6190Plan(input))
+    postReleasePhase(campaignLabels.days6190,days90Plan,buildDays6190Plan(input)),
+    list("Commercial verification gates",arr(rec(input.marketPlacement?.commercialStrategy).kpis).slice(0,4).map(value=>{const item=rec(value);return str(item.metric,"Metric")+": "+str(item.target,"Target")+" — "+str(item.verification,"Verify with source records");}))
    ],kind:"narrative"}
   );
   // Deep-dive pages are evidence-gated; do not emit pages that contain only missing-data placeholders.
@@ -510,26 +621,32 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
 }
 
 export function metricCardValueLayout(label:string):{fontSize:number;lineHeight:number;maxLines:number;cardHeight:number}{
- if(label.toUpperCase()==="LOUDNESS / SIGNAL")return {fontSize:7.2,lineHeight:8.5,maxLines:4,cardHeight:104};
- return {fontSize:14,lineHeight:17,maxLines:2,cardHeight:104};
+ if(label.toUpperCase()==="LOUDNESS / SIGNAL")return {fontSize:7.2,lineHeight:8.5,maxLines:4,cardHeight:SNAPSHOT_METRIC_CARD_HEIGHT};
+ return {fontSize:14,lineHeight:17,maxLines:2,cardHeight:SNAPSHOT_METRIC_CARD_HEIGHT};
 }
 function drawMetricCard(page:PDFPage,x:number,top:number,width:number,block:Block,fonts:Fonts):number{
- const pad=12,layout=metricCardValueLayout(block.label),bodyWidth=width-pad*2;
- const valueLines=(layout.fontSize<10
-  ?block.value.split(" · ").flatMap(part=>wrap(part,fonts.bold,layout.fontSize,bodyWidth))
-  :wrap(block.value,fonts.bold,layout.fontSize,bodyWidth)).slice(0,layout.maxLines);
- const provenanceLines=wrap(block.provenance??"From uploaded recording",fonts.regular,7,bodyWidth).slice(0,2);
- const valueTop=top-39;
- const provenanceTop=top-79;
- // Metric cards share one fixed footprint. Loudness uses a compact four-line
- // stack, so it cannot grow taller than the adjacent tempo/key cards.
- const height=layout.cardHeight;
- const y=top-height;
+ const pad=12,layout=metricCardValueLayout(block.label),bodyWidth=width-pad*2,height=layout.cardHeight,y=top-height;
+ const isLoudness=block.label.toUpperCase()==="LOUDNESS / SIGNAL",parts=block.value.split(" · ");
  page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:y+height-3,width,height:3,color:C.gold});
  page.drawText(block.label,{x:x+pad,y:top-17,size:7,font:fonts.bold,color:C.muted});
- valueLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:valueTop-index*layout.lineHeight,size:layout.fontSize,font:fonts.bold,color:C.ink}));
- provenanceLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:provenanceTop-index*9,size:7,font:fonts.regular,color:C.muted}));
+ if(isLoudness){
+  page.drawText(parts[0]??"NOT ANALYSED",{x:x+pad,y:top-48,size:12,font:fonts.bold,color:C.ink});
+  parts.slice(1,4).forEach((part,index)=>{
+   const col=index%2,row=Math.floor(index/2);
+   drawWrapped(page,part,x+pad+col*(bodyWidth/2+2),top-66-row*11,bodyWidth/2-4,fonts.regular,5.7,C.muted,6.3);
+  });
+ }else{
+  const valueLines=wrap(block.value,fonts.bold,block.label==="TEMPO"?14:10.5,bodyWidth).slice(0,2);
+  valueLines.forEach((line,index)=>page.drawText(line,{x:x+pad,y:top-45-index*13,size:block.label==="TEMPO"?14:10.5,font:fonts.bold,color:C.ink}));
+  if(block.confidence){
+   const badgeWidth=fonts.bold.widthOfTextAtSize(block.confidence,5.2)+10,badgeX=x+width-pad-badgeWidth;
+   const fill=block.confidence==="CONFIRMED"?C.teal:block.confidence==="CANDIDATE"?C.amber:C.paper;
+   page.drawRectangle({x:badgeX,y:top-27,width:badgeWidth,height:10,color:fill,borderColor:C.line,borderWidth:.35});
+   page.drawText(block.confidence,{x:badgeX+5,y:top-23.8,size:5.2,font:fonts.bold,color:block.confidence==="NOT ANALYSED"?C.muted:C.white});
+  }
+ }
+ drawWrapped(page,block.provenance??"Measured from the uploaded recording",x+pad,top-91,bodyWidth,fonts.regular,6.3,C.muted,7);
  return height;
 }
 export function normalizeCircleNote(value:string):string{
@@ -540,11 +657,11 @@ export function normalizeCircleNote(value:string):string{
  return enharmonic[note]??note;
 }
 function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Data,fonts:Fonts,top:number):number{
- const x=M,width=W-2*M,height=154,bottom=top-height;
+ const x=M,width=W-2*M,height=SNAPSHOT_KEY_MAP_HEIGHT,bottom=top-height;
  page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
  page.drawText("CIRCLE OF FIFTHS · SONG KEY MAP",{x:x+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
- const order=["C","G","D","A","E","B","F#","C#","G#","D#","A#","F"];
+ const order=["F#","B","E","A","D","G","C","F","A#","D#","G#","C#"];
  const cx=x+93,cy=top-84,radius=48;
  const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
  const resolution=rec(input.tonalResolution??harmonic.tonalResolution??rec(input.sonicDna).tonalResolution);
@@ -596,63 +713,173 @@ function drawCompactSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts,top:num
  });
  return height;
 }
+function formatSnapshotTime(seconds:number):string{
+ const safe=Math.max(0,Math.floor(Number.isFinite(seconds)?seconds:0));
+ return Math.floor(safe/60)+":"+String(safe%60).padStart(2,"0");
+}
+function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:AuditReportInput):number{
+ const audio=rec(input.sonicDna),analysis=rec(audio.vocalArrangementAnalysis??audio.vocalFeatures);
+ const sections=arr(analysis.inferredSections).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const transitions=arr(analysis.detectedTransitions).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds));
+ const intervals=arr(analysis.vocalActivityIntervals).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const duration=finite(audio.durationSeconds)&&audio.durationSeconds>0?audio.durationSeconds:Math.max(1,...sections.map(item=>Number(item.endSeconds)));
+ const presence=finite(analysis.vocalPresencePct)?Math.max(0,Math.min(100,analysis.vocalPresencePct)):0;
+ const vocalDetected=analysis.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0;
+ const pitch=finite(analysis.vocalMedianF0Hz)?analysis.vocalMedianF0Hz:null;
+ const range=rec(analysis.vocalF0RangeHz),low=finite(range.p10)?range.p10:null,high=finite(range.p90)?range.p90:null;
+ const energy=finite(analysis.vocalBandEnergyDbfs)?analysis.vocalBandEnergyDbfs:null;
+ const x=M,width=W-2*M,height=SNAPSHOT_VOCAL_MODULE_HEIGHT,bottom=top-height,pad=10,left=x+pad,right=x+width-pad,barWidth=right-left;
+ page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
+ page.drawText("VOCAL ANALYSIS, SECTIONS AND TRANSITIONS",{x:x+pad,y:top-16,size:7,font:fonts.bold,color:C.gold});
+ const status=vocalDetected?"• VOCALS DETECTED · INFERRED FROM UPLOADED MASTER SIGNAL":"• INSTRUMENTAL / LOW VOCAL ACTIVITY";
+ const statusWidth=Math.min(width-185,fonts.bold.widthOfTextAtSize(status,5.1)+10);
+ page.drawRectangle({x:x+pad,y:top-32,width:statusWidth,height:11,color:vocalDetected?C.amber:C.paper,borderColor:C.line,borderWidth:.35});
+ page.drawText(status,{x:x+pad+5,y:top-28.5,size:5.1,font:fonts.bold,color:vocalDetected?C.white:C.muted});
+ page.drawText("SIGNAL-DERIVED FROM UPLOADED MASTER",{x:right-164,y:top-28.5,size:5.2,font:fonts.bold,color:C.muted});
+ const timelineTop=top-43;
+ page.drawText("SONG ARRANGEMENT SECTIONS, TRANSITIONS AND VOCAL ACTIVITY",{x:left,y:timelineTop,size:5.8,font:fonts.bold,color:C.ink});
+ page.drawText("INFERRED · PROVISIONAL LABELS",{x:right-142,y:timelineTop,size:5.1,font:fonts.bold,color:C.amber});
+ const barY=timelineTop-30;
+ const colorFor=(label:string)=>{
+  const value=label.toLowerCase();
+  if(/intro|outro/.test(value))return C.teal;
+  if(/pre-chorus/.test(value))return C.gold;
+  if(/chorus/.test(value))return C.coral;
+  if(/verse/.test(value))return C.teal;
+  if(/bridge/.test(value))return C.muted;
+  if(/instrumental|loop|solo/.test(value))return C.muted;
+  if(/breakdown|drop/.test(value))return C.amber;
+  return C.label;
+ };
+ page.drawRectangle({x:left,y:barY,width:barWidth,height:14,color:C.paper,borderColor:C.line,borderWidth:.4});
+ if(sections.length){
+  sections.forEach((section,index)=>{
+   const start=Math.max(0,Number(section.startSeconds)),end=Math.min(duration,Number(section.endSeconds));
+   const bx=left+start/duration*barWidth,bw=Math.max(1,(end-start)/duration*barWidth);
+   page.drawRectangle({x:bx,y:barY,width:bw,height:14,color:colorFor(str(section.label,"Section")),borderColor:C.white,borderWidth:.25});
+   if(bw>24)page.drawText(String(section.label??("Section "+(index+1))).slice(0,16),{x:bx+2,y:barY+4,size:4.7,font:fonts.bold,color:C.white});
+  });
+ }else page.drawText("Section boundaries not confidently inferred",{x:left+5,y:barY+4,size:5,font:fonts.italic,color:C.muted});
+ page.drawText("0:00",{x:left,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
+ page.drawText(formatSnapshotTime(duration),{x:right-22,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
+ transitions.slice(0,16).forEach((item,index)=>{
+  const tx=left+Math.max(0,Math.min(duration,Number(item.timestampSeconds)))/duration*barWidth;
+  page.drawLine({start:{x:tx,y:barY-1},end:{x:tx,y:barY+20},color:C.ink,thickness:.6});
+  page.drawText(String(item.id??("T"+(index+1))),{x:Math.max(left,Math.min(right-12,tx-4)),y:barY+16,size:4.5,font:fonts.bold,color:C.ink});
+ });
+ const vocalY=barY-20;
+ page.drawText("VOCAL ACTIVITY",{x:left,y:vocalY+6,size:4.9,font:fonts.bold,color:C.muted});
+ page.drawRectangle({x:left+78,y:vocalY,width:barWidth-78,height:5,color:C.paper,borderColor:C.line,borderWidth:.4});
+ intervals.forEach(interval=>{
+  const start=Math.max(0,Number(interval.startSeconds)),end=Math.min(duration,Number(interval.endSeconds));
+  if(end<=start)return;
+  page.drawRectangle({x:left+78+start/duration*(barWidth-78),y:vocalY,width:Math.max(1,(end-start)/duration*(barWidth-78)),height:5,color:C.teal});
+ });
+ const intervalText=intervals.length
+  ?intervals.slice(0,5).map(item=>formatSnapshotTime(Number(item.startSeconds))+"–"+formatSnapshotTime(Number(item.endSeconds))).join(" · ")+(intervals.length>5?" · +"+(intervals.length-5)+" more":"")
+  :"No active intervals · "+String(analysis.analysisReason??"Low vocal-band activity or insufficient PCM quality.").slice(0,118);
+ drawWrapped(page,intervalText,left,vocalY-7,barWidth,fonts.regular,4.7,C.muted,5.3);
+ const legend=[["Intro/Outro",C.teal],["Verse",C.teal],["Pre-chorus",C.gold],["Chorus",C.coral],["Bridge",C.muted],["Instrumental/solo",C.muted],["Breakdown/drop",C.amber],["Vocal activity",C.teal]] as Array<[string,typeof C.teal]>;
+ let legendX=left;
+ legend.forEach(([label,color])=>{
+  page.drawRectangle({x:legendX,y:vocalY-20,width:5,height:5,color});
+  page.drawText(label,{x:legendX+7,y:vocalY-19,size:4.35,font:fonts.regular,color:C.muted});
+  legendX+=Math.min(65,fonts.regular.widthOfTextAtSize(label,4.35)+13);
+  if(legendX>right-58)legendX=right-58;
+ });
+ const calloutTop=vocalY-31;
+ page.drawText("TRANSITION CALLOUT GRID",{x:left,y:calloutTop,size:5.3,font:fonts.bold,color:C.ink});
+ const calloutWidth=(barWidth-12)/3,calloutHeight=23,calloutY=calloutTop-7-calloutHeight;
+ if(transitions.length){
+  transitions.slice(0,3).forEach((item,index)=>{
+   const cx=left+index*(calloutWidth+6);
+   page.drawRectangle({x:cx,y:calloutY,width:calloutWidth,height:calloutHeight,color:C.paper,borderColor:C.line,borderWidth:.4});
+   const label=String(item.id??("T"+(index+1)))+" "+formatSnapshotTime(Number(item.timestampSeconds))+" "+String(item.fromLabel??"Section")+" → "+String(item.toLabel??"Section");
+   drawWrapped(page,label,cx+4,calloutTop-14,calloutWidth-8,fonts.bold,4.6,C.ink,5);
+   drawWrapped(page,"Trigger: "+String(item.reason??"Spectral change"),cx+4,calloutTop-21,calloutWidth-8,fonts.regular,4.2,C.muted,4.6);
+  });
+ }else{
+  page.drawText("No discrete transition trigger exceeded the provisional novelty, energy, chroma or vocal-state thresholds.",{x:left+4,y:calloutTop-19,size:4.8,font:fonts.italic,color:C.muted});
+ }
+ drawWrapped(page,"Label basis: windowed spectral-flux novelty, RMS steps, chroma movement and vocal-band onset/offset; labels are provisional.",left,calloutTop-38,barWidth,fonts.italic,4.4,C.muted,4.8);
+ const kpiTop=calloutTop-47,kpiGap=6,kpiW=(barWidth-kpiGap*3)/4,kpiH=30;
+ const kpis=[
+  ["VOCAL PRESENCE",presence.toFixed(1)+"%"],
+  ["VOCAL-BAND ENERGY",energy===null?"NOT ANALYSED":energy.toFixed(1)+" dBFS"],
+  ["MEDIAN PITCH (F0)",pitch===null?"NOT ANALYSED":pitch.toFixed(1)+" Hz"],
+  ["ACTIVITY INTERVALS",String(intervals.length)+" timestamped"],
+ ];
+ kpis.forEach((item,index)=>{
+  const kx=left+index*(kpiW+kpiGap),ky=kpiTop-kpiH;
+  page.drawRectangle({x:kx,y:ky,width:kpiW,height:kpiH,color:C.paper,borderColor:C.line,borderWidth:.45});
+  page.drawText(item[0],{x:kx+4,y:kpiTop-9,size:4.6,font:fonts.bold,color:C.muted});
+  drawWrapped(page,item[1],kx+4,kpiTop-21,kpiW-8,fonts.bold,6.2,C.ink,6.8);
+ });
+ const rangeTitleY=kpiTop-kpiH-12;
+ page.drawText("PITCH RANGE (F0 CANDIDATES, 70–500 Hz SCALE)",{x:left,y:rangeTitleY,size:5.2,font:fonts.bold,color:C.ink});
+ const rangeX=left,rangeW=barWidth,rangeBarY=rangeTitleY-10;
+ page.drawRectangle({x:rangeX,y:rangeBarY,width:rangeW,height:6,color:C.paper,borderColor:C.line,borderWidth:.4});
+ if(low!==null&&high!==null){
+  const lo=Math.max(70,Math.min(500,low)),hi=Math.max(lo,Math.min(500,high));
+  page.drawRectangle({x:rangeX+(lo-70)/430*rangeW,y:rangeBarY,width:Math.max(1,(hi-lo)/430*rangeW),height:6,color:C.amber});
+ }
+ if(pitch!==null){
+  const px=rangeX+(Math.max(70,Math.min(500,pitch))-70)/430*rangeW;
+  page.drawLine({start:{x:px,y:rangeBarY-2},end:{x:px,y:rangeBarY+9},color:C.coral,thickness:1});
+ }
+ page.drawText("70 Hz",{x:rangeX,y:rangeBarY-9,size:4.5,font:fonts.regular,color:C.muted});
+ page.drawText(pitch===null?"F0 candidate range not analysed":"Median "+pitch.toFixed(1)+" Hz",{x:rangeX+rangeW/2-32,y:rangeBarY-9,size:4.5,font:fonts.bold,color:C.muted});
+ page.drawText("500 Hz",{x:rangeX+rangeW-24,y:rangeBarY-9,size:4.5,font:fonts.regular,color:C.muted});
+ const footerY=bottom+8;
+ drawWrapped(page,"WHAT IT SHOWS: Vocal-band energy locations, candidate pitch region and inferred section transitions from the uploaded master.",left,footerY+15,barWidth,fonts.regular,4.7,C.ink,5.1);
+ drawWrapped(page,"WHAT IT DOES NOT SHOW: Exact labels, singing vs rap, lead vs backing, singer count, lyrics, delivery quality or audience response.",left,footerY+7,barWidth,fonts.italic,4.5,C.muted,4.9);
+ return height;
+}
+export function snapshotPage3LayoutContract():{
+ pageNumber:number;metricHeight:number;keyMapHeight:number;vocalModuleHeight:number;overviewHeight:number;
+ vocalTop:number;vocalBottom:number;overviewTop:number;overviewBottom:number;bottomMargin:number;
+}{
+ const pageTop=H-92,metricHeight=SNAPSHOT_METRIC_CARD_HEIGHT,keyMapHeight=SNAPSHOT_KEY_MAP_HEIGHT;
+ const vocalModuleHeight=SNAPSHOT_VOCAL_MODULE_HEIGHT,overviewHeight=SNAPSHOT_OVERVIEW_HEIGHT;
+ const keyMapTop=pageTop-metricHeight-12;
+ const vocalTop=keyMapTop-keyMapHeight-12,vocalBottom=vocalTop-vocalModuleHeight;
+ const overviewTop=vocalBottom-10-8,overviewBottom=overviewTop-overviewHeight;
+ return {pageNumber:3,metricHeight,keyMapHeight,vocalModuleHeight,overviewHeight,vocalTop,vocalBottom,overviewTop,overviewBottom,bottomMargin:overviewBottom};
+}
 function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditReportInput){
  const blocks=metricBlock(data,input),gap=10,width=(W-2*M-gap*2)/3,top=H-92;
- const metricHeight=Math.max(...blocks.map((b,i)=>drawMetricCard(page,M+i*(width+gap),top,width,b,fonts)));
+ const metricHeight=Math.max(...blocks.map((b)=>drawMetricCard(page,M+blocks.indexOf(b)*(width+gap),top,width,b,fonts)));
  let y=top-metricHeight-12;
  const keyMapHeight=drawCircleOfFifths(page,input,data,fonts,y);
  y-=keyMapHeight+12;
- if(data.structure){
-  const height=116;card(page,M,y,W-2*M,"Structure",[],fonts,{height,accent:C.gold});
-  const left=M+14,barY=y-63,barW=W-2*M-28,total=Math.max(...data.structure.map(s=>s.endSeconds));  const palette=[C.teal,C.gold,C.amber,C.coral];
-  page.drawText("TRACK STRUCTURE · ELAPSED TIME",{x:left,y:barY+25,size:6,font:fonts.bold,color:C.muted});
-  data.structure.forEach((s,i)=>{const x=left+(s.startSeconds/total)*barW,w=barW*(s.endSeconds-s.startSeconds)/total;page.drawRectangle({x,y:barY,width:w,height:18,color:palette[i%palette.length]});page.drawText(String(s.index),{x:x+w/2-2,y:barY+5,size:6,font:fonts.bold,color:C.white});});
-  page.drawText("0s",{x:left,y:barY-12,size:6,font:fonts.regular,color:C.muted});
-  page.drawText(total.toFixed(0)+"s",{x:left+barW-18,y:barY-12,size:6,font:fonts.regular,color:C.muted});
-  let lineY=barY-28;data.structure.forEach((s,i)=>{const label=s.index+" · "+s.label+"  "+s.startSeconds.toFixed(1)+"–"+s.endSeconds.toFixed(1)+"s";const col=i%2;drawWrapped(page,label,M+14+col*250,lineY-Math.floor(i/2)*12,238,fonts.regular,6.7,C.muted,8);});
-  y-=height+14;
- }
- if(data.energySeries){
-  const h=178,topY=y;page.drawRectangle({x:M,y:topY-h,width:W-2*M,height:h,color:C.white,borderColor:C.line,borderWidth:.7});
-  page.drawText("ENERGY THROUGH THE TRACK",{x:M+12,y:topY-16,size:7,font:fonts.bold,color:C.gold});
-  page.drawText("Relative level",{x:M+12,y:topY-29,size:6,font:fonts.italic,color:C.muted});
-  page.drawText("Track time",{x:W-M-126,y:topY-h+8,size:6,font:fonts.italic,color:C.muted});
-  const left=M+28,right=W-M-16,plotTop=topY-42,plotBottom=topY-h+32;
-  const vals=data.energySeries.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),span=max-min||1;
-  for(let g=0;g<=4;g++){const gy=plotBottom+(plotTop-plotBottom)*g/4;page.drawLine({start:{x:left,y:gy},end:{x:right,y:gy},color:C.line,thickness:.5});}
-  const t0=data.energySeries[0].timeSeconds,t1=data.energySeries[data.energySeries.length-1].timeSeconds,dt=t1-t0||1;
-  for(let i=1;i<data.energySeries.length;i++){const a=data.energySeries[i-1],b=data.energySeries[i];page.drawLine({start:{x:left+(a.timeSeconds-t0)/dt*(right-left),y:plotBottom+(a.value-min)/span*(plotTop-plotBottom)},end:{x:left+(b.timeSeconds-t0)/dt*(right-left),y:plotBottom+(b.value-min)/span*(plotTop-plotBottom)},color:C.teal,thickness:2.2});}
-  const peak=data.energySeries.reduce((a,b)=>b.value>a.value?b:a),dip=data.energySeries.reduce((a,b)=>b.value<a.value?b:a);
-  page.drawCircle({x:left+(peak.timeSeconds-t0)/dt*(right-left),y:plotBottom+(peak.value-min)/span*(plotTop-plotBottom),size:4,color:C.teal});
-  page.drawCircle({x:left+(dip.timeSeconds-t0)/dt*(right-left),y:plotBottom+(dip.value-min)/span*(plotTop-plotBottom),size:4,color:C.coral});
-  const peakX=left+(peak.timeSeconds-t0)/dt*(right-left),dipX=left+(dip.timeSeconds-t0)/dt*(right-left);
-  const peakLabelX=Math.max(left,Math.min(right-42,peakX-21)),dipLabelX=Math.max(left,Math.min(right-38,dipX-19));
-  const sameRegion=Math.abs(peakLabelX-dipLabelX)<46;
-  page.drawText("Peak "+peak.timeSeconds.toFixed(1)+"s",{x:peakLabelX,y:plotBottom-13,size:6,font:fonts.bold,color:C.teal});
-  page.drawText("Dip "+dip.timeSeconds.toFixed(1)+"s",{x:dipLabelX,y:plotBottom-(sameRegion?24:13),size:6,font:fonts.bold,color:C.coral});
-  y-=h+12;
- }
- const sonic=rec(input.sonicDna);
- const rows:Array<[string,string]>=[
-  ["Track length",typeof sonic.durationSeconds==="number"&&Number.isFinite(sonic.durationSeconds)?Math.floor(sonic.durationSeconds/60)+" min "+Math.round(sonic.durationSeconds%60)+" sec":""],
-  ["Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):""],
-  ["Song key",buildRecordingOverviewKeyLabel(data)],
-  ["Tempo",buildCoverTempoLabel(data,input)]
- ].filter((entry):entry is [string,string]=>Boolean(entry[1]));
- if(rows.length){
-  const panelHeight=38+Math.ceil(rows.length/2)*23+14,top=y-8,bottom=top-panelHeight;
-  if(bottom>=72){
-   page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
-   page.drawText("RECORDING OVERVIEW",{x:M+12,y:top-16,size:7,font:fonts.bold,color:C.gold});
-   rows.forEach(([label,value],index)=>{
-    const col=index%2,row=Math.floor(index/2),x=M+12+col*250,yy=top-34-row*23;
-    page.drawText(label,{x,y:yy,size:6.4,font:fonts.regular,color:C.muted});
-    drawWrapped(page,value,x+112,yy,120,fonts.bold,6.4,C.ink,7);
-   });
-   page.drawText("Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.",{x:M+12,y:bottom+6,size:5.8,font:fonts.italic,color:C.muted});
-   y=bottom-12;
-  }
- }
+ const vocalHeight=drawVocalArrangementCard(page,y,fonts,input);
+ y-=vocalHeight+10;
+ const sonic=rec(input.sonicDna),vocal=rec(sonic.vocalArrangementAnalysis??sonic.vocalFeatures);
+ const duration=finite(sonic.durationSeconds)?sonic.durationSeconds:null;
+ const presence=finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:0;
+ const sections=arr(vocal.inferredSections),transitions=arr(vocal.detectedTransitions);
+ const keyRaw=buildRecordingOverviewKeyLabel(data),keyLabel=data.key.value!==null?"Confirmed: "+keyRaw:/^Provisional:/i.test(keyRaw)?keyRaw:keyRaw==="Unavailable"?"Unavailable":"Provisional: "+keyRaw;
+ const tempoRaw=buildCoverTempoLabel(data,input).replace(/\s*·\s*CANDIDATE$/i,"").replace(/\s*·\s*CONFIRMED$/i,"");
+ const tempoLabel=tempoRaw==="Not determined"?"Not analysed":tempoRaw+(data.tempo.value===null?" CANDIDATE":" CONFIRMED");
+ const vocalStatus=vocal.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0?"Detected (inferred)":"Minimal / Instrumental";
+ const rows:Array<[string,string,string,string]>=[
+  ["Track length",duration===null?"Not analysed":Math.floor(duration/60)+" min "+Math.round(duration%60)+" sec","Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):"Not analysed"],
+  ["Song key",keyLabel,"Tempo",tempoLabel],
+  ["Vocals",vocalStatus,"Vocal activity",presence.toFixed(1)+"% of track"],
+  ["Sections",sections.length+" INFERRED","Transitions",transitions.length+" detected"]
+ ];
+ const panelHeight=SNAPSHOT_OVERVIEW_HEIGHT,panelTop=y-8,bottom=panelTop-panelHeight;
+ page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
+ page.drawText("RECORDING OVERVIEW",{x:M+12,y:panelTop-14,size:7,font:fonts.bold,color:C.gold});
+ rows.forEach((row,index)=>{
+  const yy=panelTop-30-index*16;
+  page.drawText(row[0],{x:M+12,y:yy,size:5.7,font:fonts.regular,color:C.muted});
+  drawWrapped(page,row[1],M+82,yy,142,fonts.bold,5.8,C.ink,6.5);
+  page.drawText(row[2],{x:M+260,y:yy,size:5.7,font:fonts.regular,color:C.muted});
+  drawWrapped(page,row[3],M+334,yy,155,fonts.bold,5.8,C.ink,6.5);
+ });
+ page.drawText("Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.",{x:M+12,y:bottom+5,size:5.4,font:fonts.italic,color:C.muted});
 }
 function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  const axes=data.sonicAxes!;const names=Object.keys(axes) as Array<keyof typeof axes>,cx=170,cy=555,r=118;
@@ -821,7 +1048,7 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
 export async function generateAuditReportV2(source:AuditReportInput,tier:AuditReportTier="sample"):Promise<Uint8Array>{
  const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf),form=pdf.getForm();
- const pages=buildReportSections(input,data,tier).map(spec=>({...spec,lines:sanitizePublicReportLines(spec.lines??[]),blocks:spec.blocks.map(block=>({...block,value:sanitizePublicReportLine(block.value),provenance:sanitizePublicReportLine(block.provenance??"")||"From uploaded recording",confidence:undefined}))})),total=pages.length;
+ const pages=buildReportSections(input,data,tier).map(spec=>({...spec,lines:sanitizePublicReportLines(spec.lines??[]),blocks:spec.blocks.map(block=>({...block,value:sanitizePublicReportLine(block.value),provenance:sanitizePublicReportLine(block.provenance??"")||(spec.kind==="narrative"?"":"From uploaded recording"),confidence:undefined}))})),total=pages.length;
  if((tier==="sample"&&pages.length!==8)||(tier==="full"&&pages.length<13))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,tier==="full"&&index===0?"Full A&R report":spec.title,fonts);
@@ -916,6 +1143,14 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     page.drawText(String(i+2).padStart(2,"0"),{x,y,size:7,font:fonts.bold,color:C.gold});
     drawWrapped(page,p.title,x+28,y,205,fonts.regular,6.6,C.ink,7.4);
    });
+  }else if(spec.kind==="narrative"){
+   let y=H-92;
+   const narrativeBlocks=spec.title==="Promotion and campaign strategy"?spec.blocks.map(b=>({...b,value:b.value.length>200?b.value.slice(0,197).replace(/\\s+\\S*$/,"").trimEnd()+"…":b.value})):spec.blocks;
+   for(const b of narrativeBlocks){
+    const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:C.gold,provenance:b.provenance});
+    y-=h+6;
+   }
+   if(y<76)throw new Error("Report v2 narrative page content exceeds safe footer clearance: "+spec.title);
   }else if(spec.kind==="axes"||spec.kind==="comparables"||spec.kind==="moments"){
    let y=H-92;for(const b of spec.blocks){const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:spec.kind==="moments"?(b.label.includes("Risk")?C.coral:C.teal):C.gold,provenance:b.provenance});y-=h+8;}
   }else{
