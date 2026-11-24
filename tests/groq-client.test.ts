@@ -1040,7 +1040,11 @@ describe("Groq narrative token projection regression", () => {
 
 describe("nine-section report-readiness integration", () => {
   it("runs every assessment section and renders the report-ready sample PDF", async () => {
-    const { mock } = fetchMock();
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
     const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
       .assess({ evidence: { artist: "Fixture Artist", title: "Fixture Track", fixture: true }, sonicDna: null });
     const groups = new Set(mock.mock.calls.map(call => {
