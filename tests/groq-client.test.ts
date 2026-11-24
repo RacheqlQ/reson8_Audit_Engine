@@ -213,9 +213,23 @@ describe("GroqClient section groups",()=>{
    reconciliation:{status:"partial",conflicts:["Release date requires manual verification."]}
   };
   const {mock}=fetchMock();
+  const evidenceScorePayloads:Array<Record<string,any>>=[];
+  mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body));
+   const payload=JSON.parse(body.messages[1].content);
+   if(payload.sectionGroup==="evidence-score") evidenceScorePayloads.push(payload);
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
+  });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
   await client.assess({evidence,sonicDna,catalogMetadata});
   expect(mock).toHaveBeenCalledTimes(9);
+  expect(evidenceScorePayloads).toHaveLength(1);
+  expect(evidenceScorePayloads[0].evidence).toMatchObject({
+   sourceProviders:["musicbrainz","spotify","apple_music","youtube"],
+   genreClassification:{primaryGenre:"Contemporary R&B",genres:["Contemporary R&B"]}
+  });
+  expect(evidenceScorePayloads[0].evidence).not.toHaveProperty("genres");
+  expect(evidenceScorePayloads[0].evidence).not.toHaveProperty("catalogSources");
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
    const estimatedInputTokens=Math.ceil(new TextEncoder().encode(JSON.stringify({
