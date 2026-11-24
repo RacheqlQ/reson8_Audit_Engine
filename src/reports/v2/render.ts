@@ -4,6 +4,7 @@ import { loadReportFonts } from "../fonts.js";
 import { chartEvidenceIntegrityErrors, chartPanelHeight, countEvidenceLayers, drawChartPanel, draw3DSolidBar, draw3DSolidSphere } from "../charts.js";
 import { reconcileChartCrossChecks, reconcileChartSeriesAndLabels } from "../chart-reconciliation.js";
 import { adaptReportV2, type ReportV2Data, type TimedPoint } from "./adapters.js";
+import { hasSubmittedMasterAudio } from "../../audio/master-audio-evidence.js";
 import { hasReportableKeyCandidates, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
 import { sanitizePublicReportLines, sanitizePublicReportLine } from "./public-language.js";
@@ -790,12 +791,13 @@ function formatSnapshotTime(seconds:number):string{
 }
 function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:AuditReportInput):number{
  const audio=rec(input.sonicDna),analysis=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis??audio.vocalFeatures);
+ const hasMasterAudio=hasSubmittedMasterAudio(rec(input.evidence),Object.keys(audio).length?audio:null);
  const sections=arr(analysis.inferredSections).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
  const transitions=arr(analysis.detectedTransitions).slice(0,16).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds));
  const intervals=arr(analysis.vocalActivityIntervals).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
  const duration=finite(audio.durationSeconds)&&audio.durationSeconds>0?audio.durationSeconds:Math.max(1,...sections.map(item=>Number(item.endSeconds)));
- const presence=finite(analysis.vocalPresencePct)?Math.max(0,Math.min(100,analysis.vocalPresencePct)):0;
- const vocalDetected=analysis.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0;
+ const presence=hasMasterAudio&&finite(analysis.vocalPresencePct)?Math.max(0,Math.min(100,analysis.vocalPresencePct)):null;
+ const vocalDetected=hasMasterAudio&&analysis.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence!==null&&presence>0;
  const pitch=finite(analysis.vocalMedianF0Hz)?analysis.vocalMedianF0Hz:null;
  const range=rec(analysis.vocalF0RangeHz),low=finite(range.p10)?range.p10:null,high=finite(range.p90)?range.p90:null;
  const energy=finite(analysis.vocalBandEnergyDbfs)?analysis.vocalBandEnergyDbfs:null;
@@ -803,11 +805,11 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
  page.drawText("VOCAL ANALYSIS, SECTIONS AND TRANSITIONS",{x:x+pad,y:top-16,size:7,font:fonts.bold,color:C.gold});
- const status=vocalDetected?"• VOCALS DETECTED · INFERRED FROM UPLOADED MASTER SIGNAL":"• INSTRUMENTAL / LOW VOCAL ACTIVITY";
+ const status=!hasMasterAudio?"• NOT ANALYSED · NO UPLOADED MASTER":vocalDetected?"• VOCALS DETECTED · INFERRED FROM UPLOADED MASTER SIGNAL":"• INSTRUMENTAL / LOW VOCAL ACTIVITY";
  const statusWidth=Math.min(width-185,fonts.bold.widthOfTextAtSize(status,5.1)+10);
  page.drawRectangle({x:x+pad,y:top-32,width:statusWidth,height:11,color:vocalDetected?C.amber:C.paper,borderColor:C.line,borderWidth:.35});
  page.drawText(status,{x:x+pad+5,y:top-28.5,size:5.1,font:fonts.bold,color:vocalDetected?C.white:C.muted});
- page.drawText("SIGNAL-DERIVED FROM UPLOADED MASTER",{x:right-164,y:top-28.5,size:5.2,font:fonts.bold,color:C.muted});
+ page.drawText(hasMasterAudio?"SIGNAL-DERIVED FROM UPLOADED MASTER":"MASTER SIGNAL NOT SUPPLIED",{x:right-164,y:top-28.5,size:5.2,font:fonts.bold,color:C.muted});
  const timelineTop=top-43;
  page.drawText("SONG ARRANGEMENT SECTIONS, TRANSITIONS AND VOCAL ACTIVITY",{x:left,y:timelineTop,size:5.8,font:fonts.bold,color:C.ink});
  page.drawText("INFERRED · PROVISIONAL LABELS",{x:right-142,y:timelineTop,size:5.1,font:fonts.bold,color:C.amber});
@@ -831,7 +833,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
    draw3DSolidBar(page,bx,barY,bw,14,colorFor(str(section.label,"Section")));
    if(bw>24)page.drawText(String(section.label??("Section "+(index+1))).slice(0,16),{x:bx+2,y:barY+4,size:4.7,font:fonts.bold,color:C.white});
   });
- }else page.drawText("Section boundaries not confidently inferred",{x:left+5,y:barY+4,size:5,font:fonts.italic,color:C.muted});
+ }else page.drawText(hasMasterAudio?"Section boundaries not confidently inferred":"Not analysed — no uploaded master signal supplied",{x:left+5,y:barY+4,size:5,font:fonts.italic,color:C.muted});
  page.drawText("0:00",{x:left,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
  page.drawText(formatSnapshotTime(duration),{x:right-22,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
  transitions.slice(0,16).forEach((item,index)=>{
@@ -847,7 +849,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
   if(end<=start)return;
   draw3DSolidBar(page,left+78+start/duration*(barWidth-78),vocalY,Math.max(1,(end-start)/duration*(barWidth-78)),5,C.teal);
  });
- const intervalText=intervals.length
+ const intervalText=!hasMasterAudio?"Not analysed — no uploaded master signal supplied.":intervals.length
   ?intervals.slice(0,5).map(item=>formatSnapshotTime(Number(item.startSeconds))+"–"+formatSnapshotTime(Number(item.endSeconds))).join(" · ")+(intervals.length>5?" · +"+(intervals.length-5)+" more":"")
   :"No active intervals · "+String(analysis.analysisReason??"Low vocal-band activity or insufficient PCM quality.").slice(0,118);
  drawWrapped(page,intervalText,left,vocalY-7,barWidth,fonts.regular,4.7,C.muted,5.3);
@@ -876,10 +878,10 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  drawWrapped(page,"Label basis: windowed spectral-flux novelty, RMS steps, chroma movement and vocal-band onset/offset; labels are provisional.",left,calloutTop-38,barWidth,fonts.italic,4.4,C.muted,4.8);
  const kpiTop=calloutTop-47,kpiGap=6,kpiW=(barWidth-kpiGap*3)/4,kpiH=30;
  const kpis=[
-  ["VOCAL PRESENCE",presence.toFixed(1)+"%"],
+  ["VOCAL PRESENCE",presence===null?"NOT ANALYSED":presence.toFixed(1)+"%"],
   ["VOCAL-BAND ENERGY",energy===null?"NOT ANALYSED":energy.toFixed(1)+" dBFS"],
   ["MEDIAN PITCH (F0)",pitch===null?"NOT ANALYSED":pitch.toFixed(1)+" Hz"],
-  ["ACTIVITY INTERVALS",String(intervals.length)+" timestamped"],
+  ["ACTIVITY INTERVALS",hasMasterAudio?String(intervals.length)+" timestamped":"NOT ANALYSED"],
  ];
  kpis.forEach((item,index)=>{
   const kx=left+index*(kpiW+kpiGap),ky=kpiTop-kpiH;
@@ -903,7 +905,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  page.drawText(pitch===null?"F0 candidate range not analysed":"Median "+pitch.toFixed(1)+" Hz",{x:rangeX+rangeW/2-32,y:rangeBarY-9,size:4.5,font:fonts.bold,color:C.muted});
  page.drawText("500 Hz",{x:rangeX+rangeW-24,y:rangeBarY-9,size:4.5,font:fonts.regular,color:C.muted});
  const footerY=bottom+8;
- drawWrapped(page,"WHAT IT SHOWS: Vocal-band energy locations, candidate pitch region and inferred section transitions from the uploaded master.",left,footerY+15,barWidth,fonts.regular,4.7,C.ink,5.1);
+ drawWrapped(page,hasMasterAudio?"WHAT IT SHOWS: Vocal-band energy locations, candidate pitch region and inferred section transitions from the uploaded master.":"WHAT IT SHOWS: No vocal or section measurements are available because this submission contains no uploaded master audio.",left,footerY+15,barWidth,fonts.regular,4.7,C.ink,5.1);
  drawWrapped(page,"WHAT IT DOES NOT SHOW: Exact labels, singing vs rap, lead vs backing, singer count, lyrics, delivery quality or audience response.",left,footerY+7,barWidth,fonts.italic,4.5,C.muted,4.9);
  return height;
 }
@@ -927,18 +929,19 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
  const vocalHeight=drawVocalArrangementCard(page,y,fonts,input);
  y-=vocalHeight+10;
  const sonic=rec(input.sonicDna),vocal=rec(input.vocalAndSectionPageData??sonic.vocalArrangementAnalysis??sonic.vocalFeatures);
+ const hasMasterAudio=hasSubmittedMasterAudio(rec(input.evidence),Object.keys(sonic).length?sonic:null);
  const duration=finite(sonic.durationSeconds)?sonic.durationSeconds:null;
- const presence=finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:0;
+ const presence=hasMasterAudio&&finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:null;
  const sections=arr(vocal.inferredSections),transitions=arr(vocal.detectedTransitions);
  const keyRaw=buildRecordingOverviewKeyLabel(data),keyLabel=data.key.value!==null?"Confirmed: "+keyRaw:/^Provisional:/i.test(keyRaw)?keyRaw:keyRaw==="Unavailable"?"Unavailable":"Provisional: "+keyRaw;
  const tempoRaw=buildCoverTempoLabel(data,input).replace(/\s*·\s*CANDIDATE$/i,"").replace(/\s*·\s*CONFIRMED$/i,"");
  const tempoLabel=tempoRaw==="Not determined"?"Not analysed":tempoRaw+(data.tempo.value===null?" CANDIDATE":" CONFIRMED");
- const vocalStatus=vocal.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0?"Detected (inferred)":"Minimal / Instrumental";
+ const vocalStatus=!hasMasterAudio?"Not analysed":vocal.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence!==null&&presence>0?"Detected (inferred)":"Minimal / Instrumental";
  const rows:Array<[string,string,string,string]>=[
   ["Track length",duration===null?"Not analysed":Math.floor(duration/60)+" min "+Math.round(duration%60)+" sec","Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):"Not analysed"],
   ["Song key",keyLabel,"Tempo",tempoLabel],
-  ["Vocals",vocalStatus,"Vocal activity",presence.toFixed(1)+"% of track"],
-  ["Sections",sections.length+" INFERRED","Transitions",transitions.length+" detected"]
+  ["Vocals",vocalStatus,"Vocal activity",presence===null?"Not analysed":presence.toFixed(1)+"%"],
+  ["Sections",hasMasterAudio?sections.length+" INFERRED":"Not analysed","Transitions",hasMasterAudio?transitions.length+" detected":"Not analysed"]
  ];
  const panelHeight=SNAPSHOT_OVERVIEW_HEIGHT,panelTop=y-8,bottom=panelTop-panelHeight;
  page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
