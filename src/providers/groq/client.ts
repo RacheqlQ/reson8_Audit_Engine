@@ -466,8 +466,8 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
-    if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning", "production"].includes(group)
-      ? compactEvidenceScoreValue(value, 0, ["evidence-score", "production"].includes(group) ? 40 : 72, group === "evidence-score" ? 4 : group === "production" ? 2 : 3)
+    if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
+      ? compactEvidenceScoreValue(value, 0, group === "production" ? 40 : 72, ["evidence-score", "production"].includes(group) ? 2 : 3)
       : compactPromptValue(value);
   }
   if (["evidence-score", "production"].includes(group) && compacted.vocalArrangementAnalysis && typeof compacted.vocalArrangementAnalysis === "object" && !Array.isArray(compacted.vocalArrangementAnalysis)) {
@@ -608,7 +608,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const providerLabel = providerName === "gemini" ? "Gemini" : providerName === "ollama" ? "Ollama" : "Groq";
   const tokenField = providerName === "groq" ? "max_completion_tokens" : "max_tokens";
   const rawOutputSchema = z.toJSONSchema(schema);
-  const outputSchema = ["evidence-score", "narrative", "positioning", "release"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
+  const outputSchema = ["evidence-score", "narrative", "positioning", "release", "promotion"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
   const completed = await input.loadCompletedSectionGroup?.(cacheGroupName);
   if (completed !== null && completed !== undefined) {
     const cached = schema.safeParse(completed);
