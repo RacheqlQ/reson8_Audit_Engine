@@ -265,7 +265,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
   const provenance = projected.fieldProvenance;
   if (provenance && typeof provenance === "object" && !Array.isArray(provenance)) {
     projected.fieldProvenance = Object.fromEntries(
-      Object.entries(provenance as Record<string, unknown>).slice(0, 24).map(([field, raw]) => {
+      Object.entries(provenance as Record<string, unknown>).slice(0, 16).map(([field, raw]) => {
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [field, compactPromptValue(raw)];
         const record = raw as Record<string, unknown>;
         const retained = ["source", "provider", "status", "confidence", "evidenceClass", "value", "normalizedValue", "matchStatus"];
@@ -294,7 +294,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
 
 function compactPromptValue(value: unknown, depth = 0): unknown {
   if (value === null || typeof value !== "object") {
-    return typeof value === "string" && value.length > 360 ? value.slice(0, 360) + " [truncated]" : value;
+    return typeof value === "string" && value.length > 240 ? value.slice(0, 240) + " [truncated]" : value;
   }
   const sample = (items: unknown[], limit: number): unknown[] => {
     if (items.length <= limit) return items;
@@ -303,13 +303,19 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
     return Array.from({ length: limit }, (_, index) => items[Math.round(index * (items.length - 1) / (limit - 1))]);
   };
   if (depth >= 4) {
-    if (Array.isArray(value)) return sample(value, 6).filter((item) => item === null || typeof item !== "object");
+    if (Array.isArray(value)) return sample(value, 4).filter((item) => item === null || typeof item !== "object");
     return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 10)
       .filter(([, item]) => item === null || typeof item !== "object"));
   }
-  if (Array.isArray(value)) return sample(value, 10).map((item) => compactPromptValue(item, depth + 1));
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 20)
-    .map(([key, item]) => [key, compactPromptValue(item, depth + 1)]));
+  if (Array.isArray(value)) return sample(value, 8).map((item) => compactPromptValue(item, depth + 1));
+  const entries = Object.entries(value as Record<string, unknown>);
+  const scalarEntries = entries.filter(([, item]) => item === null || typeof item !== "object");
+  const nestedEntries = entries.filter(([, item]) => item !== null && typeof item === "object");
+  const selectedEntries = [
+    ...scalarEntries.slice(0, 16),
+    ...nestedEntries.slice(0, Math.max(0, 16 - Math.min(16, scalarEntries.length))),
+  ];
+  return Object.fromEntries(selectedEntries.map(([key, item]) => [key, compactPromptValue(item, depth + 1)]));
 }
 
 function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group: string): Record<string, unknown> | null {
@@ -379,7 +385,7 @@ function compactCatalogMetadataForGroup(
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   // Retain a bounded set of named provider records; long descriptions/raw
   // responses are already represented by normalized evidence and provenance.
-  return Object.fromEntries(Object.entries(value).slice(0, 8)
+  return Object.fromEntries(Object.entries(value).slice(0, 4)
     .map(([provider, record]) => [provider, compactPromptValue(record)])) as Record<string, unknown>;
 }
 
