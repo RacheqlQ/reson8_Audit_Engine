@@ -57,27 +57,29 @@ describe("GroqClient section groups",()=>{
   };
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
   await client.assess({evidence:{artist:"Fixture Artist",rawProviderPayload:{huge:Array(100).fill("provider-only payload")},catalogId:"private-id"},sonicDna});
-  const firstBody=JSON.parse(String(mock.mock.calls[0][1]?.body));
-  const payload=JSON.parse(firstBody.messages[1].content);
-  expect(payload.evidence).toMatchObject({artist:"Fixture Artist"});
-  expect(payload.evidence).not.toHaveProperty("rawProviderPayload");
-  expect(payload.evidence).not.toHaveProperty("catalogId");
-  expect(payload.sonicDna).toMatchObject({
+  const payloads=mock.mock.calls.map(call=>{
+   const body=JSON.parse(String(call[1]?.body));
+   return JSON.parse(body.messages[1].content);
+  });
+  const narrative=payloads.find(payload=>payload.sectionGroup==="narrative");
+  const evidenceScore=payloads.find(payload=>payload.sectionGroup==="evidence-score");
+  expect(narrative.evidence).toMatchObject({artist:"Fixture Artist"});
+  expect(narrative.evidence).not.toHaveProperty("rawProviderPayload");
+  expect(narrative.evidence).not.toHaveProperty("catalogId");
+  expect(evidenceScore.sonicDna).toMatchObject({
    provenance:"uploaded_audio_master",bpm:95,tempoConfidence:0.82,key:"A",mode:"minor",
    rhythmFeatures:{status:"measured",bpm:95,confidence:0.82,candidateBpms:[95,63,76]},
    harmonicFeatures:{status:"measured",key:"A",mode:"minor",segmentAgreement:0.62},
   });
-  expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("onsetEnvelope");
-  expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("beatTimesSeconds");
-  expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("downbeatCandidateTimesSeconds");
-  expect(payload.sonicDna.harmonicFeatures).not.toHaveProperty("segmentChroma");
-  expect(JSON.stringify(payload.sonicDna).length).toBeLessThan(JSON.stringify(sonicDna).length * 0.7);
+  expect(evidenceScore.sonicDna.rhythmFeatures).not.toHaveProperty("onsetEnvelope");
+  expect(evidenceScore.sonicDna.rhythmFeatures).not.toHaveProperty("beatTimesSeconds");
+  expect(evidenceScore.sonicDna.rhythmFeatures).not.toHaveProperty("downbeatCandidateTimesSeconds");
+  expect(evidenceScore.sonicDna.harmonicFeatures).not.toHaveProperty("segmentChroma");
+  expect(JSON.stringify(evidenceScore.sonicDna).length).toBeLessThan(JSON.stringify(sonicDna).length * 0.7);
   expect(mock.mock.calls).toHaveLength(9);
-  for(const call of mock.mock.calls){
-   const body=JSON.parse(String(call[1]?.body));
-   const repeated=JSON.parse(body.messages[1].content);
-   expect(repeated.sonicDna).toEqual(payload.sonicDna);
-  }
+  expect(narrative.sonicDna).not.toHaveProperty("rhythmFeatures");
+  expect(narrative.sonicDna).not.toHaveProperty("harmonicFeatures");
+  expect(payloads.find(payload=>payload.sectionGroup==="production").sonicDna).toHaveProperty("rhythmFeatures");
  });
 
  it("projects Sonic DNA and catalog metadata to the assessment section that can use them", async () => {
