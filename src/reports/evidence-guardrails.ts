@@ -635,7 +635,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   // Provider-level validation runs before this evidence sanitizer. Re-apply the
   // positioning contract after every deterministic rewrite so genre, numeric-
   // claim, and zero-confidence fallbacks cannot silently shorten either field.
-  const wordCount = (value: unknown): number => typeof value === "string" ? value.trim().split(/\\s+/).filter(Boolean).length : 0;
+  const wordCount = (value: unknown): number => typeof value === "string" ? value.trim().split(/\s+/).filter(Boolean).length : 0;
   if (mutable.aAndRPositioning && wordCount(mutable.aAndRPositioning.rationale) < 40) {
     mutable.aAndRPositioning.rationale = "The available evidence does not justify a definitive track-specific lane verdict. Keep the primary lane and adjacent lanes provisional, and make no stronger positioning claim until identity, genre sources and the uploaded recording have been reconciled and reviewed by a human listener against explicit audible evidence.";
   }
