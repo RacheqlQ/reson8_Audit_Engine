@@ -993,8 +993,8 @@ describe("nine-section report-readiness integration", () => {
     expect(Object.values(assessment.generationProvenance.fieldGroups)).toEqual(expect.arrayContaining([
       "narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline",
     ]));
-    expect(assessment.aAndRPositioning.rationale.trim().split(/\\s+/).length).toBeGreaterThanOrEqual(40);
-    expect(assessment.commercialRead.rationale.trim().split(/\\s+/).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.aAndRPositioning.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
     const pdfBytes = await generateAuditReportV2({
       auditId: "nine-section-readiness-fixture",
       generatedAt: "2026-11-24T00:00:00.000Z",
