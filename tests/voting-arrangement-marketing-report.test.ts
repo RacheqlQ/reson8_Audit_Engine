@@ -34,7 +34,7 @@ describe("voting-backed confirmation and report consistency", () => {
     const data = adaptReportV2(input);
     expect(data.tempo.value).toBe(120);
     expect(data.key.value).toBe("A minor");
-    expect(buildCoverTempoLabel(data, input)).toBe("120 BPM");
+    expect(buildCoverTempoLabel(data, input)).toBe("120 BPM · CONFIRMED");
     expect(buildCoverKeyLabel(input, data)).toBe("A minor");
     expect(metricBlock(data, input).find(item => item.label === "TEMPO")?.confidence).toBe("CONFIRMED");
     expect(metricBlock(data, input).find(item => item.label === "SONG KEY")?.confidence).toBe("CONFIRMED");
