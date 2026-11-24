@@ -792,15 +792,15 @@ function formatSnapshotTime(seconds:number):string{
 function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:AuditReportInput):number{
  const audio=rec(input.sonicDna),analysis=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis??audio.vocalFeatures);
  const hasMasterAudio=hasSubmittedMasterAudio(rec(input.evidence),Object.keys(audio).length?audio:null);
- const sections=arr(analysis.inferredSections).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
- const transitions=arr(analysis.detectedTransitions).slice(0,16).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds));
- const intervals=arr(analysis.vocalActivityIntervals).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const sections=hasMasterAudio?arr(analysis.inferredSections).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds):[];
+ const transitions=hasMasterAudio?arr(analysis.detectedTransitions).slice(0,16).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds)):[];
+ const intervals=hasMasterAudio?arr(analysis.vocalActivityIntervals).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds):[];
  const duration=finite(audio.durationSeconds)&&audio.durationSeconds>0?audio.durationSeconds:Math.max(1,...sections.map(item=>Number(item.endSeconds)));
  const presence=hasMasterAudio&&finite(analysis.vocalPresencePct)?Math.max(0,Math.min(100,analysis.vocalPresencePct)):null;
  const vocalDetected=hasMasterAudio&&analysis.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence!==null&&presence>0;
- const pitch=finite(analysis.vocalMedianF0Hz)?analysis.vocalMedianF0Hz:null;
- const range=rec(analysis.vocalF0RangeHz),low=finite(range.p10)?range.p10:null,high=finite(range.p90)?range.p90:null;
- const energy=finite(analysis.vocalBandEnergyDbfs)?analysis.vocalBandEnergyDbfs:null;
+ const pitch=hasMasterAudio&&finite(analysis.vocalMedianF0Hz)?analysis.vocalMedianF0Hz:null;
+ const range=rec(analysis.vocalF0RangeHz),low=hasMasterAudio&&finite(range.p10)?range.p10:null,high=hasMasterAudio&&finite(range.p90)?range.p90:null;
+ const energy=hasMasterAudio&&finite(analysis.vocalBandEnergyDbfs)?analysis.vocalBandEnergyDbfs:null;
  const x=M,width=W-2*M,height=SNAPSHOT_VOCAL_MODULE_HEIGHT,bottom=top-height,pad=10,left=x+pad,right=x+width-pad,barWidth=right-left;
  page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
