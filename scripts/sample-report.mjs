@@ -51,8 +51,8 @@ for(const [name,input] of variants){
   const reportInput={...input,generatedAt: new Date().toISOString()};
   const bytes=await ensurePdfReport(reportInput,tier);
   const pdf=await PDFDocument.load(bytes);
-  if(tier==="sample"&&pdf.getPageCount()!==8)throw new Error(name+" sample report must be exactly 8 pages; got "+pdf.getPageCount());
-  if(tier==="full"&&(pdf.getPageCount()<13||pdf.getPageCount()>16))throw new Error(name+" full report must contain 7 core pages, 5 narrative pages and up to 3 evidence-gated deep dives (13–16 pages); got "+pdf.getPageCount());
+  if(tier==="sample"&&pdf.getPageCount()!==7)throw new Error(name+" sample report must be exactly 7 pages; got "+pdf.getPageCount());
+  if(tier==="full"&&(pdf.getPageCount()<12||pdf.getPageCount()>15))throw new Error(name+" full report must contain 6 core pages, 5 narrative pages and up to 3 evidence-gated deep dives (12–15 pages); got "+pdf.getPageCount());
   const filename=name+"-"+tier+"-audit-report.pdf";
   const fileUrl=new URL(filename,out),filePath=fileUrl.pathname;
   await writeFile(fileUrl,bytes);
