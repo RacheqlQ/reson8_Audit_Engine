@@ -1001,7 +1001,7 @@ describe("positioning contract and provider recovery regressions", () => {
       const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
         .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
       expect(positioningCalls).toBe(2);
-      expect(result.aAndRPositioning.rationale.trim().split(/\\s+/).length).toBeGreaterThanOrEqual(40);
+      expect(result.aAndRPositioning.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
       const failed = attempts.find(attempt => attempt.group === "positioning" && attempt.failureKind === "threshold_violation");
       expect(failed).toMatchObject({
         validationField: field,
