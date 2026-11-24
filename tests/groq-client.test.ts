@@ -85,11 +85,17 @@ describe("GroqClient section groups",()=>{
  it("projects Sonic DNA and catalog metadata to the assessment section that can use them", async () => {
   const sonicDna = {
    provenance:"uploaded_audio_master", evidenceClass:"OBSERVED", bpm:95, tempoConfidence:0.82,
-   key:"A", mode:"minor", moodTags:["Moderate Energy"], genreClassification:{primaryGenre:"R&B"},
+   key:"A", mode:"minor", keyConfidence:0.91, keyCandidates:[{key:"A",mode:"minor",score:0.88}],
+   moodTags:["Moderate Energy"], genreContext:["Contemporary R&B"],
+   limitations:["Tempo confidence is provisional pending listening review."],
+   tonalResolution:{status:"CONFIRMED",tonic:"A",mode:"minor",candidates:[{tonic:"A",mode:"minor",score:0.88}]},
+   vocalArrangementAnalysis:{status:"analyzed",sections:[{label:"verse",startSeconds:0,endSeconds:12}]},
+   genreClassification:{primaryGenre:"R&B"},
    rhythmFeatures:{status:"measured",bpm:95,onsetEnvelope:Array(100).fill(0.1)},
    harmonicFeatures:{status:"measured",key:"A",segmentChroma:Array(100).fill(0.1)},
    acousticFeatureProfile:{predictions:{energy:{status:"provisional",score:62}}},
    vocalFeatures:{status:"analyzed",activity:0.7},
+   vocalArrangementAnalysis:{status:"analyzed"},
    dynamicRangeDb:8.2, rmsLevelDbfs:-12, sampleRate:44100, channels:2,
    privateRawWaveform:Array(1000).fill(0.2),
   };
@@ -106,6 +112,11 @@ describe("GroqClient section groups",()=>{
   expect(evidence.sonicDna).toMatchObject({
    rhythmFeatures:{status:"measured",bpm:95},
    harmonicFeatures:{status:"measured",key:"A"},
+   keyCandidates:[{key:"A",mode:"minor",score:0.88}],
+   moodTags:["Moderate Energy"], genreContext:["Contemporary R&B"],
+   limitations:["Tempo confidence is provisional pending listening review."],
+   tonalResolution:{status:"CONFIRMED",tonic:"A",mode:"minor"},
+   vocalArrangementAnalysis:{status:"analyzed",sections:[{label:"verse",startSeconds:0,endSeconds:12}]},
    acousticFeatureProfile:{predictions:{energy:{status:"provisional",score:62}}},
    vocalFeatures:{status:"analyzed",activity:0.7},
    dynamicRangeDb:8.2, sampleRate:44100,
