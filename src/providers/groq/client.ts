@@ -334,7 +334,7 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
 
 function compactEvidenceScoreValue(value: unknown, depth = 0, stringLimit = 112, arrayLimit = 4, fieldName = ""): unknown {
   const descriptiveField = /^(detail|rawPayload|description|reason|notes|commentary|warning|warnings|limitation|limitations)$/i.test(fieldName);
-  const maxStringLength = descriptiveField ? Math.min(stringLimit, 48) : stringLimit;
+  const maxStringLength = descriptiveField ? Math.min(stringLimit, 32) : stringLimit;
   if (value === null || typeof value !== "object") {
     return typeof value === "string" && value.length > maxStringLength ? value.slice(0, maxStringLength) + "…" : value;
   }
