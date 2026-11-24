@@ -51,8 +51,8 @@ for(const [name,input] of variants){
   const reportInput={...input,generatedAt: new Date().toISOString()};
   const bytes=await ensurePdfReport(reportInput,tier);
   const pdf=await PDFDocument.load(bytes);
-  if(tier==="sample"&&pdf.getPageCount()!==8)throw new Error(name+" sample report must be exactly 8 pages; got "+pdf.getPageCount());
-  if(tier==="full"&&(pdf.getPageCount()<13||pdf.getPageCount()>16))throw new Error(name+" full report must contain 7 core pages, 5 narrative pages and up to 3 evidence-gated deep dives (13–16 pages); got "+pdf.getPageCount());
+  if(tier==="sample"&&pdf.getPageCount()!==7)throw new Error(name+" sample report must be exactly 7 pages; got "+pdf.getPageCount());
+  if(tier==="full"&&(pdf.getPageCount()<12||pdf.getPageCount()>15))throw new Error(name+" full report must contain 6 core pages, 5 narrative pages and up to 3 evidence-gated deep dives (12–15 pages); got "+pdf.getPageCount());
   const filename=name+"-"+tier+"-audit-report.pdf";
   const fileUrl=new URL(filename,out),filePath=fileUrl.pathname;
   await writeFile(fileUrl,bytes);
@@ -128,11 +128,7 @@ for(const [name,input] of variants){
    if(!normalizedExtracted.includes("Tonal centre unavailable"))throw new Error(filename+" failed to render the unavailable tonal state");
   }
   if(name==="combined-master-and-dsp"&&tier==="full"){
-   const requiredCharts=["Evidence layers","Music platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"];
-   const fullText=normalizedExtracted.toLocaleLowerCase();
-   for(const chart of requiredCharts){
-    if(!fullText.includes(chart.toLocaleLowerCase()))throw new Error(filename+" is missing a sample-parity chart: "+chart);
-   }
+   if(normalizedExtracted.toUpperCase().includes("EVIDENCE LEDGER AND SCORECARD"))throw new Error(filename+" rendered the removed evidence ledger and scorecard page");
   }
   if(name==="long-form-audio"&&tier==="full"){
    const tokens=buildArNotesDecisionContext(input).summary.split(/\s+/).map(token=>token.replace(/[^\p{L}\p{N}#'-]/gu,"")).filter(Boolean);

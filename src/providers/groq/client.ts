@@ -129,16 +129,30 @@ const SYSTEM_PROMPT = [
   "Return JSON only as one complete object; obey schema and local word-count requirements without repeated boilerplate."
 ].join(" ");
 
+const NARRATIVE_SYSTEM_PROMPT = [
+  "Use supplied evidence only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or external facts.",
+  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=industry_practice guidance, never a track fact. Name only providers with returned records.",
+  "Preserve exact provider genre labels and separate scene tags; null primary genre means no confirmed lane. Tempo contributes <=15% to genre scoring and never proves genre.",
+  "Use BPM only when confirmed at confidence >=0.5; otherwise omit BPM, speed/energy inference and tempo scoring. Unconfirmed candidates/windows stay provisional.",
+  "Key/mode are CONFIRMED only by supplied voting/window-consensus-stabilized results; null/disagreement stays provisional. Mood/energy are heuristics, not probabilities, listener emotion or demand; use only supplied energy label and score/100.",
+  "Use vocals only when status=analyzed; otherwise infer no voice, delivery, layering or lyrics. Sections require explicit boundaries.",
+  "Use reconciled identity, provenance, catalogSources and provider records; preserve ISRC conflicts/ambiguity. DSP/catalog links are not audio; never claim OBSERVED audio from links. No external stem, separation or render workers.",
+  "Ground strengths, risks and actions in supplied sonic, vocal, genre and catalog facts. Label general guidance INDUSTRY PRACTICE; do not invent comparables.",
+  "Without verified commercial performance, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise.",
+  "Do not score hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return JSON only; obey schema/word limits."
+].join(" ");
+
+const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS do not prove mastering readiness; do not recommend loudness changes without a measured fault and target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.";
+
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
-  "A&R scorer: use supplied evidence only. Never invent streams, sales, playlists, curators, audience metrics, label interest, placements or external facts.",
-  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=hypothesis (source groq_assessment); INDUSTRY PRACTICE=general guidance, not track fact (source industry_practice). Always include the evidenceLabels array with at least one item; every item includes label, claim and source.",
-  "DSP/catalog links are not audio. Without uploaded-master provenance, make no OBSERVED audio claim or infer BPM, key, vocals, lyrics, arrangement or sections. No external stem/separation/render workers.",
-  "Tempo/key are CONFIRMED only from supplied voting/window-consensus-stabilized results. Null stays unconfirmed; preserve candidates/disagreement as provisional, never promote them. Tempo confidence <0.5 or missing means no BPM, tempoLaneFit or rhythmicConsistency score; describe provisional evidence.",
-  "Keep supplied genre labels exact; separate region/scene tags; null primary genre means no confirmed lane. BPM contributes at most 15% to genre score. Provisional mood/energy are signal heuristics, not probabilities, listener emotion or demand.",
-  "Use vocal features only when analyzed and sections only with explicit structure boundaries. Preserve provider names, identity conflicts, ISRC ambiguity and provenance; name no provider without its returned record.",
-  "Without verified commercial evidence, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict remains PROPOSED unless deterministic rules establish otherwise. Never infer demand from genre, tempo, popularity or metadata.",
-  "Every evidenceGaps item and every limitations item must contain at least 8 words. Null scores mean insufficient evidence. RMS/dBFS are not mastering readiness; no delivery-readiness score without destination targets. No loudness change without measured fault and target; centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
-  "Do not score taste: hook, originality, production quality, replay value and lane clarity stay in the unscored checklist, each with a distinct first-listen check. scorecard.rhythmicConsistency.rationale must contain at least 25 words, including when null. Separate track evidence from INDUSTRY PRACTICE. Return JSON only; local Zod and word-count validation remain authoritative."
+  "Use supplied facts only; never invent streams, sales, playlists, curators, audience metrics, label interest, placements or external facts.",
+  "Always include the evidenceLabels array; each item has label, claim and actual source. OBSERVED=uploaded-master measurement; RECOGNIZED=one provider; RECONCILED=2+ agreeing independent providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=industry_practice guidance, not track fact.",
+  "DSP/catalog links are not audio. Without uploaded-master provenance, do not claim OBSERVED audio or infer BPM, key, vocals, lyrics, arrangement or sections. No external stem/separation/render workers.",
+  "Tempo/key are CONFIRMED only by voting/window-consensus-stabilized results; null/candidates stay provisional and disagreement visible. Missing tempo or confidence <0.5 means no BPM, tempoLaneFit or rhythmicConsistency score. Tempo is <=15% of genre scoring; preserve provider genres and separate scene tags.",
+  "Mood/energy are heuristics, not probability, emotion or demand. Use vocals only when analyzed; sections need explicit boundaries. Preserve provider names, identity conflicts, ISRC ambiguity and provenance; name only providers with returned records.",
+  "Without verified commercial evidence, marketability is undetermined. Release date DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict PROPOSED unless deterministic rules establish otherwise; never infer demand from genre, tempo, popularity or metadata.",
+  "Each evidenceGaps and limitations item must contain at least 8 words; null scores mean insufficient evidence. RMS/dBFS do not prove mastering readiness; no delivery score without destination targets or loudness change without measured fault/target. Centroid <=2,000 Hz is not bright; mono is risk, not incompatibility.",
+  "Do not score hook, originality, production quality, replay value or lane clarity; keep them unscored with distinct listening checks. scorecard.rhythmicConsistency.rationale must contain at least 25 words even when null. Separate track evidence from INDUSTRY PRACTICE. JSON only; local Zod/word-count validation is authoritative."
 ].join(" ");
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
@@ -257,8 +271,40 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     "label-fit": ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
     timeline: ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
   };
+  if (group === "production") {
+    // Production guidance is derived from the uploaded-master Sonic DNA
+    // projection. Catalog identity and commercial records are irrelevant here.
+    return compactPromptValue({
+      auditType: evidence.auditType,
+      evidenceClass: evidence.evidenceClass,
+      fixture: evidence.fixture,
+    }) as Record<string, unknown>;
+  }
+  if (["promotion", "comparables", "label-fit", "timeline"].includes(group)) {
+    // These modules need only their task-specific release/genre context. The
+    // full 12-field provider provenance and identity reconciliation are used
+    // by narrative and evidence-score, not repeated across every section.
+    const keys: Record<string, string[]> = {
+      promotion: ["auditType", "artist", "title", "releaseDate", "sourceProviders", "genres", "genreClassification", "releaseStatus", "evidenceClass", "fixture"],
+      comparables: ["auditType", "genres", "genreClassification", "sourceProviders", "evidenceClass", "fixture"],
+      "label-fit": ["auditType", "genres", "genreClassification", "sourceProviders", "rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved", "evidenceClass", "fixture"],
+      timeline: ["auditType", "artist", "title", "releaseDate", "rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved", "evidenceClass", "fixture"],
+    };
+    const selected = Object.fromEntries(keys[group].filter(key => evidence[key] !== undefined)
+      .map(key => [key, evidence[key]]));
+    return compactEvidenceScoreValue(selected, 0, 48, 3) as Record<string, unknown>;
+  }
   const allowed = new Set([...common, ...(groupFields[group] ?? [])]);
-  const projected = Object.fromEntries(Object.entries(evidence).filter(([key]) => allowed.has(key)));
+  // Evidence-score already receives canonical identity and source provenance.
+  // Avoid repeating display-only identity fields and upload metadata in scoring.
+  const evidenceScoreOmissions = new Set([
+    "artist", "title", "album", "releaseDate", "label", "isrc", "upc",
+    "masterAudio", "metadataSourcesChecked", "fixture", "catalogSources",
+    "sourceCombination", "genres",
+  ]);
+  const projected = Object.fromEntries(Object.entries(evidence).filter(([key]) =>
+    allowed.has(key) && !(group === "evidence-score" && evidenceScoreOmissions.has(key))
+  ));
 
   // Provider provenance often contains verbose raw response descriptions.
   // Keep the source/status/confidence facts for every field, not duplicated
@@ -289,15 +335,30 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     delete projected.genres;
     delete projected.catalogSources;
     delete projected.sourceCombination;
+  } else if (["positioning", "narrative"].includes(group)) {
+    // Provider combinations and masterAudio metadata are already represented by
+    // sourceProviders, normalized identity and field provenance.
+    delete projected.sourceCombination;
+    if (["narrative", "promotion"].includes(group)) delete projected.masterAudio;
   }
-  if (group === "evidence-score" || group === "narrative") {
+  if (group === "narrative" && Array.isArray(projected.catalogSources)) {
+    projected.catalogSources = (projected.catalogSources as unknown[]).map(source => {
+      if (!source || typeof source !== "object" || Array.isArray(source)) return source;
+      const record = source as Record<string, unknown>;
+      return Object.fromEntries(["platform", "status", "provider", "source"].filter(key => record[key] !== undefined)
+        .map(key => [key, record[key]]));
+    });
+  }
+  if (["evidence-score", "narrative", "positioning", "release", "production", "promotion"].includes(group)) {
     // Keep source/provenance facts; only evidence-score drops duplicate summaries.
     if (group === "evidence-score") {
       delete projected.genres;
       delete projected.catalogSources;
       delete projected.sourceCombination;
     }
-    const compacted = compactEvidenceScoreValue(projected, 0, group === "evidence-score" ? 72 : 112, group === "evidence-score" ? 3 : 4) as Record<string, unknown>;
+    // Narrative receives the same bounded string/array envelope as evidence-score;
+    // source identities and normalized values above remain intact.
+    const compacted = compactEvidenceScoreValue(projected, 0, ["evidence-score", "production"].includes(group) ? 40 : 72, ["evidence-score", "production"].includes(group) ? 2 : 3) as Record<string, unknown>;
     if (compacted.fieldProvenance && typeof compacted.fieldProvenance === "object") {
       compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, 12));
     }
@@ -333,8 +394,8 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
 }
 
 function compactEvidenceScoreValue(value: unknown, depth = 0, stringLimit = 112, arrayLimit = 4, fieldName = ""): unknown {
-  const descriptiveField = /^(detail|rawPayload|description|reason|notes|commentary|warning|warnings|limitation|limitations)$/i.test(fieldName);
-  const maxStringLength = descriptiveField ? Math.min(stringLimit, 32) : stringLimit;
+  const descriptiveField = /^(detail|rawPayload|description|reason|notes|commentary|warning|warnings)$/i.test(fieldName);
+  const maxStringLength = fieldName === "limitations" ? 72 : descriptiveField ? Math.min(stringLimit, 32) : stringLimit;
   if (value === null || typeof value !== "object") {
     return typeof value === "string" && value.length > maxStringLength ? value.slice(0, maxStringLength) + "…" : value;
   }
@@ -387,7 +448,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   };
   const allowed = new Set([...common, ...(featureFamilies[group] ?? [])]);
   const compact = Object.fromEntries(Object.entries(sonicDna).filter(([key, value]) =>
-    allowed.has(key) || (value === null || typeof value !== "object")
+    allowed.has(key) || (!["narrative", "positioning", "release", "promotion"].includes(group) && (value === null || typeof value !== "object"))
   )) as Record<string, unknown>;
 
   const rhythm = compact.rhythmFeatures;
@@ -406,12 +467,108 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     compact.harmonicFeatures = summary;
   }
 
-  const compacted = (group === "evidence-score" ? compactEvidenceScoreValue(compact, 0, 72, 3) : group === "narrative" ? compactEvidenceScoreValue(compact) : compactPromptValue(compact)) as Record<string, unknown>;
+  const compacted = (["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
+    ? compactEvidenceScoreValue(compact, 0, group === "production" ? 40 : 72, group === "evidence-score" ? 3 : group === "production" ? 2 : 3)
+    : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
-    if (value !== undefined) compacted[key] = group === "evidence-score" ? compactEvidenceScoreValue(value, 0, 72, 3) : group === "narrative" ? compactEvidenceScoreValue(value) : compactPromptValue(value);
+    if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
+      ? compactEvidenceScoreValue(value, 0, group === "production" ? 40 : 72, group === "evidence-score" ? 4 : group === "production" ? 2 : 3)
+      : compactPromptValue(value);
+  }
+  if (["evidence-score", "production"].includes(group) && compacted.vocalArrangementAnalysis && typeof compacted.vocalArrangementAnalysis === "object" && !Array.isArray(compacted.vocalArrangementAnalysis)) {
+    // Vocal scalar measurements and provenance live in vocalFeatures. Keep a compact
+    // arrangement summary, not a second copy of the full 128-window timeline.
+    const arrangement = compacted.vocalArrangementAnalysis as Record<string, unknown>;
+    const rawSegments = Array.isArray(arrangement.segments) ? arrangement.segments : [];
+    const rawSections = Array.isArray(arrangement.sections) ? arrangement.sections : [];
+    const selectFour = (items: unknown[]) => items.length <= 4 ? items : [items[0], items[Math.round((items.length - 1) / 3)], items[Math.round(2 * (items.length - 1) / 3)], items[items.length - 1]];
+    const compactItems = (items: unknown[], fields: string[]) => selectFour(items).map(segment => {
+      if (!segment || typeof segment !== "object" || Array.isArray(segment)) return null;
+      const item = segment as Record<string, unknown>;
+      return Object.fromEntries(fields.filter(key => item[key] !== undefined).map(key => [key, item[key]]));
+    }).filter(Boolean);
+    compacted.vocalArrangementAnalysis = {
+      status: arrangement.status,
+      method: arrangement.method,
+      model: arrangement.model && typeof arrangement.model === "object" && !Array.isArray(arrangement.model)
+        ? Object.fromEntries(["name", "version"].filter(key => (arrangement.model as Record<string, unknown>)[key] !== undefined)
+          .map(key => [key, (arrangement.model as Record<string, unknown>)[key]])) : undefined,
+      segmentCount: rawSegments.length,
+      ...(Array.isArray(arrangement.segments) ? { segments: compactItems(rawSegments, ["startSeconds", "endSeconds", "role", "confidence"]) } : {}),
+      ...(Array.isArray(arrangement.sections) ? { sections: compactItems(rawSections, ["label", "startSeconds", "endSeconds", "provisional"]) } : {}),
+    };
+  }
+  if (["narrative", "positioning", "release", "evidence-score", "production", "promotion"].includes(group)) {
+    // The narrative needs the complete acoustic descriptor summary, not the
+    // 128-window raw summary series. Median/p10/p90 preserve measured spread;
+    // vocal intervals retain representative first/middle/last observations.
+    const profile = compacted.acousticFeatureProfile;
+    if (profile && typeof profile === "object" && !Array.isArray(profile)) {
+      const raw = profile as Record<string, unknown>;
+      const rawProvenance = raw.provenance && typeof raw.provenance === "object" && !Array.isArray(raw.provenance)
+        ? raw.provenance as Record<string, unknown> : {};
+      const provenanceKeys = [
+        "featureVersion", "algorithm", "sourceSampleRateHz", "analysisSampleRateHz",
+        "analysisResampling", "channels", "durationSeconds", "windowCount", "aggregation",
+      ];
+      compacted.acousticFeatureProfile = {
+        status: raw.status,
+        provenance: Object.fromEntries(provenanceKeys.filter(key => rawProvenance[key] !== undefined)
+          .map(key => [key, rawProvenance[key]])),
+        descriptors: raw.descriptors && typeof raw.descriptors === "object" && !Array.isArray(raw.descriptors)
+          ? Object.fromEntries(Object.entries(raw.descriptors as Record<string, unknown>).map(([name, descriptor]) => {
+            if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return [name, compactPromptValue(descriptor)];
+            const measured = descriptor as Record<string, unknown>;
+            return [name, Object.fromEntries(["median", "p10", "p90", "unit"].filter(key => measured[key] !== undefined)
+              .map(key => [key, measured[key]]))];
+          }))
+          : compactPromptValue(raw.descriptors),
+        predictions: raw.predictions && typeof raw.predictions === "object" && !Array.isArray(raw.predictions)
+          ? Object.fromEntries(Object.entries(raw.predictions as Record<string, unknown>).map(([name, prediction]) => {
+            if (!prediction || typeof prediction !== "object" || Array.isArray(prediction)) return [name, compactPromptValue(prediction)];
+            const result = { ...(prediction as Record<string, unknown>) };
+            delete result.method;
+            delete result.probability;
+            return [name, compactPromptValue(result)];
+          }))
+          : compactPromptValue(raw.predictions),
+        abstentionReasons: compactEvidenceScoreValue(raw.abstentionReasons, 0, 72, 3),
+      };
+    }
+
+    const vocal = compacted.vocalFeatures;
+    if (vocal && typeof vocal === "object" && !Array.isArray(vocal)) {
+      const raw = vocal as Record<string, unknown>;
+      const scalarFields = Object.entries(raw).filter(([, value]) =>
+        value === null || ["string", "number", "boolean"].includes(typeof value));
+      const vocalProjection: Record<string, unknown> = Object.fromEntries(scalarFields);
+      if (raw.model && typeof raw.model === "object" && !Array.isArray(raw.model)) {
+        const model = raw.model as Record<string, unknown>;
+        vocalProjection.model = Object.fromEntries(["name", "version"].filter(key => model[key] !== undefined)
+          .map(key => [key, model[key]]));
+      }
+      for (const key of (["positioning", "evidence-score"].includes(group) ? ["limitations"] : ["activitySegments", "pitchSegments", "limitations"])) {
+        if (raw[key] === undefined) continue;
+        if (group === "narrative" && (key === "activitySegments" || key === "pitchSegments") && Array.isArray(raw[key])) {
+          const entries = raw[key] as unknown[];
+          const selected = entries.length <= 3 ? entries : [entries[0], entries[Math.floor((entries.length - 1) / 2)], entries[entries.length - 1]];
+          const fields = key === "activitySegments"
+            ? ["startSeconds", "endSeconds", "meanLevelDbfs", "peakLevelDbfs"]
+            : ["startSeconds", "endSeconds", "medianHz", "confidence", "method"];
+          vocalProjection[key] = selected.map(entry => {
+            if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+            const item = entry as Record<string, unknown>;
+            return Object.fromEntries(fields.filter(field => item[field] !== undefined).map(field => [field, item[field]]));
+          }).filter(Boolean);
+        } else {
+          vocalProjection[key] = compactEvidenceScoreValue(raw[key], 0, 72, 3);
+        }
+      }
+      compacted.vocalFeatures = vocalProjection;
+    }
   }
   return compacted;
 }
@@ -422,7 +579,7 @@ function compactCatalogMetadataForGroup(
   evidence: Record<string, unknown>,
 ): Record<string, unknown> | null {
   if (!value || !["narrative", "positioning", "evidence-score", "label-fit"].includes(group)) return null;
-  if (group === "evidence-score") {
+  if (["evidence-score", "narrative", "positioning"].includes(group)) {
     const hasNormalizedCatalogEvidence = Boolean(
       evidence.identity && typeof evidence.identity === "object"
       && evidence.fieldProvenance && typeof evidence.fieldProvenance === "object"
@@ -430,14 +587,16 @@ function compactCatalogMetadataForGroup(
       && Array.isArray(evidence.sourceProviders) && evidence.sourceProviders.length > 0
     );
     // Prefer the canonical normalized catalog evidence when it is complete.
-    // Keep provider records for sparse inputs that do not carry those fields.
+    // Narrative and evidence-score both receive these source facts through the
+    // evidence projection; sending provider records again only duplicates large
+    // catalog payloads. Keep provider records for sparse inputs.
     if (hasNormalizedCatalogEvidence) return null;
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   // Retain a bounded set of named provider records; long descriptions/raw
   // responses are already represented by normalized evidence and provenance.
   return Object.fromEntries(Object.entries(value).slice(0, 4)
-    .map(([provider, record]) => [provider, group === "evidence-score" ? compactEvidenceScoreValue(record, 0, 72, 3) : group === "narrative" ? compactEvidenceScoreValue(record) : compactPromptValue(record)])) as Record<string, unknown>;
+    .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning", "release"].includes(group) ? compactEvidenceScoreValue(record, 0, 72, 3) : compactPromptValue(record)])) as Record<string, unknown>;
 }
 
 async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
@@ -472,7 +631,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const providerLabel = providerName === "gemini" ? "Gemini" : providerName === "ollama" ? "Ollama" : "Groq";
   const tokenField = providerName === "groq" ? "max_completion_tokens" : "max_tokens";
   const rawOutputSchema = z.toJSONSchema(schema);
-  const outputSchema = groupName === "evidence-score" ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
+  const outputSchema = ["evidence-score", "narrative", "positioning", "release", "promotion"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
   const completed = await input.loadCompletedSectionGroup?.(cacheGroupName);
   if (completed !== null && completed !== undefined) {
     const cached = schema.safeParse(completed);
@@ -512,7 +671,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? " The user payload includes outputSchema, the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value, array bound and minimum length. Return one complete JSON object only. Do not include outputSchema in the returned object. Local Zod and section word-count validation are mandatory."
       : "";
     const messages = [
-      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
+      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release", "promotion"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
       {
         role: "user",
         content: JSON.stringify({
@@ -556,7 +715,20 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens)
       : sectionOutputBudget;
     if (groqTpmBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS)) {
-      console.warn(JSON.stringify({ event: "provider_preflight_rejection", provider: providerName, model, group: groupName, failureKind: "prompt_budget_exceeded", estimatedInputTokens, minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS }));
+      const userPrompt = JSON.parse(messages[1].content) as Record<string, unknown>;
+      const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
+      console.warn(JSON.stringify({
+        event: "provider_preflight_rejection", provider: providerName, model, group: groupName,
+        failureKind: "prompt_budget_exceeded", estimatedInputTokens,
+        minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS,
+        promptBytes: {
+          system: byteLength(messages[0].content),
+          evidence: byteLength(userPrompt.evidence),
+          sonicDna: byteLength(userPrompt.sonicDna),
+          catalogMetadata: byteLength(userPrompt.catalogMetadata),
+          responseSchema: byteLength(requestBody.response_format),
+        },
+      }));
       throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
@@ -797,7 +969,7 @@ export class GroqClient implements GroqAssessmentClient {
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"positioning","Write evidence-bounded A&R positioning and commercial read.",PositioningSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"release","Write a grounded release recommendation and priorities.",ReleaseSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"evidence-score","Score evidence-derivable dimensions only. Include >=1 evidenceLabels item with label, claim and actual source; use INDUSTRY PRACTICE/source industry_practice only as separate general guidance. Return the unscored listening checklist. evidenceGaps and limitations: >=8 words each; every scorecard rationale: >=25 words, including null rhythmicConsistency with the missing master-timing evidence stated. Each checklist item: >=5 words. Write complete, specific sentences. Repair only the field named by correction; preserve evidence meaning.",EvidenceScoreSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"evidence-score","Score only evidence-derivable dimensions; return evidenceLabels and the unscored checklist. Follow local word-count minima, including the 25-word null rhythmicConsistency rationale. Repair only named fields; preserve evidence meaning.",EvidenceScoreSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"production","Give actionable production and arrangement guidance. Separate lane-general craft as INDUSTRY PRACTICE.",ProductionSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"comparables","Provide inferred lane descriptors and reference-search criteria to verify; do not invent named artists or tracks.",ComparableSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"promotion","Build a staged promotion plan, general pitching angles, content concepts and playlist categories only. Each playlist category must be a descriptive phrase of at least three words. Include INDUSTRY PRACTICE separately.",PromotionSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),

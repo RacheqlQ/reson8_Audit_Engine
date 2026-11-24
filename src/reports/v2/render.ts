@@ -575,18 +575,6 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...(data.energySeries?["ENERGY SERIES — "+(data.energySeriesPointCount??data.energySeries.length)+" timestamped source points; chart preserves extrema using "+data.energySeries.length+" plotted points."]:[]),
    ...(data.sonicAxes?["SONIC DNA AXES — "+Object.entries(data.sonicAxes).map(([name,axis])=>name+" "+axis.value+"/100"+(axis.note?" ("+axis.note+")":"")).join("; ")]:[])
   ]},
-  {title:"Evidence ledger and scorecard",blocks:[],lines:[
-   buildEvidenceLedgerSummary(arr(a.evidenceLabels).map(value => rec(value) as { label: string })),
-   "Composite score: "+(data.headlineScore===null?"Not issued — validated dimension inputs do not support a composite score; no synthetic score is substituted.":data.headlineScore+"/100"),
-   ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
-   ...sanitizePublicReportLines(data.notYetMeasured).slice(0,3),
-   ...buildTempoDiagnosticLines(input),
-   ...buildConfirmedAudioEvidenceLines(data),
-   ...publicReportLimitations(a.limitations).slice(0,2),
-   "Market proposition: "+(data.hasVerifiedCommercialEvidence?"PERFORMANCE VERIFIED — source-attributed commercial data supplied.":"PROPOSED — an evidence-informed A&R/commercial thesis; historical streams, sales, revenue, chart activity and audience demand are not asserted."),
-   ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
-   ...(data.comparables??[]).map(c=>"Comparable context (not audience overlap): "+c.title+" · "+c.year+" · "+c.lane+" · "+c.similarity+"% · "+c.basis+" · "+c.source)
-  ]},
   {title:"A&R positioning",blocks:[],lines:[...buildMandatoryArAnswerLines(input),buildVocalCadenceSummaryLine(input),...buildPositioningLines(input)]},
   {title:"Strengths, risks and actions",blocks:[],lines:[
    "Strengths ("+buildStrengthRiskSummary(input).strengthCount+" documented): "+(buildStrengthRiskSummary(input).strengths.slice(0,2).map(value=>value.length>125?value.slice(0,122).trimEnd()+"...":value).join("; ")||"No measured strengths supplied.")+(buildStrengthRiskSummary(input).strengthCount>2?" · "+(buildStrengthRiskSummary(input).strengthCount-2)+" additional documented item(s).":""),
@@ -764,6 +752,17 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  const diagnosticLines=buildKeyDiagnosticLines(input).filter(line=>
   /^(Window agreement:|Bootstrap rank share|Runner-up margin:|Bass-root anchors:|Outro weighting:|Relative major\/minor ambiguity remains\.|Tonal windows do not consistently support one candidate\.|Bootstrap candidate ranking is unstable\.|The top candidate is too close to its runner-up\.|Adjacent Circle of Fifths candidates remain close\.)/.test(line)
  );
+ const audio=rec(input.sonicDna);
+ const tuningWindows=Number(audio.tuningEvidenceWindows);
+ if(Number.isFinite(tuningWindows)&&tuningWindows>1){
+  diagnosticLines.unshift("More than one tuning window was detected; a single tuning reference is not confirmed.");
+ }
+ const audioHarmonic=rec(audio.harmonicFeatures);
+ const segmentAgreement=Number(audio.keySegmentAgreement??audioHarmonic.segmentAgreement);
+ if((Number.isFinite(segmentAgreement)&&segmentAgreement>0&&segmentAgreement<0.5)
+   ||/disagree across audio segments/i.test(String(audioHarmonic.limitation??""))){
+  diagnosticLines.unshift("Tonal windows do not consistently support one candidate.");
+ }
  let diagnosticY=top-108;
  for(const line of diagnosticLines.slice(0,5)){
   const used=drawWrapped(page,line,x+174,diagnosticY,width-190,fonts.regular,5.8,C.muted,6.8);
@@ -1167,7 +1166,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
  });
  if(consistencyErrors.length)throw new Error("Chart data reconciliation failed: "+consistencyErrors.join(" "));
 
- if((tier==="sample"&&pages.length!==8)||(tier==="full"&&pages.length<13))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
+ if((tier==="sample"&&pages.length!==7)||(tier==="full"&&pages.length<12))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,tier==="full"&&index===0?"Full A&R report":spec.title,fonts);
   let chartCursor=H-380;
@@ -1314,7 +1313,6 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   }
   const legacyChartSection: Record<string,string> = {
    "Identity and source reconciliation":"Identity and source reconciliation",
-   "Evidence ledger and scorecard":"Evidence ledger and provenance",
    "A&R positioning":"Creative identity and A&R positioning",
    "Strengths, risks and actions":"Strengths and creative leverage",
    "Release and promotion plan":"Promotion plan"

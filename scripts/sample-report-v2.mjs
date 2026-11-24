@@ -32,9 +32,9 @@ minimal.auditId="fixture-v2-minimal-audio-only";
 minimal.evidence={fixture:true,auditType:"AUDIO-ONLY TEST FIXTURE",artist:null,title:null,album:null,isrc:null,upc:null,label:null,metadataSourcesChecked:[]};
 minimal.sonicDna={provenance:"fixture-only uploaded audio",bpm:null,key:null,mode:null,tempoConfidence:0,keyConfidence:0};
 for(const [name,input,expected] of [
- ["v2-phillo-stunixx-reference",phillo,8],
- ["v2-complete-synthetic-fixture",complete,8],
- ["v2-minimal-audio-only",minimal,8],
+ ["v2-phillo-stunixx-reference",phillo,7],
+ ["v2-complete-synthetic-fixture",complete,7],
+ ["v2-minimal-audio-only",minimal,7],
 ]){
  const bytes=await generateAuditReportV2({...input,generatedAt:"2026-11-20T00:00:00.000Z"});
  const pdf=await PDFDocument.load(bytes);
@@ -52,7 +52,7 @@ for(const [name,input,expected] of [
 
 const philloFullBytes=await generateAuditReportV2({...phillo,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const philloFullPdf=await PDFDocument.load(philloFullBytes);
-if(philloFullPdf.getPageCount()!==13)throw new Error("v2-phillo-stunixx-full expected 13 pages (7 core + 5 narrative + final A&R notes); got "+philloFullPdf.getPageCount());
+if(philloFullPdf.getPageCount()!==12)throw new Error("v2-phillo-stunixx-full expected 12 pages (6 core + 5 narrative + final A&R notes); got "+philloFullPdf.getPageCount());
 const philloFullFile=new URL("v2-phillo-stunixx-full.pdf",out);
 await writeFile(philloFullFile,philloFullBytes);
 const philloFullText=execFileSync("pdftotext",["-layout",philloFullFile.pathname,"-"],{encoding:"utf8"});
@@ -69,7 +69,7 @@ process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" p
 
 const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const fullPdf=await PDFDocument.load(fullBytes);
-if(fullPdf.getPageCount()!==14)throw new Error("v2-complete-synthetic-full expected 14 pages (7 core + 5 narrative + 1 evidence-gated deep dive + final A&R notes); got "+fullPdf.getPageCount());
+if(fullPdf.getPageCount()!==13)throw new Error("v2-complete-synthetic-full expected 13 pages (6 core + 5 narrative + 1 evidence-gated deep dive + final A&R notes); got "+fullPdf.getPageCount());
 await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
 const fullText=execFileSync("pdftotext",["-layout",new URL("v2-complete-synthetic-full.pdf",out).pathname,"-"],{encoding:"utf8"});
 const completePages=fullText.split("\f").filter(page=>page.trim().length>0);
@@ -79,6 +79,5 @@ const normalizedCover=cover.replace(/\s+/g," ");
 const confirmedCount=(normalizedCover.match(/\bCONFIRMED\b/g)??[]).length;
 if(!normalizedCover.includes("96 BPM")||confirmedCount<2)throw new Error("Full-report cover must label voting-stabilized tempo and key CONFIRMED.");
 if(!normalizedCover.includes("Confirmed: A minor"))throw new Error("Full-report cover must show the confirmed consensus-stabilized key.");
-const scorecardPage=completePages[3]??"";
-if(scorecardPage.includes("No tempo result is available from the supplied recording.")&&scorecardPage.includes("TEMPO INFERENCE"))throw new Error("Evidence ledger contradicts a confirmed tempo verdict.");
-process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; cover tempo/key confirmations and evidence-ledger consistency verified.\n");
+if(fullText.toUpperCase().includes("EVIDENCE LEDGER AND SCORECARD"))throw new Error("The removed evidence ledger and scorecard page must not be rendered.");
+process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; cover tempo/key confirmations and removed-page contract verified.\n");

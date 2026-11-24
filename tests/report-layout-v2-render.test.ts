@@ -62,8 +62,8 @@ describe("v2 commercial strategy report integration", () => {
     expect(buildCommercialStrategyLines(input).join(" ")).toContain("MULTI_PLATFORM");
     const sample = await generateAuditReportV2(input, "sample");
     const full = await generateAuditReportV2(input, "full");
-    expect((await PDFDocument.load(sample)).getPageCount()).toBe(8);
-    expect((await PDFDocument.load(full)).getPageCount()).toBe(13);
+    expect((await PDFDocument.load(sample)).getPageCount()).toBe(7);
+    expect((await PDFDocument.load(full)).getPageCount()).toBe(12);
   });
 });
 
@@ -251,7 +251,7 @@ describe("v2 chart reconciliation with sanitized assessment data", () => {
     };
 
     const bytes = await generateAuditReportV2({ ...input, generatedAt: "2026-11-20T00:00:00.000Z" }, "full");
-    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(13);
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(12);
   });
 });
 
@@ -272,7 +272,7 @@ describe("v2 gated report pages", () => {
     input.evidence = { ...input.evidence, artist: "Stunixx", title: "Phillo", album: null, isrc: null, upc: null, label: null,
       reconciliation: { conflicts: [{ field: "album", values: ["Hole-Hearted - EP", "Hole-Hearted"] }] } };
     const pdf = await PDFDocument.load(await generateAuditReportV2(input));
-    expect(pdf.getPageCount()).toBe(8);
+    expect(pdf.getPageCount()).toBe(7);
   });
 
   it("keeps a complete evidence-rich sample at nine pages without dropping gated evidence", async () => {
@@ -284,14 +284,14 @@ describe("v2 gated report pages", () => {
       flaggedMoments: [{ timestampSeconds: 12, title: "Hook entry", note: "Synthetic test observation", tag: "Strength" }] };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
-    expect(pdf.getPageCount()).toBe(8);
+    expect(pdf.getPageCount()).toBe(7);
     expect(pdf.getForm().getFields().map(field => field.getName())).toContain("ar_notes");
   });
 
   it("keeps the five narrative pages and only evidence-supported deep dives", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(13);
+    expect(pdf.getPageCount()).toBe(12);
   });
 
   it("keeps the five narrative pages after page 9 and omits unsupported analytical stub pages", async () => {
@@ -302,7 +302,7 @@ describe("v2 gated report pages", () => {
     input.assessment = { ...input.assessment, headlineScore: null, scoreDrivers: [], executionTimeline: [] };
     input.realMasterContract = null;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(13);
+    expect(pdf.getPageCount()).toBe(12);
   });
 
   it("keeps expanded narrative content on its five allocated pages", async () => {
@@ -315,7 +315,7 @@ describe("v2 gated report pages", () => {
       "A release decision still requires rights clearance, delivery confirmation, approved final master and source-attributed commercial reporting."
     )];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(13);
+    expect(pdf.getPageCount()).toBe(12);
   });
 
   it("adds only the analytical pages supported by optional evidence", async () => {
@@ -329,12 +329,12 @@ describe("v2 gated report pages", () => {
     };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(14);
+    expect(pdf.getPageCount()).toBe(13);
   });
 
   it("omits every gated page for a minimal audio-only fixture", async () => {
     const input = { ...metadataOnlyFixture, evidence: { fixture: true, auditType: "AUDIO-ONLY", artist: null, title: null }, sonicDna: { provenance: "fixture", bpm: null, key: null, mode: null, tempoConfidence: 0, keyConfidence: 0 } };
-    expect((await PDFDocument.load(await generateAuditReportV2(input as any))).getPageCount()).toBe(8);
+    expect((await PDFDocument.load(await generateAuditReportV2(input as any))).getPageCount()).toBe(7);
   });
 });
 
@@ -385,7 +385,7 @@ describe("Page 3 vocal arrangement snapshot integration", () => {
     expect(geometry.vocalBottom).toBeGreaterThan(geometry.overviewTop);
     expect(geometry.overviewBottom).toBeGreaterThan(42);
     expect(titles[2]).toBe("Track snapshot");
-    expect(titles[3]).toBe("Evidence ledger and scorecard");
+    expect(titles[3]).toBe("A&R positioning");
     expect(reportV2Render.buildExecutiveSummary(input)).toContain("0:18–0:47");
     expect(reportV2Render.buildVocalCadenceSummaryLine(input)).toContain("0:18–0:47");
     const swotSmart = reportV2Render.buildSwotSmartLines(input).join(" ");
@@ -394,8 +394,8 @@ describe("Page 3 vocal arrangement snapshot integration", () => {
     expect(reportV2Render.buildMandatoryArAnswerLines(input)[1]).toContain("Intro 0:00");
     const sample = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
     const full = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(sample.getPageCount()).toBe(8);
-    expect(full.getPageCount()).toBe(13);
+    expect(sample.getPageCount()).toBe(7);
+    expect(full.getPageCount()).toBe(12);
   });
 
   it("keeps an explicit low-activity fallback with no fabricated pitch or blank structural timeline", async () => {
@@ -417,7 +417,7 @@ describe("Page 3 vocal arrangement snapshot integration", () => {
       }
     };
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
-    expect(pdf.getPageCount()).toBe(8);
+    expect(pdf.getPageCount()).toBe(7);
   });
 });
 
@@ -668,8 +668,8 @@ describe("v2 PDF renderer with verbose assessment context", () => {
 
       const sample = await generateAuditReportV2(input, "sample");
       const full = await generateAuditReportV2(input, "full");
-      expect((await PDFDocument.load(sample)).getPageCount(), source + " sample").toBe(8);
-      expect((await PDFDocument.load(full)).getPageCount(), source + " full").toBe(13);
+      expect((await PDFDocument.load(sample)).getPageCount(), source + " sample").toBe(7);
+      expect((await PDFDocument.load(full)).getPageCount(), source + " full").toBe(12);
     }
   });
 });
