@@ -618,7 +618,20 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens)
       : sectionOutputBudget;
     if (groqTpmBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS)) {
-      console.warn(JSON.stringify({ event: "provider_preflight_rejection", provider: providerName, model, group: groupName, failureKind: "prompt_budget_exceeded", estimatedInputTokens, minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS }));
+      const userPrompt = JSON.parse(messages[1].content) as Record<string, unknown>;
+      const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
+      console.warn(JSON.stringify({
+        event: "provider_preflight_rejection", provider: providerName, model, group: groupName,
+        failureKind: "prompt_budget_exceeded", estimatedInputTokens,
+        minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS,
+        promptBytes: {
+          system: byteLength(messages[0].content),
+          evidence: byteLength(userPrompt.evidence),
+          sonicDna: byteLength(userPrompt.sonicDna),
+          catalogMetadata: byteLength(userPrompt.catalogMetadata),
+          responseSchema: byteLength(requestBody.response_format),
+        },
+      }));
       throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
