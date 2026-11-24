@@ -291,10 +291,12 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     delete projected.sourceCombination;
   }
   if (group === "evidence-score" || group === "narrative") {
-    // Keep source/provenance facts; compact duplicated narrative detail only.
-    delete projected.genres;
-    delete projected.catalogSources;
-    delete projected.sourceCombination;
+    // Keep source/provenance facts; only evidence-score drops duplicate summaries.
+    if (group === "evidence-score") {
+      delete projected.genres;
+      delete projected.catalogSources;
+      delete projected.sourceCombination;
+    }
     const compacted = compactEvidenceScoreValue(projected) as Record<string, unknown>;
     if (compacted.fieldProvenance && typeof compacted.fieldProvenance === "object") {
       compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, 12));
