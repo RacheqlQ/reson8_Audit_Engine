@@ -202,7 +202,7 @@ export function buildArNotesDecisionContextFull(input:AuditReportInput):ArNotesD
  const nextAction="Verify identity, rights and the submitted master before pitching.";
  const sampleContext=buildArNotesDecisionContext(input);
  const summary=rawSummary.length>480
-  ?sampleContext.summary.replace(/\\.\\.\\./g,"")+(selectedOpenItems[1]?" Additional diligence: "+selectedOpenItems[1]:"")+(openItems.length>2?" "+(openItems.length-2)+" further diligence item(s) are detailed in the evidence and action sections.":"")
+  ?sampleContext.summary.split("...").join("")+(selectedOpenItems[1]?" Additional diligence: "+selectedOpenItems[1]:"")+(openItems.length>2?" "+(openItems.length-2)+" further diligence item(s) are detailed in the evidence and action sections.":"")
   :["Decision basis: "+fullSummary,"Open diligence: "+(openDiligence||"No additional diligence items were recorded."),"Next action: "+nextAction].join(" ");
  return {
   heading:"DECISION CONTEXT",
