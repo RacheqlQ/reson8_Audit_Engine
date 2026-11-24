@@ -246,17 +246,27 @@ describe("GroqClient section groups",()=>{
    expect(estimatedInputTokens+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
  });
- it("rejects a catalog payload above the Groq request budget before contacting the provider",async()=>{
+ it("bounds oversized catalog metadata before sending a Groq request",async()=>{
   const oversizedCatalog=Object.fromEntries(Array.from({length:40},(_,index)=>[
    "provider"+index,"catalog evidence detail ".repeat(60)
   ]));
-  const mock=vi.fn(async()=>new Response("unexpected provider request",{status:500}));
+  const {mock}=fetchMock();
+  const payloads:Array<Record<string,any>>=[];
+  mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body));
+   const payload=JSON.parse(body.messages[1].content);
+   if(payload.sectionGroup==="narrative")payloads.push(payload);
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
+  });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
-  await expect(client.assess({
+  await client.assess({
    evidence:{artist:"Fixture Artist",title:"Oversized metadata fixture"},
    sonicDna:null,catalogMetadata:oversizedCatalog
-  })).rejects.toThrow("GROQ_PROMPT_BUDGET_EXCEEDED");
-  expect(mock).not.toHaveBeenCalled();
+  });
+  expect(mock).toHaveBeenCalledTimes(9);
+  expect(payloads).toHaveLength(1);
+  expect(Object.keys(payloads[0].catalogMetadata)).toHaveLength(4);
+  expect(payloads[0].catalogMetadata.provider0.length).toBeLessThanOrEqual(244);
  });
  it("keeps Gemini and Ollama module output budgets independent of Groq's TPM ceiling",async()=>{
   const identity=Object.fromEntries(Array.from({length:20},(_,index)=>["sourceField"+index,"verified source provenance detail ".repeat(25)]));
@@ -581,10 +591,10 @@ describe("GroqClient section groups",()=>{
   expect(requests.every(request=>request.total<=6000)).toBe(true);
   const narrative=requests.find(request=>request.group==="narrative")!;
   expect(narrative.payload.sonicDna).not.toHaveProperty("vocalArrangementAnalysis");
-  expect(Object.keys(narrative.payload.evidence.fieldProvenance)).toHaveLength(20);
+  expect(Object.keys(narrative.payload.evidence.fieldProvenance)).toHaveLength(16);
   expect(narrative.payload.evidence.fieldProvenance.field0).not.toHaveProperty("detail");
   const evidenceScore=requests.find(request=>request.group==="evidence-score")!;
-  expect(evidenceScore.payload.sonicDna.vocalArrangementAnalysis.segments).toHaveLength(10);
+  expect(evidenceScore.payload.sonicDna.vocalArrangementAnalysis.segments).toHaveLength(8);
  });
 
 });
