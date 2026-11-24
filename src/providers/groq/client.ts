@@ -129,6 +129,20 @@ const SYSTEM_PROMPT = [
   "Return JSON only as one complete object; obey schema and local word-count requirements without repeated boilerplate."
 ].join(" ");
 
+const NARRATIVE_SYSTEM_PROMPT = [
+  "You are the A&R analyst. Use supplied evidence only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or external facts.",
+  "Evidence labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=two or more independent agreeing providers; INFERRED=hypothesis (source groq_assessment); INDUSTRY PRACTICE=general craft guidance (source industry_practice), never a track fact. Name only providers that returned records.",
+  "Keep provider genre labels exact and scene tags separate. Null primary genre means no confirmed A&R lane. Tempo contributes at most 15% to genre scoring and never establishes genre alone.",
+  "Tempo is reportable only when confirmed and tempoConfidence >=0.5. Otherwise do not state BPM, infer speed/energy, or use tempo in scoring or recommendations. If candidate/window/independent-estimator evidence exists while confirmed tempo is null, describe provisional evidence and its consensus limitation without promoting a candidate.",
+  "Key and mode are CONFIRMED only from supplied voting/window-consensus-stabilized results. Null confirmed values stay provisional; preserve candidate disagreement and never promote a candidate.",
+  "Mood and energy tags are provisional signal heuristics, not calibrated probabilities, listener emotion or demand. Report energy only as its supplied low/moderate/high label and score out of 100.",
+  "Use vocalFeatures only when status=analyzed; report measured activity/pitch with limitations. Otherwise abstain and never infer voice presence, delivery, layering or lyrics. Discuss song sections only when explicit structure boundaries are supplied.",
+  "Use reconciled identity, field provenance, catalogSources and provider records; preserve ISRC conflicts and ambiguous matches. DSP/catalog links are not audio: never claim OBSERVED audio measurements or invent audio analysis from a link. No external stem, separation or render workers.",
+  "Ground strengths, risks and actions in supplied sonic, vocal, genre and catalog evidence. Distinguish unavailable analysis from low-confidence candidates. Recommendations must be evidence-grounded or separately labelled INDUSTRY PRACTICE. Never invent named comparables; provide verification criteria.",
+  "Without verified commercial-performance evidence, marketability is undetermined. Release date is DETERMINED only from supplied verified date evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict remains PROPOSED unless deterministic evidence rules establish otherwise.",
+  "Do not score taste: hook, originality, production quality, replay value and lane clarity belong only in the unscored human listening checklist. Return one complete JSON object only and obey every schema and local word-count requirement."
+].join(" ");
+
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
   "A&R scorer: use supplied evidence only. Never invent streams, sales, playlists, curators, audience metrics, label interest, placements or external facts.",
   "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=hypothesis (source groq_assessment); INDUSTRY PRACTICE=general guidance, not track fact (source industry_practice). Always include the evidenceLabels array with at least one item; every item includes label, claim and source.",
@@ -560,7 +574,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? " The user payload includes outputSchema, the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value, array bound and minimum length. Return one complete JSON object only. Do not include outputSchema in the returned object. Local Zod and section word-count validation are mandatory."
       : "";
     const messages = [
-      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
+      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "narrative" ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
       {
         role: "user",
         content: JSON.stringify({
