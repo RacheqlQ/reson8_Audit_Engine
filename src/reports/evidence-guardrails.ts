@@ -632,5 +632,17 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       mutable.productionArrangementGuidance = "No track-specific production changes are recommended because supporting evidence is incomplete. A qualified listener or mix engineer should review the full recording, identify audible arrangement or mix issues, and document time-coded observations before proposing edits. Measured signal values alone do not establish musical quality or justify changing the arrangement or loudness.";
     }
   }
+  // Provider-level validation runs before this evidence sanitizer. Re-apply the
+  // positioning contract after every deterministic rewrite so genre, numeric-
+  // claim, and zero-confidence fallbacks cannot silently shorten either field.
+  const wordCount = (value: unknown): number => typeof value === "string" ? value.trim().split(/\\s+/).filter(Boolean).length : 0;
+  if (mutable.aAndRPositioning && wordCount(mutable.aAndRPositioning.rationale) < 40) {
+    mutable.aAndRPositioning.rationale = "The available evidence does not justify a definitive track-specific lane verdict. Keep the primary lane and adjacent lanes provisional, and make no stronger positioning claim until identity, genre sources and the uploaded recording have been reconciled and reviewed by a human listener against explicit audible evidence.";
+  }
+  if (mutable.commercialRead && wordCount(mutable.commercialRead.rationale) < 40) {
+    mutable.commercialRead.rationale = hasVerifiedCommercialMetrics(evidence)
+      ? "The available source-attributed commercial measurements should be interpreted only within their stated source, reporting period and method. They do not by themselves establish broader listener demand, revenue, playlist conversion or campaign effectiveness; no marketability claim should extend beyond the verified observations without independent corroboration."
+      : "No verified commercial-performance source was included in this assessment. The supplied metadata and Sonic DNA do not establish listener demand, streams, sales, revenue, playlist conversion, demographic reach or campaign outcomes. Marketability remains undetermined until source-attributed audience or campaign measurements with a defined reporting period and method are provided.";
+  }
   return result;
 }
