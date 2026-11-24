@@ -1145,7 +1145,8 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    });
   }else if(spec.kind==="narrative"){
    let y=H-92;
-   for(const b of spec.blocks){
+   const narrativeBlocks=spec.title==="Promotion and campaign strategy"?spec.blocks.map(b=>({...b,value:b.value.length>200?b.value.slice(0,197).replace(/\\s+\\S*$/,"").trimEnd()+"…":b.value})):spec.blocks;
+   for(const b of narrativeBlocks){
     const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:C.gold,provenance:b.provenance});
     y-=h+6;
    }
