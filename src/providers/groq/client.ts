@@ -35,6 +35,7 @@ const EvidenceScoreSchema = z.object({
   scorecard: z.object({
     tempoLaneFit: ScoreSchema,
     rhythmicConsistency: ScoreSchema,
+    tonalConsensus: ScoreSchema.optional(),
     dynamicRangeLoudness: ScoreSchema,
     metadataCompleteness: ScoreSchema,
     releaseReadiness: ScoreSchema,

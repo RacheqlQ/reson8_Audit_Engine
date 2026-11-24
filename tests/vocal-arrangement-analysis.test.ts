@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzeVocalArrangement,
+  buildVocalAndSectionPageData,
   detectVocalActivityIntervals,
   estimateF0Candidates,
   segmentArrangement,
@@ -83,7 +84,7 @@ describe("in-process vocal and arrangement signal analysis", () => {
     const sampleRate = 16_000;
     const samples = join(voicedTone(220, 3, sampleRate), new Float32Array(sampleRate * 2));
     const result = analyzeVocalArrangement(samples, sampleRate, 1);
-    expect(result.provenance).toBe("SIGNAL_DERIVED_FROM_UPLOADED_MASTER");
+    expect(result.provenance).toBe("SIGNAL_DERIVED_NO_STEM_WORKER");
     expect(result.vocalPresencePct).toBeGreaterThan(0);
     expect(result.vocalPresencePct).toBeLessThanOrEqual(100);
     expect(result.vocalActivityIntervals.length).toBeGreaterThan(0);

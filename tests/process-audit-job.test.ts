@@ -92,7 +92,7 @@ describe("processAuditJob", () => {
         persistedDna = dna as unknown as Record<string, unknown>;
         events.push("dna-in-process");
         expect(dna.vocalArrangementAnalysis).toMatchObject({
-          provenance: "SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+          provenance: "SIGNAL_DERIVED_NO_STEM_WORKER",
           analysisStatus: "INSUFFICIENT_SIGNAL",
           vocalPresencePct: 0,
         });
