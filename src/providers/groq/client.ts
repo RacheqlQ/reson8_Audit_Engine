@@ -130,16 +130,16 @@ const SYSTEM_PROMPT = [
 ].join(" ");
 
 const NARRATIVE_SYSTEM_PROMPT = [
-  "A&R narrative: supplied evidence only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or external facts.",
-  "Evidence labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=general guidance from industry_practice, never track fact. Name only providers with returned records.",
+  "Use supplied evidence only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or external facts.",
+  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=industry_practice guidance, never a track fact. Name only providers with returned records.",
   "Preserve exact provider genre labels and separate scene tags; null primary genre means no confirmed lane. Tempo contributes <=15% to genre scoring and never proves genre.",
-  "Use BPM only when confirmed with confidence >=0.5; otherwise omit BPM, speed/energy inference and tempo scoring. Null confirmed tempo means candidate/window evidence stays provisional.",
-  "Key/mode are CONFIRMED only by supplied voting/window-consensus-stabilized results; null and disagreement stay provisional. Mood/energy are signal heuristics, not probabilities, listener emotion or demand; energy uses only supplied low/moderate/high and score/100.",
-  "Use vocals only when status=analyzed; otherwise do not infer voice, delivery, layering or lyrics. Song sections require explicit boundaries.",
-  "Use reconciled identity, provenance, catalogSources and actual provider records; preserve ISRC conflicts and ambiguous matches. DSP/catalog links are not audio; never claim OBSERVED audio or infer audio from links. No external stem, separation or render workers.",
-  "Ground strengths, risks and actions in supplied sonic, vocal, genre and catalog facts; distinguish unavailable from low-confidence. Label general recommendations INDUSTRY PRACTICE. No invented comparables; give verification criteria.",
-  "Without verified commercial performance, marketability is undetermined. Release date is DETERMINED only from verified supplied evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise.",
-  "Do not score hook, originality, production quality, replay value or lane clarity; keep each in the unscored human-listening checklist. Return JSON only and obey schema/word limits."
+  "Use BPM only when confirmed at confidence >=0.5; otherwise omit BPM, speed/energy inference and tempo scoring. Unconfirmed candidates/windows stay provisional.",
+  "Key/mode are CONFIRMED only by supplied voting/window-consensus-stabilized results; null/disagreement stays provisional. Mood/energy are heuristics, not probabilities, listener emotion or demand; use only supplied energy label and score/100.",
+  "Use vocals only when status=analyzed; otherwise infer no voice, delivery, layering or lyrics. Sections require explicit boundaries.",
+  "Use reconciled identity, provenance, catalogSources and provider records; preserve ISRC conflicts/ambiguity. DSP/catalog links are not audio; never claim OBSERVED audio from links. No external stem, separation or render workers.",
+  "Ground strengths, risks and actions in supplied sonic, vocal, genre and catalog facts. Label general guidance INDUSTRY PRACTICE; do not invent comparables.",
+  "Without verified commercial performance, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise.",
+  "Do not score hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return JSON only; obey schema/word limits."
 ].join(" ");
 
 const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS do not prove mastering readiness; do not recommend loudness changes without a measured fault and target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.";
@@ -341,6 +341,14 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     delete projected.sourceCombination;
     if (["narrative", "promotion"].includes(group)) delete projected.masterAudio;
   }
+  if (group === "narrative" && Array.isArray(projected.catalogSources)) {
+    projected.catalogSources = (projected.catalogSources as unknown[]).map(source => {
+      if (!source || typeof source !== "object" || Array.isArray(source)) return source;
+      const record = source as Record<string, unknown>;
+      return Object.fromEntries(["platform", "status", "provider", "source"].filter(key => record[key] !== undefined)
+        .map(key => [key, record[key]]));
+    });
+  }
   if (["evidence-score", "narrative", "positioning", "release", "production", "promotion"].includes(group)) {
     // Keep source/provenance facts; only evidence-score drops duplicate summaries.
     if (group === "evidence-score") {
@@ -510,8 +518,23 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
         status: raw.status,
         provenance: Object.fromEntries(provenanceKeys.filter(key => rawProvenance[key] !== undefined)
           .map(key => [key, rawProvenance[key]])),
-        descriptors: compactPromptValue(raw.descriptors),
-        predictions: compactPromptValue(raw.predictions),
+        descriptors: raw.descriptors && typeof raw.descriptors === "object" && !Array.isArray(raw.descriptors)
+          ? Object.fromEntries(Object.entries(raw.descriptors as Record<string, unknown>).map(([name, descriptor]) => {
+            if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return [name, compactPromptValue(descriptor)];
+            const measured = descriptor as Record<string, unknown>;
+            return [name, Object.fromEntries(["median", "p10", "p90", "unit"].filter(key => measured[key] !== undefined)
+              .map(key => [key, measured[key]]))];
+          }))
+          : compactPromptValue(raw.descriptors),
+        predictions: raw.predictions && typeof raw.predictions === "object" && !Array.isArray(raw.predictions)
+          ? Object.fromEntries(Object.entries(raw.predictions as Record<string, unknown>).map(([name, prediction]) => {
+            if (!prediction || typeof prediction !== "object" || Array.isArray(prediction)) return [name, compactPromptValue(prediction)];
+            const result = { ...(prediction as Record<string, unknown>) };
+            delete result.method;
+            delete result.probability;
+            return [name, compactPromptValue(result)];
+          }))
+          : compactPromptValue(raw.predictions),
         abstentionReasons: compactEvidenceScoreValue(raw.abstentionReasons, 0, 72, 3),
       };
     }
