@@ -140,7 +140,7 @@ const NARRATIVE_SYSTEM_PROMPT = [
   "Use reconciled identity, field provenance, catalogSources and provider records; preserve ISRC conflicts and ambiguous matches. DSP/catalog links are not audio: never claim OBSERVED audio measurements or invent audio analysis from a link. No external stem, separation or render workers.",
   "Ground strengths, risks and actions in supplied sonic, vocal, genre and catalog evidence. Distinguish unavailable analysis from low-confidence candidates. Recommendations must be evidence-grounded or separately labelled INDUSTRY PRACTICE. Never invent named comparables; provide verification criteria.",
   "Without verified commercial-performance evidence, marketability is undetermined. Release date is DETERMINED only from supplied verified date evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict remains PROPOSED unless deterministic evidence rules establish otherwise.",
-  "Do not score taste: hook, originality, production quality, replay value and lane clarity belong only in the unscored human listening checklist. Return one complete JSON object only and obey every schema and local word-count requirement."
+  "Do not score taste: hook, originality, production quality, replay value and lane clarity belong only in the unscored human listening checklist. Return JSON only: one complete JSON object, and obey every schema and local word-count requirement."
 ].join(" ");
 
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
@@ -534,7 +534,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const providerLabel = providerName === "gemini" ? "Gemini" : providerName === "ollama" ? "Ollama" : "Groq";
   const tokenField = providerName === "groq" ? "max_completion_tokens" : "max_tokens";
   const rawOutputSchema = z.toJSONSchema(schema);
-  const outputSchema = groupName === "evidence-score" ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
+  const outputSchema = groupName === "evidence-score" || groupName === "narrative" ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
   const completed = await input.loadCompletedSectionGroup?.(cacheGroupName);
   if (completed !== null && completed !== undefined) {
     const cached = schema.safeParse(completed);
