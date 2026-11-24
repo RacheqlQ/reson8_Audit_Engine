@@ -608,7 +608,7 @@ describe("voting-confirmed tempo propagation",()=>{
   const data=adaptReportV2(input);
   expect(data.tempo.value).toBe(96);
   expect(data.notYetMeasured.some(line=>/tempo/i.test(line))).toBe(false);
-  expect(buildCoverTempoLabel(data,input)).toBe("96 BPM");
+  expect(buildCoverTempoLabel(data,input)).toBe("96 BPM · CONFIRMED");
   const tempoCard=reportV2Render.metricBlock(data,input).find(block=>block.label==="TEMPO");
   expect(tempoCard).toMatchObject({value:"96 BPM · CONFIRMED",confidence:"CONFIRMED"});
   expect(reportV2Render.buildConfirmedAudioEvidenceLines(data).join(" ")).toContain("TEMPO INFERENCE · CONFIRMED");
