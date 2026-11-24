@@ -339,9 +339,9 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     // Provider combinations and masterAudio metadata are already represented by
     // sourceProviders, normalized identity and field provenance.
     delete projected.sourceCombination;
-    if (group === "narrative") delete projected.masterAudio;
+    if (["narrative", "promotion"].includes(group)) delete projected.masterAudio;
   }
-  if (["evidence-score", "narrative", "positioning", "release", "production"].includes(group)) {
+  if (["evidence-score", "narrative", "positioning", "release", "production", "promotion"].includes(group)) {
     // Keep source/provenance facts; only evidence-score drops duplicate summaries.
     if (group === "evidence-score") {
       delete projected.genres;
@@ -386,7 +386,7 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
 }
 
 function compactEvidenceScoreValue(value: unknown, depth = 0, stringLimit = 112, arrayLimit = 4, fieldName = ""): unknown {
-  const descriptiveField = /^(detail|rawPayload|description|reason|notes|commentary|warning|warnings|limitation|limitations)$/i.test(fieldName);
+  const descriptiveField = /^(detail|rawPayload|description|reason|notes|commentary|warning|warnings)$/i.test(fieldName);
   const maxStringLength = fieldName === "limitations" ? 72 : descriptiveField ? Math.min(stringLimit, 32) : stringLimit;
   if (value === null || typeof value !== "object") {
     return typeof value === "string" && value.length > maxStringLength ? value.slice(0, maxStringLength) + "…" : value;
@@ -440,7 +440,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   };
   const allowed = new Set([...common, ...(featureFamilies[group] ?? [])]);
   const compact = Object.fromEntries(Object.entries(sonicDna).filter(([key, value]) =>
-    allowed.has(key) || (!["narrative", "positioning", "release"].includes(group) && (value === null || typeof value !== "object"))
+    allowed.has(key) || (!["narrative", "positioning", "release", "promotion"].includes(group) && (value === null || typeof value !== "object"))
   )) as Record<string, unknown>;
 
   const rhythm = compact.rhythmFeatures;
@@ -459,8 +459,8 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     compact.harmonicFeatures = summary;
   }
 
-  const compacted = (["evidence-score", "narrative", "positioning", "production"].includes(group)
-    ? compactEvidenceScoreValue(compact, 0, ["evidence-score", "production"].includes(group) ? 40 : 72, group === "evidence-score" ? 4 : group === "production" ? 2 : 3)
+  const compacted = (["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
+    ? compactEvidenceScoreValue(compact, 0, group === "production" ? 40 : 72, ["evidence-score", "production"].includes(group) ? 2 : 3)
     : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
@@ -493,7 +493,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
       ...(Array.isArray(arrangement.sections) ? { sections: compactItems(rawSections, ["label", "startSeconds", "endSeconds", "provisional"]) } : {}),
     };
   }
-  if (["narrative", "positioning", "release", "evidence-score", "production"].includes(group)) {
+  if (["narrative", "positioning", "release", "evidence-score", "production", "promotion"].includes(group)) {
     // The narrative needs the complete acoustic descriptor summary, not the
     // 128-window raw summary series. Median/p10/p90 preserve measured spread;
     // vocal intervals retain representative first/middle/last observations.
@@ -648,7 +648,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? " The user payload includes outputSchema, the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value, array bound and minimum length. Return one complete JSON object only. Do not include outputSchema in the returned object. Local Zod and section word-count validation are mandatory."
       : "";
     const messages = [
-      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
+      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release", "promotion"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
       {
         role: "user",
         content: JSON.stringify({
