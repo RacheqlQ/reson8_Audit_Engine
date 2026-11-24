@@ -96,6 +96,7 @@ export interface AuditStageFailureDiagnostic {
   timedOut: boolean;
   errorCode: string;
   stackFingerprint: string;
+  stackFrames: string[];
   durationMs?: number;
 }
 
@@ -114,12 +115,16 @@ function safeAuditErrorCode(error: unknown): string {
   return known.find(([pattern]) => pattern.test(message))?.[1] ?? "UNCLASSIFIED_STAGE_ERROR";
 }
 
-function safeStackFingerprint(error: unknown): string {
+function safeStackFrames(error: unknown): string[] {
   const stack = error instanceof Error ? error.stack ?? "" : "";
-  const frames = stack.split("\n").slice(1).map(line => {
+  return stack.split("\n").slice(1).map(line => {
     const match = line.match(/^\s*at\s+([A-Za-z0-9_.$<>-]+)(?:\s+\(|$)/);
     return match?.[1] ?? "";
   }).filter(Boolean).slice(0, 4);
+}
+
+function safeStackFingerprint(error: unknown): string {
+  const frames = safeStackFrames(error);
   if (!frames.length) return "stk-unknown";
   let hash = 2166136261;
   for (const char of frames.join("|")) {
@@ -134,7 +139,7 @@ export function buildAuditStageFailureDiagnostic(stage: string, error: unknown, 
   const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(error.name)
     ? error.name
     : "UnknownError";
-  return { stage, failureCode, errorName, timedOut: failureCode === "timeout", errorCode: safeAuditErrorCode(error), stackFingerprint: safeStackFingerprint(error), ...(Number.isFinite(durationMs) ? { durationMs: Math.max(0, Math.round(durationMs!)) } : {}) };
+  return { stage, failureCode, errorName, timedOut: failureCode === "timeout", errorCode: safeAuditErrorCode(error), stackFingerprint: safeStackFingerprint(error), stackFrames: safeStackFrames(error), ...(Number.isFinite(durationMs) ? { durationMs: Math.max(0, Math.round(durationMs!)) } : {}) };
 }
 
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
@@ -1035,6 +1040,7 @@ export async function processAuditJob(
           errorCode: diagnostic.errorCode,
           errorName: diagnostic.errorName,
           stackFingerprint: diagnostic.stackFingerprint,
+          stackFrames: diagnostic.stackFrames,
         }));
       }
     }
