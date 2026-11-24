@@ -1069,6 +1069,21 @@ describe("nine-section report-readiness integration", () => {
     const pdf = await PDFDocument.load(pdfBytes);
     expect(pdf.getPageCount()).toBe(7);
   });
+
+  it("retains both positioning minima after zero-confidence evidence sanitization", async () => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      const value = p(payload.sectionGroup) as Record<string, any>;
+      if (payload.sectionGroup === "evidence-score") value.confidence = 0;
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(value) } }] }), { status: 200 });
+    });
+    const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null });
+    expect(assessment.confidence).toBe(0);
+    expect(assessment.aAndRPositioning.rationale.trim().split(/\\s+/).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.trim().split(/\\s+/).length).toBeGreaterThanOrEqual(40);
+  });
 });
 
 describe("positioning contract and provider recovery regressions", () => {
