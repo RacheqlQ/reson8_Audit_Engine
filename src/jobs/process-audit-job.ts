@@ -133,12 +133,12 @@ function safeAuditErrorMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : typeof error === "string" ? error : "";
   if (!raw) return "No exception message available";
   return raw
-    .replace(/[\\r\\n\\t]+/g, " ")
-    .replace(/https?:\\/\\/[^\\s)]+/gi, "[url]")
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email]")
-    .replace(/(?:[A-Z]:\\\\|\\/)(?:[^\\s"'<>]+[\\\\/])*[^\\s"'<>]*/g, "[path]")
-    .replace(/(?:token|secret|authorization|api[_-]?key)(?:\\s*[:=]\\s*|\\s+)[^\\s,;]+/gi, "$1=[redacted]")
-    .replace(/\\b[0-9a-f]{8}-[0-9a-f-]{27,}\\b/gi, "[id]")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/https?:\/\/[^\s)]+/gi, "[url]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/(?:[A-Z]:\\|\/)(?:[^\s"'<>]+[\\/])*[^\s"'<>]*/g, "[path]")
+    .replace(/\b(token|secret|authorization|api[_-]?key)(?:\s*[:=]\s*|\s+)[^\s,;]+/gi, "$1=[redacted]")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/gi, "[id]")
     .slice(0, 240);
 }
 
