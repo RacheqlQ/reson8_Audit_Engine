@@ -333,13 +333,13 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       value: tempoReliable ? audio?.bpm as number : null,
       confidence: tempoConfidence,
       method: methodOf(record(audio?.rhythmFeatures), ["method"]) ?? methodOf(audio, ["tempoMethod", "method"]),
-      evidence: sourceLine(record(audio?.rhythmFeatures), "Uploaded-master tempo evidence"),
+      evidence: (tempoReliable ? "CONFIRMED · voting consensus" : "Unconfirmed · candidate evidence") + " · " + sourceLine(record(audio?.rhythmFeatures), "Uploaded-master tempo evidence"),
     },
     key: {
       value: keyReliable ? [audio?.key, audio?.mode].filter((part) => typeof part === "string" && part.trim()).join(" ") : null,
       confidence: keyConfidence,
       method: methodOf(record(audio?.harmonicFeatures), ["method"]) ?? methodOf(audio, ["keyMethod", "method"]),
-      evidence: sourceLine(record(audio?.harmonicFeatures), "Uploaded-master harmonic evidence"),
+      evidence: (keyReliable ? "CONFIRMED · tonal resolver consensus" : "Unconfirmed · tonal candidate evidence") + " · " + sourceLine(record(audio?.harmonicFeatures), "Uploaded-master harmonic evidence"),
     },
     tonalResolution,
     energy: {

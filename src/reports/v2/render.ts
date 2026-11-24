@@ -3,7 +3,7 @@ import { buildArNotesDecisionContext, buildArNotesDecisionContextFull, chartsFor
 import { loadReportFonts } from "../fonts.js";
 import { chartEvidenceIntegrityErrors, chartPanelHeight, countEvidenceLayers, drawChartPanel } from "../charts.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
-import { hasReportableKeyCandidates } from "../evidence-guardrails.js";
+import { hasReportableKeyCandidates, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
 import { sanitizePublicReportLines, sanitizePublicReportLine } from "./public-language.js";
 import { buildReconciledArIntelligence } from "./reconciled-ar-intelligence.js";
@@ -17,7 +17,8 @@ const C={
  teal:rgb(29/255,158/255,117/255),label:rgb(138/255,106/255,48/255),amber:rgb(239/255,159/255,39/255),coral:rgb(216/255,90/255,48/255),violet:rgb(99/255,107/255,184/255)
 };
 type Fonts={regular:PDFFont;bold:PDFFont;italic:PDFFont;boldItalic:PDFFont};
-type Block={label:string;value:string;provenance?:string;confidence?:string;color?:keyof typeof C};
+export type ProposedArrangementSegment={label:string;startPct:number;endPct:number;intensity:number;emotion:string};
+export type Block={label:string;value:string;provenance?:string;confidence?:string;color?:keyof typeof C;arrangementBar?:ProposedArrangementSegment[]};
 type PageSpec={title:string;blocks:Block[];lines?:string[];kind?:string};
 const rec=(v:unknown):Record<string,unknown>=>v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:{};
 const finite=(value:unknown):value is number=>typeof value==="number"&&Number.isFinite(value);
@@ -93,7 +94,7 @@ export function buildCoverTempoLabel(data:ReportV2Data,input:AuditReportInput):s
  if(candidate!==null&&verdict.confirmation_status!=="UNDETERMINED")return candidate+" BPM · CANDIDATE";
  return "Not determined";
 }
-function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
+export function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
  const provenance="Measured from the uploaded recording",audio=rec(input.sonicDna),rhythm=rec(audio.rhythmFeatures),verdict=rec(rhythm.tempoVerdict);
  const candidate=finite(audio.tempoCandidateBpm)?audio.tempoCandidateBpm:finite(verdict.primary_candidate_bpm)?verdict.primary_candidate_bpm:finite(audio.bpm)?audio.bpm:null;
  const tempoStatus=data.tempo.value!==null?"CONFIRMED":candidate!==null&&candidate>=40&&candidate<=220?"CANDIDATE":"NOT ANALYSED";
@@ -114,6 +115,67 @@ function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
   {label:"TEMPO",value:tempoDisplay,confidence:tempoStatus,provenance},
   {label:"SONG KEY",value:keyDisplay,confidence:keyStatus,provenance},
   {label:"LOUDNESS / SIGNAL",value:loudness,provenance}
+ ];
+}
+export function buildProposedArrangement(input:AuditReportInput):{summary:string;segments:ProposedArrangementSegment[]}{
+ const evidence=rec(input.evidence),assessment=rec(input.assessment),position=rec(assessment.aAndRPositioning),audio=rec(input.sonicDna);
+ const lane=str(evidence.genre,str(position.primaryLane,"genre lane to validate"));
+ const genre=lane.toLowerCase();
+ const afro=/(afrobeat|afropop|afro.?r&b|afro.?fusion)/.test(genre);
+ const rap=/(hip.?hop|rap|drill|trap)/.test(genre);
+ const labels=afro?["Intro / hook tease","Verse 1","Pre-hook lift","Hook / chorus","Verse 2","Hook reprise","Bridge / breakdown","Final hook","Outro"]:rap?["Intro / motif","Verse 1","Hook","Verse 2","Hook reprise","Bridge / beat variation","Final hook","Outro"]:["Intro","Verse 1","Pre-chorus","Chorus","Verse 2","Chorus reprise","Bridge / breakdown","Final chorus","Outro"];
+ const weights=rap?[7,19,13,18,18,10,10,5]:[7,17,9,16,16,13,9,9,4];
+ const levels=rap?[.22,.48,.78,.88,.52,.82,.45,1]:[.2,.42,.62,.88,.48,.82,.38,1,.2];
+ const emotions=["Set the scene","Establish identity","Build anticipation","Release and memorability","Renew momentum","Reinforce the hook","Contrast and emotional turn","Peak resolution","Intentional tail"];
+ const total=weights.reduce((sum,value)=>sum+value,0);let cursor=0;
+ const duration=finite(audio.durationSeconds)&&audio.durationSeconds>0?audio.durationSeconds:null;
+ const energySeries=arr(audio.energyOverTime??audio.energySeries).map(value=>rec(value)).filter(item=>finite(item.timeSeconds??item.time)&&finite(item.value??item.energy??item.loudness));
+ const energyValues=energySeries.map(item=>Number(item.value??item.energy??item.loudness));
+ const energyMin=energyValues.length?Math.min(...energyValues):0,energyMax=energyValues.length?Math.max(...energyValues):0;
+ const vocal=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis),intervals=arr(vocal.vocalActivityIntervals).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const tonal=rec(input.tonalResolution??audio.tonalResolution??rec(audio.harmonicFeatures).tonalResolution);
+ const mode=tonal.mode==="major"||tonal.mode==="minor"?String(tonal.mode):"";
+ const emotionalFrame=mode==="minor"?"tension-to-release":mode==="major"?"bright lift-to-release":"contrast-to-payoff";
+ const segments=labels.map((label,index)=>{
+  const startPct=cursor;cursor+=weights[index]!/total*100;const endPct=cursor,centerPct=(startPct+endPct)/2;
+  const time=duration===null?null:duration*centerPct/100;
+  const nearest=time===null?null:energySeries.reduce((best,item)=>Math.abs(Number(item.timeSeconds??item.time)-time)<(best===null?Infinity:Math.abs(Number(best.timeSeconds??best.time)-time))?item:best,null as Record<string,unknown>|null);
+  const rawEnergy=nearest?Number(nearest.value??nearest.energy??nearest.loudness):null;
+  const energyLevel=rawEnergy===null||energyMax===energyMin?null:.25+.75*(rawEnergy-energyMin)/(energyMax-energyMin);
+  const segmentStart=duration===null?null:duration*startPct/100,segmentEnd=duration===null?null:duration*endPct/100;
+  const hasVocalCue=segmentStart!==null&&segmentEnd!==null&&intervals.some(item=>Number(item.startSeconds)<segmentEnd&&Number(item.endSeconds)>segmentStart);
+  const baseline=levels[index]??.5;
+  const intensity=Math.max(.15,Math.min(1,energyLevel===null?baseline:baseline*.65+energyLevel*.35+((hasVocalCue ? 0.04 : 0))));
+  const emotion=hasVocalCue?"Vocal-led "+emotions[index]!.toLowerCase():emotions[index]??"Dynamic progression";
+  return {label,startPct,endPct,intensity,emotion};
+ });
+ const tempo=isReliableTempo(audio)?String(audio.bpm)+" BPM · CONFIRMED":"tempo unconfirmed";
+ const keyAudio={...audio,tonalResolution:input.tonalResolution??audio.tonalResolution??rec(audio.harmonicFeatures).tonalResolution};
+ const key=isReliableKey(keyAudio)?String(audio.key)+" "+String(audio.mode)+" · CONFIRMED":"tonal centre unconfirmed";
+ const presence=finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:null;
+ const mood=arr(audio.moodTags).map(value=>str(value,"")).filter(Boolean).slice(0,2);
+ const cue=intervals.length?"Use "+intervals.length+" signal-derived vocal activity interval(s) to place human-reviewed lyrical entries and hook focus.":presence===null?"Place lead-vocal entry and hook through human listening.":"Use "+presence.toFixed(1)+"% signal-derived vocal-band activity as a cue, then human-confirm lead-vocal and hook placement.";
+ const energyCue=energySeries.length?"Section intensity is blended with the supplied relative energy envelope.":"The intensity arc is a proposed creative contour because no timestamped energy series was supplied.";
+ const moodCue=mood.length?"Mood context to validate by listening: "+mood.join(", ")+".":"Mood remains a human-listening decision.";
+ return {summary:"PROPOSED · "+lane+" arrangement. Context: "+tempo+"; "+key+"; "+(mode?mode+"-mode "+emotionalFrame:emotionalFrame)+". Build from a concise identity-setting opening into a clear verse-to-hook lift, create contrast before the final payoff, and retain an intentional outro. "+cue+" "+energyCue+" "+moodCue+" Creative guidance only; sections and emotional framing are proposals, not claims about the existing master.",segments};
+}
+function drawProposedArrangementBar(page:PDFPage,top:number,segments:ProposedArrangementSegment[],fonts:Fonts):number{
+ const x=M+12,width=W-2*M-24,barY=top-22,barH=18;
+ page.drawText("PROPOSED TRACK FLOW · NORMALIZED TIMELINE",{x,y:top-9,size:6.3,font:fonts.bold,color:C.muted});
+ segments.forEach(segment=>{const sx=x+width*segment.startPct/100,sw=width*(segment.endPct-segment.startPct)/100,shade=Math.max(.25,Math.min(.95,segment.intensity));page.drawRectangle({x:sx,y:barY,width:Math.max(1,sw),height:barH,color:rgb(.12+.35*shade,.34+.32*shade,.34+.2*shade),borderColor:C.white,borderWidth:.6});});
+ const labelY=barY-11;
+ segments.forEach(segment=>{const sx=x+width*segment.startPct/100,sw=width*(segment.endPct-segment.startPct)/100;if(sw>31)drawWrapped(page,segment.label,sx+1,labelY,sw-2,fonts.bold,5.1,C.ink,5.6);});
+ const arcY=barY-29,points=segments.map(segment=>({x:x+width*(segment.startPct+segment.endPct)/200,y:arcY-10*segment.intensity}));
+ for(let i=0;i<points.length-1;i++)page.drawLine({start:points[i]!,end:points[i+1]!,color:C.coral,thickness:1.5});
+ points.forEach(point=>page.drawCircle({x:point.x,y:point.y,size:2.2,color:C.coral}));
+ page.drawText("Intensity / emotional arc",{x,y:arcY-18,size:5.7,font:fonts.italic,color:C.muted});
+ drawWrapped(page,"Emotional progression: "+segments.map(segment=>segment.emotion).join(" > "),x,arcY-27,width,fonts.italic,5.2,C.muted,6);
+ return 88;
+}
+export function buildConfirmedAudioEvidenceLines(data:ReportV2Data):string[]{
+ return [
+  ...(data.tempo.value!==null?["TEMPO INFERENCE · CONFIRMED — weighted voting, window agreement, prominence and runner-up margin passed; "+data.tempo.value+" BPM informs the tempo and rhythmic-consistency scorecard dimensions. Tempo-to-lane fit remains unscored when no source-backed lane range exists."]:[]),
+  ...(data.key.value!==null?["TONAL INFERENCE · CONFIRMED — the tonal resolver passed its window/bootstrap consensus and runner-up margin; "+String(data.key.value)+" informs the tonal-consensus scorecard dimension. This is signal-consensus evidence, not a rating of artistic harmonic quality."]:[])
  ];
 }
 function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,value:string,color:typeof C.teal,fonts:Fonts){
@@ -384,8 +446,8 @@ export function buildPositioningLines(input: AuditReportInput): string[] {
  const genreSource = str(evidence.genreSource ?? evidence.genreProvider ?? evidence.genreProvenance, "");
  if (genre) {
   lines.push(genreSource
-   ? "Primary lane: " + genre + " [Provider-backed · " + genreSource + "]"
-   : "Genre candidate: " + genre + " [Hypothesis · provider provenance not supplied]");
+   ? "Primary lane: " + genre + " · Provider-backed (" + genreSource + ")"
+   : "Genre direction: " + genre + " · PROPOSED");
  }
  const hypotheses = arr(assessment.laneHypotheses).map(value => str(value, "")).filter(Boolean);
  const adjacent = arr(assessment.adjacentLanes).map(value => str(value, "")).filter(Boolean);
@@ -509,6 +571,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    ...(data.scoreDrivers??[]).map(d=>d.label+": "+d.score+"/100"+(d.weight===null?"":" · weight "+d.weight)+" · "+(d.evidence||"Evidence note not supplied")),
    ...sanitizePublicReportLines(data.notYetMeasured).slice(0,3),
    ...buildTempoDiagnosticLines(input),
+   ...buildConfirmedAudioEvidenceLines(data),
    ...publicReportLimitations(a.limitations).slice(0,2),
    "Market proposition: "+(data.hasVerifiedCommercialEvidence?"PERFORMANCE VERIFIED — source-attributed commercial data supplied.":"PROPOSED — an evidence-informed A&R/commercial thesis; historical streams, sales, revenue, chart activity and audience demand are not asserted."),
    ...data.decisionDimensions.map(dimension=>dimension.name+" verdict: "+dimension.status+" — "+dimension.basis),
@@ -570,7 +633,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
     paragraph("Signal-derived vocal and arrangement observations",buildArrangementGuidanceSummary(input),"No reliable vocal or structural signal analysis was available."),
     list("Human listening checks",[...arr(a.listeningChecks).map(value=>str(value,"")).filter(Boolean),...buildDerivedListeningChecks(input)])
    ],kind:"narrative"},
-   {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod)],kind:"narrative"},
+   {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod),(()=>{const proposal=buildProposedArrangement(input);return {label:"PROPOSED ARRANGEMENT & EMOTIONAL ARC",value:proposal.summary,arrangementBar:proposal.segments,provenance:"PROPOSED · creative arrangement guidance; human listening required"};})()],kind:"narrative"},
    {title:"Promotion and campaign strategy",blocks:[
     paragraph("ISRC-anchored catalogue coverage",compact(buildCommercialStrategyLines(input).slice(1,2).join(" "),210)),
     paragraph("Audience and short-form strategy",[
@@ -718,7 +781,7 @@ function formatSnapshotTime(seconds:number):string{
  return Math.floor(safe/60)+":"+String(safe%60).padStart(2,"0");
 }
 function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:AuditReportInput):number{
- const audio=rec(input.sonicDna),analysis=rec(audio.vocalArrangementAnalysis??audio.vocalFeatures);
+ const audio=rec(input.sonicDna),analysis=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis??audio.vocalFeatures);
  const sections=arr(analysis.inferredSections).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
  const transitions=arr(analysis.detectedTransitions).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds));
  const intervals=arr(analysis.vocalActivityIntervals).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
@@ -855,7 +918,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
  y-=keyMapHeight+12;
  const vocalHeight=drawVocalArrangementCard(page,y,fonts,input);
  y-=vocalHeight+10;
- const sonic=rec(input.sonicDna),vocal=rec(sonic.vocalArrangementAnalysis??sonic.vocalFeatures);
+ const sonic=rec(input.sonicDna),vocal=rec(input.vocalAndSectionPageData??sonic.vocalArrangementAnalysis??sonic.vocalFeatures);
  const duration=finite(sonic.durationSeconds)?sonic.durationSeconds:null;
  const presence=finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:0;
  const sections=arr(vocal.inferredSections),transitions=arr(vocal.detectedTransitions);
@@ -1066,7 +1129,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    const tempoLines=[data.tempo.value===null
     ?"Tempo not confirmed from the recording."
     :"Measured tempo: "+data.tempo.value+" BPM."];
-   card(page,M,H-105,W-2*M,"Tempo",tempoLines,fonts,{accent:data.tempo.value===null?C.amber:C.teal});
+   card(page,M,H-105,W-2*M,data.tempo.value===null?"Tempo":"Tempo · CONFIRMED",tempoLines,fonts,{accent:data.tempo.value===null?C.amber:C.teal});
    const harmonic=rec(rec(input.sonicDna).harmonicFeatures);
    const candidates=(hasReportableKeyCandidates(rec(input.sonicDna))?arr(harmonic.topCandidates):[]).map(value=>rec(value))
     .map(item=>[str(item.key,""),str(item.mode,"")].filter(Boolean).join(" ")).filter(Boolean).slice(0,4);
@@ -1074,7 +1137,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     ?"Confirmed song key: "+String(data.key.value)+"."
     :candidates.length?"Song key not confirmed. Possible tonal centres: "+candidates.join(", ")+"."
     :"Song key not determined from the recording."];
-   card(page,M,H-245,W-2*M,"Song key",keyLines,fonts,{accent:data.key.value===null?C.amber:C.teal});
+   card(page,M,H-245,W-2*M,data.key.value===null?"Song key":"Song key · CONFIRMED",keyLines,fonts,{accent:data.key.value===null?C.amber:C.teal});
    const energy=data.energy.value===null?"Playback level was not measured.":"Playback level measurements are available from the uploaded recording.";
    card(page,M,H-385,W-2*M,"Playback level", [energy],fonts,{accent:data.energy.value===null?C.amber:C.teal});
    if(data.energySeries){
@@ -1149,6 +1212,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    for(const b of narrativeBlocks){
     const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:C.gold,provenance:b.provenance});
     y-=h+6;
+    if(b.arrangementBar?.length){const barHeight=drawProposedArrangementBar(page,y,b.arrangementBar,fonts);y-=barHeight+5;}
    }
    if(y<76)throw new Error("Report v2 narrative page content exceeds safe footer clearance: "+spec.title);
   }else if(spec.kind==="axes"||spec.kind==="comparables"||spec.kind==="moments"){

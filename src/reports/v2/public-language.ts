@@ -43,6 +43,7 @@ export function sanitizePublicReportLine(value: string): string {
     .replace(/\bsource-attributed\b/gi, "source-backed")
     .replace(/\bprovenance\b/gi, "source")
     .replace(/\bgenre candidate\b/gi, "Genre direction")
+    .replace(/\s*\[working direction\s*[·|—-]\s*platform source not supplied\]/gi, "")
     .replace(/\bN\/D\b/gi, "Not available")
     .replace(/\bhypothesis\b/gi, "working direction")
     .replace(/\bnot cleared\b/gi, "pending rights checks")

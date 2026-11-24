@@ -372,6 +372,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
   const scorecardDefaults = {
     tempoLaneFit: { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE },
     rhythmicConsistency: { score: null, rationale: RHYTHM_UNAVAILABLE_RATIONALE },
+    tonalConsensus: { score: null, rationale: "Not scored: a confirmed tonal resolver result and its consensus diagnostics are not available; no provisional-key penalty is applied." },
     dynamicRangeLoudness: { score: null, rationale: "Not scored: RMS-envelope spread and RMS dBFS are descriptive signal measurements, not mastering-readiness criteria. No destination-specific integrated-loudness, loudness-range or true-peak targets were supplied for this release." },
     metadataCompleteness: { score: null, rationale: "Not scored: fewer than two source-attributed core release fields are available to support a reproducible completeness assessment; populate and reconcile identity metadata first for this release." },
     releaseReadiness: { score: null, rationale: "Not scored: source-verified rights clearance, delivery confirmation, release status and master approval are not all present for this specific release; no readiness score is inferred." },
@@ -385,21 +386,61 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
     if (!reliableTempo || bpm === null) {
       if (tempoDimension) result.scorecard.tempoLaneFit = { score: null, rationale: TEMPO_UNAVAILABLE_RATIONALE };
     } else if (!primaryGenre?.tempoHints) {
-      if (tempoDimension) result.scorecard.tempoLaneFit = { score: null, rationale: "Not scored: the uploaded-master tempo remains provisional, and no source-backed primary genre with a reference tempo range is available for a defensible tempo-to-lane comparison." };
+      if (tempoDimension) result.scorecard.tempoLaneFit = { score: null, rationale: "Not scored: the voting-confirmed uploaded-master tempo is available, but no source-backed primary genre with a reference tempo range is available for a defensible tempo-to-lane comparison." };
     } else {
       const [low, high] = primaryGenre.tempoHints;
       const distance = bpm < low ? low - bpm : bpm > high ? bpm - high : 0;
       const score = Math.round(Math.max(0, 1 - distance / Math.max(12, high - low)) * 100);
       if (tempoDimension) result.scorecard.tempoLaneFit = {
         score,
-        rationale: "Tempo-band fit compares the provisional uploaded-master BPM against the " + primaryGenre.label + " reference range of " + low + "–" + high + " BPM; this is a positioning heuristic, not a market-performance or audience-response score.",
+        rationale: "Tempo-band fit compares the voting-confirmed uploaded-master BPM against the " + primaryGenre.label + " reference range of " + low + "–" + high + " BPM; this is a positioning heuristic, not a market-performance or audience-response score.",
+      };
+    }
+    const harmonic = sonicDna?.harmonicFeatures && typeof sonicDna.harmonicFeatures === "object"
+      ? sonicDna.harmonicFeatures as Record<string, unknown> : {};
+    const tonalResolution = harmonic.tonalResolution && typeof harmonic.tonalResolution === "object"
+      ? harmonic.tonalResolution as Record<string, unknown>
+      : sonicDna?.tonalResolution && typeof sonicDna.tonalResolution === "object"
+        ? sonicDna.tonalResolution as Record<string, unknown> : {};
+    const tonalDimension = result.scorecard.tonalConsensus ?? scorecardDefaults.tonalConsensus;
+    if (isReliableKey(sonicDna)) {
+      const bootstrapShare = tonalResolution.bootstrapShare;
+      const windowAgreement = tonalResolution.windowAgreement;
+      const runnerUpMargin = tonalResolution.runnerUpMargin;
+      const thresholds = tonalResolution.thresholds && typeof tonalResolution.thresholds === "object"
+        ? tonalResolution.thresholds as Record<string, unknown> : {};
+      const requiredMargin = typeof thresholds.minRunnerUpMargin === "number" && thresholds.minRunnerUpMargin > 0
+        ? thresholds.minRunnerUpMargin : 0.025;
+      if (typeof bootstrapShare === "number" && Number.isFinite(bootstrapShare)
+        && typeof windowAgreement === "number" && Number.isFinite(windowAgreement)
+        && typeof runnerUpMargin === "number" && Number.isFinite(runnerUpMargin)) {
+        const marginScore = Math.max(0, Math.min(1, runnerUpMargin / requiredMargin));
+        const score = Math.round(100 * (0.4 * Math.max(0, Math.min(1, bootstrapShare))
+          + 0.4 * Math.max(0, Math.min(1, windowAgreement)) + 0.2 * marginScore));
+        result.scorecard.tonalConsensus = {
+          score,
+          rationale: "CONFIRMED tonal centre " + String(tonalResolution.tonic ?? sonicDna?.key) + " " + String(tonalResolution.mode ?? sonicDna?.mode)
+            + "; score reflects resolver bootstrap share, window agreement and runner-up margin only, not artistic quality or harmonic sophistication.",
+        };
+      } else {
+        result.scorecard.tonalConsensus = {
+          score: null,
+          rationale: "The tonal resolver CONFIRMED the reported key, so no unresolved-key penalty is applied; numeric consensus diagnostics were incomplete and no substitute score is inferred.",
+        };
+      }
+    } else {
+      result.scorecard.tonalConsensus = {
+        score: null,
+        rationale: "Not scored: the tonal resolver did not confirm a single key; provisional alternatives remain visible as unresolved evidence rather than a negative musical-quality score.",
       };
     }
     const rhythm = sonicDna?.rhythmFeatures && typeof sonicDna.rhythmFeatures === "object"
       ? sonicDna.rhythmFeatures as Record<string, unknown> : {};
     const beatTimes = Array.isArray(rhythm.beatTimesSeconds)
       ? rhythm.beatTimesSeconds.filter((value): value is number => typeof value === "number" && Number.isFinite(value)) : [];
-    const stableGrid = rhythm.beatGridStatus === "measured" || rhythm.beatGridStatus === "stable";
+    const tempoVerdict = rhythm.tempoVerdict && typeof rhythm.tempoVerdict === "object" ? rhythm.tempoVerdict as Record<string, unknown> : {};
+    const votingConfirmed = tempoVerdict.confirmation_status === "CONFIRMED";
+    const stableGrid = rhythm.beatGridStatus === "measured" || rhythm.beatGridStatus === "stable" || (votingConfirmed && rhythm.beatGridStatus === "tentative");
     if (!reliableTempo || !stableGrid || beatTimes.length < 8) {
       if (rhythmDimension) result.scorecard.rhythmicConsistency = { score: null, rationale: RHYTHM_UNAVAILABLE_RATIONALE };
     } else {
@@ -410,7 +451,7 @@ export function sanitizeAssessmentForEvidence<T extends Record<string, any>>(
       const score = Math.round(Math.max(0, Math.min(1, 1 - coefficientOfVariation / 0.2)) * 100);
       if (rhythmDimension) result.scorecard.rhythmicConsistency = {
         score,
-        rationale: "Beat-interval regularity is calculated from " + intervals.length + " measured intervals using their coefficient of variation; it describes timing consistency, not groove quality, emotional feel or listener response.",
+        rationale: (votingConfirmed ? "Voting-confirmed tempo anchors " : "Beat-grid tempo anchors ") + intervals.length + " beat intervals; coefficient of variation describes measured timing consistency, not groove quality, emotional feel or listener response.",
       };
     }
     const metadata = deriveMetadataCompleteness(evidence);

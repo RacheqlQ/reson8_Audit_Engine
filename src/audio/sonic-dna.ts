@@ -6,7 +6,7 @@ import { voteTempoCandidates, type TempoVotingVerdict } from "./tempo-voting.js"
 
 export const MIN_RELIABLE_TEMPO_CONFIDENCE = 0.5;
 import { analyzeVocalSignalDiagnostics } from "./vocal-signal-diagnostics.js";
-import { analyzeVocalArrangement, type VocalArrangementAnalysis } from "./vocal-arrangement-analysis.js";
+import { buildVocalAndSectionPageData, type VocalArrangementAnalysis } from "./vocal-arrangement-analysis.js";
 import { extractAcousticFeatureProfile, type AcousticFeatureProfile } from "./acoustic-features.js";
 import type { GenreFusionResult } from "../genre/fusion.js";
 export interface TempoEstimate {
@@ -292,7 +292,7 @@ export function analyzePcm(samples:Float32Array,sampleRate:number,channels=1):So
  const acousticFeatureProfile=extractAcousticFeatureProfile(samples,sampleRate,channels);
  const prepared=prepareAnalysisPcm(samples,sampleRate,channels),a=prepared.samples,rate=prepared.sampleRate,energy=rms(a);
  const vocalDiagnostics=analyzeVocalSignalDiagnostics(a,rate);
- const vocalArrangementAnalysis=analyzeVocalArrangement(a,rate,1);
+ const vocalArrangementAnalysis=buildVocalAndSectionPageData(a,rate,1);
  let crossings=0;
  for(let i=1;i<a.length;i++)if((a[i-1]<0&&a[i]>=0)||(a[i-1]>=0&&a[i]<0))crossings++;
  const size=2048,bins=size/2,available=Math.max(1,Math.floor((a.length-size)/(size/2))+1),count=Math.min(12,available);

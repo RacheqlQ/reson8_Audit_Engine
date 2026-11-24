@@ -115,7 +115,7 @@ describe("Phillo evidence guardrails", () => {
       genreClassification: { primaryGenre: null, abstained: true },
     });
     expect(result.scorecard.tempoLaneFit.score).toBeNull();
-    expect(result.scorecard.tempoLaneFit.rationale).toContain("tempo remains provisional");
+    expect(result.scorecard.tempoLaneFit.rationale).toContain("voting-confirmed uploaded-master tempo is available");
     expect(result.scorecard.tempoLaneFit.rationale).not.toContain("did not pass the confidence gate");
   });
 
@@ -440,7 +440,7 @@ describe("Phillo evidence guardrails", () => {
     expect(result.executiveSummary).toContain("0.09");
   });
 
-  it("fills all five scorecard dimensions when a zero-confidence assessment is incomplete", () => {
+  it("fills all six scorecard dimensions when a zero-confidence assessment is incomplete", () => {
     const assessment = {
       ...baseAssessment,
       confidence: 0,
@@ -457,6 +457,7 @@ describe("Phillo evidence guardrails", () => {
     const required = [
       "tempoLaneFit",
       "rhythmicConsistency",
+      "tonalConsensus",
       "dynamicRangeLoudness",
       "metadataCompleteness",
       "releaseReadiness",

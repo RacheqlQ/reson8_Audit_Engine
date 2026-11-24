@@ -25,7 +25,7 @@ export type AnalysisWindow = {
 };
 export type VocalArrangementAnalysis = {
   schemaVersion: "1.0.0";
-  provenance: "SIGNAL_DERIVED_FROM_UPLOADED_MASTER";
+  provenance: "SIGNAL_DERIVED_NO_STEM_WORKER";
   method: "WINDOWED_FFT_MID_BAND_SALIENCE_AND_AUTOCORRELATION";
   analysisStatus: "MEASURED_SIGNAL" | "INSUFFICIENT_SIGNAL";
   vocalActivityStatus: "SIGNAL_ACTIVITY_DETECTED" | "LOW_VOCAL_ACTIVITY";
@@ -383,13 +383,18 @@ function analyzeWindow(samples: Float32Array, start: number, sampleRate: number,
   };
 }
 
+/** Stable pipeline entry point for vocal/section report data; no stem or render worker is invoked. */
+export function buildVocalAndSectionPageData(samples: Float32Array, sampleRate: number, channels = 1): VocalArrangementAnalysis {
+  return analyzeVocalArrangement(samples, sampleRate, channels);
+}
+
 /**
  * Zero-cost whole-master signal analysis. Vocal-band activity and F0 are
  * inferred proxies: periodic instruments can satisfy the same thresholds.
  */
 export function analyzeVocalArrangement(samples: Float32Array, sampleRate: number, channels = 1): VocalArrangementAnalysis {
   const empty = (durationSeconds: number, reason: string): VocalArrangementAnalysis => ({
-    schemaVersion: "1.0.0", provenance: "SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+    schemaVersion: "1.0.0", provenance: "SIGNAL_DERIVED_NO_STEM_WORKER",
     method: "WINDOWED_FFT_MID_BAND_SALIENCE_AND_AUTOCORRELATION",
     analysisStatus: "INSUFFICIENT_SIGNAL", vocalActivityStatus: "LOW_VOCAL_ACTIVITY",
     vocalPresencePct: 0, vocalBandEnergyDbfs: null, vocalMedianF0Hz: null, vocalF0RangeHz: null,
@@ -436,7 +441,7 @@ export function analyzeVocalArrangement(samples: Float32Array, sampleRate: numbe
   const arrangement = segmentArrangement(windows, durationSeconds);
   const activityDetected = activeWindowCount > 0;
   return {
-    schemaVersion: "1.0.0", provenance: "SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+    schemaVersion: "1.0.0", provenance: "SIGNAL_DERIVED_NO_STEM_WORKER",
     method: "WINDOWED_FFT_MID_BAND_SALIENCE_AND_AUTOCORRELATION",
     analysisStatus: "MEASURED_SIGNAL",
     vocalActivityStatus: activityDetected ? "SIGNAL_ACTIVITY_DETECTED" : "LOW_VOCAL_ACTIVITY",

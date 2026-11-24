@@ -56,7 +56,7 @@ describe("Sonic DNA",()=>{
   const sampleRate=8000,samples=Float32Array.from({length:sampleRate*5},(_,i)=>0.15*Math.sin(2*Math.PI*220*i/sampleRate)+0.08*Math.sin(2*Math.PI*440*i/sampleRate)+0.04*Math.sin(2*Math.PI*660*i/sampleRate));
   const result=analyzePcm(samples,sampleRate);
   expect(result.vocalArrangementAnalysis).toMatchObject({
-   provenance:"SIGNAL_DERIVED_FROM_UPLOADED_MASTER",
+   provenance:"SIGNAL_DERIVED_NO_STEM_WORKER",
    method:"WINDOWED_FFT_MID_BAND_SALIENCE_AND_AUTOCORRELATION",
    analysisStatus:"MEASURED_SIGNAL"
   });
@@ -64,7 +64,7 @@ describe("Sonic DNA",()=>{
   expect(result.vocalArrangementAnalysis?.vocalMedianF0Hz).toBeGreaterThan(200);
   expect(result.vocalFeatures).toMatchObject({
    voicePresence:"undetermined",
-   provenance:"SIGNAL_DERIVED_FROM_UPLOADED_MASTER"
+   provenance:"SIGNAL_DERIVED_NO_STEM_WORKER"
   });
  });
  it("uses transient-onset evidence and exposes ranked tempo candidates with an abstention diagnostic",()=>{
