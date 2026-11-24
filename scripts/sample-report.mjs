@@ -128,11 +128,7 @@ for(const [name,input] of variants){
    if(!normalizedExtracted.includes("Tonal centre unavailable"))throw new Error(filename+" failed to render the unavailable tonal state");
   }
   if(name==="combined-master-and-dsp"&&tier==="full"){
-   const requiredCharts=["Evidence layers","Music platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"];
-   const fullText=normalizedExtracted.toLocaleLowerCase();
-   for(const chart of requiredCharts){
-    if(!fullText.includes(chart.toLocaleLowerCase()))throw new Error(filename+" is missing a sample-parity chart: "+chart);
-   }
+   if(normalizedExtracted.toUpperCase().includes("EVIDENCE LEDGER AND SCORECARD"))throw new Error(filename+" rendered the removed evidence ledger and scorecard page");
   }
   if(name==="long-form-audio"&&tier==="full"){
    const tokens=buildArNotesDecisionContext(input).summary.split(/\s+/).map(token=>token.replace(/[^\p{L}\p{N}#'-]/gu,"")).filter(Boolean);
