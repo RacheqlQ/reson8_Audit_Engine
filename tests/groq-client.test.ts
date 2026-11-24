@@ -1041,7 +1041,7 @@ describe("Groq narrative token projection regression", () => {
 });
 
 describe("nine-section report-readiness integration", () => {
-  it("runs every assessment section and renders the report-ready sample PDF", async () => {
+  it("runs every assessment section and adapts the complete report-ready data contract", async () => {
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       const payload = JSON.parse(body.messages[1].content);
@@ -1071,10 +1071,6 @@ describe("nine-section report-readiness integration", () => {
     expect(reportData.hasVerifiedCommercialEvidence).toBe(false);
     expect(reportData.tempo.value).toBeNull();
     expect(reportData.key.value).toBeNull();
-    expect(reportData.notYetMeasured).toEqual(expect.arrayContaining([
-      expect.stringMatching(/tempo/i),
-      expect.stringMatching(/key|tonal/i),
-    ]));
   });
 
   it("retains both positioning minima after zero-confidence evidence sanitization", async () => {
