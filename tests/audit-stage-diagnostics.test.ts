@@ -15,7 +15,9 @@ describe("audit stage failure diagnostics", () => {
       timedOut: false,
       errorCode: "UNCLASSIFIED_STAGE_ERROR",
       stackFingerprint: expect.stringMatching(/^stk-[a-f0-9]{8}$/),
+      stackFrames: expect.arrayContaining([expect.any(String)]),
     });
+    expect(diagnostic.stackFrames.every((frame) => /^[A-Za-z0-9_.$<>-]+$/.test(frame))).toBe(true);
     expect(JSON.stringify(diagnostic)).not.toContain("owner-private");
     expect(JSON.stringify(diagnostic)).not.toContain("secret");
     expect(JSON.stringify(diagnostic)).not.toContain("report.pdf");
