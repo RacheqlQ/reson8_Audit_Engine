@@ -116,6 +116,7 @@ function safeAuditErrorCode(error: unknown): string {
     [/Report JSON payload does not contain a valid audit report input/i, "PDF_REPORT_INPUT_INVALID"],
     [/Report source is neither a PDF nor valid JSON/i, "PDF_REPORT_SOURCE_INVALID"],
     [/HTTP 402|payment required|insufficient credits|billing required/i, "AI_PROVIDER_BILLING_REQUIRED"],
+    [/Maximum call stack size exceeded|too many arguments|Maximum call stack/i, "PDF_RENDERER_ARGUMENT_LIMIT"],
     [/WinAnsi|cannot encode|encode.*character|glyph/i, "PDF_FONT_ENCODING_ERROR"],
   ];
   return known.find(([pattern]) => pattern.test(message))?.[1] ?? "UNCLASSIFIED_STAGE_ERROR";
