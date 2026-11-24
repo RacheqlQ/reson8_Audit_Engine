@@ -304,7 +304,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     delete projected.catalogSources;
     delete projected.sourceCombination;
   }
-  if (group === "evidence-score" || group === "narrative") {
+  if (["evidence-score", "narrative", "positioning"].includes(group)) {
     // Keep source/provenance facts; only evidence-score drops duplicate summaries.
     if (group === "evidence-score") {
       delete projected.genres;
@@ -315,7 +315,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     // source identities and normalized values above remain intact.
     const compacted = compactEvidenceScoreValue(projected, 0, 72, 3) as Record<string, unknown>;
     if (compacted.fieldProvenance && typeof compacted.fieldProvenance === "object") {
-      compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, group === "narrative" ? 8 : 12));
+      compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, ["narrative", "positioning"].includes(group) ? 8 : 12));
     }
     return compacted;
   }
@@ -422,18 +422,18 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     compact.harmonicFeatures = summary;
   }
 
-  const compacted = (group === "evidence-score" || group === "narrative"
+  const compacted = (["evidence-score", "narrative", "positioning"].includes(group)
     ? compactEvidenceScoreValue(compact, 0, 72, 3)
     : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
-    if (value !== undefined) compacted[key] = group === "evidence-score" || group === "narrative"
+    if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning"].includes(group)
       ? compactEvidenceScoreValue(value, 0, 72, 3)
       : compactPromptValue(value);
   }
-  if (group === "narrative") {
+  if (group === "narrative" || group === "positioning") {
     // The narrative needs the complete acoustic descriptor summary, not the
     // 128-window raw summary series. Median/p10/p90 preserve measured spread;
     // vocal intervals retain representative first/middle/last observations.
@@ -499,7 +499,7 @@ function compactCatalogMetadataForGroup(
   // Retain a bounded set of named provider records; long descriptions/raw
   // responses are already represented by normalized evidence and provenance.
   return Object.fromEntries(Object.entries(value).slice(0, 4)
-    .map(([provider, record]) => [provider, group === "evidence-score" || group === "narrative" ? compactEvidenceScoreValue(record, 0, 72, 3) : compactPromptValue(record)])) as Record<string, unknown>;
+    .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning"].includes(group) ? compactEvidenceScoreValue(record, 0, 72, 3) : compactPromptValue(record)])) as Record<string, unknown>;
 }
 
 async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
@@ -534,7 +534,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const providerLabel = providerName === "gemini" ? "Gemini" : providerName === "ollama" ? "Ollama" : "Groq";
   const tokenField = providerName === "groq" ? "max_completion_tokens" : "max_tokens";
   const rawOutputSchema = z.toJSONSchema(schema);
-  const outputSchema = groupName === "evidence-score" || groupName === "narrative" ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
+  const outputSchema = ["evidence-score", "narrative", "positioning"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
   const completed = await input.loadCompletedSectionGroup?.(cacheGroupName);
   if (completed !== null && completed !== undefined) {
     const cached = schema.safeParse(completed);
@@ -574,7 +574,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? " The user payload includes outputSchema, the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value, array bound and minimum length. Return one complete JSON object only. Do not include outputSchema in the returned object. Local Zod and section word-count validation are mandatory."
       : "";
     const messages = [
-      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "narrative" ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
+      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : ["narrative", "positioning"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
       {
         role: "user",
         content: JSON.stringify({
