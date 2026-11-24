@@ -752,6 +752,10 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  const diagnosticLines=buildKeyDiagnosticLines(input).filter(line=>
   /^(Window agreement:|Bootstrap rank share|Runner-up margin:|Bass-root anchors:|Outro weighting:|Relative major\/minor ambiguity remains\.|Tonal windows do not consistently support one candidate\.|Bootstrap candidate ranking is unstable\.|The top candidate is too close to its runner-up\.|Adjacent Circle of Fifths candidates remain close\.)/.test(line)
  );
+ const tuningWindows=Number(rec(input.sonicDna).tuningEvidenceWindows);
+ if(Number.isFinite(tuningWindows)&&tuningWindows>1){
+  diagnosticLines.unshift("More than one tuning window was detected; a single tuning reference is not confirmed.");
+ }
  let diagnosticY=top-108;
  for(const line of diagnosticLines.slice(0,5)){
   const used=drawWrapped(page,line,x+174,diagnosticY,width-190,fonts.regular,5.8,C.muted,6.8);
