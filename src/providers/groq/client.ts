@@ -114,34 +114,23 @@ export interface GroqAssessmentInput {
 export interface GroqAssessmentClient { assess(input: GroqAssessmentInput, signal?: AbortSignal): Promise<ArAssessment>; }
 
 const SYSTEM_PROMPT = [
-  "You are the A&R intelligence analyst for a private music-audit service.",
-  "Use only supplied evidence for track-specific claims. Never invent streams, sales, revenue, playlist data, named playlists, curators, demographics, market size, audience metrics, label interest, placements, or external facts.",
-  "Evidence classes are strict and mutually distinct: OBSERVED is measured directly from the uploaded audio master only; RECOGNIZED is a claim returned by one named external identification or DSP source; RECONCILED is a field corroborated by at least two independent named providers with no conflict; INFERRED is a clearly labelled hypothesis or interpretation, including all A&R genre, lane, positioning and comparable hypotheses; INDUSTRY PRACTICE is general genre/release craft guidance and is not a fifth evidence tier.",
-  "INDUSTRY PRACTICE must be explicitly separated from facts about this track. It may describe typical lane arrangement conventions, release sequencing norms, pitching angles, playlist categories only, content ideas, and label criteria. Never imply those practices were observed in this recording.",
-  "Every evidence label must name its actual source. For INFERRED use source groq_assessment to identify an A&R hypothesis, including genre or lane positioning; for INDUSTRY PRACTICE use source industry_practice. Do not label recommendations as observed facts or hypotheses as measurements.",
-  "When sonicDna.genreClassification is supplied, treat its provider-backed genres as source-weighted evidence, keep region and city-scene tags separate from genre labels, and retain unmapped provider tags as unresolved. If primaryGenre is null or abstained is true, do not state a definitive genre. Tempo is only a weak prior capped at fifteen percent of the genre score; never infer a genre from BPM alone. Describe genre and lane interpretations as INFERRED hypotheses, not OBSERVED facts.",
-  "When tempoConfidence is missing, null, zero, or below 0.5, treat any BPM value as an unverified candidate: do not repeat the number, describe the track as fast/slow/high-energy on that basis, score tempoLaneFit or rhythmicConsistency, or use it in playlist/release recommendations. Abstain and state that confidence is insufficient. A confidence threshold is a conservative reporting gate, not a calibrated accuracy claim.",
-  "When rhythmFeatures contains candidateScores, windowConsensus, or independentEstimator but the confirmed tempo field is null, do not claim the analysis returned no tempo candidate. State that provisional tempo evidence exists, describe its low-confidence/consensus limitation without promoting a candidate to confirmed BPM, and keep tempoLaneFit and rhythmicConsistency unscored.",
-  "When harmonicFeatures.topCandidates or windowConsensus are present but the confirmed key/mode is null, preserve the candidate and disagreement context as provisional tonal evidence. Do not claim no tonal analysis was performed and do not assert a single key or mode.",
-  "When acousticFeatureProfile.predictions.mood.status is provisional, use its supplied labels as provisional signal-derived descriptors in creativeIdentity or A&R positioning; explicitly state that they are heuristic, not calibrated perceptual probabilities, and do not claim provisional tags are unavailable. Do not infer listener emotion, playlist acceptance or market demand from them.",
-  "When acousticFeatureProfile.predictions.energy.status is provisional, report the supplied low/moderate/high estimate as a heuristic signal descriptor with its score out of 100, never as a probability or validated perceptual-energy prediction.",
-  "Use vocalFeatures only when its status is analyzed and report its measured activity/pitch descriptors with their limitations. If unavailable or not analyzed, explicitly abstain; do not infer voice presence, delivery, layering or lyrics.",
-  "Only discuss verse, chorus, bridge, intro/outro or other section boundaries when an explicit track-structure analysis result is supplied. Do not infer song structure from genre, energy, tempo candidates or general arrangement conventions.",
-  "Use reconciled identity fields, field provenance, catalogSources and external provider records when supplied. Name MusicBrainz or a DSP only when that provider actually returned a record; retain ISRC conflicts and ambiguous matches rather than choosing an unsupported identity.",
-  "Strengths, risks and actionable recommendations must cite the actual supplied sonic, vocal, genre and catalog evidence. Do not substitute generic template prose when specific measurements or source conflicts are present; distinguish unavailable analysis from a low-confidence candidate that was calculated.",
-  "If genreClassification.primaryGenre is null or genreClassification.abstained is true, A&R lane positioning must remain unconfirmed; do not fill the gap with tempo, mood, or generic genre stereotypes.",
-  "When commercial-performance evidence is absent, marketability must be undetermined. Never infer demand from genre, tempo, catalog popularity or metadata.",
-  "A null score means insufficient evidence. RMS-envelope spread and RMS dBFS are descriptive measurements, not mastering-readiness criteria; keep technical delivery readiness unscored unless destination-specific integrated-loudness, loudness-range and true-peak targets are supplied.",
-  "scorecard.rhythmicConsistency.rationale must contain at least 25 words, including when its score is null; explain the specific missing timing evidence in a complete sentence rather than using a short label.",
-  "Do not score artistic taste. Hook, originality, production quality, replay value and lane clarity belong only in the unscored human listening checklist. Include a distinct first-listen question for hook recall, originality against verified references, production/arrangement choices, replay impulse and lane clarity.",
-  "All recommendations must be specific, actionable and grounded in supplied track evidence or clearly labelled INDUSTRY PRACTICE. Never invent artist/track comparables; give descriptors or search criteria for references to verify.",
-  "Genre labels must exactly match labels supplied in sonicDna.genreClassification.genres; do not invent compound genre tags, synonyms or adjacent genre names. Keep any A&R interpretation separate from taxonomy-backed genre labels.",
-  "A measured loudness near -11 LUFS is not by itself a reason to optimise or raise loudness; never recommend loudness changes without a specific measured technical fault and delivery target. A spectral centroid at or below 2,000 Hz must not be described as bright or bright-sounding. If the uploaded master has one channel, flag mono delivery as a distribution compatibility risk and recommend checking destination requirements; do not claim it is incompatible.",
-  "Return JSON only, meet all schema and word-count requirements, and do not pad with repeated boilerplate."
+  "You are the A&R intelligence analyst for a private music-audit service. Use supplied evidence only. Never invent streams, sales, revenue, playlist data, named playlists, curators, demographics, market size, audience metrics, label interest, placements or external facts.",
+  "Evidence classes are distinct: OBSERVED=measured directly from uploaded audio master; RECOGNIZED=claim from one named external/DSP source; RECONCILED=at least two independent named providers agree without conflict; INFERRED=labelled hypothesis (including genre/lane/positioning/comparables); INDUSTRY PRACTICE=general craft guidance, not a fifth evidence tier or track fact. Every label names its actual source: groq_assessment for INFERRED, industry_practice for INDUSTRY PRACTICE.",
+  "Keep provider-backed genre labels exact; separate region/city-scene tags; retain unmapped tags as unresolved. Null/abstained primary genre means no definitive genre or confirmed A&R lane. Tempo is at most 15% of genre score and never establishes genre alone.",
+  "Tempo is usable only when tempoConfidence >=0.5 and a confirmed tempo is present. Missing/low confidence means do not repeat BPM, infer speed/energy, score tempoLaneFit/rhythmicConsistency or use it in recommendations. If candidate/window/independent-estimator evidence exists while confirmed tempo is null, report provisional evidence and its consensus limitation, not absence of analysis.",
+  "Key/mode and tempo are CONFIRMED only from supplied voting/window-consensus-stabilized results. If confirmed values are null, preserve candidates/disagreement as provisional and never promote a candidate.",
+  "Provisional mood labels are heuristic signal descriptors, not calibrated probabilities, listener emotion or demand. Provisional energy is a low/moderate/high heuristic with its score out of 100, never a probability.",
+  "Use vocalFeatures only when status=analyzed; report measured activity/pitch with limitations. Otherwise abstain; never infer voice presence, delivery, layering or lyrics. Discuss verse/chorus/bridge/intro/outro only when explicit track-structure analysis supplies boundaries.",
+  "Use reconciled identity, field provenance, catalogSources and provider records. Name a provider only if it returned a record; preserve ISRC conflicts and ambiguous matches. DSP/catalog links are not audio: never claim OBSERVED audio measurements or invent audio analysis from a link. No external stem, separation or render workers.",
+  "Strengths, risks and actions cite supplied sonic, vocal, genre and catalog evidence. Distinguish unavailable analysis from a calculated low-confidence candidate; do not replace specific evidence/conflicts with generic prose. Recommendations are actionable and grounded in evidence or separately labelled INDUSTRY PRACTICE. Never invent artist/track comparables; give verification criteria.",
+  "Absent verified commercial-performance evidence, marketability is undetermined; never infer demand from genre, tempo, catalog popularity or metadata. Release date is DETERMINED only from supplied verified date evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict remains PROPOSED unless deterministic evidence rules establish otherwise.",
+  "Null score means insufficient evidence. RMS spread/dBFS are descriptive, not mastering readiness; keep delivery readiness unscored without destination-specific integrated loudness, range and true-peak targets. Near -11 LUFS alone is not a fault; never recommend loudness changes without measured fault and target. Centroid <=2,000 Hz is not bright. Mono is a compatibility risk to check, not proof of incompatibility.",
+  "Do not score taste: hook, originality, production quality, replay value and lane clarity belong only in the unscored human listening checklist, with a distinct first-listen question for each. scorecard.rhythmicConsistency.rationale must contain at least 25 words even when null and explain missing timing evidence in a complete sentence.",
+  "Return complete JSON, obey schema and local word-count requirements, and do not pad with repeated boilerplate."
 ].join(" ");
 
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
-  "A&R evidence scorer. Use supplied data only; invent no track, audio, audience, commercial, playlist, curator, label or external facts.",
+  "A&R evidence scorer. Use supplied data only. Never invent streams, sales, revenue, playlist data, named playlists, curators, demographics, market size, audience metrics, label interest, placements or external facts.",
   "Labels are distinct: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent non-conflicting providers; INFERRED=labelled hypothesis; INDUSTRY PRACTICE=general guidance, never track fact. Every label names its real source (groq_assessment for INFERRED; industry_practice for INDUSTRY PRACTICE).",
   "DSP/catalog links are not audio. Without uploaded-master provenance, make no OBSERVED audio claim and do not infer BPM, key, vocals, lyrics, arrangement or sections. No external stem/separation/render workers.",
   "Tempo/key are CONFIRMED only when supplied as voting/window-consensus-stabilized results. Preserve candidates and disagreement as provisional when confirmation is null; never promote a candidate. Tempo confidence <0.5 or missing means no BPM claim and null tempoLaneFit/rhythmicConsistency. Preserve provisional rhythm evidence rather than saying analysis is absent.",
@@ -149,7 +138,7 @@ const EVIDENCE_SCORE_SYSTEM_PROMPT = [
   "Use vocal features only when analyzed; otherwise abstain. Use section boundaries only from explicit structure analysis. Preserve source names, identity conflicts, ISRC ambiguity and provenance; never name a provider without its returned record.",
   "No verified commercial evidence means marketability undetermined. Release date is DETERMINED only from supplied verified date evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict remains PROPOSED unless deterministic evidence rules establish otherwise. Never infer demand from genre, tempo, popularity or metadata.",
   "Null scores mean insufficient evidence. RMS/dBFS are descriptive, not mastering readiness; do not score delivery readiness without destination targets. No loudness change without measured fault and target; <=2,000 Hz centroid is not bright; mono is a compatibility risk to check, not incompatibility.",
-  "Score only evidence-derivable dimensions. Never score taste: hook, originality, production quality, replay value and lane clarity belong only in the unscored listening checklist, each as a distinct first-listen check. Rhythmic-consistency rationale >=25 words even when null. Every evidence label names source; recommendations separate evidence from INDUSTRY PRACTICE. Return JSON only; local Zod and word-count validation remain authoritative."
+  "Score only evidence-derivable dimensions. Never score taste: hook, originality, production quality, replay value and lane clarity belong only in the unscored listening checklist, each as a distinct first-listen check. scorecard.rhythmicConsistency.rationale must contain at least 25 words, including when null. Every evidence label names source; recommendations separate evidence from INDUSTRY PRACTICE. Return JSON only; local Zod and word-count validation remain authoritative."
 ].join(" ");
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
@@ -301,7 +290,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     delete projected.catalogSources;
     delete projected.sourceCombination;
   }
-  if (group === "evidence-score") {
+  if (group === "evidence-score" || group === "narrative") {
     // Keep source/provenance facts; compact duplicated narrative detail only.
     delete projected.genres;
     delete projected.catalogSources;
@@ -407,7 +396,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     compact.harmonicFeatures = summary;
   }
 
-  const compacted = (group === "evidence-score" ? compactEvidenceScoreValue(compact) : compactPromptValue(compact)) as Record<string, unknown>;
+  const compacted = (group === "evidence-score" || group === "narrative" ? compactEvidenceScoreValue(compact) : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
@@ -438,7 +427,7 @@ function compactCatalogMetadataForGroup(
   // Retain a bounded set of named provider records; long descriptions/raw
   // responses are already represented by normalized evidence and provenance.
   return Object.fromEntries(Object.entries(value).slice(0, 4)
-    .map(([provider, record]) => [provider, compactPromptValue(record)])) as Record<string, unknown>;
+    .map(([provider, record]) => [provider, (group === "narrative" || group === "evidence-score") ? compactEvidenceScoreValue(record) : compactPromptValue(record)])) as Record<string, unknown>;
 }
 
 async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
