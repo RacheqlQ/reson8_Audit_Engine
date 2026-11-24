@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
 import { clearAssessmentProviderUnavailable, getAssessmentProviderReadiness } from "../src/providers/provider-policy.js";
 
@@ -977,3 +978,181 @@ describe("safe assessment validation diagnostics", () => {
   expect(attempts.some(attempt => attempt.group === "evidence-score" && attempt.failureKind === "threshold_violation")).toBe(true);
  });
 });
+
+describe("Groq narrative token projection regression", () => {
+  it("keeps a production-shaped verbose evidence payload under the unchanged 6,000-token ceiling", async () => {
+    const logs: string[] = [];
+    const info = vi.spyOn(console, "info").mockImplementation((message?: unknown) => { if (typeof message === "string") logs.push(message); });
+    try {
+      const fieldProvenance = Object.fromEntries(Array.from({ length: 12 }, (_, index) => [
+        "field" + index,
+        {
+          source: "MusicBrainz catalogue source " + index,
+          provider: "musicbrainz",
+          status: "verified",
+          confidence: 0.82,
+          evidenceClass: "RECONCILED",
+          value: "Verified source value with descriptive provenance details ".repeat(5),
+          normalizedValue: "Normalized source value with matching evidence details ".repeat(5),
+          matchStatus: "matched",
+        },
+      ]));
+      const evidence = {
+        auditType: "MASTER-BASED AUDIT", artist: "Fixture Artist", title: "Fixture Track",
+        album: "Fixture Album", releaseDate: "2025-08-27", label: "Fixture Label",
+        isrc: "NGABC2600001", upc: "123456789012", genres: ["Afrobeats", "Alternative R&B"],
+        sourceProviders: ["musicbrainz", "audd", "spotify"], fieldProvenance,
+        identity: { artist: "Fixture Artist", title: "Fixture Track", album: "Fixture Album", releaseDate: "2025-08-27" },
+        reconciliation: { status: "reconciled", matchedFields: Array.from({ length: 20 }, (_, i) => "field-" + i), conflicts: [] },
+        genreClassification: { primaryGenre: "Afrobeats", confidence: 0.82, source: "provider-reconciled" },
+        catalogSources: Array.from({ length: 12 }, (_, i) => ({ platform: "catalog-" + i, provider: "provider-" + i, status: "available", description: "Catalog metadata detail ".repeat(8) })),
+        commercialEvidence: { verified: false, reason: "No source-attributed commercial telemetry was supplied." },
+        fixture: true,
+      };
+      const sonicDna = {
+        provenance: "uploaded_audio_master", evidenceClass: "OBSERVED", analysisVersion: "fixture-v1",
+        sourceProviders: ["essentia", "librosa"], confidence: 0.82, bpm: 95, tempoConfidence: 0.82,
+        key: "A", mode: "minor", moodTags: ["Moderate Energy", "Bright Timbre"],
+        warnings: Array.from({ length: 24 }, (_, i) => "Analysis warning " + i + ": " + "supporting detail ".repeat(8)),
+        limitations: ["No commercial demand inference."],
+        acousticFeatureProfile: {
+          status: "measured", provenance: { featureVersion: "v1", algorithm: "fixture", sourceSampleRateHz: 44100, analysisSampleRateHz: 22050, windowCount: 128 },
+          descriptors: Object.fromEntries(Array.from({ length: 20 }, (_, i) => ["descriptor" + i, { median: i, p10: i - 1, p90: i + 1, unit: "normalized" }])),
+          predictions: { mood: { status: "heuristic", method: "fixture", probability: 0.4 }, energy: { status: "heuristic", method: "fixture", probability: 0.5 } },
+          abstentionReasons: ["Insufficient context ".repeat(8)],
+        },
+        vocalFeatures: { status: "analyzed", summary: "Vocal signal summary ".repeat(30), intervals: Array.from({ length: 128 }, (_, i) => ({ startSeconds: i, endSeconds: i + 1, confidence: 0.7, role: "unknown" })) },
+      };
+      const { mock } = fetchMock();
+      await new GroqClient("test-groq-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({
+          evidence, sonicDna,
+          loadCompletedSectionGroup: async group => group === "narrative" ? null : p(group),
+        });
+      const narrativeBudget = logs.map(line => JSON.parse(line) as Record<string, unknown>)
+        .find(line => line.event === "request_budget" && line.group === "narrative");
+      expect(narrativeBudget).toMatchObject({ maxTotalTokens: 6000 });
+      expect(Number(narrativeBudget?.estimatedTotalTokens)).toBeLessThanOrEqual(6000);
+      expect(Number(narrativeBudget?.maxCompletionTokens)).toBeGreaterThanOrEqual(256);
+    } finally {
+      info.mockRestore();
+    }
+  });
+});
+
+describe("nine-section report-readiness integration", () => {
+  it("runs every assessment section and adapts the complete report-ready data contract", async () => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: { artist: "Fixture Artist", title: "Fixture Track", fixture: true }, sonicDna: null });
+    const groups = new Set(mock.mock.calls.map(call => {
+      const body = JSON.parse(String(call[1]?.body));
+      return JSON.parse(body.messages[1].content).sectionGroup;
+    }));
+    expect(groups).toEqual(new Set(["narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline"]));
+    expect(Object.values(assessment.generationProvenance.fieldGroups)).toEqual(expect.arrayContaining([
+      "narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline",
+    ]));
+    expect(assessment.aAndRPositioning.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    const reportData = adaptReportV2({
+      auditId: "nine-section-readiness-fixture",
+      generatedAt: "2026-11-24T00:00:00.000Z",
+      evidence: { artist: "Fixture Artist", title: "Fixture Track", fixture: true },
+      sonicDna: null,
+      assessment,
+      executionMode: "dsp_link",
+    });
+    expect(reportData.decisionDimensions).toHaveLength(4);
+    expect(reportData.hasVerifiedCommercialEvidence).toBe(false);
+    expect(reportData.tempo.value).toBeNull();
+    expect(reportData.key.value).toBeNull();
+  });
+
+  it("retains both positioning minima after zero-confidence evidence sanitization", async () => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      const value = p(payload.sectionGroup) as Record<string, any>;
+      if (payload.sectionGroup === "evidence-score") value.confidence = 0;
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(value) } }] }), { status: 200 });
+    });
+    const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null });
+    expect(assessment.confidence).toBe(0);
+    expect(assessment.aAndRPositioning.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+  });
+});
+
+describe("positioning contract and provider recovery regressions", () => {
+  it.each(["aAndRPositioning.rationale", "commercialRead.rationale"])(
+    "reports the exact %s word-count threshold and recovers with a corrected response",
+    async (field) => {
+      const attempts: Array<Record<string, unknown>> = [];
+      let positioningCalls = 0;
+      let positioningInstructions = "";
+      const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        const payload = JSON.parse(body.messages[1].content);
+        if (payload.sectionGroup === "positioning") {
+          positioningInstructions = body.messages[0].content;
+          positioningCalls++;
+          if (positioningCalls === 1) {
+            const invalid = p("positioning") as any;
+            const short = "The supplied evidence supports this limited positioning hypothesis while important source limitations remain and require verification before any external decision is made.";
+            invalid[field === "aAndRPositioning.rationale" ? "aAndRPositioning" : "commercialRead"].rationale = short;
+            return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(invalid) } }] }), { status: 200 });
+          }
+        }
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      });
+      const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+      expect(positioningCalls).toBe(2);
+      expect(positioningInstructions).toContain("aAndRPositioning.rationale");
+      expect(positioningInstructions).toContain("commercialRead.rationale");
+      expect(positioningInstructions).toContain("at least 40 words");
+      expect(result.aAndRPositioning.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+      expect(result.commercialRead.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+      const failed = attempts.find(attempt => attempt.group === "positioning" && attempt.failureKind === "threshold_violation");
+      expect(failed).toMatchObject({
+        validationField: field,
+        validationRule: "minimum_word_count",
+        minimumWords: 40,
+      });
+      expect(failed?.actualWords).toBe(22);
+      expect(JSON.stringify(attempts)).not.toContain("supplied evidence supports this limited positioning hypothesis");
+    },
+  );
+
+  it.each(["narrative", "positioning"])(
+    "recovers the %s section after transient Gemini HTTP 503 responses",
+    async (targetGroup) => {
+      let calls = 0;
+      const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        const payload = JSON.parse(body.messages[1].content);
+        if (payload.sectionGroup === targetGroup && calls++ < 2) {
+          return new Response(JSON.stringify({ error: { message: "temporarily unavailable" } }), { status: 503 });
+        }
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      });
+      const attempts: Array<Record<string, unknown>> = [];
+      const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+      expect(result.assessmentVersion).toBe("3.0");
+      expect(result.generationProvenance.fieldGroups).toHaveProperty("executionPlan", "timeline");
+      expect(new Set(mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)).messages[1].content)
+        .map(content => JSON.parse(content).sectionGroup))).toHaveProperty("size", 9);
+      expect(calls).toBe(3);
+      expect(attempts.filter(attempt => attempt.group === targetGroup && attempt.status === 503)).toHaveLength(2);
+      expect(mock.mock.calls.filter(call => JSON.parse(String(call[1]?.body)).messages[1].content.includes('"sectionGroup":"' + targetGroup + '"'))).toHaveLength(3);
+    },
+  );
+});
+
