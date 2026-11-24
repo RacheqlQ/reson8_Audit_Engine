@@ -34,10 +34,11 @@ function parseReportInput(source: Uint8Array | string | unknown): AuditReportInp
   return value as unknown as AuditReportInput;
 }
 
-export async function ensurePdfReport(source: Uint8Array | string | unknown, tier: AuditReportTier): Promise<Uint8Array> {
+export async function ensurePdfReport(source: Uint8Array | string | unknown, tier: AuditReportTier, signal?: AbortSignal): Promise<Uint8Array> {
   if (source instanceof Uint8Array && isPdf(source)) return source;
   const input = parseReportInput(source);
-  const pdf = await generateAuditReportV2(input, tier);
+  if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error("PDF_RENDER_ABORTED");
+  const pdf = await generateAuditReportV2(input, tier, signal);
   if (!isPdf(pdf)) throw new Error("Report v2 renderer did not return a PDF.");
   return pdf;
 }
