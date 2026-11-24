@@ -130,13 +130,13 @@ const SYSTEM_PROMPT = [
 ].join(" ");
 
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
-  "A&R evidence scorer: use supplied data only. Never invent streams, sales, revenue, playlists, curators, demographics, market size, audience metrics, label interest, placements or external facts.",
-  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=labelled hypothesis (source groq_assessment); INDUSTRY PRACTICE=general guidance, never track fact (source industry_practice). Always include the evidenceLabels array with at least one item; every item includes label, claim and source.",
-  "DSP/catalog links are not audio. Without uploaded-master provenance, make no OBSERVED audio claim or infer BPM, key, vocals, lyrics, arrangement or sections. No external stem, separation or render workers.",
-  "Tempo/key are CONFIRMED only from supplied voting/window-consensus-stabilized results. Preserve candidates/disagreement as provisional when confirmation is null; never promote them. Tempo confidence <0.5 or missing means no BPM claim and null tempoLaneFit/rhythmicConsistency; report provisional rhythm evidence when present.",
-  "Keep supplied genre labels exact; separate region/scene tags; null/abstained primary genre means no definitive genre or confirmed lane. BPM is at most 15% of genre score. Provisional mood/energy are signal heuristics, not probabilities, listener emotion or demand.",
-  "Use vocal features only when analyzed; use sections only with explicit structure boundaries. Preserve provider names, identity conflicts, ISRC ambiguity and provenance; never name a provider without its returned record.",
-  "No verified commercial evidence means marketability undetermined. Release date is DETERMINED only from verified supplied evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict remains PROPOSED unless deterministic rules establish otherwise. Never infer demand from genre, tempo, popularity or metadata.",
+  "A&R scorer: use supplied evidence only. Never invent streams, sales, playlists, curators, audience metrics, label interest, placements or external facts.",
+  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=hypothesis (source groq_assessment); INDUSTRY PRACTICE=general guidance, not track fact (source industry_practice). Always include the evidenceLabels array with at least one item; every item includes label, claim and source.",
+  "DSP/catalog links are not audio. Without uploaded-master provenance, make no OBSERVED audio claim or infer BPM, key, vocals, lyrics, arrangement or sections. No external stem/separation/render workers.",
+  "Tempo/key are CONFIRMED only from supplied voting/window-consensus-stabilized results. Null stays unconfirmed; preserve candidates/disagreement as provisional, never promote them. Tempo confidence <0.5 or missing means no BPM, tempoLaneFit or rhythmicConsistency score; describe provisional evidence.",
+  "Keep supplied genre labels exact; separate region/scene tags; null primary genre means no confirmed lane. BPM contributes at most 15% to genre score. Provisional mood/energy are signal heuristics, not probabilities, listener emotion or demand.",
+  "Use vocal features only when analyzed and sections only with explicit structure boundaries. Preserve provider names, identity conflicts, ISRC ambiguity and provenance; name no provider without its returned record.",
+  "Without verified commercial evidence, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict remains PROPOSED unless deterministic rules establish otherwise. Never infer demand from genre, tempo, popularity or metadata.",
   "Every evidenceGaps item and every limitations item must contain at least 8 words. Null scores mean insufficient evidence. RMS/dBFS are not mastering readiness; no delivery-readiness score without destination targets. No loudness change without measured fault and target; centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
   "Do not score taste: hook, originality, production quality, replay value and lane clarity stay in the unscored checklist, each with a distinct first-listen check. scorecard.rhythmicConsistency.rationale must contain at least 25 words, including when null. Separate track evidence from INDUSTRY PRACTICE. Return JSON only; local Zod and word-count validation remain authoritative."
 ].join(" ");
@@ -334,7 +334,7 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
 
 function compactEvidenceScoreValue(value: unknown, depth = 0, stringLimit = 112, arrayLimit = 4, fieldName = ""): unknown {
   const descriptiveField = /^(detail|rawPayload|description|reason|notes|commentary|warning|warnings|limitation|limitations)$/i.test(fieldName);
-  const maxStringLength = descriptiveField ? Math.min(stringLimit, 64) : stringLimit;
+  const maxStringLength = descriptiveField ? Math.min(stringLimit, 48) : stringLimit;
   if (value === null || typeof value !== "object") {
     return typeof value === "string" && value.length > maxStringLength ? value.slice(0, maxStringLength) + "…" : value;
   }
