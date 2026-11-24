@@ -136,7 +136,7 @@ const NARRATIVE_SYSTEM_PROMPT = [
   "Use BPM only when confirmed with confidence >=0.5; otherwise omit BPM, speed/energy inference and tempo scoring. Null confirmed tempo means candidate/window evidence stays provisional.",
   "Key/mode are CONFIRMED only by supplied voting/window-consensus-stabilized results; null and disagreement stay provisional. Mood/energy are signal heuristics, not probabilities, listener emotion or demand; energy uses only supplied low/moderate/high and score/100.",
   "Use vocals only when status=analyzed; otherwise do not infer voice, delivery, layering or lyrics. Song sections require explicit boundaries.",
-  "Use reconciled identity, provenance, catalogSources and actual provider records; preserve ISRC conflicts and ambiguous matches. DSP links are not audio; never claim OBSERVED audio or infer audio from links. No external stem, separation or render workers.",
+  "Use reconciled identity, provenance, catalogSources and actual provider records; preserve ISRC conflicts and ambiguous matches. DSP/catalog links are not audio; never claim OBSERVED audio or infer audio from links. No external stem, separation or render workers.",
   "Ground strengths, risks and actions in supplied sonic, vocal, genre and catalog facts; distinguish unavailable from low-confidence. Label general recommendations INDUSTRY PRACTICE. No invented comparables; give verification criteria.",
   "Without verified commercial performance, marketability is undetermined. Release date is DETERMINED only from verified supplied evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise.",
   "Do not score hook, originality, production quality, replay value or lane clarity; keep each in the unscored human-listening checklist. Return JSON only and obey schema/word limits."
@@ -301,9 +301,11 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     delete projected.genres;
     delete projected.catalogSources;
     delete projected.sourceCombination;
-  } else if (group === "positioning") {
-    // Provider combinations are duplicated by sourceProviders/catalogSources.
+  } else if (["positioning", "narrative"].includes(group)) {
+    // Provider combinations and masterAudio metadata are already represented by
+    // sourceProviders, normalized identity and field provenance.
     delete projected.sourceCombination;
+    if (group === "narrative") delete projected.masterAudio;
   }
   if (["evidence-score", "narrative", "positioning", "release"].includes(group)) {
     // Keep source/provenance facts; only evidence-score drops duplicate summaries.
@@ -493,7 +495,21 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
           .map(key => [key, model[key]]));
       }
       for (const key of (["positioning", "evidence-score"].includes(group) ? ["limitations"] : ["activitySegments", "pitchSegments", "limitations"])) {
-        if (raw[key] !== undefined) vocalProjection[key] = compactEvidenceScoreValue(raw[key], 0, 72, 3);
+        if (raw[key] === undefined) continue;
+        if (group === "narrative" && (key === "activitySegments" || key === "pitchSegments") && Array.isArray(raw[key])) {
+          const entries = raw[key] as unknown[];
+          const selected = entries.length <= 3 ? entries : [entries[0], entries[Math.floor((entries.length - 1) / 2)], entries[entries.length - 1]];
+          const fields = key === "activitySegments"
+            ? ["startSeconds", "endSeconds", "meanLevelDbfs", "peakLevelDbfs"]
+            : ["startSeconds", "endSeconds", "medianHz", "confidence", "method"];
+          vocalProjection[key] = selected.map(entry => {
+            if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+            const item = entry as Record<string, unknown>;
+            return Object.fromEntries(fields.filter(field => item[field] !== undefined).map(field => [field, item[field]]));
+          }).filter(Boolean);
+        } else {
+          vocalProjection[key] = compactEvidenceScoreValue(raw[key], 0, 72, 3);
+        }
       }
       compacted.vocalFeatures = vocalProjection;
     }
