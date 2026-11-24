@@ -623,3 +623,33 @@ describe("voting-confirmed tempo propagation",()=>{
   expect(lines).not.toContain("No tempo result is available from the supplied recording.");
  });
 });
+
+
+describe("v2 PDF renderer with verbose assessment context", () => {
+  it("keeps master and DSP-only sample/full reports renderable without changing page allocation", async () => {
+    for (const [source, fixture] of [
+      ["uploaded-master", fullAudioFixture],
+      ["dsp-link", metadataOnlyFixture],
+    ] as const) {
+      const input = structuredClone(fixture) as any;
+      input.executionMode = source === "dsp-link" ? "dsp_link" : "master";
+      input.assessment.executiveSummary = Array.from({ length: 80 }, (_, index) =>
+        `Decision evidence detail ${index + 1}: the supplied material requires source verification and a human listening review before any external pitch.`
+      ).join(" ");
+      input.assessment.evidenceGaps = Array.from({ length: 30 }, (_, index) =>
+        `Evidence gap ${index + 1}: verify the submitted identity, rights record, release mapping and supporting source before relying on this claim.`
+      );
+      input.assessment.risks = Array.from({ length: 30 }, (_, index) =>
+        `Risk ${index + 1}: the current assessment requires a documented review and confirmation against the original source material.`
+      );
+      input.assessment.limitations = Array.from({ length: 30 }, (_, index) =>
+        `Limitation ${index + 1}: no unsupported commercial, audience or playlist outcome should be inferred from this record.`
+      );
+
+      const sample = await generateAuditReportV2(input, "sample");
+      const full = await generateAuditReportV2(input, "full");
+      expect((await PDFDocument.load(sample)).getPageCount(), source + " sample").toBe(8);
+      expect((await PDFDocument.load(full)).getPageCount(), source + " full").toBe(13);
+    }
+  });
+});
