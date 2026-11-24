@@ -100,7 +100,7 @@ export function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
  const candidate=finite(audio.tempoCandidateBpm)?audio.tempoCandidateBpm:finite(verdict.primary_candidate_bpm)?verdict.primary_candidate_bpm:finite(audio.bpm)?audio.bpm:null;
  const tempoStatus=data.tempo.value!==null?"CONFIRMED":candidate!==null&&candidate>=40&&candidate<=220?"CANDIDATE":"NOT ANALYSED";
  const tempoDisplay=data.tempo.value!==null?data.tempo.value+" BPM · CONFIRMED":tempoStatus==="CANDIDATE"?candidate!.toFixed(1)+" BPM · CANDIDATE":"Not analysed";
- const resolution=rec(data.tonalResolution??rec(audio.harmonicFeatures).tonalResolution);
+ const resolution=rec(data.tonalResolution??input.tonalResolution??rec(audio.harmonicFeatures).tonalResolution??audio.tonalResolution);
  const keyBase=buildCoverKeyLabel(input,data).replace(/^Confirmed:\s*/i,"").replace(/^Possible:\s*/i,"");
  const keyStatus=resolution.status==="CONFIRMED"||data.key.value!==null?"CONFIRMED":hasReportableKeyCandidates({...audio,tonalResolution:resolution})?"CANDIDATE":"NOT ANALYSED";
  const keyDisplay=keyStatus==="CONFIRMED"?"Confirmed: "+keyBase:keyStatus==="CANDIDATE"?"Possible: "+keyBase:"Not analysed";
