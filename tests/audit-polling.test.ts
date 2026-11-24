@@ -12,6 +12,32 @@ describe("browser audit polling authorization and retry policy", () => {
     expect(onMessage).toHaveBeenCalledOnce();
     expect(onMessage.mock.calls[0][0]).toContain("credential was rejected");
   });
+  it("stops on completed status when only the sample PDF is available", async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      status: "completed", sample: { available: true }, full: { available: false },
+    }), { status: 200 }));
+    const onPayload = vi.fn(), poller = createAuditPoller({ fetchImpl, onPayload });
+    await poller.poll("job-sample-only", "capability");
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(onPayload).toHaveBeenCalledWith(expect.objectContaining({ sample: { available: true } }));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+  it("stops on failed status but reports that a successfully generated PDF remains downloadable", async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      status: "failed", sample: { available: true }, full: { available: false },
+    }), { status: 200 }));
+    const onPayload = vi.fn(), onMessage = vi.fn();
+    const poller = createAuditPoller({ fetchImpl, onPayload, onMessage });
+    await poller.poll("job-partial", "capability");
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(onPayload).toHaveBeenCalledOnce();
+    expect(onMessage).toHaveBeenCalledWith(expect.stringContaining("successfully generated PDF remains available"));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
   it("stops after three consecutive 404 responses and shows the invalid-key message", async () => {
     vi.useFakeTimers();
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ message: "not found" }), { status: 404 }));
