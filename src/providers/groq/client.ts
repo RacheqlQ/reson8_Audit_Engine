@@ -270,7 +270,16 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     timeline: ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
   };
   const allowed = new Set([...common, ...(groupFields[group] ?? [])]);
-  const projected = Object.fromEntries(Object.entries(evidence).filter(([key]) => allowed.has(key)));
+  // Evidence-score already receives canonical identity and source provenance.
+  // Avoid repeating display-only identity fields and upload metadata in scoring.
+  const evidenceScoreOmissions = new Set([
+    "artist", "title", "album", "releaseDate", "label", "isrc", "upc",
+    "masterAudio", "metadataSourcesChecked", "fixture", "catalogSources",
+    "sourceCombination", "genres",
+  ]);
+  const projected = Object.fromEntries(Object.entries(evidence).filter(([key]) =>
+    allowed.has(key) && !(group === "evidence-score" && evidenceScoreOmissions.has(key))
+  ));
 
   // Provider provenance often contains verbose raw response descriptions.
   // Keep the source/status/confidence facts for every field, not duplicated
@@ -316,7 +325,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     }
     // Narrative receives the same bounded string/array envelope as evidence-score;
     // source identities and normalized values above remain intact.
-    const compacted = compactEvidenceScoreValue(projected, 0, 72, 3) as Record<string, unknown>;
+    const compacted = compactEvidenceScoreValue(projected, 0, group === "evidence-score" ? 40 : 72, group === "evidence-score" ? 2 : 3) as Record<string, unknown>;
     if (compacted.fieldProvenance && typeof compacted.fieldProvenance === "object") {
       compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, 12));
     }
@@ -426,7 +435,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   }
 
   const compacted = (["evidence-score", "narrative", "positioning"].includes(group)
-    ? compactEvidenceScoreValue(compact, 0, 72, 3)
+    ? compactEvidenceScoreValue(compact, 0, group === "evidence-score" ? 40 : 72, group === "evidence-score" ? 2 : 3)
     : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
@@ -442,8 +451,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     const arrangement = compacted.vocalArrangementAnalysis as Record<string, unknown>;
     const rawSegments = Array.isArray(arrangement.segments) ? arrangement.segments : [];
     const rawSections = Array.isArray(arrangement.sections) ? arrangement.sections : [];
-    const selectFour = (items: unknown[]) => items.length <= 4 ? items
-      : [items[0], items[Math.round((items.length - 1) / 3)], items[Math.round(2 * (items.length - 1) / 3)], items[items.length - 1]];
+    const selectFour = (items: unknown[]) => items.length <= 2 ? items : [items[0], items[items.length - 1]];
     const compactItems = (items: unknown[], fields: string[]) => selectFour(items).map(segment => {
       if (!segment || typeof segment !== "object" || Array.isArray(segment)) return null;
       const item = segment as Record<string, unknown>;
