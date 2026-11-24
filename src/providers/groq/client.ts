@@ -297,7 +297,9 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
       delete projected.catalogSources;
       delete projected.sourceCombination;
     }
-    const compacted = compactEvidenceScoreValue(projected, 0, group === "evidence-score" ? 72 : 112, group === "evidence-score" ? 3 : 4) as Record<string, unknown>;
+    // Narrative receives the same bounded string/array envelope as evidence-score;
+    // source identities and normalized values above remain intact.
+    const compacted = compactEvidenceScoreValue(projected, 0, 72, 3) as Record<string, unknown>;
     if (compacted.fieldProvenance && typeof compacted.fieldProvenance === "object") {
       compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, 12));
     }
@@ -406,12 +408,16 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     compact.harmonicFeatures = summary;
   }
 
-  const compacted = (group === "evidence-score" ? compactEvidenceScoreValue(compact, 0, 72, 3) : group === "narrative" ? compactEvidenceScoreValue(compact) : compactPromptValue(compact)) as Record<string, unknown>;
+  const compacted = (group === "evidence-score" || group === "narrative"
+    ? compactEvidenceScoreValue(compact, 0, 72, 3)
+    : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
-    if (value !== undefined) compacted[key] = group === "evidence-score" ? compactEvidenceScoreValue(value, 0, 72, 3) : group === "narrative" ? compactEvidenceScoreValue(value) : compactPromptValue(value);
+    if (value !== undefined) compacted[key] = group === "evidence-score" || group === "narrative"
+      ? compactEvidenceScoreValue(value, 0, 72, 3)
+      : compactPromptValue(value);
   }
   return compacted;
 }
@@ -422,7 +428,7 @@ function compactCatalogMetadataForGroup(
   evidence: Record<string, unknown>,
 ): Record<string, unknown> | null {
   if (!value || !["narrative", "positioning", "evidence-score", "label-fit"].includes(group)) return null;
-  if (group === "evidence-score") {
+  if (group === "evidence-score" || group === "narrative") {
     const hasNormalizedCatalogEvidence = Boolean(
       evidence.identity && typeof evidence.identity === "object"
       && evidence.fieldProvenance && typeof evidence.fieldProvenance === "object"
@@ -430,14 +436,16 @@ function compactCatalogMetadataForGroup(
       && Array.isArray(evidence.sourceProviders) && evidence.sourceProviders.length > 0
     );
     // Prefer the canonical normalized catalog evidence when it is complete.
-    // Keep provider records for sparse inputs that do not carry those fields.
+    // Narrative and evidence-score both receive these source facts through the
+    // evidence projection; sending provider records again only duplicates large
+    // catalog payloads. Keep provider records for sparse inputs.
     if (hasNormalizedCatalogEvidence) return null;
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   // Retain a bounded set of named provider records; long descriptions/raw
   // responses are already represented by normalized evidence and provenance.
   return Object.fromEntries(Object.entries(value).slice(0, 4)
-    .map(([provider, record]) => [provider, group === "evidence-score" ? compactEvidenceScoreValue(record, 0, 72, 3) : group === "narrative" ? compactEvidenceScoreValue(record) : compactPromptValue(record)])) as Record<string, unknown>;
+    .map(([provider, record]) => [provider, group === "evidence-score" || group === "narrative" ? compactEvidenceScoreValue(record, 0, 72, 3) : compactPromptValue(record)])) as Record<string, unknown>;
 }
 
 async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
