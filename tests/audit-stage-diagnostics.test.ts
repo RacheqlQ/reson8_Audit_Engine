@@ -12,6 +12,7 @@ describe("audit stage failure diagnostics", () => {
       stage: "full_pdf_persistence",
       failureCode: "processing_error",
       errorName: "Error",
+      errorMessage: "storage rejected [path]?token=[redacted]",
       timedOut: false,
       errorCode: "UNCLASSIFIED_STAGE_ERROR",
       stackFingerprint: expect.stringMatching(/^stk-[a-f0-9]{8}$/),
@@ -19,9 +20,10 @@ describe("audit stage failure diagnostics", () => {
     expect(JSON.stringify(diagnostic)).not.toContain("owner-private");
     expect(JSON.stringify(diagnostic)).not.toContain("secret");
     expect(JSON.stringify(diagnostic)).not.toContain("report.pdf");
+    expect(diagnostic.errorMessage).toContain("storage rejected");
   });
 
-  it("marks stage timeouts without including the timeout message", () => {
+  it("retains a bounded timeout message for internal diagnosis", () => {
     const diagnostic = buildAuditStageFailureDiagnostic(
       "full_pdf_generation",
       new Error("AUDIT_STAGE_TIMEOUT:full_pdf_generation"),
@@ -31,10 +33,20 @@ describe("audit stage failure diagnostics", () => {
       stage: "full_pdf_generation",
       failureCode: "timeout",
       errorName: "Error",
+      errorMessage: "AUDIT_STAGE_TIMEOUT:full_pdf_generation",
       timedOut: true,
       errorCode: "UNCLASSIFIED_STAGE_ERROR",
       stackFingerprint: expect.stringMatching(/^stk-[a-f0-9]{8}$/),
     });
+  });
+
+  it("redacts URLs, emails, identifiers, and truncates exception messages", () => {
+    const diagnostic = buildAuditStageFailureDiagnostic("sample_pdf_generation", new Error("Failed https://private.example/report?token=secret for owner@example.com id 12345678-1234-1234-1234-123456789012"));
+    expect(diagnostic.errorMessage).not.toContain("private.example");
+    expect(diagnostic.errorMessage).not.toContain("secret");
+    expect(diagnostic.errorMessage).not.toContain("owner@example.com");
+    expect(diagnostic.errorMessage).not.toContain("12345678-1234");
+    expect(diagnostic.errorMessage.length).toBeLessThanOrEqual(240);
   });
 
   it("classifies known full-report layout failures without exposing report text", () => {
