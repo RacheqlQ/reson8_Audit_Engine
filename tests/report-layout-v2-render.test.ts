@@ -612,5 +612,14 @@ describe("voting-confirmed tempo propagation",()=>{
   const tempoCard=reportV2Render.metricBlock(data,input).find(block=>block.label==="TEMPO");
   expect(tempoCard).toMatchObject({value:"96 BPM",confidence:"CONFIRMED"});
   expect(reportV2Render.buildConfirmedAudioEvidenceLines(data).join(" ")).toContain("TEMPO INFERENCE · CONFIRMED");
+  expect(reportV2Render.buildTempoDiagnosticLines(input)).toContain("Confirmed tempo: 96 BPM.");
+ });
+
+ it("uses reliable top-level BPM when rhythm-window details are absent",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  delete input.sonicDna.rhythmFeatures;
+  const lines=reportV2Render.buildTempoDiagnosticLines(input);
+  expect(lines).toContain("Confirmed tempo: 96 BPM.");
+  expect(lines).not.toContain("No tempo result is available from the supplied recording.");
  });
 });
