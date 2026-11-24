@@ -1122,7 +1122,7 @@ describe("positioning contract and provider recovery regressions", () => {
         validationRule: "minimum_word_count",
         minimumWords: 40,
       });
-      expect(typeof failed?.actualWords).toBe("number");
+      expect(failed?.actualWords).toBe(31);
       expect(JSON.stringify(attempts)).not.toContain("supplied evidence supports this limited positioning hypothesis");
     },
   );
