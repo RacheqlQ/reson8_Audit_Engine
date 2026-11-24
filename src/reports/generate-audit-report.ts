@@ -195,7 +195,7 @@ export function buildArNotesDecisionContextFull(input:AuditReportInput):ArNotesD
   verdict:coverVerdictLabel(input).toUpperCase(),
   summary:[
    "Decision basis: "+fullSummary,
-   "Open diligence: "+(openItems.join(" ")||"No additional diligence items were recorded."),
+   "Open diligence: "+(openDiligence||"No additional diligence items were recorded."),
    "Next action: "+nextAction,
   ].join(" "),
   prompts:[
