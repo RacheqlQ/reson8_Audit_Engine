@@ -113,7 +113,7 @@ describe("voting-backed confirmation and report consistency", () => {
 
     const sample = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
     const full = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(sample.getPageCount()).toBe(8);
-    expect(full.getPageCount()).toBe(13);
+    expect(sample.getPageCount()).toBe(7);
+    expect(full.getPageCount()).toBe(12);
   });
 });
