@@ -131,13 +131,13 @@ const SYSTEM_PROMPT = [
 
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
   "A&R evidence scorer. Use supplied data only. Never invent streams, sales, revenue, playlist data, named playlists, curators, demographics, market size, audience metrics, label interest, placements or external facts.",
-  "Labels are distinct: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent non-conflicting providers; INFERRED=labelled hypothesis; INDUSTRY PRACTICE=general guidance, never track fact. Every label names its real source (groq_assessment for INFERRED; industry_practice for INDUSTRY PRACTICE).",
+  "Labels are distinct: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent non-conflicting providers; INFERRED=labelled hypothesis; INDUSTRY PRACTICE=general guidance, never track fact. Every label names its real source (groq_assessment for INFERRED; industry_practice for INDUSTRY PRACTICE). Always include the evidenceLabels array with at least one item; every item includes label, claim and source.",
   "DSP/catalog links are not audio. Without uploaded-master provenance, make no OBSERVED audio claim and do not infer BPM, key, vocals, lyrics, arrangement or sections. No external stem/separation/render workers.",
   "Tempo/key are CONFIRMED only when supplied as voting/window-consensus-stabilized results. Preserve candidates and disagreement as provisional when confirmation is null; never promote a candidate. Tempo confidence <0.5 or missing means no BPM claim and null tempoLaneFit/rhythmicConsistency. Preserve provisional rhythm evidence rather than saying analysis is absent.",
   "Keep genre labels exactly as supplied; separate region/scene tags; null/abstained primary genre means no definitive genre or confirmed lane. BPM contributes at most 15% to genre scoring. Provisional mood/energy are heuristic signal descriptors, not calibrated probabilities or listener demand.",
   "Use vocal features only when analyzed; otherwise abstain. Use section boundaries only from explicit structure analysis. Preserve source names, identity conflicts, ISRC ambiguity and provenance; never name a provider without its returned record.",
   "No verified commercial evidence means marketability undetermined. Release date is DETERMINED only from supplied verified date evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict remains PROPOSED unless deterministic evidence rules establish otherwise. Never infer demand from genre, tempo, popularity or metadata.",
-  "Null scores mean insufficient evidence. RMS/dBFS are descriptive, not mastering readiness; do not score delivery readiness without destination targets. No loudness change without measured fault and target; <=2,000 Hz centroid is not bright; mono is a compatibility risk to check, not incompatibility.",
+  "Every evidenceGaps item and every limitations item must contain at least 8 words. Null scores mean insufficient evidence. RMS/dBFS are descriptive, not mastering readiness; do not score delivery readiness without destination targets. No loudness change without measured fault and target; <=2,000 Hz centroid is not bright; mono is a compatibility risk to check, not incompatibility.",
   "Score only evidence-derivable dimensions. Never score taste: hook, originality, production quality, replay value and lane clarity belong only in the unscored listening checklist, each as a distinct first-listen check. scorecard.rhythmicConsistency.rationale must contain at least 25 words, including when null. Every evidence label names source; recommendations separate evidence from INDUSTRY PRACTICE. Return JSON only; local Zod and word-count validation remain authoritative."
 ].join(" ");
 
@@ -332,17 +332,24 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
   return Object.fromEntries(selectedEntries.map(([key, item]) => [key, compactPromptValue(item, depth + 1)]));
 }
 
-function compactEvidenceScoreValue(value: unknown, depth = 0, stringLimit = 112, arrayLimit = 4): unknown {
+function compactEvidenceScoreValue(value: unknown, depth = 0, stringLimit = 112, arrayLimit = 4, fieldName = ""): unknown {
+  const descriptiveField = /^(detail|rawPayload|description|reason|notes|commentary|warning|warnings|limitation|limitations)$/i.test(fieldName);
+  const maxStringLength = descriptiveField ? Math.min(stringLimit, 64) : stringLimit;
   if (value === null || typeof value !== "object") {
-    return typeof value === "string" && value.length > stringLimit ? value.slice(0, stringLimit) + "…" : value;
+    return typeof value === "string" && value.length > maxStringLength ? value.slice(0, maxStringLength) + "…" : value;
   }
   const sample = (items: unknown[], limit: number): unknown[] => items.length <= limit ? items
     : Array.from({ length: limit }, (_, index) => items[Math.round(index * (items.length - 1) / (limit - 1))]);
-  if (Array.isArray(value)) return sample(value, arrayLimit).map(item => compactEvidenceScoreValue(item, depth + 1, stringLimit, arrayLimit));
+  if (Array.isArray(value)) {
+    const limit = /^(sourceProviders|genres|catalogSources|matchedFields)$/i.test(fieldName) ? 12
+      : /^(segments|sections)$/i.test(fieldName) ? 4 : arrayLimit;
+    return sample(value, limit).map(item => compactEvidenceScoreValue(item, depth + 1, stringLimit, arrayLimit, fieldName));
+  }
   const entries = Object.entries(value as Record<string, unknown>);
   if (depth >= 4) return Object.fromEntries(entries.filter(([, item]) => item === null || typeof item !== "object")
-    .slice(0, 12).map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1, stringLimit, arrayLimit)]));
-  return Object.fromEntries(entries.slice(0, depth === 0 ? 32 : 16).map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1, stringLimit, arrayLimit)]));
+    .slice(0, 12).map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1, stringLimit, arrayLimit, key)]));
+  return Object.fromEntries(entries.slice(0, depth === 0 ? 32 : 16)
+    .map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1, stringLimit, arrayLimit, key)]));
 }
 
 function compactStructuredSchema(schema: unknown): unknown {
