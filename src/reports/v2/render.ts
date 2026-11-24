@@ -757,10 +757,10 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
  if(Number.isFinite(tuningWindows)&&tuningWindows>1){
   diagnosticLines.unshift("More than one tuning window was detected; a single tuning reference is not confirmed.");
  }
- const harmonic=rec(audio.harmonicFeatures);
- const segmentAgreement=Number(audio.keySegmentAgreement??harmonic.segmentAgreement);
+ const audioHarmonic=rec(audio.harmonicFeatures);
+ const segmentAgreement=Number(audio.keySegmentAgreement??audioHarmonic.segmentAgreement);
  if((Number.isFinite(segmentAgreement)&&segmentAgreement>0&&segmentAgreement<0.5)
-   ||/disagree across audio segments/i.test(String(harmonic.limitation??""))){
+   ||/disagree across audio segments/i.test(String(audioHarmonic.limitation??""))){
   diagnosticLines.unshift("Tonal windows do not consistently support one candidate.");
  }
  let diagnosticY=top-108;
