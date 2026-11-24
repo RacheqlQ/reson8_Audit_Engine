@@ -984,10 +984,12 @@ describe("positioning contract and provider recovery regressions", () => {
     async (field) => {
       const attempts: Array<Record<string, unknown>> = [];
       let positioningCalls = 0;
+      let positioningInstructions = "";
       const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
         const body = JSON.parse(String(init?.body));
         const payload = JSON.parse(body.messages[1].content);
         if (payload.sectionGroup === "positioning") {
+          positioningInstructions = body.messages[0].content;
           positioningCalls++;
           if (positioningCalls === 1) {
             const invalid = p("positioning") as any;
@@ -1001,6 +1003,9 @@ describe("positioning contract and provider recovery regressions", () => {
       const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
         .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
       expect(positioningCalls).toBe(2);
+      expect(positioningInstructions).toContain("aAndRPositioning.rationale");
+      expect(positioningInstructions).toContain("commercialRead.rationale");
+      expect(positioningInstructions).toContain("at least 40 words");
       expect(result.aAndRPositioning.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
       const failed = attempts.find(attempt => attempt.group === "positioning" && attempt.failureKind === "threshold_violation");
       expect(failed).toMatchObject({
@@ -1029,6 +1034,9 @@ describe("positioning contract and provider recovery regressions", () => {
       const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
         .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
       expect(result.assessmentVersion).toBe("3.0");
+      expect(result.generationProvenance.fieldGroups).toHaveProperty("executionPlan", "timeline");
+      expect(new Set(mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)).messages[1].content)
+        .map(content => JSON.parse(content).sectionGroup))).toHaveProperty("size", 9);
       expect(calls).toBe(3);
       expect(attempts.filter(attempt => attempt.group === targetGroup && attempt.status === 503)).toHaveLength(2);
       expect(mock.mock.calls.filter(call => JSON.parse(String(call[1]?.body)).messages[1].content.includes('"sectionGroup":"' + targetGroup + '"'))).toHaveLength(3);
