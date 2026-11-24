@@ -271,6 +271,16 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     "label-fit": ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
     timeline: ["rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved"],
   };
+  if (group === "production") {
+    // Production guidance is derived from the uploaded-master Sonic DNA
+    // projection. Catalog identity, reconciliation and commercial records are
+    // irrelevant to this group and are retained unchanged in canonical storage.
+    return compactPromptValue({
+      auditType: evidence.auditType,
+      evidenceClass: evidence.evidenceClass,
+      fixture: evidence.fixture,
+    }) as Record<string, unknown>;
+  }
   const allowed = new Set([...common, ...(groupFields[group] ?? [])]);
   // Evidence-score already receives canonical identity and source provenance.
   // Avoid repeating display-only identity fields and upload metadata in scoring.
