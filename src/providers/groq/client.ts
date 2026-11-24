@@ -436,7 +436,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
       ? compactEvidenceScoreValue(value, 0, 72, 3)
       : compactPromptValue(value);
   }
-  if (["narrative", "positioning", "release"].includes(group)) {
+  if (["narrative", "positioning", "release", "evidence-score"].includes(group)) {
     // The narrative needs the complete acoustic descriptor summary, not the
     // 128-window raw summary series. Median/p10/p90 preserve measured spread;
     // vocal intervals retain representative first/middle/last observations.
@@ -470,7 +470,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
         vocalProjection.model = Object.fromEntries(["name", "version"].filter(key => model[key] !== undefined)
           .map(key => [key, model[key]]));
       }
-      for (const key of (group === "positioning" ? ["limitations"] : ["activitySegments", "pitchSegments", "limitations"])) {
+      for (const key of (["positioning", "evidence-score"].includes(group) ? ["limitations"] : ["activitySegments", "pitchSegments", "limitations"])) {
         if (raw[key] !== undefined) vocalProjection[key] = compactEvidenceScoreValue(raw[key], 0, 72, 3);
       }
       compacted.vocalFeatures = vocalProjection;
