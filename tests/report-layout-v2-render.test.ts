@@ -592,3 +592,25 @@ describe("post-release campaign framing", () => {
     expect(labels.days6190).toMatch(/post-release/i);
   });
 });
+
+describe("voting-confirmed tempo propagation",()=>{
+ it("uses a confirmed voting verdict consistently when the compatibility BPM field is absent",()=>{
+  const input=structuredClone(fullAudioFixture) as any;
+  input.sonicDna.bpm=null;
+  input.sonicDna.tempoConfidence=null;
+  input.sonicDna.rhythmFeatures={
+   ...(input.sonicDna.rhythmFeatures??{}),
+   tempoVerdict:{
+    confirmation_status:"CONFIRMED",primary_candidate_bpm:96,prominence_score:0.91,
+    window_agreement:0.9,runner_up_margin:0.2,vote_share:0.95,explanation:"Confirmed by weighted window consensus."
+   }
+  };
+  const data=adaptReportV2(input);
+  expect(data.tempo.value).toBe(96);
+  expect(data.notYetMeasured.some(line=>/tempo/i.test(line))).toBe(false);
+  expect(buildCoverTempoLabel(data,input)).toBe("96 BPM");
+  const tempoCard=reportV2Render.metricBlock(data,input).find(block=>block.label==="TEMPO");
+  expect(tempoCard).toMatchObject({value:"96 BPM",confidence:"CONFIRMED"});
+  expect(reportV2Render.buildConfirmedAudioEvidenceLines(data).join(" ")).toContain("TEMPO INFERENCE · CONFIRMED");
+ });
+});
