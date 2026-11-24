@@ -1,0 +1,26 @@
+import type { ChartRow } from "./charts.js";
+export type ChartFallbackState = "AVAILABLE" | "CONFIRMED" | "SIGNAL-DERIVED" | "PROVISIONAL" | "PROPOSED" | "ENDPOINT_PENDING" | "UNAVAILABLE";
+export interface ReconciledChartSeries { rows: ChartRow[]; state: ChartFallbackState; provenance: string; sourceCount: number; total: number | null; labels: string[]; axisTicks: number[]; note: string | null; }
+export interface ChartReconciliationInput { rows?: ChartRow[] | null; sourceRows?: ChartRow[] | null; endpointAvailable?: boolean; metricAvailable?: boolean; derivedInProcess?: boolean; proposed?: boolean; confirmed?: boolean; provenance?: string | null; expectedLabels?: string[]; fallbackLabel?: string; maxRows?: number; }
+const PLACEHOLDER=/^(?:not supplied|not available|not measured|not determined|null|undefined|n\/a|istener action|endpoint pending)$/i;
+const INTERNAL=/(?:working direction\s*[·-]\s*platform source not supplied|istener action|not supplied)/ig;
+function cleanLabel(value:unknown):string{return String(value??"").normalize("NFKC").replace(INTERNAL,"").replace(/[\s·•]+/g," ").trim().replace(/\b(lufs|dbfs|bpm|hz|lu)\b/gi,u=>u.toUpperCase()).replace(/\s*\/\s*/g," / ").replace(/\s+/g," ");}
+function finiteValue(value:ChartRow["value"]):number|null{if(typeof value==="number")return Number.isFinite(value)?value:null;if(typeof value==="string"&&/^-?\d+(?:\.\d+)?$/.test(value.trim()))return Number(value);return null;}
+function niceTicks(max:number):number[]{if(!Number.isFinite(max)||max<=0)return[0,1];const magnitude=10**Math.floor(Math.log10(max));const step=magnitude/(max/magnitude<=2?4:max/magnitude<=5?2:1);const upper=Math.ceil(max/step)*step;return Array.from({length:5},(_,i)=>Number((upper*i/4).toFixed(3)));}
+/** Central deterministic chart projection. It never manufactures a measurement. */
+export function reconcileChartSeriesAndLabels(input:ChartReconciliationInput):ReconciledChartSeries{
+ const source=input.sourceRows??input.rows??[];
+ const rows=source.filter(row=>row&&typeof row==="object").map(row=>{const rawLabel=String(row.label??"");const label=/platform source not supplied|istener action/i.test(rawLabel)?"":cleanLabel(rawLabel);const summary=typeof row.summary==="string"?cleanLabel(row.summary):undefined;const value=typeof row.value==="string"&&PLACEHOLDER.test(row.value.trim())?null:row.value;return{...row,label,...(summary?{summary}:{}),value};}).filter(row=>row.label&&!PLACEHOLDER.test(row.label));
+ const expected=(input.expectedLabels??[]).map(cleanLabel).filter(Boolean);for(const label of expected)if(!rows.some(row=>row.label.toLowerCase()===label.toLowerCase()))rows.push({label,value:null});
+ const limited=rows.slice(0,Math.max(1,input.maxRows??24)),numeric=limited.map(row=>finiteValue(row.value)).filter((v):v is number=>v!==null);
+ const endpoint=input.endpointAvailable!==false,metric=input.metricAvailable!==false&&numeric.length>0;
+ const state:ChartFallbackState=input.confirmed?"CONFIRMED":input.proposed?"PROPOSED":input.derivedInProcess&&metric?"SIGNAL-DERIVED":!endpoint?"ENDPOINT_PENDING":metric?"AVAILABLE":"UNAVAILABLE";
+ const provenance=input.provenance?.trim()||(state==="CONFIRMED"?"CONFIRMED · VOTING-STABILIZED AUDIT RESULT":state==="SIGNAL-DERIVED"?"SIGNAL-DERIVED · IN-PROCESS AUDIO":state==="PROPOSED"?"PROPOSED · NO VERIFIED COMMERCIAL TELEMETRY":state==="ENDPOINT_PENDING"?"ENDPOINT PENDING — AWAITING SOURCE":state==="UNAVAILABLE"?"UNAVAILABLE · SOURCE METRIC NOT PRESENT":"RECONCILED AUDIT DATA");
+ const note=state==="ENDPOINT_PENDING"?"Dedicated source endpoint is not configured; no external value is inferred.":state==="UNAVAILABLE"?(input.fallbackLabel??"No source-backed metric is available for this chart."):state==="PROPOSED"?"Proposed direction only; no verified commercial performance is represented.":state==="SIGNAL-DERIVED"?"Coarse series derived from the uploaded master in-process; not an external telemetry feed.":null;
+ return{rows:limited,state,provenance,sourceCount:limited.length,total:numeric.length?numeric.reduce((a,v)=>a+v,0):null,labels:limited.map(row=>row.label),axisTicks:niceTicks(Math.max(0,...numeric)),note};
+}
+export function reconcileChartCrossChecks(input:{platformLookupCount?:number;platformChartCount?:number;evidenceClaimCount?:number;evidenceChartCount?:number;strengthCount?:number;strengthChartCount?:number;riskCount?:number;riskChartCount?:number;executionLabels?:string[]}):string[]{
+ const errors:string[]=[];const pairs:Array<[string,number|undefined,number|undefined]>=[["Music Platform Coverage",input.platformLookupCount,input.platformChartCount],["Evidence Layers",input.evidenceClaimCount,input.evidenceChartCount],["Strengths",input.strengthCount,input.strengthChartCount],["Risks",input.riskCount,input.riskChartCount]];
+ for(const[name,expected,actual]of pairs)if(expected!==undefined&&actual!==undefined&&expected!==actual)errors.push(name+" chart count does not match reconciled source count.");
+ const required=["Days 1–30","Days 31–60","Days 61–90"];if(input.executionLabels&&required.some(label=>!input.executionLabels!.includes(label)))errors.push("30/60/90-day execution timeline is missing a required milestone window.");return errors;
+}

@@ -217,6 +217,44 @@ describe("v2 detector diagnostics", () => {
   });
 });
 
+describe("v2 chart reconciliation with sanitized assessment data", () => {
+  it("uses the same once-sanitized risk set for reconciliation and rendered chart rows", async () => {
+    const input = structuredClone(ambiguousAudioFixture) as any;
+    if (input.sonicDna && typeof input.sonicDna === "object") input.sonicDna.tempoConfidence = 0;
+    input.assessment = {
+      ...input.assessment,
+      confidence: 0,
+      limitations: [
+        ...(Array.isArray(input.assessment.limitations) ? input.assessment.limitations : []),
+        "Vocal analysis: Not performed - Vocal analysis is temporarily disabled to keep the audit worker within its memory limit.",
+        "Vocal presence/absence is unknown and is not inferred.",
+        "No vocal conclusion is available because the separation model did not complete.",
+        "Learned audio model: disabled.",
+        "Detection model status: disabled."
+      ],
+      executiveSummary: [
+        "The recording is a 128 BPM high-energy Afrobeats release.",
+        "The track has 24000 streams, strong market demand and high commercial potential.",
+        "Verified 24000 monthly listeners prove the campaign is commercially successful.",
+        "Further listening and source verification are required before any external decision."
+      ].join(" ")
+    };
+    input.evidence = {
+      ...input.evidence,
+      playlistDiscovery: {
+        status: "partial",
+        outcomes: [
+          { provider: "spotify", status: "unavailable", reason: "Spotify catalog request failed with HTTP 403" },
+          { provider: "apple_music", status: "not_configured", reason: "Apple Music developer token is not configured." }
+        ]
+      }
+    };
+
+    const bytes = await generateAuditReportV2({ ...input, generatedAt: "2026-11-20T00:00:00.000Z" }, "full");
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(13);
+  });
+});
+
 describe("v2 gated report pages", () => {
   it("provides a useful positioning decision panel when no lane evidence exists", () => {
     const input = structuredClone(fullAudioFixture) as any;

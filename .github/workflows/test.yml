@@ -2,12 +2,12 @@ name: test
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/reconciled-3d-report-charts]
   pull_request:
 
 # Only the newest five-pass acceptance run for this ref should consume CI minutes.
 concurrency:
-  group: audit-acceptance-${{ github.ref }}
+  group: audit-acceptance-${{ github.event.pull_request.head.ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
