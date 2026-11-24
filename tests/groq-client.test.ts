@@ -540,6 +540,53 @@ describe("GroqClient section groups",()=>{
   expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
 
+ it("bounds production-sized provenance and vocal timelines without breaching Groq's 6,000-token request ceiling",async()=>{
+  const detail="Provider-returned reconciliation commentary with repeated raw source context that is not needed to preserve the actual source, status, confidence or normalized field value. ".repeat(8);
+  const fieldProvenance=Object.fromEntries(Array.from({length:48},(_,index)=>["field"+index,{
+   source:["musicbrainz","spotify","apple_music"][index%3],status:"recognized",confidence:0.82,
+   value:"normalized identity value "+index,detail,rawPayload:detail
+  }]));
+  const evidence={
+   auditType:"full_a_and_r",artist:"Fixture Artist",title:"Production-sized evidence fixture",
+   sourceProviders:["musicbrainz","spotify","apple_music","youtube"],fieldProvenance,
+   identity:{artist:"Fixture Artist",title:"Production-sized evidence fixture",isrc:"USAAA2600001",matchStatus:"reconciled"},
+   reconciliation:{status:"partial",matchedFields:["artist","title","isrc"],conflicts:Array.from({length:40},(_,index)=>"Conflict "+index+": "+detail)},
+   genreClassification:{primaryGenre:"Contemporary R&B",genres:["Contemporary R&B"],abstained:false},
+   commercialEvidence:{verified:false,reason:detail},rightsStatus:{status:"unverified",notes:detail}
+  };
+  const sonicDna={
+   provenance:"uploaded_audio_master",evidenceClass:"OBSERVED",analysisVersion:"sonic-dna-v1",
+   sourceProviders:["essentia"],confidence:0.82,warnings:[detail],limitations:[detail],
+   bpm:95,tempoConfidence:0.82,key:"A",mode:"minor",moodTags:["reflective"],genreTags:["Contemporary R&B"],
+   genreClassification:{primaryGenre:"Contemporary R&B",genres:["Contemporary R&B"],abstained:false},
+   vocalArrangementAnalysis:{status:"analyzed",segments:Array.from({length:60},(_,index)=>({
+    startSeconds:index*3,endSeconds:(index+1)*3,role:index%2?"lead":"backing",description:detail
+   }))}
+  };
+  const catalogMetadata=Object.fromEntries(Array.from({length:32},(_,index)=>["provider"+index,{
+   status:"matched",source:"catalog provider "+index,detail
+  }]));
+  const {mock}=fetchMock();
+  const requests:Array<{group:string;payload:Record<string,any>;total:number}>=[];
+  mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body));
+   const payload=JSON.parse(body.messages[1].content);
+   const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
+   requests.push({group:payload.sectionGroup,payload,total:estimated+body.max_completion_tokens});
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  await client.assess({evidence,sonicDna,catalogMetadata});
+  expect(requests).toHaveLength(9);
+  expect(requests.every(request=>request.total<=6000)).toBe(true);
+  const narrative=requests.find(request=>request.group==="narrative")!;
+  expect(narrative.payload.sonicDna).not.toHaveProperty("vocalArrangementAnalysis");
+  expect(Object.keys(narrative.payload.evidence.fieldProvenance)).toHaveLength(24);
+  expect(narrative.payload.evidence.fieldProvenance.field0).not.toHaveProperty("detail");
+  const evidenceScore=requests.find(request=>request.group==="evidence-score")!;
+  expect(evidenceScore.payload.sonicDna.vocalArrangementAnalysis.segments).toHaveLength(12);
+ });
+
 });
 
 
