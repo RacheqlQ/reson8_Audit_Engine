@@ -304,7 +304,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     delete projected.catalogSources;
     delete projected.sourceCombination;
   }
-  if (["evidence-score", "narrative", "positioning"].includes(group)) {
+  if (["evidence-score", "narrative", "positioning", "release"].includes(group)) {
     // Keep source/provenance facts; only evidence-score drops duplicate summaries.
     if (group === "evidence-score") {
       delete projected.genres;
@@ -315,7 +315,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     // source identities and normalized values above remain intact.
     const compacted = compactEvidenceScoreValue(projected, 0, 72, 3) as Record<string, unknown>;
     if (compacted.fieldProvenance && typeof compacted.fieldProvenance === "object") {
-      compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, ["narrative", "positioning"].includes(group) ? 8 : 12));
+      compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, 12));
     }
     return compacted;
   }
@@ -403,7 +403,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   };
   const allowed = new Set([...common, ...(featureFamilies[group] ?? [])]);
   const compact = Object.fromEntries(Object.entries(sonicDna).filter(([key, value]) =>
-    allowed.has(key) || (!["narrative", "positioning"].includes(group) && (value === null || typeof value !== "object"))
+    allowed.has(key) || (!["narrative", "positioning", "release"].includes(group) && (value === null || typeof value !== "object"))
   )) as Record<string, unknown>;
 
   const rhythm = compact.rhythmFeatures;
@@ -433,7 +433,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
       ? compactEvidenceScoreValue(value, 0, 72, 3)
       : compactPromptValue(value);
   }
-  if (group === "narrative" || group === "positioning") {
+  if (["narrative", "positioning", "release"].includes(group)) {
     // The narrative needs the complete acoustic descriptor summary, not the
     // 128-window raw summary series. Median/p10/p90 preserve measured spread;
     // vocal intervals retain representative first/middle/last observations.
@@ -534,7 +534,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const providerLabel = providerName === "gemini" ? "Gemini" : providerName === "ollama" ? "Ollama" : "Groq";
   const tokenField = providerName === "groq" ? "max_completion_tokens" : "max_tokens";
   const rawOutputSchema = z.toJSONSchema(schema);
-  const outputSchema = ["evidence-score", "narrative", "positioning"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
+  const outputSchema = ["evidence-score", "narrative", "positioning", "release"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
   const completed = await input.loadCompletedSectionGroup?.(cacheGroupName);
   if (completed !== null && completed !== undefined) {
     const cached = schema.safeParse(completed);
@@ -574,7 +574,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? " The user payload includes outputSchema, the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value, array bound and minimum length. Return one complete JSON object only. Do not include outputSchema in the returned object. Local Zod and section word-count validation are mandatory."
       : "";
     const messages = [
-      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : ["narrative", "positioning"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
+      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : ["narrative", "positioning", "release"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
       {
         role: "user",
         content: JSON.stringify({
