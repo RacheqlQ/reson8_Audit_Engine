@@ -1007,6 +1007,7 @@ describe("positioning contract and provider recovery regressions", () => {
       expect(positioningInstructions).toContain("commercialRead.rationale");
       expect(positioningInstructions).toContain("at least 40 words");
       expect(result.aAndRPositioning.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
+      expect(result.commercialRead.rationale.trim().split(/\\s+/).length).toBeGreaterThanOrEqual(40);
       const failed = attempts.find(attempt => attempt.group === "positioning" && attempt.failureKind === "threshold_violation");
       expect(failed).toMatchObject({
         validationField: field,
