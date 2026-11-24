@@ -296,12 +296,15 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     if (projected[key] !== undefined) projected[key] = compactPromptValue(projected[key]);
   }
 
-  if (group === "evidence-score" || group === "positioning") {
+  if (group === "evidence-score") {
     // The normalized provenance/reconciliation fields above are the canonical
     // evidence-score inputs. These duplicate summaries are already represented
     // there and need not be serialized a second time.
     delete projected.genres;
     delete projected.catalogSources;
+    delete projected.sourceCombination;
+  } else if (group === "positioning") {
+    // Provider combinations are duplicated by sourceProviders/catalogSources.
     delete projected.sourceCombination;
   }
   if (["evidence-score", "narrative", "positioning", "release"].includes(group)) {
