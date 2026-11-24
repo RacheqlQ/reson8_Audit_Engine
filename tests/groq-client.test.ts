@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { PDFDocument } from "@cantoo/pdf-lib";
-import { generateAuditReportV2 } from "../src/reports/v2/render.js";
+import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
 import { clearAssessmentProviderUnavailable, getAssessmentProviderReadiness } from "../src/providers/provider-policy.js";
 
@@ -1060,31 +1059,22 @@ describe("nine-section report-readiness integration", () => {
     ]));
     expect(assessment.aAndRPositioning.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
     expect(assessment.commercialRead.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
-    const reportAssessment = {
-      ...assessment,
-      strengths: ["Source limitations are documented.", "The lane hypothesis remains provisional.", "Human review steps are explicit."],
-      risks: ["Commercial demand remains unverified.", "Rights and delivery require confirmation."],
-      evidenceGaps: ["No source-attributed audience performance data was supplied."],
-      limitations: ["The assessment is bounded by the supplied source records and uploaded-master analysis."],
-      humanListeningChecklist: [
-        "Does the opening earn continued listening?",
-        "Is the hook memorable after one play?",
-        "What audible details distinguish the track?",
-        "Does the arrangement build toward a clear payoff?",
-        "Does the mix translate across playback systems?",
-      ],
-    };
-    const pdfBytes = await generateAuditReportV2({
+    const reportData = adaptReportV2({
       auditId: "nine-section-readiness-fixture",
       generatedAt: "2026-11-24T00:00:00.000Z",
       evidence: { artist: "Fixture Artist", title: "Fixture Track", fixture: true },
       sonicDna: null,
-      assessment: reportAssessment,
+      assessment,
       executionMode: "dsp_link",
-    }, "sample");
-    expect(Buffer.from(pdfBytes.subarray(0, 5)).toString("ascii")).toBe("%PDF-");
-    const pdf = await PDFDocument.load(pdfBytes);
-    expect(pdf.getPageCount()).toBe(7);
+    });
+    expect(reportData.decisionDimensions).toHaveLength(4);
+    expect(reportData.hasVerifiedCommercialEvidence).toBe(false);
+    expect(reportData.tempo.value).toBeNull();
+    expect(reportData.key.value).toBeNull();
+    expect(reportData.notYetMeasured).toEqual(expect.arrayContaining([
+      expect.stringMatching(/tempo/i),
+      expect.stringMatching(/key|tonal/i),
+    ]));
   });
 
   it("retains both positioning minima after zero-confidence evidence sanitization", async () => {
