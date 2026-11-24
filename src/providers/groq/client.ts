@@ -162,10 +162,10 @@ const EVIDENCE_SCORE_SYSTEM_PROMPT = [
   "Do not score hook, originality, production quality, replay value or lane clarity; keep them unscored with distinct listening checks. scorecard.rhythmicConsistency.rationale must contain at least 25 words even when null. Separate track evidence from INDUSTRY PRACTICE. JSON only; local Zod/word-count validation is authoritative."
 ].join(" ");
 
-function words(value: string): number { return value.trim().split(/\\s+/).filter(Boolean).length; }
+function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
 function safeThresholdDiagnostic(group: string, value: unknown, message: string): Pick<ProviderAttemptDiagnostic, "validationField" | "validationRule" | "minimumWords" | "actualWords"> {
   const d = value as Record<string, any>;
-  const match = message.match(/^(.+?) must contain at least (\\d+) words\\./);
+  const match = message.match(/^(.+?) must contain at least (\d+) words\\./);
   const label = match?.[1] ?? "unknown";
   const minimumWords = Number(match?.[2] ?? 0);
   const fieldMap: Record<string, string> = {
@@ -181,7 +181,7 @@ function safeThresholdDiagnostic(group: string, value: unknown, message: string)
     days30: "executionPlan.days30", days60: "executionPlan.days60", days90: "executionPlan.days90",
   };
   const validationField = fieldMap[label] ?? label;
-  const actual = validationField.split(/[.\\[\\]]/).filter(Boolean).reduce((current: any, key) => current?.[/^\\d+$/.test(key) ? Number(key) : key], d);
+  const actual = validationField.split(/[.\[\]]/).filter(Boolean).reduce((current: any, key) => current?.[/^\d+$/.test(key) ? Number(key) : key], d);
   return { validationField, validationRule: "minimum_word_count", minimumWords, actualWords: typeof actual === "string" ? words(actual) : 0 };
 }
 function thresholdError(name: string, value: unknown): string | null {
