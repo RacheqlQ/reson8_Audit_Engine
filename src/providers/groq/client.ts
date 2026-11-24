@@ -3,7 +3,7 @@ import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails
 import { sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
 import { markAssessmentProviderUnavailable } from "../provider-policy.js";
 
-export const GROQ_PROMPT_VERSION = "audit-ar-v6-analysis-integration-2026-11-20";
+export const GROQ_PROMPT_VERSION = "audit-ar-v7-evidence-budget-2026-11-24";
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 
 const EvidenceLabelSchema = z.object({
