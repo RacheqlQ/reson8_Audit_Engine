@@ -608,11 +608,6 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
    return {label,value:candidate||fallback};
   };
   const compact=(value:unknown,max=220):string=>{const clean=str(value,"");if(clean.length<=max)return clean;const shortened=clean.slice(0,max-1).replace(/\s+\S*$/,"").trimEnd();return (shortened||clean.slice(0,max-1).trimEnd())+"…";};
-  const compact=(value:unknown,max=220):string=>{
-   const clean=str(value,"");if(clean.length<=max)return clean;
-   const shortened=clean.slice(0,max-1).replace(/\s+\S*$/,"").trimEnd();
-   return (shortened||clean.slice(0,max-1).trimEnd())+"…";
-  };
   const list=(label:string,value:unknown[],fallback="Not supplied in the assessment."):Block=>{
    const items=value.map(item=>sanitizePublicReportLine(str(item,""))).filter(Boolean);
    return {label,value:items.join("\n\n")||fallback};
@@ -1193,7 +1188,6 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     drivers.forEach((d,i)=>{const yy=H-340-i*23;page.drawText(d.label,{x:M+145,y:yy,size:7,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+245,y:yy-2,width:205,height:7,color:C.line});page.drawRectangle({x:M+245,y:yy-2,width:205*d.score/100,height:7,color:d.score<60?C.amber:C.teal});page.drawText(String(d.score),{x:M+460,y:yy-2,size:7,font:fonts.bold,color:C.ink});});
     const weights=drivers.length&&drivers.every(d=>d.weight!==null)?drivers.map(d=>d.label+" "+Math.round((d.weight??0)*100)+"%").join(", "):"Weighting not supplied.";
     page.drawText("Weighting: "+weights,{x:M+145,y:H-340-drivers.length*23-6,size:6.5,font:fonts.italic,color:C.muted});
-    if(b.arrangementBar?.length){const barHeight=drawProposedArrangementBar(page,y,b.arrangementBar,fonts);y-=barHeight+5;}
    }
    const metricTop=H-(data.headlineScore!==null?420:320),width=(W-2*M-16)/3;
    const metricHeight=Math.max(...spec.blocks.map((block,i)=>drawMetricCard(page,M+i*(width+8),metricTop,width,block,fonts)));
