@@ -57,29 +57,81 @@ describe("GroqClient section groups",()=>{
   };
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
   await client.assess({evidence:{artist:"Fixture Artist",rawProviderPayload:{huge:Array(100).fill("provider-only payload")},catalogId:"private-id"},sonicDna});
-  const firstBody=JSON.parse(String(mock.mock.calls[0][1]?.body));
-  const payload=JSON.parse(firstBody.messages[1].content);
-  expect(payload.evidence).toMatchObject({artist:"Fixture Artist"});
-  expect(payload.evidence).not.toHaveProperty("rawProviderPayload");
-  expect(payload.evidence).not.toHaveProperty("catalogId");
-  expect(payload.sonicDna).toMatchObject({
+  const payloads=mock.mock.calls.map(call=>{
+   const body=JSON.parse(String(call[1]?.body));
+   return JSON.parse(body.messages[1].content);
+  });
+  const narrative=payloads.find(payload=>payload.sectionGroup==="narrative");
+  const evidenceScore=payloads.find(payload=>payload.sectionGroup==="evidence-score");
+  expect(narrative.evidence).toMatchObject({artist:"Fixture Artist"});
+  expect(narrative.evidence).not.toHaveProperty("rawProviderPayload");
+  expect(narrative.evidence).not.toHaveProperty("catalogId");
+  expect(evidenceScore.sonicDna).toMatchObject({
    provenance:"uploaded_audio_master",bpm:95,tempoConfidence:0.82,key:"A",mode:"minor",
    rhythmFeatures:{status:"measured",bpm:95,confidence:0.82,candidateBpms:[95,63,76]},
    harmonicFeatures:{status:"measured",key:"A",mode:"minor",segmentAgreement:0.62},
   });
-  expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("onsetEnvelope");
-  expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("beatTimesSeconds");
-  expect(payload.sonicDna.rhythmFeatures).not.toHaveProperty("downbeatCandidateTimesSeconds");
-  expect(payload.sonicDna.harmonicFeatures).not.toHaveProperty("segmentChroma");
-  expect(JSON.stringify(payload.sonicDna).length).toBeLessThan(JSON.stringify(sonicDna).length * 0.7);
+  expect(evidenceScore.sonicDna.rhythmFeatures).not.toHaveProperty("onsetEnvelope");
+  expect(evidenceScore.sonicDna.rhythmFeatures).not.toHaveProperty("beatTimesSeconds");
+  expect(evidenceScore.sonicDna.rhythmFeatures).not.toHaveProperty("downbeatCandidateTimesSeconds");
+  expect(evidenceScore.sonicDna.harmonicFeatures).not.toHaveProperty("segmentChroma");
+  expect(JSON.stringify(evidenceScore.sonicDna).length).toBeLessThan(JSON.stringify(sonicDna).length * 0.7);
   expect(mock.mock.calls).toHaveLength(9);
-  for(const call of mock.mock.calls){
-   const body=JSON.parse(String(call[1]?.body));
-   const repeated=JSON.parse(body.messages[1].content);
-   expect(repeated.sonicDna).toEqual(payload.sonicDna);
-  }
+  expect(narrative.sonicDna).not.toHaveProperty("rhythmFeatures");
+  expect(narrative.sonicDna).not.toHaveProperty("harmonicFeatures");
+  expect(payloads.find(payload=>payload.sectionGroup==="production").sonicDna).toHaveProperty("rhythmFeatures");
  });
 
+ it("projects Sonic DNA and catalog metadata to the assessment section that can use them", async () => {
+  const sonicDna = {
+   provenance:"uploaded_audio_master", evidenceClass:"OBSERVED", bpm:95, tempoConfidence:0.82,
+   key:"A", mode:"minor", keyConfidence:0.91, keyCandidates:[{key:"A",mode:"minor",score:0.88}],
+   moodTags:["Moderate Energy"], genreContext:["Contemporary R&B"],
+   limitations:["Tempo confidence is provisional pending listening review."],
+   tonalResolution:{status:"CONFIRMED",tonic:"A",mode:"minor",candidates:[{tonic:"A",mode:"minor",score:0.88}]},
+   vocalArrangementAnalysis:{status:"analyzed",sections:[{label:"verse",startSeconds:0,endSeconds:12}]},
+   genreClassification:{primaryGenre:"R&B"},
+   rhythmFeatures:{status:"measured",bpm:95,onsetEnvelope:Array(100).fill(0.1)},
+   harmonicFeatures:{status:"measured",key:"A",segmentChroma:Array(100).fill(0.1)},
+   acousticFeatureProfile:{predictions:{energy:{status:"provisional",score:62}}},
+   vocalFeatures:{status:"analyzed",activity:0.7},
+   vocalArrangementAnalysis:{status:"analyzed",sections:[{label:"verse",startSeconds:0,endSeconds:12}]},
+   dynamicRangeDb:8.2, rmsLevelDbfs:-12, sampleRate:44100, channels:2,
+   privateRawWaveform:Array(1000).fill(0.2),
+  };
+  const catalogMetadata={apple_music:{title:"Track",isrc:"USAAA2600001"},spotify:{artist:"Artist"}};
+  const {mock}=fetchMock();
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch);
+  await client.assess({evidence:{artist:"Artist",title:"Track"},sonicDna,catalogMetadata});
+  const payloads=mock.mock.calls.map(call=>{
+   const body=JSON.parse(String(call[1]?.body));
+   return JSON.parse(body.messages[1].content);
+  });
+  const byGroup=new Map(payloads.map(payload=>[payload.sectionGroup,payload]));
+  const evidence=byGroup.get("evidence-score") as Record<string,any>;
+  expect(evidence.sonicDna).toMatchObject({
+   rhythmFeatures:{status:"measured",bpm:95},
+   harmonicFeatures:{status:"measured",key:"A"},
+   keyCandidates:[{key:"A",mode:"minor",score:0.88}],
+   moodTags:["Moderate Energy"], genreContext:["Contemporary R&B"],
+   limitations:["Tempo confidence is provisional pending listening review."],
+   tonalResolution:{status:"CONFIRMED",tonic:"A",mode:"minor"},
+   vocalArrangementAnalysis:{status:"analyzed",sections:[{label:"verse",startSeconds:0,endSeconds:12}]},
+   acousticFeatureProfile:{predictions:{energy:{status:"provisional",score:62}}},
+   vocalFeatures:{status:"analyzed",activity:0.7},
+   dynamicRangeDb:8.2, sampleRate:44100,
+  });
+  expect(evidence.sonicDna).not.toHaveProperty("privateRawWaveform");
+  expect(evidence.catalogMetadata).toEqual(catalogMetadata);
+  const timeline=byGroup.get("timeline") as Record<string,any>;
+  expect(timeline.sonicDna).toMatchObject({provenance:"uploaded_audio_master",genreClassification:{primaryGenre:"R&B"}});
+  expect(timeline.sonicDna).not.toHaveProperty("rhythmFeatures");
+  expect(timeline.catalogMetadata).toBeNull();
+  const production=byGroup.get("production") as Record<string,any>;
+  expect(production.sonicDna).toHaveProperty("rhythmFeatures");
+  expect(production.sonicDna).toHaveProperty("vocalFeatures");
+  expect(production.catalogMetadata).toBeNull();
+ });
  it("records sanitized provider attempt diagnostics without prompt or credential material",async()=>{
   const {mock}=fetchMock();
   const attempts:Array<Record<string,unknown>>=[];
@@ -117,6 +169,94 @@ describe("GroqClient section groups",()=>{
    expect(body.max_completion_tokens).toBeLessThanOrEqual(1200);
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
+ });
+ it("keeps production-shaped assessment evidence under the Groq 6,000-token request ceiling",async()=>{
+  const evidence={
+   auditType:"full_a_and_r",artist:"Fixture Artist",title:"Evidence-rich single release",
+   releaseDate:"2026-10-18",label:"Independent",isrc:"USAAA2600001",upc:"198765432109",
+   genres:["Contemporary R&B","Alternative R&B"],
+   sourceProviders:["musicbrainz","spotify","apple_music","youtube"],
+   fieldProvenance:Object.fromEntries(Array.from({length:14},(_,index)=>["field"+index,{
+    source:["musicbrainz","spotify","apple_music"][index%3],
+    status:"recognized",confidence:0.82,detail:"Provider-returned identity and release evidence retained for reconciliation."
+   }])),
+   identity:{artist:"Fixture Artist",title:"Evidence-rich single release",isrc:"USAAA2600001",matchStatus:"reconciled"},
+   reconciliation:{status:"partial",conflicts:["Release date differs between two provider records."],matchedFields:["artist","title","isrc"]},
+   genreClassification:{genres:["Contemporary R&B"],primaryGenre:"Contemporary R&B",abstained:false},
+   catalogSources:["musicbrainz","spotify","apple_music"],
+   commercialEvidence:{status:"not_supplied",reason:"No authenticated platform analytics were connected."},
+   commercialPerformance:{streams:null,saveRate:null,source:"not_supplied"},
+   audienceTelemetry:{status:"unavailable",platformsChecked:["spotify","youtube"]},
+   rightsStatus:{status:"unverified",notes:"Independent rights documentation is required."},
+   releaseStatus:{status:"released",releaseDate:"2026-10-18"}
+  };
+  const sonicDna={
+   provenance:"uploaded_audio_master",evidenceClass:"OBSERVED",analysisVersion:"sonic-dna-v1",
+   sourceProviders:["essentia","musicbrainz"],confidence:0.82,warnings:["Mood descriptors remain provisional."],
+   bpm:95,tempoConfidence:0.82,key:"A",mode:"minor",moodTags:["Moderate Energy"],
+   genreTags:["Contemporary R&B"],genreContext:["Contemporary R&B"],
+   limitations:["Tempo confidence is provisional pending human listening review."],
+   keyCandidates:[{key:"A",mode:"minor",score:0.88}],
+   genreClassification:{primaryGenre:"Contemporary R&B",genres:["Contemporary R&B"],abstained:false},
+   tonalResolution:{status:"CONFIRMED",tonic:"A",mode:"minor",confidence:0.88},
+   rhythmFeatures:{status:"measured",bpm:95,confidence:0.82,candidateBpms:[95,63,76],windowConsensus:0.78},
+   harmonicFeatures:{status:"measured",key:"A",mode:"minor",confidence:0.88,segmentAgreement:0.82},
+   acousticFeatureProfile:{predictions:{mood:{status:"provisional",labels:["reflective"]},energy:{status:"provisional",score:62}}},
+   vocalFeatures:{status:"analyzed",activity:0.7,pitchMedianHz:184},
+   dynamicRangeDb:8.2,rmsLevelDbfs:-12,sampleRate:44100,channels:2,durationSeconds:198
+  };
+  const catalogMetadata={
+   musicbrainz:{status:"matched",artistCredit:"Fixture Artist",recordingTitle:"Evidence-rich single release",releaseDate:"2026-10-18"},
+   spotify:{status:"matched",artist:"Fixture Artist",track:"Evidence-rich single release",isrc:"USAAA2600001"},
+   apple_music:{status:"matched",artist:"Fixture Artist",title:"Evidence-rich single release"},
+   youtube:{status:"checked",officialArtistChannel:true},
+   reconciliation:{status:"partial",conflicts:["Release date requires manual verification."]}
+  };
+  const {mock}=fetchMock();
+  const evidenceScorePayloads:Array<Record<string,any>>=[];
+  mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body));
+   const payload=JSON.parse(body.messages[1].content);
+   if(payload.sectionGroup==="evidence-score") evidenceScorePayloads.push(payload);
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
+  });
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch);
+  await client.assess({evidence,sonicDna,catalogMetadata});
+  expect(mock).toHaveBeenCalledTimes(9);
+  expect(evidenceScorePayloads).toHaveLength(1);
+  expect(evidenceScorePayloads[0].evidence).toMatchObject({
+   sourceProviders:["musicbrainz","spotify","apple_music","youtube"],
+   genreClassification:{primaryGenre:"Contemporary R&B",genres:["Contemporary R&B"]}
+  });
+  expect(evidenceScorePayloads[0].evidence).not.toHaveProperty("genres");
+  expect(evidenceScorePayloads[0].evidence).not.toHaveProperty("catalogSources");
+  expect(evidenceScorePayloads[0].evidence).toMatchObject({
+   identity:{artist:"Fixture Artist",isrc:"USAAA2600001"},
+   reconciliation:{status:"partial"},
+   fieldProvenance:expect.objectContaining({field0:expect.objectContaining({source:"musicbrainz"})})
+  });
+  expect(evidenceScorePayloads[0].catalogMetadata).toBeNull();
+  for(const call of mock.mock.calls){
+   const body=JSON.parse(String(call[1]?.body));
+   const estimatedInputTokens=Math.ceil(new TextEncoder().encode(JSON.stringify({
+    messages:body.messages,response_format:body.response_format
+   })).length/3)+256;
+   expect(estimatedInputTokens).toBeGreaterThan(256);
+   expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
+   expect(estimatedInputTokens+body.max_completion_tokens).toBeLessThanOrEqual(6000);
+  }
+ });
+ it("rejects a catalog payload above the Groq request budget before contacting the provider",async()=>{
+  const oversizedCatalog=Object.fromEntries(Array.from({length:40},(_,index)=>[
+   "provider"+index,"catalog evidence detail ".repeat(60)
+  ]));
+  const mock=vi.fn(async()=>new Response("unexpected provider request",{status:500}));
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
+  await expect(client.assess({
+   evidence:{artist:"Fixture Artist",title:"Oversized metadata fixture"},
+   sonicDna:null,catalogMetadata:oversizedCatalog
+  })).rejects.toThrow("GROQ_PROMPT_BUDGET_EXCEEDED");
+  expect(mock).not.toHaveBeenCalled();
  });
  it("keeps Gemini and Ollama module output budgets independent of Groq's TPM ceiling",async()=>{
   const identity=Object.fromEntries(Array.from({length:20},(_,index)=>["sourceField"+index,"verified source provenance detail ".repeat(25)]));
