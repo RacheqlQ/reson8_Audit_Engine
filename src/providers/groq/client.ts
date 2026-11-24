@@ -274,11 +274,34 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
     .map(([key, item]) => [key, compactPromptValue(item, depth + 1)]));
 }
 
-function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null): Record<string, unknown> | null {
+function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group: string): Record<string, unknown> | null {
   if (!sonicDna) return null;
-  const compact: Record<string, unknown> = { ...sonicDna };
 
-  const rhythm = sonicDna.rhythmFeatures;
+  // Keep scalar measurements and provenance, but send nested feature families
+  // only to the section that can use them. This avoids retransmitting the full
+  // audio-analysis object nine times without discarding report evidence.
+  const common = new Set([
+    "provenance", "evidenceClass", "analysisVersion", "sourceProviders",
+    "confidence", "warnings", "bpm", "tempoConfidence", "key", "mode",
+    "moodTags", "genreTags", "genreClassification",
+  ]);
+  const featureFamilies: Record<string, string[]> = {
+    narrative: ["acousticFeatureProfile", "vocalFeatures"],
+    positioning: ["acousticFeatureProfile", "vocalFeatures"],
+    release: ["acousticFeatureProfile", "rhythmFeatures", "harmonicFeatures"],
+    "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
+    production: ["acousticFeatureProfile", "vocalFeatures", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
+    comparables: [],
+    promotion: ["acousticFeatureProfile"],
+    "label-fit": [],
+    timeline: [],
+  };
+  const allowed = new Set([...common, ...(featureFamilies[group] ?? [])]);
+  const compact = Object.fromEntries(Object.entries(sonicDna).filter(([key, value]) =>
+    allowed.has(key) || (value === null || typeof value !== "object")
+  )) as Record<string, unknown>;
+
+  const rhythm = compact.rhythmFeatures;
   if (rhythm && typeof rhythm === "object" && !Array.isArray(rhythm)) {
     const summary = { ...(rhythm as Record<string, unknown>) };
     delete summary.onsetEnvelope;
@@ -287,7 +310,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null): Recor
     compact.rhythmFeatures = summary;
   }
 
-  const harmonic = sonicDna.harmonicFeatures;
+  const harmonic = compact.harmonicFeatures;
   if (harmonic && typeof harmonic === "object" && !Array.isArray(harmonic)) {
     const summary = { ...(harmonic as Record<string, unknown>) };
     delete summary.segmentChroma;
@@ -295,6 +318,11 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null): Recor
   }
 
   return compactPromptValue(compact) as Record<string, unknown>;
+}
+
+function compactCatalogMetadataForGroup(value: Record<string, unknown> | null | undefined, group: string): Record<string, unknown> | null {
+  if (!value || !["narrative", "positioning", "evidence-score", "label-fit"].includes(group)) return null;
+  return compactPromptValue(value) as Record<string, unknown>;
 }
 
 async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
@@ -375,8 +403,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           promptVersion: GROQ_PROMPT_VERSION,
           sectionGroup: groupName,
           evidence: compactPromptValue(compactEvidenceForGroq(input.evidence, groupName)),
-          sonicDna: compactSonicDnaForGroq(input.sonicDna),
-          catalogMetadata: compactPromptValue(input.catalogMetadata ?? null),
+          sonicDna: compactSonicDnaForGroq(input.sonicDna, groupName),
+          catalogMetadata: compactCatalogMetadataForGroup(input.catalogMetadata, groupName),
           correction: attempt === 0 ? null : lastError,
           ...(fallbackMode ? { outputSchema } : {}),
         }),
@@ -643,7 +671,7 @@ export class GroqClient implements GroqAssessmentClient {
     signal?.throwIfAborted();
     const promptInput: GroqAssessmentInput = {
       ...input,
-      sonicDna: compactSonicDnaForGroq(input.sonicDna),
+      sonicDna: input.sonicDna,
     };
     const tasks=[
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
