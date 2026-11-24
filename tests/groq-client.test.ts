@@ -1062,8 +1062,17 @@ describe("nine-section report-readiness integration", () => {
     expect(assessment.commercialRead.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
     const reportAssessment = {
       ...assessment,
-      strengths: ["Source limitations documented", "Lane hypothesis remains provisional", "Human review steps are explicit"],
-      risks: ["Commercial demand remains unverified", "Rights and delivery require confirmation"],
+      strengths: ["Source limitations are documented.", "The lane hypothesis remains provisional.", "Human review steps are explicit."],
+      risks: ["Commercial demand remains unverified.", "Rights and delivery require confirmation."],
+      evidenceGaps: ["No source-attributed audience performance data was supplied."],
+      limitations: ["The assessment is bounded by the supplied source records and uploaded-master analysis."],
+      humanListeningChecklist: [
+        "Does the opening earn continued listening?",
+        "Is the hook memorable after one play?",
+        "What audible details distinguish the track?",
+        "Does the arrangement build toward a clear payoff?",
+        "Does the mix translate across playback systems?",
+      ],
     };
     const pdfBytes = await generateAuditReportV2({
       auditId: "nine-section-readiness-fixture",
