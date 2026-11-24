@@ -273,13 +273,26 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
   };
   if (group === "production") {
     // Production guidance is derived from the uploaded-master Sonic DNA
-    // projection. Catalog identity, reconciliation and commercial records are
-    // irrelevant to this group and are retained unchanged in canonical storage.
+    // projection. Catalog identity and commercial records are irrelevant here.
     return compactPromptValue({
       auditType: evidence.auditType,
       evidenceClass: evidence.evidenceClass,
       fixture: evidence.fixture,
     }) as Record<string, unknown>;
+  }
+  if (["promotion", "comparables", "label-fit", "timeline"].includes(group)) {
+    // These modules need only their task-specific release/genre context. The
+    // full 12-field provider provenance and identity reconciliation are used
+    // by narrative and evidence-score, not repeated across every section.
+    const keys: Record<string, string[]> = {
+      promotion: ["auditType", "artist", "title", "releaseDate", "sourceProviders", "genres", "genreClassification", "releaseStatus", "evidenceClass", "fixture"],
+      comparables: ["auditType", "genres", "genreClassification", "sourceProviders", "evidenceClass", "fixture"],
+      "label-fit": ["auditType", "genres", "genreClassification", "sourceProviders", "rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved", "evidenceClass", "fixture"],
+      timeline: ["auditType", "artist", "title", "releaseDate", "rightsStatus", "deliveryStatus", "releaseStatus", "masterApproved", "evidenceClass", "fixture"],
+    };
+    const selected = Object.fromEntries(keys[group].filter(key => evidence[key] !== undefined)
+      .map(key => [key, evidence[key]]));
+    return compactEvidenceScoreValue(selected, 0, 48, 3) as Record<string, unknown>;
   }
   const allowed = new Set([...common, ...(groupFields[group] ?? [])]);
   // Evidence-score already receives canonical identity and source provenance.
@@ -374,7 +387,7 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
 
 function compactEvidenceScoreValue(value: unknown, depth = 0, stringLimit = 112, arrayLimit = 4, fieldName = ""): unknown {
   const descriptiveField = /^(detail|rawPayload|description|reason|notes|commentary|warning|warnings|limitation|limitations)$/i.test(fieldName);
-  const maxStringLength = descriptiveField ? Math.min(stringLimit, 32) : stringLimit;
+  const maxStringLength = fieldName === "limitations" ? 72 : descriptiveField ? Math.min(stringLimit, 32) : stringLimit;
   if (value === null || typeof value !== "object") {
     return typeof value === "string" && value.length > maxStringLength ? value.slice(0, maxStringLength) + "…" : value;
   }
