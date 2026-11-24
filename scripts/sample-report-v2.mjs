@@ -75,9 +75,10 @@ const fullText=execFileSync("pdftotext",["-layout",new URL("v2-complete-syntheti
 const completePages=fullText.split("\f").filter(page=>page.trim().length>0);
 assertArNotes(fullPdf,completePages,"v2-complete-synthetic-full",complete.assessment?.humanListeningChecklist??[]);
 const cover=completePages[0]??"";
-const confirmedCount=(cover.match(/\bCONFIRMED\b/g)??[]).length;
-if(!cover.includes("96 BPM · CONFIRMED")||confirmedCount<2)throw new Error("Full-report cover must label voting-stabilized tempo and key CONFIRMED.");
-if(!cover.includes("Confirmed: A minor"))throw new Error("Full-report cover must show the confirmed consensus-stabilized key.");
+const normalizedCover=cover.replace(/\s+/g," ");
+const confirmedCount=(normalizedCover.match(/\bCONFIRMED\b/g)??[]).length;
+if(!normalizedCover.includes("96 BPM · CONFIRMED")||confirmedCount<2)throw new Error("Full-report cover must label voting-stabilized tempo and key CONFIRMED.");
+if(!normalizedCover.includes("Confirmed: A minor"))throw new Error("Full-report cover must show the confirmed consensus-stabilized key.");
 const scorecardPage=completePages[3]??"";
 if(scorecardPage.includes("No tempo result is available from the supplied recording.")&&scorecardPage.includes("TEMPO INFERENCE"))throw new Error("Evidence ledger contradicts a confirmed tempo verdict.");
 process.stdout.write("v2-complete-synthetic-full: "+fullPdf.getPageCount()+" pages; cover tempo/key confirmations and evidence-ledger consistency verified.\n");
