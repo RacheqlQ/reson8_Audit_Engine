@@ -339,7 +339,7 @@ function compactEvidenceScoreValue(value: unknown, depth = 0): unknown {
   const entries = Object.entries(value as Record<string, unknown>);
   if (depth >= 4) return Object.fromEntries(entries.filter(([, item]) => item === null || typeof item !== "object")
     .slice(0, 12).map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1)]));
-  return Object.fromEntries(entries.slice(0, 16).map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1)]));
+  return Object.fromEntries(entries.slice(0, depth === 0 ? 32 : 16).map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1)]));
 }
 
 function compactStructuredSchema(schema: unknown): unknown {
@@ -400,7 +400,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
-    if (value !== undefined) compacted[key] = compactPromptValue(value);
+    if (value !== undefined) compacted[key] = group === "evidence-score" ? compactEvidenceScoreValue(value) : compactPromptValue(value);
   }
   return compacted;
 }
