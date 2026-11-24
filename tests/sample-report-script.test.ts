@@ -13,7 +13,7 @@ describe("sample-report command",()=>{
   expect(script).toContain("overlapX>1.5&&overlapY>2");
   expect(script).toContain('pdf.getPageCount()!==7');
   expect(script).toContain('pdf.getPageCount()<12||pdf.getPageCount()>15');
-  expect(script).toContain('requiredCharts=["Evidence layers","Music platform coverage","Lane constellation","Strengths versus risks","Discovery pathway"]');
+  expect(script).toContain('rendered the removed evidence ledger and scorecard page');
   expect(script).toContain("generatedAt: new Date().toISOString()");
   const v2=await readFile(new URL("scripts/sample-report-v2.mjs",root),"utf8");
   expect(v2).toContain("philloFullPdf.getPageCount()!==12");
