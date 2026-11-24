@@ -3,7 +3,8 @@ import { buildArNotesDecisionContext, buildArNotesDecisionContextFull, chartsFor
 import { loadReportFonts } from "../fonts.js";
 import { chartEvidenceIntegrityErrors, chartPanelHeight, countEvidenceLayers, drawChartPanel, draw3DSolidBar, draw3DSolidSphere } from "../charts.js";
 import { reconcileChartCrossChecks, reconcileChartSeriesAndLabels } from "../chart-reconciliation.js";
-import { adaptReportV2, type ReportV2Data } from "./adapters.js";
+import { adaptReportV2, type ReportV2Data, type TimedPoint } from "./adapters.js";
+import { hasSubmittedMasterAudio } from "../../audio/master-audio-evidence.js";
 import { hasReportableKeyCandidates, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
 import { sanitizePublicReportLines, sanitizePublicReportLine } from "./public-language.js";
@@ -118,7 +119,7 @@ export function metricBlock(data:ReportV2Data,input:AuditReportInput):Block[]{
   {label:"LOUDNESS / SIGNAL",value:loudness,provenance}
  ];
 }
-export function buildProposedArrangement(input:AuditReportInput):{summary:string;segments:ProposedArrangementSegment[]}{
+export function buildProposedArrangement(input:AuditReportInput,chartSeries?:TimedPoint[]|null):{summary:string;segments:ProposedArrangementSegment[]}{
  const evidence=rec(input.evidence),assessment=rec(input.assessment),position=rec(assessment.aAndRPositioning),audio=rec(input.sonicDna);
  const lane=str(evidence.genre,str(position.primaryLane,"genre lane to validate"));
  const genre=lane.toLowerCase();
@@ -130,18 +131,20 @@ export function buildProposedArrangement(input:AuditReportInput):{summary:string
  const emotions=["Set the scene","Establish identity","Build anticipation","Release and memorability","Renew momentum","Reinforce the hook","Contrast and emotional turn","Peak resolution","Intentional tail"];
  const total=weights.reduce((sum,value)=>sum+value,0);let cursor=0;
  const duration=finite(audio.durationSeconds)&&audio.durationSeconds>0?audio.durationSeconds:null;
- const energySeries=arr(audio.energyOverTime??audio.energySeries).map(value=>rec(value)).filter(item=>finite(item.timeSeconds??item.time)&&finite(item.value??item.energy??item.loudness));
- const energyValues=energySeries.map(item=>Number(item.value??item.energy??item.loudness));
- const energyMin=energyValues.length?Math.min(...energyValues):0,energyMax=energyValues.length?Math.max(...energyValues):0;
- const vocal=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis),intervals=arr(vocal.vocalActivityIntervals).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const energySeries:TimedPoint[]=chartSeries!==undefined?(chartSeries??[]):arr(audio.energyOverTime??audio.energySeries).map(value=>rec(value)).filter(item=>finite(item.timeSeconds??item.time)&&finite(item.value??item.energy??item.loudness)).map(item=>({timeSeconds:Number(item.timeSeconds??item.time),value:Number(item.value??item.energy??item.loudness)}));
+ let energyMin=Infinity,energyMax=-Infinity;
+ for(const point of energySeries){if(point.value<energyMin)energyMin=point.value;if(point.value>energyMax)energyMax=point.value;}
+ if(!Number.isFinite(energyMin)||!Number.isFinite(energyMax)){energyMin=0;energyMax=0;}
+ const hasMasterAudio=hasSubmittedMasterAudio(evidence,audio);
+ const vocal=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis),intervals=hasMasterAudio?arr(vocal.vocalActivityIntervals).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds):[];
  const tonal=rec(input.tonalResolution??audio.tonalResolution??rec(audio.harmonicFeatures).tonalResolution);
  const mode=tonal.mode==="major"||tonal.mode==="minor"?String(tonal.mode):"";
  const emotionalFrame=mode==="minor"?"tension-to-release":mode==="major"?"bright lift-to-release":"contrast-to-payoff";
  const segments=labels.map((label,index)=>{
   const startPct=cursor;cursor+=weights[index]!/total*100;const endPct=cursor,centerPct=(startPct+endPct)/2;
   const time=duration===null?null:duration*centerPct/100;
-  const nearest=time===null?null:energySeries.reduce((best,item)=>Math.abs(Number(item.timeSeconds??item.time)-time)<(best===null?Infinity:Math.abs(Number(best.timeSeconds??best.time)-time))?item:best,null as Record<string,unknown>|null);
-  const rawEnergy=nearest?Number(nearest.value??nearest.energy??nearest.loudness):null;
+  const nearest=time===null?null:energySeries.reduce((best,item)=>Math.abs(item.timeSeconds-time)<(best===null?Infinity:Math.abs(best.timeSeconds-time))?item:best,null as TimedPoint|null);
+  const rawEnergy=nearest?nearest.value:null;
   const energyLevel=rawEnergy===null||energyMax===energyMin?null:.25+.75*(rawEnergy-energyMin)/(energyMax-energyMin);
   const segmentStart=duration===null?null:duration*startPct/100,segmentEnd=duration===null?null:duration*endPct/100;
   const hasVocalCue=segmentStart!==null&&segmentEnd!==null&&intervals.some(item=>Number(item.startSeconds)<segmentEnd&&Number(item.endSeconds)>segmentStart);
@@ -153,7 +156,7 @@ export function buildProposedArrangement(input:AuditReportInput):{summary:string
  const tempo=isReliableTempo(audio)?String(audio.bpm)+" BPM · CONFIRMED":"tempo unconfirmed";
  const keyAudio={...audio,tonalResolution:input.tonalResolution??audio.tonalResolution??rec(audio.harmonicFeatures).tonalResolution};
  const key=isReliableKey(keyAudio)?String(audio.key)+" "+String(audio.mode)+" · CONFIRMED":"tonal centre unconfirmed";
- const presence=finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:null;
+ const presence=hasMasterAudio&&finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:null;
  const mood=arr(audio.moodTags).map(value=>str(value,"")).filter(Boolean).slice(0,2);
  const cue=intervals.length?"Use "+intervals.length+" signal-derived vocal activity interval(s) to place human-reviewed lyrical entries and hook focus.":presence===null?"Place lead-vocal entry and hook through human listening.":"Use "+presence.toFixed(1)+"% signal-derived vocal-band activity as a cue, then human-confirm lead-vocal and hook placement.";
  const energyCue=energySeries.length?"Section intensity is blended with the supplied relative energy envelope.":"The intensity arc is a proposed creative contour because no timestamped energy series was supplied.";
@@ -569,7 +572,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   {title:"Identity and source reconciliation",kind:"identity",blocks:[]},
   {title:"Track snapshot",kind:"snapshot",blocks:metricBlock(data,input),lines:[
    ...(data.structure?["STRUCTURE — "+data.structure.map(s=>s.index+". "+s.label+" ("+s.startSeconds+"–"+s.endSeconds+"s)").join(" | ")]:[]),
-   ...(data.energySeries?["ENERGY SERIES — "+data.energySeries.length+" timestamped points; peak/dip derived from supplied series."]:[]),
+   ...(data.energySeries?["ENERGY SERIES — "+(data.energySeriesPointCount??data.energySeries.length)+" timestamped source points; chart preserves extrema using "+data.energySeries.length+" plotted points."]:[]),
    ...(data.sonicAxes?["SONIC DNA AXES — "+Object.entries(data.sonicAxes).map(([name,axis])=>name+" "+axis.value+"/100"+(axis.note?" ("+axis.note+")":"")).join("; ")]:[])
   ]},
   {title:"Evidence ledger and scorecard",blocks:[],lines:[
@@ -640,7 +643,7 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
     paragraph("Signal-derived vocal and arrangement observations",buildArrangementGuidanceSummary(input),"No reliable vocal or structural signal analysis was available."),
     list("Human listening checks",[...arr(a.listeningChecks).map(value=>str(value,"")).filter(Boolean),...buildDerivedListeningChecks(input)])
    ],kind:"narrative"},
-   {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod),(()=>{const proposal=buildProposedArrangement(input);return {label:"PROPOSED ARRANGEMENT & EMOTIONAL ARC",value:proposal.summary,arrangementBar:proposal.segments,provenance:"PROPOSED · creative arrangement guidance; human listening required"};})()],kind:"narrative"},
+   {title:"Comparable lanes and listening references",blocks:[paragraph("Comparable lane hypothesis",a.laneHypothesis),list("References to verify (not asserted matches)",arr(a.referencesToVerify)),paragraph("Verification method",a.verificationMethod),(()=>{const proposal=buildProposedArrangement(input,data.energySeries);return {label:"PROPOSED ARRANGEMENT & EMOTIONAL ARC",value:proposal.summary,arrangementBar:proposal.segments,provenance:"PROPOSED · creative arrangement guidance; human listening required"};})()],kind:"narrative"},
    {title:"Promotion and campaign strategy",blocks:[
     paragraph("ISRC-anchored catalogue coverage",compact(buildCommercialStrategyLines(input).slice(1,2).join(" "),210)),
     paragraph("Audience and short-form strategy",[
@@ -789,27 +792,28 @@ function formatSnapshotTime(seconds:number):string{
 }
 function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:AuditReportInput):number{
  const audio=rec(input.sonicDna),analysis=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis??audio.vocalFeatures);
- const sections=arr(analysis.inferredSections).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
- const transitions=arr(analysis.detectedTransitions).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds));
- const intervals=arr(analysis.vocalActivityIntervals).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const hasMasterAudio=hasSubmittedMasterAudio(rec(input.evidence),Object.keys(audio).length?audio:null);
+ const sections=hasMasterAudio?arr(analysis.inferredSections).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds):[];
+ const transitions=hasMasterAudio?arr(analysis.detectedTransitions).slice(0,16).map(value=>rec(value)).filter(item=>finite(item.timestampSeconds)):[];
+ const intervals=hasMasterAudio?arr(analysis.vocalActivityIntervals).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds):[];
  const duration=finite(audio.durationSeconds)&&audio.durationSeconds>0?audio.durationSeconds:Math.max(1,...sections.map(item=>Number(item.endSeconds)));
- const presence=finite(analysis.vocalPresencePct)?Math.max(0,Math.min(100,analysis.vocalPresencePct)):0;
- const vocalDetected=analysis.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0;
- const pitch=finite(analysis.vocalMedianF0Hz)?analysis.vocalMedianF0Hz:null;
- const range=rec(analysis.vocalF0RangeHz),low=finite(range.p10)?range.p10:null,high=finite(range.p90)?range.p90:null;
- const energy=finite(analysis.vocalBandEnergyDbfs)?analysis.vocalBandEnergyDbfs:null;
+ const presence=hasMasterAudio&&finite(analysis.vocalPresencePct)?Math.max(0,Math.min(100,analysis.vocalPresencePct)):null;
+ const vocalDetected=hasMasterAudio&&analysis.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence!==null&&presence>0;
+ const pitch=hasMasterAudio&&finite(analysis.vocalMedianF0Hz)?analysis.vocalMedianF0Hz:null;
+ const range=rec(analysis.vocalF0RangeHz),low=hasMasterAudio&&finite(range.p10)?range.p10:null,high=hasMasterAudio&&finite(range.p90)?range.p90:null;
+ const energy=hasMasterAudio&&finite(analysis.vocalBandEnergyDbfs)?analysis.vocalBandEnergyDbfs:null;
  const x=M,width=W-2*M,height=SNAPSHOT_VOCAL_MODULE_HEIGHT,bottom=top-height,pad=10,left=x+pad,right=x+width-pad,barWidth=right-left;
  page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
  page.drawText("VOCAL ANALYSIS, SECTIONS AND TRANSITIONS",{x:x+pad,y:top-16,size:7,font:fonts.bold,color:C.gold});
- const status=vocalDetected?"• VOCALS DETECTED · INFERRED FROM UPLOADED MASTER SIGNAL":"• INSTRUMENTAL / LOW VOCAL ACTIVITY";
+ const status=!hasMasterAudio?"• NOT ANALYSED · NO UPLOADED MASTER":vocalDetected?"• VOCALS DETECTED · INFERRED FROM UPLOADED MASTER SIGNAL":"• INSTRUMENTAL / LOW VOCAL ACTIVITY";
  const statusWidth=Math.min(width-185,fonts.bold.widthOfTextAtSize(status,5.1)+10);
  page.drawRectangle({x:x+pad,y:top-32,width:statusWidth,height:11,color:vocalDetected?C.amber:C.paper,borderColor:C.line,borderWidth:.35});
  page.drawText(status,{x:x+pad+5,y:top-28.5,size:5.1,font:fonts.bold,color:vocalDetected?C.white:C.muted});
- page.drawText("SIGNAL-DERIVED FROM UPLOADED MASTER",{x:right-164,y:top-28.5,size:5.2,font:fonts.bold,color:C.muted});
+ page.drawText(hasMasterAudio?"SIGNAL-DERIVED FROM UPLOADED MASTER":"MASTER SIGNAL NOT SUPPLIED",{x:right-164,y:top-28.5,size:5.2,font:fonts.bold,color:C.muted});
  const timelineTop=top-43;
  page.drawText("SONG ARRANGEMENT SECTIONS, TRANSITIONS AND VOCAL ACTIVITY",{x:left,y:timelineTop,size:5.8,font:fonts.bold,color:C.ink});
- page.drawText("INFERRED · PROVISIONAL LABELS",{x:right-142,y:timelineTop,size:5.1,font:fonts.bold,color:C.amber});
+ page.drawText(hasMasterAudio?"INFERRED · PROVISIONAL LABELS":"NOT ANALYSED · MASTER NOT SUPPLIED",{x:right-142,y:timelineTop,size:5.1,font:fonts.bold,color:C.amber});
  const barY=timelineTop-30;
  const colorFor=(label:string)=>{
   const value=label.toLowerCase();
@@ -830,9 +834,9 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
    draw3DSolidBar(page,bx,barY,bw,14,colorFor(str(section.label,"Section")));
    if(bw>24)page.drawText(String(section.label??("Section "+(index+1))).slice(0,16),{x:bx+2,y:barY+4,size:4.7,font:fonts.bold,color:C.white});
   });
- }else page.drawText("Section boundaries not confidently inferred",{x:left+5,y:barY+4,size:5,font:fonts.italic,color:C.muted});
- page.drawText("0:00",{x:left,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
- page.drawText(formatSnapshotTime(duration),{x:right-22,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
+ }else page.drawText(hasMasterAudio?"Section boundaries not confidently inferred":"Not analysed — no uploaded master signal supplied",{x:left+5,y:barY+4,size:5,font:fonts.italic,color:C.muted});
+ page.drawText(hasMasterAudio?"0:00":"Time unavailable",{x:left,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
+ page.drawText(hasMasterAudio?formatSnapshotTime(duration):"Not analysed",{x:right-42,y:barY-9,size:5.1,font:fonts.regular,color:C.muted});
  transitions.slice(0,16).forEach((item,index)=>{
   const tx=left+Math.max(0,Math.min(duration,Number(item.timestampSeconds)))/duration*barWidth;
   page.drawLine({start:{x:tx,y:barY-1},end:{x:tx,y:barY+20},color:C.ink,thickness:.6});
@@ -846,7 +850,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
   if(end<=start)return;
   draw3DSolidBar(page,left+78+start/duration*(barWidth-78),vocalY,Math.max(1,(end-start)/duration*(barWidth-78)),5,C.teal);
  });
- const intervalText=intervals.length
+ const intervalText=!hasMasterAudio?"Not analysed — no uploaded master signal supplied.":intervals.length
   ?intervals.slice(0,5).map(item=>formatSnapshotTime(Number(item.startSeconds))+"–"+formatSnapshotTime(Number(item.endSeconds))).join(" · ")+(intervals.length>5?" · +"+(intervals.length-5)+" more":"")
   :"No active intervals · "+String(analysis.analysisReason??"Low vocal-band activity or insufficient PCM quality.").slice(0,118);
  drawWrapped(page,intervalText,left,vocalY-7,barWidth,fonts.regular,4.7,C.muted,5.3);
@@ -870,15 +874,15 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
    drawWrapped(page,"Trigger: "+String(item.reason??"Spectral change"),cx+4,calloutTop-21,calloutWidth-8,fonts.regular,4.2,C.muted,4.6);
   });
  }else{
-  page.drawText("No discrete transition trigger exceeded the provisional novelty, energy, chroma or vocal-state thresholds.",{x:left+4,y:calloutTop-19,size:4.8,font:fonts.italic,color:C.muted});
+  page.drawText(hasMasterAudio?"No discrete transition trigger exceeded the provisional novelty, energy, chroma or vocal-state thresholds.":"Not analysed — no uploaded master signal supplied.",{x:left+4,y:calloutTop-19,size:4.8,font:fonts.italic,color:C.muted});
  }
- drawWrapped(page,"Label basis: windowed spectral-flux novelty, RMS steps, chroma movement and vocal-band onset/offset; labels are provisional.",left,calloutTop-38,barWidth,fonts.italic,4.4,C.muted,4.8);
+ drawWrapped(page,hasMasterAudio?"Label basis: windowed spectral-flux novelty, RMS steps, chroma movement and vocal-band onset/offset; labels are provisional.":"Label basis: no uploaded master signal supplied; sections and transitions are not analysed.",left,calloutTop-38,barWidth,fonts.italic,4.4,C.muted,4.8);
  const kpiTop=calloutTop-47,kpiGap=6,kpiW=(barWidth-kpiGap*3)/4,kpiH=30;
  const kpis=[
-  ["VOCAL PRESENCE",presence.toFixed(1)+"%"],
+  ["VOCAL PRESENCE",presence===null?"NOT ANALYSED":presence.toFixed(1)+"%"],
   ["VOCAL-BAND ENERGY",energy===null?"NOT ANALYSED":energy.toFixed(1)+" dBFS"],
   ["MEDIAN PITCH (F0)",pitch===null?"NOT ANALYSED":pitch.toFixed(1)+" Hz"],
-  ["ACTIVITY INTERVALS",String(intervals.length)+" timestamped"],
+  ["ACTIVITY INTERVALS",hasMasterAudio?String(intervals.length)+" timestamped":"NOT ANALYSED"],
  ];
  kpis.forEach((item,index)=>{
   const kx=left+index*(kpiW+kpiGap),ky=kpiTop-kpiH;
@@ -902,7 +906,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  page.drawText(pitch===null?"F0 candidate range not analysed":"Median "+pitch.toFixed(1)+" Hz",{x:rangeX+rangeW/2-32,y:rangeBarY-9,size:4.5,font:fonts.bold,color:C.muted});
  page.drawText("500 Hz",{x:rangeX+rangeW-24,y:rangeBarY-9,size:4.5,font:fonts.regular,color:C.muted});
  const footerY=bottom+8;
- drawWrapped(page,"WHAT IT SHOWS: Vocal-band energy locations, candidate pitch region and inferred section transitions from the uploaded master.",left,footerY+15,barWidth,fonts.regular,4.7,C.ink,5.1);
+ drawWrapped(page,hasMasterAudio?"WHAT IT SHOWS: Vocal-band energy locations, candidate pitch region and inferred section transitions from the uploaded master.":"WHAT IT SHOWS: No vocal or section measurements are available because this submission contains no uploaded master audio.",left,footerY+15,barWidth,fonts.regular,4.7,C.ink,5.1);
  drawWrapped(page,"WHAT IT DOES NOT SHOW: Exact labels, singing vs rap, lead vs backing, singer count, lyrics, delivery quality or audience response.",left,footerY+7,barWidth,fonts.italic,4.5,C.muted,4.9);
  return height;
 }
@@ -926,18 +930,19 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
  const vocalHeight=drawVocalArrangementCard(page,y,fonts,input);
  y-=vocalHeight+10;
  const sonic=rec(input.sonicDna),vocal=rec(input.vocalAndSectionPageData??sonic.vocalArrangementAnalysis??sonic.vocalFeatures);
+ const hasMasterAudio=hasSubmittedMasterAudio(rec(input.evidence),Object.keys(sonic).length?sonic:null);
  const duration=finite(sonic.durationSeconds)?sonic.durationSeconds:null;
- const presence=finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:0;
+ const presence=hasMasterAudio&&finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:null;
  const sections=arr(vocal.inferredSections),transitions=arr(vocal.detectedTransitions);
  const keyRaw=buildRecordingOverviewKeyLabel(data),keyLabel=data.key.value!==null?"Confirmed: "+keyRaw:/^Provisional:/i.test(keyRaw)?keyRaw:keyRaw==="Unavailable"?"Unavailable":"Provisional: "+keyRaw;
  const tempoRaw=buildCoverTempoLabel(data,input).replace(/\s*·\s*CANDIDATE$/i,"").replace(/\s*·\s*CONFIRMED$/i,"");
  const tempoLabel=tempoRaw==="Not determined"?"Not analysed":tempoRaw+(data.tempo.value===null?" CANDIDATE":" CONFIRMED");
- const vocalStatus=vocal.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence>0?"Detected (inferred)":"Minimal / Instrumental";
+ const vocalStatus=!hasMasterAudio?"Not analysed":vocal.vocalActivityStatus==="SIGNAL_ACTIVITY_DETECTED"&&presence!==null&&presence>0?"Detected (inferred)":"Minimal / Instrumental";
  const rows:Array<[string,string,string,string]>=[
   ["Track length",duration===null?"Not analysed":Math.floor(duration/60)+" min "+Math.round(duration%60)+" sec","Format",typeof sonic.channels==="number"?(sonic.channels===2?"Stereo":sonic.channels===1?"Mono":sonic.channels+" channels"):"Not analysed"],
   ["Song key",keyLabel,"Tempo",tempoLabel],
-  ["Vocals",vocalStatus,"Vocal activity",presence.toFixed(1)+"% of track"],
-  ["Sections",sections.length+" INFERRED","Transitions",transitions.length+" detected"]
+  ["Vocals",vocalStatus,"Vocal activity",presence===null?"Not analysed":presence.toFixed(1)+"%"],
+  ["Sections",hasMasterAudio?sections.length+" INFERRED":"Not analysed","Transitions",hasMasterAudio?transitions.length+" detected":"Not analysed"]
  ];
  const panelHeight=SNAPSHOT_OVERVIEW_HEIGHT,panelTop=y-8,bottom=panelTop-panelHeight;
  page.drawRectangle({x:M,y:bottom,width:W-2*M,height:panelHeight,color:C.white,borderColor:C.line,borderWidth:.7});
@@ -949,7 +954,7 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
   page.drawText(row[2],{x:M+260,y:yy,size:5.7,font:fonts.regular,color:C.muted});
   drawWrapped(page,row[3],M+334,yy,155,fonts.bold,5.8,C.ink,6.5);
  });
- page.drawText("Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.",{x:M+12,y:bottom+5,size:5.4,font:fonts.italic,color:C.muted});
+ page.drawText(hasMasterAudio?"Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.":"No uploaded master audio supplied; master-derived descriptors are not measured.",{x:M+12,y:bottom+5,size:5.4,font:fonts.italic,color:C.muted});
 }
 function drawExecutionMilestoneTrack(page:PDFPage,top:number,fonts:Fonts,labels:string[]):void{
  const required=["Days 1–30","Days 31–60","Days 61–90"],x=M+18,width=W-2*M-36,y=top-22,step=width/3;
@@ -1126,7 +1131,17 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  }
 }
 
-export async function generateAuditReportV2(source:AuditReportInput,tier:AuditReportTier="sample"):Promise<Uint8Array>{
+function assertRenderActive(signal?:AbortSignal):void{
+ if(signal?.aborted)throw signal.reason instanceof Error?signal.reason:new Error("PDF_RENDER_ABORTED");
+}
+async function yieldRenderTurn(signal?:AbortSignal):Promise<void>{
+ assertRenderActive(signal);
+ await new Promise<void>(resolve=>setImmediate(resolve));
+ assertRenderActive(signal);
+}
+
+export async function generateAuditReportV2(source:AuditReportInput,tier:AuditReportTier="sample",signal?:AbortSignal):Promise<Uint8Array>{
+ assertRenderActive(signal);
  const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf),form=pdf.getForm();
  const pages=buildReportSections(input,data,tier).map(spec=>({...spec,lines:sanitizePublicReportLines(spec.lines??[]),blocks:spec.blocks.map(block=>({...block,value:sanitizePublicReportLine(block.value),provenance:sanitizePublicReportLine(block.provenance??"")||(spec.kind==="narrative"?"":"From uploaded recording"),confidence:block.confidence}))})),total=pages.length;
@@ -1185,7 +1200,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     page.drawRectangle({x:M,y:top-height,width:W-2*M,height,color:C.white,borderColor:C.line,borderWidth:.7});
     page.drawText("ENERGY SPECTRUM · SOURCE VALUES",{x:M+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
     const series=reconcileChartSeriesAndLabels({rows:data.energySeries.map(point=>({label:point.timeSeconds.toFixed(1)+" s",value:point.value})),endpointAvailable:true,metricAvailable:true,derivedInProcess:true,provenance:"SIGNAL-DERIVED · TIMESTAMPED UPLOADED-MASTER SERIES"});
-    const values=series.rows.map(row=>typeof row.value==="number"?row.value:0),min=Math.min(...values),max=Math.max(...values),span=max-min||1;
+    let min=Infinity,max=-Infinity;for(const row of series.rows){if(typeof row.value!=="number")continue;if(row.value<min)min=row.value;if(row.value>max)max=row.value;}if(!Number.isFinite(min)||!Number.isFinite(max)){min=0;max=0;}const span=max-min||1;
     const t0=data.energySeries[0].timeSeconds,t1=data.energySeries[data.energySeries.length-1].timeSeconds,dt=t1-t0||1;
     for(let i=0;i<series.rows.length;i++){
      const value=typeof series.rows[i]!.value==="number"?Number(series.rows[i]!.value):null;
@@ -1318,6 +1333,10 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    }
   }
   drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
+  // Yield between pages so the job timeout and lease heartbeat can run. Chart
+  // input is bounded before drawing, keeping each synchronous page slice finite.
+  await yieldRenderTurn(signal);
  }
+ assertRenderActive(signal);
  return pdf.save();
 }

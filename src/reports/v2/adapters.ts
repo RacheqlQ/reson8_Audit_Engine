@@ -23,6 +23,7 @@ export interface ReportV2Data {
   energy: MetricValue;
   structure: TrackSection[] | null;
   energySeries: TimedPoint[] | null;
+  energySeriesPointCount: number | null;
   sonicAxes: Record<"Rhythm" | "Harmony" | "Texture" | "Vocal" | "Space", SonicAxis> | null;
   comparables: Comparable[] | null;
   moments: FlaggedMoment[] | null;
@@ -64,11 +65,16 @@ const firstFinite = (source: UnknownRecord | null, keys: string[]): number | nul
 const sourceLine = (source: UnknownRecord | null, fallback: string): string =>
   nonEmpty(source?.evidence) ?? nonEmpty(source?.provenance) ?? fallback;
 
+const MAX_REPORT_SECTIONS = 64;
+const MAX_REPORT_COMPARABLES = 12;
+const MAX_REPORT_MOMENTS = 32;
+const MAX_ENERGY_CHART_POINTS = 256;
+
 function sectionsFrom(source: UnknownRecord | null): TrackSection[] | null {
   const raw = source?.structure ?? source?.sections;
   if (!Array.isArray(raw) || raw.length === 0) return null;
   const result: TrackSection[] = [];
-  for (let i = 0; i < raw.length; i++) {
+  for (let i = 0; i < Math.min(raw.length, MAX_REPORT_SECTIONS); i++) {
     const item = record(raw[i]);
     const startSeconds = item?.startSeconds ?? item?.start;
     const endSeconds = item?.endSeconds ?? item?.end;
@@ -78,18 +84,49 @@ function sectionsFrom(source: UnknownRecord | null): TrackSection[] | null {
   }
   return result;
 }
-function seriesFrom(source: UnknownRecord | null): TimedPoint[] | null {
+function seriesFrom(source: UnknownRecord | null): { points: TimedPoint[]; pointCount: number } | null {
   const raw = source?.energyOverTime ?? source?.energySeries ?? source?.loudnessTimeSeries;
   if (!Array.isArray(raw) || raw.length < 2) return null;
-  const result: TimedPoint[] = [];
-  for (const itemValue of raw) {
-    const item = record(itemValue);
+  type IndexedPoint = { index: number; point: TimedPoint };
+  type Bucket = { min: IndexedPoint; max: IndexedPoint };
+  const bucketCount = Math.max(1, Math.floor(MAX_ENERGY_CHART_POINTS / 2));
+  const buckets: Array<Bucket | null> = Array.from({ length: bucketCount }, () => null);
+  let previousTime = -1;
+  let first: TimedPoint | null = null;
+  let last: TimedPoint | null = null;
+  for (let index = 0; index < raw.length; index++) {
+    const item = record(raw[index]);
     const timeSeconds = item?.timeSeconds ?? item?.time;
     const value = item?.value ?? item?.energy ?? item?.loudness;
-    if (!finite(timeSeconds) || timeSeconds < 0 || !finite(value)) return null;
-    result.push({ timeSeconds, value });
+    if (!finite(timeSeconds) || timeSeconds < 0 || !finite(value) || timeSeconds <= previousTime) return null;
+    previousTime = timeSeconds;
+    const point = { timeSeconds, value };
+    if (!first) first = point;
+    last = point;
+    const bucketIndex = Math.min(bucketCount - 1, Math.floor(index * bucketCount / raw.length));
+    const indexed = { index, point };
+    const bucket = buckets[bucketIndex];
+    if (!bucket) buckets[bucketIndex] = { min: indexed, max: indexed };
+    else {
+      if (value < bucket.min.point.value) bucket.min = indexed;
+      if (value > bucket.max.point.value) bucket.max = indexed;
+    }
   }
-  return result.every((point, i) => i === 0 || point.timeSeconds > result[i - 1].timeSeconds) ? result : null;
+  if (!first || !last) return null;
+  // Preserve each bucket's extrema in original temporal order, plus the exact
+  // endpoints. The chart remains signal-derived while PDF vector work is bounded.
+  const selected = new Map<number, TimedPoint>();
+  selected.set(0, first);
+  selected.set(raw.length - 1, last);
+  for (const bucket of buckets) {
+    if (!bucket) continue;
+    selected.set(bucket.min.index, bucket.min.point);
+    selected.set(bucket.max.index, bucket.max.point);
+  }
+  return {
+    points: [...selected.entries()].sort((a, b) => a[0] - b[0]).map(([, point]) => point),
+    pointCount: raw.length,
+  };
 }
 function axesFrom(source: UnknownRecord | null): ReportV2Data["sonicAxes"] {
   const raw = record(source?.sonicDnaAxes ?? source?.sonicAxes);
@@ -108,7 +145,7 @@ function comparablesFrom(source: UnknownRecord | null): Comparable[] | null {
   const raw = source?.verifiedComparables ?? source?.comparables ?? source?.marketComparables;
   if (!Array.isArray(raw) || raw.length === 0) return null;
   const result: Comparable[] = [];
-  for (const itemValue of raw) {
+  for (const itemValue of raw.slice(0, MAX_REPORT_COMPARABLES)) {
     const item = record(itemValue);
     const title = nonEmpty(item?.title);
     const year = item?.year;
@@ -125,7 +162,7 @@ function momentsFrom(audio: UnknownRecord | null, evidence: UnknownRecord | null
   const raw = audio?.flaggedMoments ?? audio?.moments ?? evidence?.flaggedMoments;
   if (!Array.isArray(raw) || raw.length === 0) return null;
   const result: FlaggedMoment[] = [];
-  for (const itemValue of raw) {
+  for (const itemValue of raw.slice(0, MAX_REPORT_MOMENTS)) {
     const item = record(itemValue);
     const timestampSeconds = item?.timestampSeconds ?? item?.timeSeconds;
     const title = nonEmpty(item?.title ?? item?.label);
@@ -282,7 +319,9 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
     ? loudnessMetrics.join(" · ") + (energyValue === null ? "" : " · Energy index " + Number(energyValue).toFixed(1))
     : energyValue === null ? null : energyValue;
   const structure = sectionsFrom(audio);
-  const energySeries = seriesFrom(audio);
+  const energySeriesResult = seriesFrom(audio);
+  const energySeries = energySeriesResult?.points ?? null;
+  const energySeriesPointCount = energySeriesResult?.pointCount ?? null;
   const sonicAxes = axesFrom(audio);
   const comparables = comparablesFrom(evidence);
   const moments = momentsFrom(audio, evidence);
@@ -356,7 +395,7 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
       method: energyMethod,
       evidence: sourceLine(audio, "Uploaded-master energy evidence"),
     },
-    structure, energySeries, sonicAxes, comparables, moments,
+    structure, energySeries, energySeriesPointCount, sonicAxes, comparables, moments,
     headlineScore: finite(assessment?.headlineScore) && assessment.headlineScore >= 0 && assessment.headlineScore <= 100 ? assessment.headlineScore : null,
     scoreDrivers: driversFrom(assessment),
     hasVerifiedCommercialEvidence: commercialEvidenceExists(evidence),

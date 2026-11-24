@@ -175,22 +175,39 @@ export function buildArNotesDecisionContext(input:AuditReportInput):ArNotesDecis
 export function buildArNotesDecisionContextFull(input:AuditReportInput):ArNotesDecisionContext {
  const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
  const internalStatusNotice=/(?:vocal analysis.{0,80}(?:temporarily disabled|not performed|unavailable|disabled|not run)|vocal presence(?:\s*\/\s*absence)? is unknown|no vocal conclusion is available|learned audio model.{0,40}disabled|detection model.{0,40}disabled)/i;
+ // The A&R Notes panel is a concise decision brief, not a second copy of the
+ // complete assessment. Keep its text bounded so unusually verbose provider output
+ // cannot make the PDF renderer fail; the complete evidence remains in the report's
+ // dedicated evidence, SWOT and action sections.
  const openItems=[...(Array.isArray(safeAssessment.evidenceGaps)?safeAssessment.evidenceGaps:[]),...(Array.isArray(safeAssessment.risks)?safeAssessment.risks:[]),...(Array.isArray(safeAssessment.limitations)?safeAssessment.limitations:[])]
   .filter((item):item is string=>typeof item==="string"&&item.trim().length>0)
   .filter(item=>!internalStatusNotice.test(item))
   .map(professionalEvidenceLanguage)
   .filter((item)=>item.trim().length>0)
   .filter((item,index,items)=>items.indexOf(item)===index);
- const fullSummary=professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required."));
+ const boundedSentences=(value:string,max:number,fallback:string)=>{
+  const sentences=value.match(/[^.!?]+[.!?]+/g)??[];
+  let result="";
+  for(const sentence of sentences){
+   const next=(result?" ":"")+sentence.trim();
+   if(result.length+next.length>max)break;
+   result+=next;
+  }
+  return result||fallback;
+ };
+ const selectedOpenItems=openItems.slice(0,2).map(item=>boundedSentences(item,140,"Further diligence detail is included in the evidence and action sections."));
+ const openDiligence=selectedOpenItems.join(" ")+(openItems.length>selectedOpenItems.length?" "+(openItems.length-selectedOpenItems.length)+" additional diligence item(s) are detailed in the evidence and action sections.":"");
+ const rawSummary=professionalEvidenceLanguage(val(safeAssessment.executiveSummary,"Further listening and source verification are required."));
+ const fullSummary=boundedSentences(rawSummary,480,"Full decision basis is detailed in the report's narrative assessment sections.");
  const nextAction="Verify identity, rights and the submitted master before pitching.";
+ const sampleContext=buildArNotesDecisionContext(input);
+ const summary=rawSummary.length>480
+  ?sampleContext.summary.split("...").join("")+(selectedOpenItems[1]?" Additional diligence: "+selectedOpenItems[1]:"")+(openItems.length>2?" "+(openItems.length-2)+" further diligence item(s) are detailed in the evidence and action sections.":"")
+  :["Decision basis: "+fullSummary,"Open diligence: "+(openDiligence||"No additional diligence items were recorded."),"Next action: "+nextAction].join(" ");
  return {
   heading:"DECISION CONTEXT",
   verdict:coverVerdictLabel(input).toUpperCase(),
-  summary:[
-   "Decision basis: "+fullSummary,
-   "Open diligence: "+(openItems.join(" ")||"No additional diligence items were recorded."),
-   "Next action: "+nextAction,
-  ].join(" "),
+  summary,
   prompts:[
    "What evidence would change the current decision?",
    "Which identity, rights or source gaps remain unresolved?",

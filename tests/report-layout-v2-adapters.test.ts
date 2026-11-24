@@ -76,6 +76,29 @@ describe("v2 read-only evidence adapters", () => {
     expect(data.comparables).toBeNull();
   });
 
+
+  it("bounds large energy charts while preserving endpoints and bucket extrema", () => {
+    const input = structuredClone(fullAudioFixture) as any;
+    const raw = Array.from({ length: 100_000 }, (_, index) => ({
+      timeSeconds: index / 10,
+      value: Math.sin(index / 37) * 4,
+    }));
+    raw[12_345]!.value = -80;
+    raw[54_321]!.value = 95;
+    input.sonicDna = { ...input.sonicDna, energyOverTime: raw };
+    const data = adaptReportV2(input);
+    expect(data.energySeriesPointCount).toBe(100_000);
+    expect(data.energySeries).not.toBeNull();
+    expect(data.energySeries!.length).toBeLessThanOrEqual(258);
+    expect(data.energySeries![0]).toEqual(raw[0]);
+    expect(data.energySeries![data.energySeries!.length - 1]).toEqual(raw[raw.length - 1]);
+    expect(data.energySeries!.some(point => point.value === -80)).toBe(true);
+    expect(data.energySeries!.some(point => point.value === 95)).toBe(true);
+    expect(data.energySeries!.every((point, index, points) =>
+      index === 0 || point.timeSeconds > points[index - 1]!.timeSeconds
+    )).toBe(true);
+  });
+
   it("renders measured loudness components even when no composite energy confidence exists", () => {
     const input = structuredClone(fullAudioFixture) as any;
     input.sonicDna = {
