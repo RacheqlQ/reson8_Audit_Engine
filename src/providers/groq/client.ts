@@ -296,7 +296,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     if (projected[key] !== undefined) projected[key] = compactPromptValue(projected[key]);
   }
 
-  if (group === "evidence-score") {
+  if (group === "evidence-score" || group === "positioning") {
     // The normalized provenance/reconciliation fields above are the canonical
     // evidence-score inputs. These duplicate summaries are already represented
     // there and need not be serialized a second time.
@@ -467,7 +467,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
         vocalProjection.model = Object.fromEntries(["name", "version"].filter(key => model[key] !== undefined)
           .map(key => [key, model[key]]));
       }
-      for (const key of ["activitySegments", "pitchSegments", "limitations"]) {
+      for (const key of (group === "positioning" ? ["limitations"] : ["activitySegments", "pitchSegments", "limitations"])) {
         if (raw[key] !== undefined) vocalProjection[key] = compactEvidenceScoreValue(raw[key], 0, 72, 3);
       }
       compacted.vocalFeatures = vocalProjection;
@@ -482,7 +482,7 @@ function compactCatalogMetadataForGroup(
   evidence: Record<string, unknown>,
 ): Record<string, unknown> | null {
   if (!value || !["narrative", "positioning", "evidence-score", "label-fit"].includes(group)) return null;
-  if (group === "evidence-score" || group === "narrative") {
+  if (["evidence-score", "narrative", "positioning"].includes(group)) {
     const hasNormalizedCatalogEvidence = Boolean(
       evidence.identity && typeof evidence.identity === "object"
       && evidence.fieldProvenance && typeof evidence.fieldProvenance === "object"
@@ -499,7 +499,7 @@ function compactCatalogMetadataForGroup(
   // Retain a bounded set of named provider records; long descriptions/raw
   // responses are already represented by normalized evidence and provenance.
   return Object.fromEntries(Object.entries(value).slice(0, 4)
-    .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning"].includes(group) ? compactEvidenceScoreValue(record, 0, 72, 3) : compactPromptValue(record)])) as Record<string, unknown>;
+    .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning", "release"].includes(group) ? compactEvidenceScoreValue(record, 0, 72, 3) : compactPromptValue(record)])) as Record<string, unknown>;
 }
 
 async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
