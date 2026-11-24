@@ -73,6 +73,24 @@ describe("Sonic DNA",()=>{
   expect(result.candidateBpms).toContain(120);
   expect(result.abstentionReason).toBeNull();
  });
+ it("retains weak-prominence tempo candidates without confirming a BPM",()=>{
+  const sampleRate=8000,seconds=24,bpm=55;
+  const samples=Float32Array.from({length:sampleRate*seconds},(_,index)=>{
+   const time=index/sampleRate,phase=(time*bpm/60)%1;
+   const triangle=phase<0.5?phase*2:2-phase*2;
+   const envelope=0.08*(1+0.02*(triangle-0.5));
+   return envelope*Math.sin(2*Math.PI*220*time);
+  });
+  const result=estimateTempo(samples,sampleRate);
+  expect(result.bpm).toBeNull();
+  expect(result.abstentionReason).toMatch(/weak|ambiguous|not confirmed/i);
+  expect(result.candidateBpms.length).toBeGreaterThan(0);
+  expect(result.candidateBpms.some(candidate=>Math.abs(candidate-55)<=3)).toBe(true);
+  expect(result.candidateBpms.some(candidate=>Math.abs(candidate-110)<=6)).toBe(true);
+  expect(result.alternateTempo).not.toBeNull();
+  expect(result.candidateBpms).toContain(result.alternateTempo);
+  expect(result.windowConsensus.windowCount).toBeGreaterThan(0);
+ });
  it("abstains on sustained non-rhythmic noise instead of reporting an arbitrary tempo",()=>{
   let seed=17;
   const noise=Float32Array.from({length:8000*8},()=>{seed=(seed*16807)%2147483647;return ((seed/2147483647)*2-1)*0.08;});
