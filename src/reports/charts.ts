@@ -1,4 +1,5 @@
 import { rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
+import { reconcileChartSeriesAndLabels } from "./chart-reconciliation.js";
 
 export interface ChartRow {
   label: string;
@@ -12,7 +13,7 @@ export type ChartKind = "bars" | "sonic" | "spectrum" | "constellation" | "layer
 export type ChartEvidenceClass = "measured" | "provider-recognized" | "inferred" | "assessment-derived" | "illustrative";
 export interface ChartPanelInput {
   title: string; rows: ChartRow[]; shows: string; cantShow: string; evidenceRefs?: string[];
-  kind?: ChartKind; evidenceClass?: ChartEvidenceClass; inferred?: boolean; unavailable?: boolean; fixture?: boolean; y?: number; width?: number;
+  kind?: ChartKind; evidenceClass?: ChartEvidenceClass; inferred?: boolean; unavailable?: boolean; fixture?: boolean; chartState?: string; chartProvenance?: string; y?: number; width?: number;
 }
 export interface ChartRect { x:number; y:number; width:number; height:number; id:string; }
 const C = {
@@ -42,12 +43,15 @@ export function compactChartItemSummary(value:string,maxLength=58):string{
  const boundary=clipped.lastIndexOf(" ");
  return (boundary>Math.floor(maxLength*.55)?clipped.slice(0,boundary):clipped).replace(/[,:;\s]+$/,"")+"…";
 }
-export function buildStrengthRiskChartRows(strengths:string[],risks:string[]):ChartRow[]{
+export function buildStrengthRiskChartRows(strengths:string[],risks:string[],maxDetailsPerGroup=10):ChartRow[]{
+ const limit=Math.max(0,Math.floor(maxDetailsPerGroup));
  return [
+  // Counts always represent the complete reconciled source lists. Only the
+  // explanatory detail rows are capped to protect the fixed report layout.
   {label:"Strengths",value:strengths.length},
   {label:"Risks",value:risks.length},
-  ...strengths.map(label=>({label,summary:compactChartItemSummary(label),value:null,group:"strength" as const})),
-  ...risks.map(label=>({label,summary:compactChartItemSummary(label),value:null,group:"risk" as const})),
+  ...strengths.slice(0,limit).map(label=>({label,summary:compactChartItemSummary(label),value:null,group:"strength" as const})),
+  ...risks.slice(0,limit).map(label=>({label,summary:compactChartItemSummary(label),value:null,group:"risk" as const})),
  ];
 }
 export function strengthRiskItemsForColumn(rows:ChartRow[],group:"strength"|"risk"):ChartRow[]{
@@ -60,6 +64,15 @@ function shown(v:ChartRow["value"]):string{
  return String(v).replace(/[\u2010-\u2015\u2212]/g,"-").replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/\u2026/g,"...");
 }
 function line(p:PDFPage,x1:number,y1:number,x2:number,y2:number,c=C.line,w=.8){p.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},color:c,thickness:w});}
+type PdfPolygonStyle={color?:ReturnType<typeof rgb>;opacity?:number;borderColor?:ReturnType<typeof rgb>;borderOpacity?:number;borderWidth?:number};
+function drawPdfPolygon(p:PDFPage,points:Array<{x:number;y:number}>,style:PdfPolygonStyle){
+ if(points.length<3)return;
+ // drawSvgPath uses a local SVG coordinate system whose Y axis points down.
+ // Convert page-space points to local coordinates and anchor the path explicitly.
+ const origin=points[0];
+ const path=points.map((point,index)=>(index?"L ":"M ")+(point.x-origin.x).toFixed(2)+" "+(origin.y-point.y).toFixed(2)).join(" ")+" Z";
+ p.drawSvgPath(path,{x:origin.x,y:origin.y,...style});
+}
 function normalizeChartText(value:string):string{return value.normalize("NFKC").replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/[\u2010-\u2015\u2212]/g,"-").replace(/[\u00A0\u202F]/g," ").replace(/\u2026/g,"...").replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"?");}
 function wrap(s:string,font:PDFFont,size:number,width:number):string[]{
  s=normalizeChartText(s);
@@ -130,7 +143,7 @@ export function chartPanelLayoutRects(kind:ChartKind,rows:ChartRow[],x=CARD_X,to
    result.push({x:cx,y:panelTop-17,width:colW,height:17,id:"shape-tension-header-"+col});
    result.push({x:cx+9,y:panelTop-15,width:colW-18,height:12,id:"label-tension-title-"+col});
    result.push({x:cx+9,y:panelTop-42,width:colW-18,height:12,id:"label-tension-count-"+col});
-   result.push({x:cx+9,y:panelTop-58,width:colW-13,height:15,id:"shape-tension-count-bar-and-shadow-"+col});
+   result.push({x:cx+9,y:panelTop-66,width:colW-13,height:26,id:"shape-tension-count-bar-and-shadow-"+col});
    result.push({x:cx+9,y:panelTop-84,width:colW-18,height:10,id:"label-tension-detail-"+col});
   });
  }else if(kind==="spectrum"){
@@ -275,9 +288,13 @@ export function chartEvidenceIntegrityErrors(input: Pick<ChartPanelInput, "evide
  return errors;
 }
 
-export function chartPanelDisplayStatus(input: Pick<ChartPanelInput, "fixture" | "inferred" | "unavailable" | "evidenceClass">): string {
+export function chartPanelDisplayStatus(input: Pick<ChartPanelInput, "fixture" | "inferred" | "unavailable" | "evidenceClass" | "chartState">): string {
  if(input.fixture)return "SAMPLE DATA · AUDIO REQUIRED";
- if(input.unavailable)return "NOT AVAILABLE";
+ if(input.chartState==="CONFIRMED")return "CONFIRMED";
+ if(input.chartState==="SIGNAL-DERIVED")return "SIGNAL-DERIVED";
+ if(input.chartState==="PROPOSED")return "PROPOSED";
+ if(input.chartState==="ENDPOINT_PENDING")return "ENDPOINT PENDING";
+ if(input.chartState==="UNAVAILABLE"||input.unavailable)return "NOT AVAILABLE";
  if(input.inferred||input.evidenceClass==="inferred")return "WORKING DIRECTION";
  if(input.evidenceClass==="provider-recognized")return "MUSIC PLATFORM RESULTS";
  if(input.evidenceClass==="assessment-derived")return "A&R REVIEW";
@@ -311,18 +328,42 @@ function drawFrame(p:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont,hei
  return {x,top,bottom,width:w,height,contentTop:top-HEADER_H-9,contentBottom:captionTop+5};
 }
 function shadowBar(p:PDFPage,x:number,y:number,w:number,h:number,c:ReturnType<typeof rgb>,index:number){
- p.drawRectangle({x:x+2,y:y-2,width:w,height:h,color:C.navy,opacity:.13});
+ if(w<=0||h<=0)return;
+ // True isometric quadrilaterals keep the top and right planes visible at
+ // normal report scale instead of approximating the extrusion with rectangles.
+ const depth=Math.max(5,Math.min(8,h*.58));
+ const topColor=rgb(Math.min(1,c.red+.25),Math.min(1,c.green+.25),Math.min(1,c.blue+.25));
+ const sideColor=rgb(c.red*.42,c.green*.42,c.blue*.42);
+ p.drawRectangle({x:x+depth+2,y:y-depth-2,width:w,height:h,color:C.navy,opacity:.14});
+ // Back/right plane first; top plane meets it along the rear upper edge.
+ drawPdfPolygon(p,[{x:x+w,y},{x:x+w+depth,y:y+depth},{x:x+w+depth,y:y+h+depth},{x:x+w,y:y+h}],{color:sideColor});
+ drawPdfPolygon(p,[{x,y:y+h},{x:x+depth,y:y+h+depth},{x:x+w+depth,y:y+h+depth},{x:x+w,y:y+h}],{color:topColor});
  p.drawRectangle({x,y,width:w,height:h,color:c});
- p.drawSvgPath(`M ${x} ${y+h} L ${x+5} ${y+h+4} L ${x+w+5} ${y+h+4} L ${x+w} ${y+h} Z`,{color:C.white,opacity:.25});
- p.drawSvgPath(`M ${x+w} ${y} L ${x+w+5} ${y+4} L ${x+w+5} ${y+h+4} L ${x+w} ${y+h} Z`,{color:C.navy,opacity:.24});
+ p.drawLine({start:{x:x+depth,y:y+h+depth-.5},end:{x:x+w+depth-.5,y:y+h+depth-.5},color:C.white,thickness:.65});
+ p.drawLine({start:{x:x+w+depth-.5,y:y+depth},end:{x:x+w+depth-.5,y:y+h+depth-.5},color:C.navy,thickness:.65});
+ p.drawLine({start:{x:x+1,y:y+h-1},end:{x:x+w-1,y:y+h-1},color:C.white,thickness:.7});
 }
+function solidNode(p:PDFPage,x:number,y:number,r:number,c:ReturnType<typeof rgb>){
+ p.drawCircle({x:x+2,y:y-2,size:r+1,color:C.navy,opacity:.16});
+ p.drawEllipse({x:x+2,y:y-2,xScale:r,yScale:r*.72,color:C.navy,opacity:.18});
+ p.drawCircle({x,y,size:r,color:c,borderColor:C.navy,borderWidth:.45});
+ p.drawEllipse({x:x-r*.28,y:y+r*.38,xScale:r*.48,yScale:r*.25,color:C.white,opacity:.38});
+}
+export function draw3DSolidBar(page:PDFPage,x:number,y:number,width:number,height:number,color:ReturnType<typeof rgb>):void{shadowBar(page,x,y,width,height,color,0);}
+export function draw3DSolidSphere(page:PDFPage,x:number,y:number,radius:number,color:ReturnType<typeof rgb>):void{solidNode(page,x,y,radius,color);}
+function solidStrut(p:PDFPage,x1:number,y1:number,x2:number,y2:number,c:ReturnType<typeof rgb>,thickness=2){
+ const dx=x2-x1,dy=y2-y1,length=Math.max(1,Math.hypot(dx,dy)),nx=-dy/length*thickness/2,ny=dx/length*thickness/2,depth=2.5;
+ const a={x:x1+nx,y:y1+ny},b={x:x2+nx,y:y2+ny},d={x:x1-nx,y:y1-ny},e={x:x2-nx,y:y2-ny};
+ drawPdfPolygon(p,[{x:a.x+2,y:a.y-2},{x:b.x+2,y:b.y-2},{x:e.x+2,y:e.y-2},{x:d.x+2,y:d.y-2}],{color:C.navy,opacity:.18});
+ drawPdfPolygon(p,[a,b,{x:b.x+depth,y:b.y-depth},{x:a.x+depth,y:a.y-depth}],{color:c,opacity:.82});
+ drawPdfPolygon(p,[b,e,{x:e.x+depth,y:e.y-depth},{x:b.x+depth,y:b.y-depth}],{color:C.navy,opacity:.28});
+ p.drawLine({start:a,end:b,color:C.white,thickness:.55});
+}
+
 function ring(p:PDFPage,cx:number,cy:number,r:number,value:number|null,c:ReturnType<typeof rgb>,font:PDFFont,bold:PDFFont){
- if(value===null){for(let a=0;a<360;a+=24){const a1=a*Math.PI/180,a2=(a+12)*Math.PI/180;line(p,cx+Math.cos(a1)*(r-2),cy+Math.sin(a1)*(r-2),cx+Math.cos(a2)*(r-2),cy+Math.sin(a2)*(r-2),C.muted,1.4);}text(p,"N/D",cx-7,cy-3,bold,6,C.muted);return;}
- p.drawCircle({x:cx,y:cy,size:r,borderColor:C.line,borderWidth:5});
- const clamped=Math.max(0,Math.min(100,value));
- const segments=Math.max(1,Math.round(clamped/100*48));
- for(let i=0;i<segments;i++){const a1=(-90+i*7.5)*Math.PI/180,a2=(-90+(i+1)*7.5-1)*Math.PI/180;line(p,cx+Math.cos(a1)*r,cy+Math.sin(a1)*r,cx+Math.cos(a2)*r,cy+Math.sin(a2)*r,c,4.5);}
- text(p,Math.round(clamped)+"%",cx-10,cy-3,bold,7,C.ink);
+ const clamped=value===null?null:Math.max(0,Math.min(100,value)),segments=clamped===null?0:Math.max(1,Math.round(clamped/100*48));
+ for(let i=0;i<48;i++){const angle=(-90+i*7.5)*Math.PI/180;solidNode(p,cx+Math.cos(angle)*r,cy+Math.sin(angle)*r,clamped===null?1.8:2.2,i<segments?c:C.line);}
+ if(clamped===null){text(p,"N/D",cx-7,cy-3,bold,6,C.muted);return;}text(p,Math.round(clamped)+"%",cx-10,cy-3,bold,7,C.ink);
 }
 function drawSonic(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const cols=[g.x+18,g.x+184,g.x+350],top=g.contentTop-22;
@@ -366,7 +407,7 @@ function drawLayers(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<t
  else{for(let k=0;k<w;k+=12)line(p,x+k,y+12,Math.min(x+k+5,x+w),y+12,C.muted,1);}
  const columns=[g.x+16,g.x+264];
  rows.slice(0,4).forEach((row,i)=>{const col=i%2,r=Math.floor(i/2),lx=columns[col],ly=g.contentBottom+34-r*25,c=color(i);
-  p.drawRectangle({x:lx,y:ly-2,width:10,height:10,color:c});
+  shadowBar(p,lx,ly-2,10,8,c,i);
   tracked(p,row.label.toUpperCase(),lx+17,ly,b,6.7,c,.35);
   text(p,shown(row.value),lx+17,ly-10,f,6.3,C.ink);
  });
@@ -377,12 +418,18 @@ function drawRadar(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<ty
  // The full plot/label footprint is 60%+ of the card width.
  for(let ringIndex=1;ringIndex<=4;ringIndex++){const r=radius*ringIndex/4;const pts=data.map((_,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;return{x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r};});for(let i=0;i<pts.length;i++)line(p,pts[i].x,pts[i].y,pts[(i+1)%pts.length].x,pts[(i+1)%pts.length].y,C.line,.65);}
  const pts=data.map((row,i)=>{const angle=-Math.PI/2+i*2*Math.PI/n,score=validNumber(row.value),r=score===null?0:radius*Math.max(0,Math.min(100,score))/100;return{row,angle,score,x:cx+Math.cos(angle)*r,y:cy+Math.sin(angle)*r};});
- const scored=pts.filter(q=>q.score!==null);if(scored.length>=3){const path=scored.map((q,i)=>(i?"L ":"M ")+q.x.toFixed(2)+" "+q.y.toFixed(2)).join(" ")+" Z";p.drawSvgPath(path,{color:C.teal,opacity:.24,borderColor:C.blue,borderOpacity:1,borderWidth:1.7});}
+ const complete=pts.length===5&&pts.every(q=>q.score!==null);
+ if(complete){
+  const depth=7,front=pts.map(q=>({x:q.x,y:q.y})),back=pts.map(q=>({x:q.x+depth,y:q.y-depth}));
+  pts.forEach((q,i)=>{const next=pts[(i+1)%pts.length];drawPdfPolygon(p,[q,next,{x:next.x+depth,y:next.y-depth},{x:q.x+depth,y:q.y-depth}],{color:C.navy,opacity:.25});});
+  drawPdfPolygon(p,back,{color:C.navy,opacity:.32});
+  drawPdfPolygon(p,front,{color:C.teal,opacity:.42,borderColor:C.blue,borderOpacity:1,borderWidth:1.7});
+ }
  pts.forEach((q,i)=>{
   const ax=cx+Math.cos(q.angle)*outer,ay=cy+Math.sin(q.angle)*outer;
   line(p,cx+Math.cos(q.angle)*radius,cy+Math.sin(q.angle)*radius,ax,ay,C.muted,.6);
-  if(q.score===null){p.drawCircle({x:cx+Math.cos(q.angle)*radius*.72,y:cy+Math.sin(q.angle)*radius*.72,size:4,borderColor:C.coral,borderWidth:1.2,color:C.paper});}
-  else p.drawCircle({x:q.x,y:q.y,size:4,color:C.coral,borderColor:C.white,borderWidth:.7});
+  if(q.score===null)solidNode(p,cx+Math.cos(q.angle)*radius*.72,cy+Math.sin(q.angle)*radius*.72,4,C.muted);
+  else solidNode(p,q.x,q.y,5,C.coral);
   const label=q.row.label.length>23?q.row.label.slice(0,21)+"…":q.row.label;
   const align=Math.cos(q.angle)>.35?"left":Math.cos(q.angle)<-.35?"right":"center";
   const width=b.widthOfTextAtSize(label,6.2),lx=align==="left"?ax+5:align==="right"?ax-width-5:ax-width/2;
@@ -405,11 +452,11 @@ function drawTension(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<
   p.drawRectangle({x,y:panelTop-17,width:colW,height:17,color:accent});
   tracked(p,title,x+9,panelTop-12,b,7,C.white,.5);
   text(p,String(count)+" documented",x+9,panelTop-37,b,9,accent);
-  shadowBar(p,x+9,panelTop-56,(colW-18)*count/maxCount,5,accent,c);
+  shadowBar(p,x+9,panelTop-66,(colW-18)*count/maxCount,12,accent,c);
   const firstItem=rows.find((item)=>item.group===(c===0?"strength":"risk"));
   const summary=firstItem?.summary??firstItem?.label??"No item recorded";
   const summaryLines=wrapChartSummary(summary,f,6.2,colW-18,1);
-  text(p,summaryLines[0]??"No item recorded",x+9,panelTop-78,f,6.2,C.muted);
+  text(p,summaryLines[0]??"No item recorded",x+9,panelTop-91,f,6.2,C.muted);
  }
 }
 export interface SpectrumScale { min:number; max:number; unit:string; }
@@ -434,14 +481,11 @@ function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType
    text(p,"Tempo withheld — insufficient confidence",trackX,trackY+1,f,6.2,C.muted);
    return;
   }
-  if(ratio===null){
-   for(let strip=0;strip<16;strip++){const sx=trackX+strip*(trackW/16);p.drawRectangle({x:sx,y:trackY,width:trackW/32,height:trackH,color:C.muted,opacity:.42});}
-   text(p,"Not determined",trackX+trackW+7,trackY+1,f,6.5,C.muted);
-  }else{
-   for(let strip=0;strip<16;strip++){const t=strip/15;p.drawRectangle({x:trackX+strip*(trackW/16),y:trackY,width:trackW/16+.2,height:trackH,color:rgb(.18+.04*t,.42+.32*t,.96-.48*t)});}
-   const markerX=trackX+ratio*trackW;
-   p.drawLine({start:{x:markerX,y:trackY-4},end:{x:markerX,y:trackY+trackH+4},color:C.coral,thickness:2});
-   p.drawCircle({x:markerX,y:trackY+trackH/2,size:4,color:C.coral,borderColor:C.white,borderWidth:.8});
+  shadowBar(p,trackX,trackY,trackW,trackH,ratio===null?C.paper:C.line,index);
+  if(ratio===null){text(p,"Not determined",trackX+trackW+7,trackY+1,f,6.5,C.muted);}
+  else{
+   if(ratio>0)shadowBar(p,trackX,trackY,trackW*ratio,trackH,C.blue,index);
+   const markerX=trackX+ratio*trackW;shadowBar(p,markerX-1,trackY-4,2,trackH+8,C.coral,index);solidNode(p,markerX,trackY+trackH/2,4,C.coral);
    text(p,String(Number(raw.toFixed(2)))+(range.unit?" "+range.unit:""),trackX+trackW+7,trackY+1,b,7,C.ink);
   }
   if (!isTempo || ratio !== null) {
@@ -451,12 +495,16 @@ function drawSpectrum(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType
  });
 }
 function drawBars(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
- rows.slice(0,6).forEach((r,i)=>{const y=g.contentTop-20-i*19,c=color(i);text(p,r.label.slice(0,25),g.x+13,y,b,7,c);text(p,shown(r.value).slice(0,48),g.x+178,y,f,7,C.ink);});
+ const values=rows.slice(0,6).map(row=>validNumber(row.value)),max=Math.max(1,...values.filter((v):v is number=>v!==null));
+ rows.slice(0,6).forEach((r,i)=>{const y=g.contentTop-20-i*19,c=color(i),v=values[i];text(p,r.label.slice(0,25),g.x+13,y,b,7,c);
+  if(v!==null){if(v>0)shadowBar(p,g.x+190,y-1,190*Math.max(0,v)/max,8,c,i);text(p,shown(r.value).slice(0,14),g.x+390,y,f,6.2,C.ink);}
+  else text(p,shown(r.value).slice(0,48),g.x+178,y,f,7,C.ink);
+ });
 }
 function drawConstellation(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const visibleRows=rows.slice(0,5),labelHeights=constellationLabelRowHeights(visibleRows,g.width),labelTotal=labelHeights.reduce((sum,value)=>sum+value,0);
  const cx=g.x+g.width/2,graphBottom=g.contentBottom+labelTotal+10,cy=graphBottom+56,radiusX=Math.min(g.width*.2,88),radiusY=38;
- p.drawCircle({x:cx,y:cy,size:23,borderColor:C.violet,borderWidth:1.4,color:C.paper});
+ solidNode(p,cx,cy,23,C.violet);
  text(p,"PRIMARY",cx-12,cy-2,b,4.5,C.violet);
  const adjacentRows=visibleRows.slice(1);
  if(adjacentRows.length===0){
@@ -464,7 +512,7 @@ function drawConstellation(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:Retur
  }
  adjacentRows.forEach((row,i)=>{
   const angle=-Math.PI/2+i*2*Math.PI/Math.max(adjacentRows.length,3),px=cx+Math.cos(angle)*radiusX,py=cy+Math.sin(angle)*radiusY;
-  line(p,cx,cy,px,py,color(i+1),1);p.drawCircle({x:px,y:py,size:15,borderColor:color(i+1),borderWidth:1,color:C.white});
+  solidStrut(p,cx,cy,px,py,color(i+1),3);solidNode(p,px,py,15,color(i+1));
  });
  visibleRows.forEach((row,i)=>{
   const labelWidth=(g.width-36)/2,rowIndex=Math.floor(i/2),column=i%2;
@@ -476,26 +524,30 @@ function drawConstellation(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:Retur
  });
 }
 function drawTimeline(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
- const y=g.contentBottom+80;line(p,g.x+42,y,g.x+g.width-42,y,C.line,1.4);
+ const y=g.contentBottom+80;shadowBar(p,g.x+42,y-1,g.width-84,2,C.blue,0);
  const nodes=[g.x+58,g.x+g.width/2,g.x+g.width-90];
- rows.slice(0,3).forEach((r,i)=>{const x=nodes[i];p.drawCircle({x,y,size:7,color:color(i)});text(p,"STAGE "+(i+1),x-20,y+18,b,6,color(i));wrap(shown(r.value),f,6,115).slice(0,2).forEach((s,j)=>text(p,s,x-35,y-18-j*8,f,6,C.ink));});
+ rows.slice(0,3).forEach((r,i)=>{const x=nodes[i];solidNode(p,x,y,8,color(i));text(p,r.label.toUpperCase(),x-31,y+19,b,5.8,color(i));wrap(shown(r.value),f,6,115).slice(0,2).forEach((s,j)=>text(p,s,x-35,y-19-j*8,f,6,C.ink));});
 }
 function drawChain(p:PDFPage,rows:ChartRow[],f:PDFFont,b:PDFFont,g:ReturnType<typeof drawFrame>){
  const names=["CONTENT","DISCOVERY","LISTENER ACTION"];
- names.forEach((name,i)=>{const x=g.x+82+i*166,y=g.contentBottom+78;if(i<2)line(p,x+30,y,g.x+82+(i+1)*166-30,y,C.blue,1.5);p.drawCircle({x,y,size:25,borderColor:color(i),borderWidth:1.3,color:C.white});text(p,name,x-42,y-3,b,4.7,color(i));wrap(shown(rows[i]?.value),f,5.8,110).slice(0,2).forEach((s,j)=>text(p,s,x-54,y-39-j*8,f,5.8,C.ink));});
+ names.forEach((name,i)=>{const x=g.x+82+i*166,y=g.contentBottom+78;if(i<2)shadowBar(p,x+30,y-1,g.x+82+(i+1)*166-30-(x+30),2,C.blue,i);solidNode(p,x,y,25,color(i));text(p,name,x-42,y-3,b,4.7,color(i));wrap(shown(rows[i]?.value),f,5.8,110).slice(0,2).forEach((s,j)=>text(p,s,x-54,y-39-j*8,f,5.8,C.ink));});
 }
 export function drawChartPanel(page:PDFPage,input:ChartPanelInput,font:PDFFont,bold:PDFFont):void{
- const kind=input.kind??"bars",height=chartPanelHeight(kind,input.rows,input.width??CARD_W),g=drawFrame(page,input,font,bold,height);
+ const reconciled=reconcileChartSeriesAndLabels({rows:input.rows,endpointAvailable:!input.unavailable,metricAvailable:input.rows.some(row=>validNumber(row.value)!==null),derivedInProcess:input.evidenceClass==="measured",proposed:input.inferred,confirmed:input.evidenceClass==="measured"&&input.rows.some(row=>/CONFIRMED/i.test(row.label+" "+shown(row.value))),provenance:input.evidenceClass==="measured"?"RECONCILED · UPLOADED MASTER":undefined});
+ const radarMeasured=input.kind==="radar"?input.rows.slice(0,5).filter(row=>validNumber(row.value)!==null).length:null;
+ const partialRadarNote=radarMeasured!==null&&radarMeasured<5?"PARTIAL — "+radarMeasured+"/5 radar axes have source-backed scores; missing axes are omitted, not scored.":null;
+ const cleanInput={...input,rows:reconciled.rows,chartState:reconciled.state,chartProvenance:reconciled.provenance,shows:input.shows+((reconciled.note??partialRadarNote)?" · "+(reconciled.note??partialRadarNote):"")};
+ const kind=input.kind??"bars",height=chartPanelHeight(kind,cleanInput.rows,input.width??CARD_W),g=drawFrame(page,cleanInput,font,bold,height);
  switch(kind){
-  case "sonic":drawSonic(page,input.rows,font,bold,g);break;
-  case "layers":drawLayers(page,input.rows,font,bold,g);break;
-  case "radar":drawRadar(page,input.rows,font,bold,g);break;
-  case "tension":drawTension(page,input.rows,font,bold,g);break;
-  case "spectrum":drawSpectrum(page,input.rows,font,bold,g);break;
-  case "constellation":drawConstellation(page,input.rows,font,bold,g);break;
-  case "timeline":drawTimeline(page,input.rows,font,bold,g);break;
-  case "chain":drawChain(page,input.rows,font,bold,g);break;
-  default:drawBars(page,input.rows,font,bold,g);
+  case "sonic":drawSonic(page,cleanInput.rows,font,bold,g);break;
+  case "layers":drawLayers(page,cleanInput.rows,font,bold,g);break;
+  case "radar":drawRadar(page,cleanInput.rows,font,bold,g);break;
+  case "tension":drawTension(page,cleanInput.rows,font,bold,g);break;
+  case "spectrum":drawSpectrum(page,cleanInput.rows,font,bold,g);break;
+  case "constellation":drawConstellation(page,cleanInput.rows,font,bold,g);break;
+  case "timeline":drawTimeline(page,cleanInput.rows,font,bold,g);break;
+  case "chain":drawChain(page,cleanInput.rows,font,bold,g);break;
+  default:drawBars(page,cleanInput.rows,font,bold,g);
  }
 }
 export interface EvidenceLayerCounts{OBSERVED:number;RECOGNIZED:number;RECONCILED:number;INFERRED:number;}

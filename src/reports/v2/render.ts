@@ -1,7 +1,8 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
-import { buildArNotesDecisionContext, buildArNotesDecisionContextFull, chartsForSection, metadataFieldStatus, metadataFieldSource, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
+import { buildArNotesDecisionContext, buildArNotesDecisionContextFull, chartsForSection, metadataFieldStatus, metadataFieldSource, reconciledAssessmentItems, type AuditReportInput, type AuditReportTier } from "../generate-audit-report.js";
 import { loadReportFonts } from "../fonts.js";
-import { chartEvidenceIntegrityErrors, chartPanelHeight, countEvidenceLayers, drawChartPanel } from "../charts.js";
+import { chartEvidenceIntegrityErrors, chartPanelHeight, countEvidenceLayers, drawChartPanel, draw3DSolidBar, draw3DSolidSphere } from "../charts.js";
+import { reconcileChartCrossChecks, reconcileChartSeriesAndLabels } from "../chart-reconciliation.js";
 import { adaptReportV2, type ReportV2Data } from "./adapters.js";
 import { hasReportableKeyCandidates, isReliableKey, isReliableTempo } from "../evidence-guardrails.js";
 import { sanitizeAssessmentForEvidence } from "../evidence-guardrails.js";
@@ -162,12 +163,12 @@ export function buildProposedArrangement(input:AuditReportInput):{summary:string
 function drawProposedArrangementBar(page:PDFPage,top:number,segments:ProposedArrangementSegment[],fonts:Fonts):number{
  const x=M+12,width=W-2*M-24,barY=top-22,barH=18;
  page.drawText("PROPOSED TRACK FLOW · NORMALIZED TIMELINE",{x,y:top-9,size:6.3,font:fonts.bold,color:C.muted});
- segments.forEach(segment=>{const sx=x+width*segment.startPct/100,sw=width*(segment.endPct-segment.startPct)/100,shade=Math.max(.25,Math.min(.95,segment.intensity));page.drawRectangle({x:sx,y:barY,width:Math.max(1,sw),height:barH,color:rgb(.12+.35*shade,.34+.32*shade,.34+.2*shade),borderColor:C.white,borderWidth:.6});});
+ segments.forEach(segment=>{const sx=x+width*segment.startPct/100,sw=width*(segment.endPct-segment.startPct)/100,shade=Math.max(.25,Math.min(.95,segment.intensity));draw3DSolidBar(page,sx,barY,Math.max(1,sw),barH,rgb(.12+.35*shade,.34+.32*shade,.34+.2*shade));});
  const labelY=barY-11;
  segments.forEach(segment=>{const sx=x+width*segment.startPct/100,sw=width*(segment.endPct-segment.startPct)/100;if(sw>31)drawWrapped(page,segment.label,sx+1,labelY,sw-2,fonts.bold,5.1,C.ink,5.6);});
  const arcY=barY-29,points=segments.map(segment=>({x:x+width*(segment.startPct+segment.endPct)/200,y:arcY-10*segment.intensity}));
  for(let i=0;i<points.length-1;i++)page.drawLine({start:points[i]!,end:points[i+1]!,color:C.coral,thickness:1.5});
- points.forEach(point=>page.drawCircle({x:point.x,y:point.y,size:2.2,color:C.coral}));
+ points.forEach(point=>draw3DSolidSphere(page,point.x,point.y,2.2,C.coral));
  page.drawText("Intensity / emotional arc",{x,y:arcY-18,size:5.7,font:fonts.italic,color:C.muted});
  drawWrapped(page,"Emotional progression: "+segments.map(segment=>segment.emotion).join(" > "),x,arcY-27,width,fonts.italic,5.2,C.muted,6);
  return 88;
@@ -184,19 +185,20 @@ function scoreChip(page:PDFPage,x:number,y:number,width:number,label:string,valu
  page.drawText(label.toUpperCase(),{x:x+24,y:y+28,size:6.5,font:fonts.bold,color:C.label});
  drawWrapped(page,value,x+12,y+15,width-24,fonts.bold,8.2,color,10);
 }
-function card(page:PDFPage,x:number,top:number,width:number,title:string,body:string[],fonts:Fonts,opts:{accent?:typeof C.teal;height?:number;provenance?:string}={}):number{
- const pad=12,titleH=14,bodyW=width-pad*2;let bodyHeight=0;
- const chunks=body.map(t=>wrap(t,fonts.regular,8.4,bodyW));
- bodyHeight=chunks.reduce((n,lines)=>n+lines.length*11+5,0);
- const provenance=opts.provenance?wrap(opts.provenance,fonts.italic,7,bodyW):[];
- const height=Math.max(opts.height??0,pad+titleH+bodyHeight+(provenance.length?provenance.length*9+6:0)+pad);
+function card(page:PDFPage,x:number,top:number,width:number,title:string,body:string[],fonts:Fonts,opts:{accent?:typeof C.teal;height?:number;provenance?:string;compact?:boolean}={}):number{
+ const compact=opts.compact===true,pad=compact?8:12,titleH=compact?11:14,bodyFont=compact?7.3:8.4,bodyLine=compact?9:11,bodyGap=compact?3:5,provenanceFont=compact?6.2:7,provenanceLine=compact?7.5:9,titleFont=compact?6.4:7;
+ const bodyW=width-pad*2;
+ const chunks=body.map(t=>wrap(t,fonts.regular,bodyFont,bodyW));
+ const bodyHeight=chunks.reduce((n,lines)=>n+lines.length*bodyLine+bodyGap,0);
+ const provenance=opts.provenance?wrap(opts.provenance,fonts.italic,provenanceFont,bodyW):[];
+ const height=Math.max(opts.height??0,pad+titleH+bodyHeight+(provenance.length?provenance.length*provenanceLine+4:0)+pad);
  const y=top-height;
  page.drawRectangle({x,y,width,height,color:C.white,borderColor:C.line,borderWidth:.65});
  page.drawRectangle({x,y:y+height-3,width,height:3,color:opts.accent??C.gold});
- page.drawText(title.toUpperCase(),{x:x+pad,y:top-pad-8,size:7,font:fonts.bold,color:opts.accent??C.gold});
+ page.drawText(title.toUpperCase(),{x:x+pad,y:top-pad-(compact?7:8),size:titleFont,font:fonts.bold,color:opts.accent??C.gold});
  let cy=top-pad-titleH-4;
- for(const lines of chunks){for(const line of lines){page.drawText(line,{x:x+pad,y:cy,size:8.4,font:fonts.regular,color:C.ink});cy-=11;}cy-=5;}
- for(const line of provenance){page.drawText(line,{x:x+pad,y:cy,size:7,font:fonts.italic,color:C.muted});cy-=9;}
+ for(const lines of chunks){for(const line of lines){page.drawText(line,{x:x+pad,y:cy,size:bodyFont,font:fonts.regular,color:C.ink});cy-=bodyLine;}cy-=bodyGap;}
+ for(const line of provenance){page.drawText(line,{x:x+pad,y:cy,size:provenanceFont,font:fonts.italic,color:C.muted});cy-=provenanceLine;}
  return height;
 }
 function drawFooter(page:PDFPage,title:string,auditId:string,n:number,total:number,fonts:Fonts){
@@ -525,10 +527,10 @@ function drawIdentityReconciliation(page:PDFPage,input:AuditReportInput,fonts:Fo
  ],fonts,{accent:C.gold});
  return summaryTop-summaryHeight-14;
 }
-export function buildStrengthRiskSummary(input:AuditReportInput):{strengths:string[];risks:string[];strengthCount:number;riskCount:number}{
- const assessment=rec(input.assessment);
- const clean=(value:unknown)=>arr(value).map(item=>str(item,"")).map(item=>item.trim()).filter(item=>item&&!/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(item));
- const strengths=clean(assessment.strengths),risks=clean(assessment.risks);
+export function buildStrengthRiskSummary(input:AuditReportInput,assessmentOverride?:Record<string,unknown>):{strengths:string[];risks:string[];strengthCount:number;riskCount:number}{
+ const assessment=assessmentOverride??rec(input.assessment);
+ const clean=(value:unknown)=>arr(value).map(item=>str(item,""));
+ const strengths=reconciledAssessmentItems(clean(assessment.strengths)),risks=reconciledAssessmentItems(clean(assessment.risks));
  return {strengths,risks,strengthCount:strengths.length,riskCount:risks.length};
 }
 export function buildReleaseCampaignLabels(input:AuditReportInput){
@@ -737,7 +739,7 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
   const angle=-Math.PI/2+index*2*Math.PI/12,px=cx+Math.cos(angle)*radius,py=cy+Math.sin(angle)*radius;
   const isConfirmed=Boolean(confirmed&&note===confirmed),isCandidate=!isConfirmed&&candidateNotes.has(note);
   const fill=isConfirmed?C.teal:isCandidate?C.amber:C.paper;
-  page.drawCircle({x:px,y:py,size:11,color:fill,borderColor:isConfirmed?C.teal:isCandidate?C.amber:C.line,borderWidth:1});
+  draw3DSolidSphere(page,px,py,11,fill);
   const labelWidth=fonts.bold.widthOfTextAtSize(note,6.5);
   page.drawText(note,{x:px-labelWidth/2,y:py-2.2,size:6.5,font:fonts.bold,color:isConfirmed||isCandidate?C.white:C.ink});
  });
@@ -771,7 +773,7 @@ function drawCompactSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts,top:num
   const y=top-39-index*17;
   page.drawText(name,{x:x+12,y,size:6.7,font:fonts.bold,color:C.ink});
   page.drawRectangle({x:x+145,y:y-2,width:210,height:6,color:C.line});
-  page.drawRectangle({x:x+145,y:y-2,width:210*Math.max(0,Math.min(100,axis.value))/100,height:6,color:axis.value<60?C.amber:C.teal});
+  draw3DSolidBar(page,x+145,y-2,210*Math.max(0,Math.min(100,axis.value))/100,6,axis.value<60?C.amber:C.teal);
   page.drawText(String(axis.value),{x:x+365,y:y-1,size:6.7,font:fonts.bold,color:C.ink});
  });
  return height;
@@ -820,7 +822,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
   sections.forEach((section,index)=>{
    const start=Math.max(0,Number(section.startSeconds)),end=Math.min(duration,Number(section.endSeconds));
    const bx=left+start/duration*barWidth,bw=Math.max(1,(end-start)/duration*barWidth);
-   page.drawRectangle({x:bx,y:barY,width:bw,height:14,color:colorFor(str(section.label,"Section")),borderColor:C.white,borderWidth:.25});
+   draw3DSolidBar(page,bx,barY,bw,14,colorFor(str(section.label,"Section")));
    if(bw>24)page.drawText(String(section.label??("Section "+(index+1))).slice(0,16),{x:bx+2,y:barY+4,size:4.7,font:fonts.bold,color:C.white});
   });
  }else page.drawText("Section boundaries not confidently inferred",{x:left+5,y:barY+4,size:5,font:fonts.italic,color:C.muted});
@@ -837,7 +839,7 @@ function drawVocalArrangementCard(page:PDFPage,top:number,fonts:Fonts,input:Audi
  intervals.forEach(interval=>{
   const start=Math.max(0,Number(interval.startSeconds)),end=Math.min(duration,Number(interval.endSeconds));
   if(end<=start)return;
-  page.drawRectangle({x:left+78+start/duration*(barWidth-78),y:vocalY,width:Math.max(1,(end-start)/duration*(barWidth-78)),height:5,color:C.teal});
+  draw3DSolidBar(page,left+78+start/duration*(barWidth-78),vocalY,Math.max(1,(end-start)/duration*(barWidth-78)),5,C.teal);
  });
  const intervalText=intervals.length
   ?intervals.slice(0,5).map(item=>formatSnapshotTime(Number(item.startSeconds))+"–"+formatSnapshotTime(Number(item.endSeconds))).join(" · ")+(intervals.length>5?" · +"+(intervals.length-5)+" more":"")
@@ -944,17 +946,28 @@ function drawSnapshot(page:PDFPage,data:ReportV2Data,fonts:Fonts,input:AuditRepo
  });
  page.drawText("Uploaded-master descriptors only; no mastering-readiness or audience conclusion is implied.",{x:M+12,y:bottom+5,size:5.4,font:fonts.italic,color:C.muted});
 }
+function drawExecutionMilestoneTrack(page:PDFPage,top:number,fonts:Fonts,labels:string[]):void{
+ const required=["Days 1–30","Days 31–60","Days 61–90"],x=M+18,width=W-2*M-36,y=top-22,step=width/3;
+ const reconciled=reconcileChartSeriesAndLabels({rows:required.map(label=>({label,value:null})),expectedLabels:required,provenance:"PROPOSED · EXECUTION PLAN"});
+ draw3DSolidBar(page,x+step*.5,y+6,step*2,2,C.teal);
+ reconciled.rows.forEach((row,index)=>{const cx=x+step*(index+.5);draw3DSolidSphere(page,cx,y+7,8,index===0?C.teal:index===1?C.amber:C.violet);page.drawText(row.label,{x:cx-28,y:y-10,size:5.8,font:fonts.bold,color:C.ink});const supplied=labels[index];drawWrapped(page,supplied??"Action detail not supplied.",cx-step*.5+3,y-21,step-6,fonts.regular,4.8,C.muted,5.4);});
+}
 function drawSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  const axes=data.sonicAxes!;const names=Object.keys(axes) as Array<keyof typeof axes>,cx=170,cy=555,r=118;
  for(let ring=1;ring<=4;ring++){const rr=r*ring/4;for(let i=0;i<5;i++){const a=-Math.PI/2+i*2*Math.PI/5,b=-Math.PI/2+(i+1)*2*Math.PI/5;page.drawLine({start:{x:cx+Math.cos(a)*rr,y:cy+Math.sin(a)*rr},end:{x:cx+Math.cos(b)*rr,y:cy+Math.sin(b)*rr},color:C.line,thickness:.6});}}
  const pts=names.map((name,i)=>{const a=-Math.PI/2+i*2*Math.PI/5,v=axes[name].value/100;return {x:cx+Math.cos(a)*r*v,y:cy+Math.sin(a)*r*v};});
- pts.forEach((p,i)=>{const q=pts[(i+1)%pts.length];page.drawLine({start:p,end:q,color:C.teal,thickness:2.2});page.drawCircle({x:p.x,y:p.y,size:4,color:C.teal});});
+ const polygon=pts.map((point,i)=>(i?"L ":"M ")+point.x.toFixed(2)+" "+point.y.toFixed(2)).join(" ")+" Z";
+ const extrusion=pts.map((point,i)=>(i?"L ":"M ")+(point.x+5).toFixed(2)+" "+(point.y-5).toFixed(2)).join(" ")+" Z";
+ pts.forEach((point,i)=>{const next=pts[(i+1)%pts.length];page.drawSvgPath(`M ${point.x} ${point.y} L ${next.x} ${next.y} L ${next.x+5} ${next.y-5} L ${point.x+5} ${point.y-5} Z`,{color:C.charcoal,opacity:.28});});
+ page.drawSvgPath(extrusion,{color:C.charcoal,opacity:.3});
+ page.drawSvgPath(polygon,{color:C.teal,opacity:.32,borderColor:C.white,borderOpacity:.65,borderWidth:1.8});
+ pts.forEach((point)=>draw3DSolidSphere(page,point.x,point.y,4,C.teal));
  names.forEach((name,i)=>{const a=-Math.PI/2+i*2*Math.PI/5;const x=cx+Math.cos(a)*(r+22),y=cy+Math.sin(a)*(r+22);page.drawText(name+" "+axes[name].value,{x:x-28,y,size:7,font:fonts.bold,color:C.ink});});
  const note="Supplied axis scores only. Scale: 0–100; higher values indicate a higher score on that named axis. No reference average or audience-overlap claim is implied.";
  drawWrapped(page,note,330,cy+60,180,fonts.regular,8,C.muted,11);
 
  let y=cy-155;
- names.forEach(name=>{const item=axes[name];page.drawRectangle({x:M,y:y-15,width:W-2*M,height:38,color:C.white,borderColor:C.line,borderWidth:.6});page.drawText(name,{x:M+12,y:y+8,size:8,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+112,y:y+5,width:150,height:6,color:C.line});page.drawRectangle({x:M+112,y:y+5,width:150*item.value/100,height:6,color:item.value<60?C.amber:C.teal});page.drawText(String(item.value),{x:M+270,y:y+5,size:8,font:fonts.bold,color:C.ink});drawWrapped(page,item.note??"Axis note not supplied.",M+310,y+8,190,fonts.regular,7,C.muted,9);y-=45;});
+ names.forEach(name=>{const item=axes[name];page.drawRectangle({x:M,y:y-15,width:W-2*M,height:38,color:C.white,borderColor:C.line,borderWidth:.6});page.drawText(name,{x:M+12,y:y+8,size:8,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+112,y:y+5,width:150,height:6,color:C.line});draw3DSolidBar(page,M+112,y+5,150*item.value/100,6,item.value<60?C.amber:C.teal);page.drawText(String(item.value),{x:M+270,y:y+5,size:8,font:fonts.bold,color:C.ink});drawWrapped(page,item.note??"Axis note not supplied.",M+310,y+8,190,fonts.regular,7,C.muted,9);y-=45;});
 }
 function drawComparables(page:PDFPage,input:AuditReportInput,data:ReportV2Data,fonts:Fonts){
  const e=rec(input.evidence),position=rec(e.marketPosition),score=typeof position.score==="number"&&Number.isFinite(position.score)?position.score:null;
@@ -965,7 +978,7 @@ function drawComparables(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  }
  if(score!==null){
   card(page,M,y,W-2*M,"Market position",[score+" / 100 · "+str(position.label,"Position label not supplied"),"Basis: "+str(position.basis,"Source-attributed comparables")],fonts,{accent:C.gold});
-  const barX=M+14,barY=y-52,barW=W-2*M-28;page.drawRectangle({x:barX,y:barY,width:barW,height:12,color:C.line});page.drawRectangle({x:barX,y:barY,width:barW*score/100,height:12,color:C.teal});page.drawCircle({x:barX+barW*score/100,y:barY+6,size:7,color:C.white,borderColor:C.ink,borderWidth:1});y-=105;
+  const barX=M+14,barY=y-52,barW=W-2*M-28;page.drawRectangle({x:barX,y:barY,width:barW,height:12,color:C.line});draw3DSolidBar(page,barX,barY,barW*score/100,12,C.teal);page.drawCircle({x:barX+barW*score/100,y:barY+6,size:7,color:C.white,borderColor:C.ink,borderWidth:1});y-=105;
  }
  card(page,M,y,W-2*M,"Closest comparables",[],fonts,{height:28+data.comparables!.length*43,accent:C.gold});
  drawWrapped(page,"Source-reported similarity is not a measure of audience overlap, playlist reach or predicted commercial performance. Compare only within each source's stated methodology.",M+14,y-24,W-2*M-28,fonts.italic,6.5,C.muted,8);
@@ -979,10 +992,10 @@ function drawMoments(page:PDFPage,data:ReportV2Data,fonts:Fonts){
  page.drawText("TRACK POSITION · SECONDS",{x:left,y:top-14,size:6.5,font:fonts.bold,color:C.muted});
  page.drawText("0s",{x:left,y:mid-42,size:6,font:fonts.regular,color:C.muted});
  page.drawText(max.toFixed(1)+"s",{x:right-24,y:mid-42,size:6,font:fonts.regular,color:C.muted});
- moments.forEach((m,i)=>{const x=left+(m.timestampSeconds/max)*(right-left);const color=m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal;page.drawLine({start:{x,y:mid-23},end:{x,y:mid+24},color,thickness:1.6});page.drawCircle({x,y:mid+26,size:8,color});page.drawText(String(i+1),{x:x-2.5,y:mid+23,size:6,font:fonts.bold,color:C.white});page.drawText(m.timestampSeconds.toFixed(1)+"s",{x:x-14,y:mid-34-(i%2)*9,size:6,font:fonts.bold,color});});
- page.drawCircle({x:M+17,y:mid-9,size:2.5,color:C.teal});page.drawText("Strength",{x:M+24,y:mid-12,size:6.5,font:fonts.bold,color:C.teal});
- page.drawCircle({x:M+98,y:mid-9,size:2.5,color:C.amber});page.drawText("Check",{x:M+105,y:mid-12,size:6.5,font:fonts.bold,color:C.amber});
- page.drawCircle({x:M+164,y:mid-9,size:2.5,color:C.coral});page.drawText("Risk",{x:M+171,y:mid-12,size:6.5,font:fonts.bold,color:C.coral});
+ moments.forEach((m,i)=>{const x=left+(m.timestampSeconds/max)*(right-left);const color=m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal;draw3DSolidBar(page,x-.9,mid-23,1.8,47,color);draw3DSolidSphere(page,x,mid+26,8,color);page.drawText(String(i+1),{x:x-2.5,y:mid+23,size:6,font:fonts.bold,color:C.white});page.drawText(m.timestampSeconds.toFixed(1)+"s",{x:x-14,y:mid-34-(i%2)*9,size:6,font:fonts.bold,color});});
+ draw3DSolidSphere(page,M+17,mid-9,2.5,C.teal);page.drawText("Strength",{x:M+24,y:mid-12,size:6.5,font:fonts.bold,color:C.teal});
+ draw3DSolidSphere(page,M+98,mid-9,2.5,C.amber);page.drawText("Check",{x:M+105,y:mid-12,size:6.5,font:fonts.bold,color:C.amber});
+ draw3DSolidSphere(page,M+164,mid-9,2.5,C.coral);page.drawText("Risk",{x:M+171,y:mid-12,size:6.5,font:fonts.bold,color:C.coral});
  let y=mid-48;
  moments.forEach((m,i)=>{const h=card(page,M,y,W-2*M,m.timestampSeconds.toFixed(2)+"s · "+m.title,[m.note],fonts,{accent:m.tag==="Risk"?C.coral:m.tag==="Check"?C.amber:C.teal});y-=h+8;});
  card(page,M,y,W-2*M,"How moments are chosen",["Moments are rendered from supplied timestamped detector output or device flags. This report does not create or infer additional flags."],fonts,{accent:C.gold});
@@ -1112,6 +1125,28 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
  const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf),form=pdf.getForm();
  const pages=buildReportSections(input,data,tier).map(spec=>({...spec,lines:sanitizePublicReportLines(spec.lines??[]),blocks:spec.blocks.map(block=>({...block,value:sanitizePublicReportLine(block.value),provenance:sanitizePublicReportLine(block.provenance??"")||(spec.kind==="narrative"?"":"From uploaded recording"),confidence:undefined}))})),total=pages.length;
+ // input.assessment is already the canonical evidence-sanitized assessment at this boundary.
+ // Reuse that exact object for source counts and chart rows; re-sanitizing a sanitized
+ // assessment can remove risk language a second time and create false count drift.
+ const safeAssessment=rec(input.assessment);
+ const platformPanel=chartsForSection(input,"Identity and source reconciliation",safeAssessment as AuditReportInput["assessment"])[0];
+ const evidencePanel=chartsForSection(input,"Evidence ledger and provenance",safeAssessment as AuditReportInput["assessment"])[0];
+ const strengthPanel=chartsForSection(input,"Strengths and creative leverage",safeAssessment as AuditReportInput["assessment"])[0];
+ const executionPanel=chartsForSection(input,"30 / 60 / 90-day execution plan",safeAssessment as AuditReportInput["assessment"])[0];
+ const catalogSources=arr(rec(input.evidence).catalogSources).filter(item=>item&&typeof item==="object");
+ const platformCount=platformPanel?.rows.reduce((sum,row)=>sum+(typeof row.value==="number"?row.value:0),0)??0;
+ const evidenceCounts=countEvidenceLayers(arr(safeAssessment.evidenceLabels).map(value=>rec(value) as {label:string}));
+ const evidenceCount=Object.values(evidenceCounts).reduce((sum,value)=>sum+value,0);
+ const strengths=buildStrengthRiskSummary(input,safeAssessment);
+ const consistencyErrors=reconcileChartCrossChecks({
+  platformLookupCount:catalogSources.length,platformChartCount:platformCount,
+  evidenceClaimCount:evidenceCount,evidenceChartCount:evidencePanel?.rows.reduce((sum,row)=>sum+(typeof row.value==="number"?row.value:0),0)??0,
+  strengthCount:strengths.strengthCount,strengthChartCount:typeof strengthPanel?.rows[0]?.value==="number"?strengthPanel.rows[0].value:undefined,
+  riskCount:strengths.riskCount,riskChartCount:typeof strengthPanel?.rows[1]?.value==="number"?strengthPanel.rows[1].value:undefined,
+  executionLabels:executionPanel?.rows.map(row=>row.label)
+ });
+ if(consistencyErrors.length)throw new Error("Chart data reconciliation failed: "+consistencyErrors.join(" "));
+
  if((tier==="sample"&&pages.length!==8)||(tier==="full"&&pages.length<13))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,tier==="full"&&index===0?"Full A&R report":spec.title,fonts);
@@ -1144,14 +1179,43 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     const top=H-540,height=220,left=M+28,right=W-M-18,bottom=top-height+32;
     page.drawRectangle({x:M,y:top-height,width:W-2*M,height,color:C.white,borderColor:C.line,borderWidth:.7});
     page.drawText("ENERGY SPECTRUM · SOURCE VALUES",{x:M+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
-    const values=data.energySeries.map(point=>point.value),min=Math.min(...values),max=Math.max(...values),span=max-min||1;
+    const series=reconcileChartSeriesAndLabels({rows:data.energySeries.map(point=>({label:point.timeSeconds.toFixed(1)+" s",value:point.value})),endpointAvailable:true,metricAvailable:true,derivedInProcess:true,provenance:"SIGNAL-DERIVED · TIMESTAMPED UPLOADED-MASTER SERIES"});
+    const values=series.rows.map(row=>typeof row.value==="number"?row.value:0),min=Math.min(...values),max=Math.max(...values),span=max-min||1;
     const t0=data.energySeries[0].timeSeconds,t1=data.energySeries[data.energySeries.length-1].timeSeconds,dt=t1-t0||1;
-    for(let i=1;i<data.energySeries.length;i++){
-     const a=data.energySeries[i-1],b=data.energySeries[i];
-     page.drawLine({start:{x:left+(a.timeSeconds-t0)/dt*(right-left),y:bottom+(a.value-min)/span*(top-48-bottom)},end:{x:left+(b.timeSeconds-t0)/dt*(right-left),y:bottom+(b.value-min)/span*(top-48-bottom)},color:C.teal,thickness:2});
+    for(let i=0;i<series.rows.length;i++){
+     const value=typeof series.rows[i]!.value==="number"?Number(series.rows[i]!.value):null;
+     if(value===null)continue;
+     const point=data.energySeries[i]!,barX=left+(point.timeSeconds-t0)/dt*(right-left);
+     draw3DSolidBar(page,barX-2,bottom,4,Math.max(2,(value-min)/span*(top-48-bottom)),C.teal);
     }
     page.drawText("Elapsed "+t0.toFixed(1)+"–"+t1.toFixed(1)+" s",{x:left,y:bottom-15,size:6,font:fonts.regular,color:C.muted});
-   }else card(page,M,H-540,W-2*M,"Energy spectrum · Not measured",["NOT MEASURED: no valid timestamped energy series was supplied."],fonts,{accent:C.amber});
+   }else{
+    const audio=rec(input.sonicDna);
+    const candidates=[
+     ["Integrated loudness",audio.integratedLoudnessLufs??audio.loudnessLufs,"LUFS",-60,0],
+     ["Loudness range",audio.loudnessRangeLu,"LU",0,20],
+     ["True peak",audio.truePeakDbfs,"dBFS",-60,0],
+     ["RMS level",audio.rmsDbfs??audio.rmsLevelDbfs,"dBFS",-60,0],
+    ] as Array<[string,unknown,string,number,number]>;
+    const rows=candidates.filter((item):item is [string,number,string,number,number]=>typeof item[1]==="number"&&Number.isFinite(item[1])).map(item=>({label:item[0]+" "+item[2],value:item[1]}));
+    const reconciled=reconcileChartSeriesAndLabels({rows,endpointAvailable:true,metricAvailable:rows.length>0,derivedInProcess:false,provenance:"MEASURED · DECODED UPLOADED-MASTER METRICS"});
+    if(reconciled.rows.length){
+     const boxTop=H-540,boxHeight=220,boxBottom=boxTop-boxHeight;
+     page.drawRectangle({x:M,y:boxBottom,width:W-2*M,height:boxHeight,color:C.white,borderColor:C.line,borderWidth:.7});
+     page.drawText("MASTER METRIC PROFILE · NO TIMESTAMPED SERIES",{x:M+12,y:boxTop-17,size:7,font:fonts.bold,color:C.gold});
+     page.drawText("MEASURED VALUES · COARSE OVERVIEW · NOT A TIME SERIES",{x:M+12,y:boxTop-30,size:5.5,font:fonts.italic,color:C.muted});
+     rows.forEach((row,index)=>{
+      const meta=candidates.find(item=>item[0]+" "+item[2]===row.label)!;
+      const value=Number(row.value),ratio=Math.max(0,Math.min(1,(value-meta[3])/(meta[4]-meta[3]))),yy=boxTop-62-index*34;
+      page.drawText(row.label,{x:M+14,y:yy+8,size:6.5,font:fonts.bold,color:C.ink});
+      page.drawRectangle({x:M+155,y:yy,width:280,height:7,color:C.line});
+      draw3DSolidBar(page,M+155,yy,280*ratio,7,index%2?C.violet:C.teal);
+      page.drawText(value.toFixed(1)+" "+meta[2],{x:M+445,y:yy-1,size:6.5,font:fonts.bold,color:C.ink});
+     });
+     page.drawText(reconciled.provenance,{x:M+14,y:boxBottom+12,size:5.5,font:fonts.bold,color:C.muted});
+     page.drawText("Dedicated timestamped energy endpoint absent — no temporal shape is inferred.",{x:M+14,y:boxBottom+3,size:5.2,font:fonts.regular,color:C.muted});
+    }else card(page,M,H-540,W-2*M,"Energy spectrum · Endpoint pending",["ENDPOINT PENDING — no timestamped series or decoded loudness/headroom metric is available. No chart values are fabricated."],fonts,{accent:C.amber});
+   }
   }else if(spec.kind==="full-depth"){
    const assessment=rec(input.assessment),release=rec(assessment.releaseStrategy);
    const scoreLines=data.headlineScore===null?["NOT MEASURED: no validated headline score was supplied.",...(data.scoreDrivers??[]).map(driver=>driver.label+": "+driver.score+"/100 · "+(driver.evidence||"Evidence note not supplied"))]:["Supplied assessment score: "+data.headlineScore+"/100",...(data.scoreDrivers??[]).map(driver=>driver.label+": "+driver.score+"/100 · "+(driver.evidence||"Evidence note not supplied"))];
@@ -1159,6 +1223,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    const rawTimeline=Array.isArray(release.executionTimeline)?release.executionTimeline:Array.isArray(assessment.executionTimeline)?assessment.executionTimeline:[];
    const timelineLines=rawTimeline.map(value=>{const row=rec(value);return [str(row.label??row.phase??row.title,""),str(row.timing??row.when??row.window,""),str(row.action??row.description??row.task,"")].filter(value=>value&&value!=="Not supplied").join(" · ");}).filter(Boolean);
    card(page,M,H-245,W-2*M,"Execution timeline · PLAN",timelineLines.length?["ILLUSTRATIVE PLAN — proposed guidance, not a verified campaign outcome.",...timelineLines]:["NOT SUPPLIED: no execution timeline was included in the persisted assessment."],fonts,{accent:C.amber});
+   drawExecutionMilestoneTrack(page,H-340,fonts,["Prepare assets, metadata and initial pitches","Review response signals and refine creative","Re-pitch qualified lanes and document next cycle"]);
    card(page,M,H-430,W-2*M,"Playback note",["Measurements describe the supplied recording only. A final mastering decision requires a dedicated listening review."],fonts,{accent:C.gold});
   }else if(spec.kind==="axes"){
    drawSonicAxes(page,data,fonts);
@@ -1179,13 +1244,13 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    });
    if(data.headlineScore!==null){
     const ringX=M+65,ringY=H-355;
-    page.drawCircle({x:ringX,y:ringY,size:43,color:C.paper,borderColor:C.line,borderWidth:9});
+    draw3DSolidSphere(page,ringX,ringY,43,C.paper);
     page.drawCircle({x:ringX,y:ringY,size:43,color:C.white,borderColor:C.teal,borderWidth:7});
     page.drawText(String(data.headlineScore),{x:ringX-18,y:ringY-7,size:19,font:fonts.bold,color:C.ink});
     page.drawText("SCORE",{x:ringX-13,y:ringY-21,size:6,font:fonts.bold,color:C.teal});
     page.drawText("SCORE DRIVERS",{x:M+145,y:H-315,size:7,font:fonts.bold,color:C.muted});
     const drivers=data.scoreDrivers??[];
-    drivers.forEach((d,i)=>{const yy=H-340-i*23;page.drawText(d.label,{x:M+145,y:yy,size:7,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+245,y:yy-2,width:205,height:7,color:C.line});page.drawRectangle({x:M+245,y:yy-2,width:205*d.score/100,height:7,color:d.score<60?C.amber:C.teal});page.drawText(String(d.score),{x:M+460,y:yy-2,size:7,font:fonts.bold,color:C.ink});});
+    drivers.forEach((d,i)=>{const yy=H-340-i*23;page.drawText(d.label,{x:M+145,y:yy,size:7,font:fonts.bold,color:C.ink});page.drawRectangle({x:M+245,y:yy-2,width:205,height:7,color:C.line});draw3DSolidBar(page,M+245,yy-2,205*d.score/100,7,d.score<60?C.amber:C.teal);page.drawText(String(d.score),{x:M+460,y:yy-2,size:7,font:fonts.bold,color:C.ink});});
     const weights=drivers.length&&drivers.every(d=>d.weight!==null)?drivers.map(d=>d.label+" "+Math.round((d.weight??0)*100)+"%").join(", "):"Weighting not supplied.";
     page.drawText("Weighting: "+weights,{x:M+145,y:H-340-drivers.length*23-6,size:6.5,font:fonts.italic,color:C.muted});
    }
@@ -1208,10 +1273,11 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    });
   }else if(spec.kind==="narrative"){
    let y=H-92;
-   const narrativeBlocks=spec.title==="Promotion and campaign strategy"?spec.blocks.map(b=>({...b,value:b.value.length>200?b.value.slice(0,197).replace(/\\s+\\S*$/,"").trimEnd()+"…":b.value})):spec.blocks;
+   const compactNarrative=spec.title==="Promotion and campaign strategy";
+   const narrativeBlocks=compactNarrative?spec.blocks.map(b=>({...b,value:b.value.length>200?b.value.slice(0,197).replace(/\\s+\\S*$/,"").trimEnd()+"…":b.value})):spec.blocks;
    for(const b of narrativeBlocks){
-    const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:C.gold,provenance:b.provenance});
-    y-=h+6;
+    const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:C.gold,provenance:b.provenance,compact:compactNarrative});
+    y-=h+(compactNarrative?3:6);
     if(b.arrangementBar?.length){const barHeight=drawProposedArrangementBar(page,y,b.arrangementBar,fonts);y-=barHeight+5;}
    }
    if(y<76)throw new Error("Report v2 narrative page content exceeds safe footer clearance: "+spec.title);
@@ -1237,7 +1303,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
   if(chartSection){
    // Anchor evidence panels to the actual end of the page's content card.
    // The fit guard below still fails closed when the complete chart cannot fit.
-   for(const panel of chartsForSection(input,chartSection)){
+   for(const panel of chartsForSection(input,chartSection,safeAssessment as AuditReportInput["assessment"])){
     const evidenceErrors=chartEvidenceIntegrityErrors(panel);
     if(evidenceErrors.length)throw new Error("Report chart evidence integrity failed for "+panel.title+": "+evidenceErrors.join("; "));
     const panelHeight=chartPanelHeight(panel.kind,panel.rows,W-2*M),panelTop=chartCursor;

@@ -224,6 +224,11 @@ function normalizeRmsEnvelopeWording(value:string):string {
 export function reportableAssessmentItems(items:string[]):string[] {
  return items.map(professionalEvidenceLanguage).map((item)=>item.trim()).filter(Boolean);
 }
+export function reconciledAssessmentItems(items:string[]):string[] {
+ return reportableAssessmentItems(items.map(item=>String(item??"").trim()).filter(item=>
+  item&&!/^(?:not supplied|not provided|not available)(?: in the assessment)?\.?$/i.test(item)
+ ));
+}
 function professionalEvidenceLanguage(value:string):string {
  value=normalizeRmsEnvelopeWording(value);
  return value
@@ -434,19 +439,20 @@ export function signalDashboardRowsForReport(s:Record<string,unknown>|null,hasAu
  ];
 }
 
-export function chartsForSection(i:AuditReportInput,title:string):ChartPanelInput[]{
- const a=sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),counts=countEvidenceLayers(a.evidenceLabels);
+export function chartsForSection(i:AuditReportInput,title:string,assessmentOverride?:AuditReportInput["assessment"]):ChartPanelInput[]{
+ const a=assessmentOverride??sanitizeAssessmentForEvidence(i.assessment,i.sonicDna,i.evidence),e=i.evidence,s=i.sonicDna,hasAudio=Boolean(s&&s.provenance==="uploaded_audio_master"),tempoReliable=isReliableTempo(s),keyReliable=isReliableKey(s),counts=countEvidenceLayers(a.evidenceLabels);
 
  if(title==="Evidence ledger and provenance")return [{title:"Evidence layers",kind:"layers",evidenceClass:"assessment-derived",rows:[{label:"Measured",value:counts.OBSERVED},{label:"Source matches",value:counts.RECOGNIZED},{label:"Cross-checked",value:counts.RECONCILED},{label:"Hypotheses",value:counts.INFERRED}],shows:"Counts of claims carrying each evidence label in this assessment.",cantShow:"Whether a claim is true, complete or commercially meaningful.",evidenceRefs:["assessment.evidenceLabels"]}];
  if(title==="Identity and source reconciliation"){
   const sources=Array.isArray(e.catalogSources)
    ?e.catalogSources.filter((item):item is Record<string,unknown>=>Boolean(item&&typeof item==="object"))
    :[];
-  const count=(status:string)=>sources.filter((item)=>item.status===status).length;
+  const count=(status:string)=>sources.filter((item)=>String(item.status??"").toLowerCase()===status).length;
+  const recognized=count("recognized"),partial=count("partial"),unavailable=Math.max(0,sources.length-recognized-partial);
   return [{title:"Music platform coverage",kind:"bars",evidenceClass:"provider-recognized",unavailable:sources.length===0,rows:[
-   {label:"Recognized",value:count("recognized")},
-   {label:"Partial",value:count("partial")},
-   {label:"Unavailable",value:count("unavailable")},
+   {label:"Recognized",value:recognized},
+   {label:"Partial",value:partial},
+   {label:"Unavailable",value:unavailable},
   ],shows:sources.length
    ?"Provider lookup outcomes across the submitted track links."
    :"No submitted DSP provider lookup outcomes were recorded; coverage is unavailable, not zero.",
@@ -455,7 +461,7 @@ export function chartsForSection(i:AuditReportInput,title:string):ChartPanelInpu
  if(title==="Sonic DNA and technical profile")return [
   {
    title:"Sonic DNA dashboard",kind:"sonic",evidenceClass:"measured",unavailable:!hasAudio,
-   rows:sonicDashboardRowsForReport(s,hasAudio),
+   rows:sonicDashboardRowsForReport(s,hasAudio).map(row=>row.label==="TEMPO BPM"&&tempoReliable?{...row,label:row.label+" · CONFIRMED"}:row.label==="KEY / MODE"&&keyReliable?{...row,label:row.label+" · CONFIRMED"}:row),
    shows:"Supported tempo and song-key findings, plus direct loudness and signal-level measurements from the uploaded master.",cantShow:"Audience demand, listener response, mastering quality or commercial performance.",evidenceRefs:["sonicDna"]
   },
   {
@@ -466,9 +472,9 @@ export function chartsForSection(i:AuditReportInput,title:string):ChartPanelInpu
  ];
  if(title==="Creative identity and A&R positioning")return [{title:"Lane constellation",kind:"constellation",evidenceClass:"inferred",inferred:true,rows:[{label:"Primary lane",value:a.aAndRPositioning.primaryLane},...a.aAndRPositioning.adjacentLanes.slice(0,4).map(v=>({label:"Adjacent lane",value:v}))],shows:"The stated primary and adjacent lane hypotheses.",cantShow:"Measured genre distance, verified market size or audience overlap.",evidenceRefs:["assessment.aAndRPositioning"]}];
  if(title==="Evidence-derived scorecard")return [{title:"Evidence scorecard",kind:"radar",evidenceClass:"assessment-derived",rows:[{label:"Tempo / lane fit",value:a.scorecard.tempoLaneFit.score},{label:"Rhythmic consistency",value:a.scorecard.rhythmicConsistency.score},{label:"Tonal consensus",value:a.scorecard.tonalConsensus?.score ?? null},{label:"RMS / envelope",value:a.scorecard.dynamicRangeLoudness.score},{label:"Metadata",value:a.scorecard.metadataCompleteness.score},{label:"Release readiness",value:a.scorecard.releaseReadiness.score}],shows:"Evidence-derived numeric scores for dimensions with adequate source support.",cantShow:"Artistic taste, hook quality, originality or unmeasured release outcomes.",evidenceRefs:["assessment.scorecard"]}];
- if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(reportableAssessmentItems(a.strengths).slice(0,10),reportableAssessmentItems(a.risks).slice(0,10)),shows:"Counts of documented strengths and risks in the assessment; counts are items, not weights.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes.",evidenceRefs:["assessment.strengths","assessment.risks"]}];
+ if(title==="Strengths and creative leverage")return [{title:"Strengths versus risks",kind:"tension",evidenceClass:"assessment-derived",rows:buildStrengthRiskChartRows(reconciledAssessmentItems(a.strengths),reconciledAssessmentItems(a.risks),10),shows:"Counts of all documented strengths and risks in the assessment; displayed detail is capped at ten items per group.",cantShow:"Relative severity, weighting, probability of success or commercial outcomes.",evidenceRefs:["assessment.strengths","assessment.risks"]}];
  if(title==="Promotion plan")return [{title:"Discovery pathway",kind:"chain",evidenceClass:"illustrative",rows:[{label:"Content",value:"Approved short-form excerpt"},{label:"Discovery",value:"Research the proposed DSP playlist archetypes in the campaign strategy; no provider shortlist is implied."},{label:"Listener action",value:"Review attributable saves, visits and completion signals when source reporting is available."}],shows:"An illustrative sequence of approved content, discovery research and measurable next-step signals.",cantShow:"Conversion, playlist placement or audience growth.",evidenceRefs:["reportTemplates.discoveryPathway.v1"]}];
- if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",evidenceClass:"illustrative",rows:[{label:"30 days",value:"Verify master, rights and identity"},{label:"60 days",value:"Prepare approved assets and delivery"},{label:"90 days",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes.",evidenceRefs:["reportTemplates.executionTimeline.v1"]}];
+ if(title==="30 / 60 / 90-day execution plan")return [{title:"Execution timeline",kind:"timeline",evidenceClass:"illustrative",rows:[{label:"Days 1–30",value:"Verify master, rights and identity"},{label:"Days 31–60",value:"Prepare approved assets and delivery"},{label:"Days 61–90",value:"Review evidence and decide next step"}],shows:"Concise milestones derived from the three staged execution-plan sections.",cantShow:"Calendar dates, delivery completion or guaranteed outcomes.",evidenceRefs:["reportTemplates.executionTimeline.v1"]}];
  return [];
 }
 

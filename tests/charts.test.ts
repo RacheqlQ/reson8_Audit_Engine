@@ -1,11 +1,60 @@
-import { PDFDocument, StandardFonts } from "@cantoo/pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFPage } from "@cantoo/pdf-lib";
 import { describe, expect, it } from "vitest";
-import { buildStrengthRiskChartRows, compactChartItemSummary, parseChartMetricValue, strengthRiskItemsForColumn, chartPanelStatus, chartPanelDisplayStatus, chartEvidenceIntegrityErrors, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, drawChartPanel, radarScoreDisplayValue, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
-import { checkLayout } from "../src/reports/generate-audit-report.js";
+import { buildStrengthRiskChartRows, compactChartItemSummary, parseChartMetricValue, strengthRiskItemsForColumn, chartPanelStatus, chartPanelDisplayStatus, chartEvidenceIntegrityErrors, chartPanelHeight, chartPanelLayoutErrors, chartPanelLayoutRects, chartShapeBoundsErrors, countEvidenceLayers, draw3DSolidBar, drawChartPanel, radarScoreDisplayValue, wrapChartSummary, type ChartKind, type ChartRow } from "../src/reports/charts.js";
+import { checkLayout, reconciledAssessmentItems } from "../src/reports/generate-audit-report.js";
 import { fullAudioFixture, partialAudioFixture, metadataOnlyFixture, longFormAudioFixture, sampleReportInput } from "../scripts/fixtures/sample-report-input.mjs";
 import { ambiguousAudioFixture } from "../scripts/fixtures/ambiguous-audio.mjs";
 
+describe("strength and risk chart count reconciliation", () => {
+  it("retains complete source counts while limiting visible detail to ten items per group", () => {
+    const strengths = reconciledAssessmentItems([
+      ...Array.from({ length: 12 }, (_, index) => "Strength item " + (index + 1)),
+      "Not supplied in the assessment."
+    ]);
+    const risks = reconciledAssessmentItems([
+      ...Array.from({ length: 13 }, (_, index) => "Risk item " + (index + 1)),
+      "Not available"
+    ]);
+    const rows = buildStrengthRiskChartRows(strengths, risks, 10);
+
+    expect(rows.slice(0, 2)).toEqual([
+      { label: "Strengths", value: 12 },
+      { label: "Risks", value: 13 }
+    ]);
+    expect(strengthRiskItemsForColumn(rows, "strength")).toHaveLength(10);
+    expect(strengthRiskItemsForColumn(rows, "risk")).toHaveLength(10);
+  });
+});
+
 describe("native PDF chart helpers", () => {
+  it("draws a solid bar with distinct isometric top, right, and front faces", () => {
+    const calls: Array<{ kind: string; path?: string; options: Record<string, unknown> }> = [];
+    const page = {
+      drawRectangle: (options: Record<string, unknown>) => calls.push({ kind: "rectangle", options }),
+      drawSvgPath: (path: string, options: Record<string, unknown>) => calls.push({ kind: "path", path, options }),
+      drawLine: (options: Record<string, unknown>) => calls.push({ kind: "line", options }),
+    } as unknown as PDFPage;
+    draw3DSolidBar(page, 20, 30, 100, 12, rgb(.08, .72, .62));
+    const faces = calls.filter((call) => call.kind === "path");
+    expect(faces).toHaveLength(2);
+    expect(faces[0].options).toMatchObject({ x: 120, y: 30 });
+    expect(faces[1].options).toMatchObject({ x: 20, y: 42 });
+    expect(faces[0].path).toMatch(/^M 0\.00 0\.00 L /);
+    expect(faces[1].path).toMatch(/^M 0\.00 0\.00 L /);
+    expect(faces[0].options.color).not.toEqual(faces[1].options.color);
+    const front = calls.find((call) => call.kind === "rectangle" && call.options.x === 20 && call.options.y === 30);
+    expect(front).toBeDefined();
+    expect(faces[0].options.color).not.toEqual(front?.options.color);
+    expect(faces[1].options.color).not.toEqual(front?.options.color);
+  });
+  it("gives Strengths/Risks count bars a visible solid extrusion and reserves the expanded footprint", () => {
+    const rows = buildStrengthRiskChartRows(["Documented strength"], ["Documented risk"]);
+    const rects = chartPanelLayoutRects("tension", rows, 48, 700, chartPanelHeight("tension", rows));
+    const bars = rects.filter((rect) => rect.id.startsWith("shape-tension-count-bar-and-shadow-"));
+    expect(bars).toHaveLength(2);
+    expect(bars.every((rect) => rect.height === 26)).toBe(true);
+    expect(chartPanelLayoutErrors("tension", rows, 48, 700, chartPanelHeight("tension", rows))).toEqual([]);
+  });
   it("labels unavailable evidence-scorecard dimensions as not scored, not N/D", () => {
     expect(radarScoreDisplayValue(null)).toBe("NOT SCORED");
     expect(radarScoreDisplayValue(Number.NaN)).toBe("NOT SCORED");

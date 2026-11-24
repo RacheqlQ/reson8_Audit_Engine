@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/multi-dsp-enrichment, fix/production-resilience-acceptance-20261118]
+    branches: [main, feat/multi-dsp-enrichment, feat/reconciled-3d-report-charts, fix/production-resilience-acceptance-20261118]
   pull_request:
     branches: [main, fix/report-fixture-provenance-date, fix/production-resilience-acceptance-20261118]
   workflow_dispatch:
