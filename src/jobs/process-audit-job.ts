@@ -129,12 +129,25 @@ function safeStackFingerprint(error: unknown): string {
   return "stk-" + (hash >>> 0).toString(16).padStart(8, "0");
 }
 
+function safeAuditErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (!raw) return "No exception message available";
+  return raw
+    .replace(/[\\r\\n\\t]+/g, " ")
+    .replace(/https?:\\/\\/[^\\s)]+/gi, "[url]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email]")
+    .replace(/(?:[A-Z]:\\\\|\\/)(?:[^\\s"'<>]+[\\\\/])*[^\\s"'<>]*/g, "[path]")
+    .replace(/(?:token|secret|authorization|api[_-]?key)(?:\\s*[:=]\\s*|\\s+)[^\\s,;]+/gi, "$1=[redacted]")
+    .replace(/\\b[0-9a-f]{8}-[0-9a-f-]{27,}\\b/gi, "[id]")
+    .slice(0, 240);
+}
+
 export function buildAuditStageFailureDiagnostic(stage: string, error: unknown, durationMs?: number): AuditStageFailureDiagnostic {
   const failureCode = classifyAuditFailure(error);
   const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(error.name)
     ? error.name
     : "UnknownError";
-  return { stage, failureCode, errorName, timedOut: failureCode === "timeout", errorCode: safeAuditErrorCode(error), stackFingerprint: safeStackFingerprint(error), ...(Number.isFinite(durationMs) ? { durationMs: Math.max(0, Math.round(durationMs!)) } : {}) };
+  return { stage, failureCode, errorName, errorMessage: safeAuditErrorMessage(error), timedOut: failureCode === "timeout", errorCode: safeAuditErrorCode(error), stackFingerprint: safeStackFingerprint(error), ...(Number.isFinite(durationMs) ? { durationMs: Math.max(0, Math.round(durationMs!)) } : {}) };
 }
 
 export function classifyAuditFailure(error: unknown): AuditFailureCode {
