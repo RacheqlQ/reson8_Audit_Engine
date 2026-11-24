@@ -135,7 +135,8 @@ export function buildProposedArrangement(input:AuditReportInput,chartSeries?:Tim
  let energyMin=Infinity,energyMax=-Infinity;
  for(const point of energySeries){if(point.value<energyMin)energyMin=point.value;if(point.value>energyMax)energyMax=point.value;}
  if(!Number.isFinite(energyMin)||!Number.isFinite(energyMax)){energyMin=0;energyMax=0;}
- const vocal=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis),intervals=arr(vocal.vocalActivityIntervals).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds);
+ const hasMasterAudio=hasSubmittedMasterAudio(evidence,audio);
+ const vocal=rec(input.vocalAndSectionPageData??audio.vocalArrangementAnalysis),intervals=hasMasterAudio?arr(vocal.vocalActivityIntervals).slice(0,64).map(value=>rec(value)).filter(item=>finite(item.startSeconds)&&finite(item.endSeconds)&&item.endSeconds>item.startSeconds):[];
  const tonal=rec(input.tonalResolution??audio.tonalResolution??rec(audio.harmonicFeatures).tonalResolution);
  const mode=tonal.mode==="major"||tonal.mode==="minor"?String(tonal.mode):"";
  const emotionalFrame=mode==="minor"?"tension-to-release":mode==="major"?"bright lift-to-release":"contrast-to-payoff";
@@ -155,7 +156,7 @@ export function buildProposedArrangement(input:AuditReportInput,chartSeries?:Tim
  const tempo=isReliableTempo(audio)?String(audio.bpm)+" BPM · CONFIRMED":"tempo unconfirmed";
  const keyAudio={...audio,tonalResolution:input.tonalResolution??audio.tonalResolution??rec(audio.harmonicFeatures).tonalResolution};
  const key=isReliableKey(keyAudio)?String(audio.key)+" "+String(audio.mode)+" · CONFIRMED":"tonal centre unconfirmed";
- const presence=finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:null;
+ const presence=hasMasterAudio&&finite(vocal.vocalPresencePct)?vocal.vocalPresencePct:null;
  const mood=arr(audio.moodTags).map(value=>str(value,"")).filter(Boolean).slice(0,2);
  const cue=intervals.length?"Use "+intervals.length+" signal-derived vocal activity interval(s) to place human-reviewed lyrical entries and hook focus.":presence===null?"Place lead-vocal entry and hook through human listening.":"Use "+presence.toFixed(1)+"% signal-derived vocal-band activity as a cue, then human-confirm lead-vocal and hook placement.";
  const energyCue=energySeries.length?"Section intensity is blended with the supplied relative energy envelope.":"The intensity arc is a proposed creative contour because no timestamped energy series was supplied.";
