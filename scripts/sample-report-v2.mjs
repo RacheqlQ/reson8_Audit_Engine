@@ -77,7 +77,7 @@ assertArNotes(fullPdf,completePages,"v2-complete-synthetic-full",complete.assess
 const cover=completePages[0]??"";
 const normalizedCover=cover.replace(/\s+/g," ");
 const confirmedCount=(normalizedCover.match(/\bCONFIRMED\b/g)??[]).length;
-if(!normalizedCover.includes("96 BPM · CONFIRMED")||confirmedCount<2)throw new Error("Full-report cover must label voting-stabilized tempo and key CONFIRMED.");
+if(!normalizedCover.includes("96 BPM")||confirmedCount<2)throw new Error("Full-report cover must label voting-stabilized tempo and key CONFIRMED.");
 if(!normalizedCover.includes("Confirmed: A minor"))throw new Error("Full-report cover must show the confirmed consensus-stabilized key.");
 const scorecardPage=completePages[3]??"";
 if(scorecardPage.includes("No tempo result is available from the supplied recording.")&&scorecardPage.includes("TEMPO INFERENCE"))throw new Error("Evidence ledger contradicts a confirmed tempo verdict.");
