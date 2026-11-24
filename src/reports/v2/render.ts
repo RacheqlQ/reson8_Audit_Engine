@@ -90,7 +90,7 @@ export function buildCoverKeyLabel(input:AuditReportInput,data:ReportV2Data):str
 }
 export function buildCoverTempoLabel(data:ReportV2Data,input:AuditReportInput):string {
  const audio=rec(input.sonicDna),rhythm=rec(audio.rhythmFeatures),verdict=rec(rhythm.tempoVerdict);
- if(data.tempo.value!==null)return data.tempo.value+" BPM";
+ if(data.tempo.value!==null)return data.tempo.value+" BPM · CONFIRMED";
  const candidate=finite(verdict.primary_candidate_bpm)?verdict.primary_candidate_bpm:null;
  if(candidate!==null&&verdict.confirmation_status!=="UNDETERMINED")return candidate+" BPM · CANDIDATE";
  return "Not determined";
