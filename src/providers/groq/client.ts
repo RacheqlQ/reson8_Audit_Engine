@@ -103,9 +103,11 @@ export interface ProviderAttemptDiagnostic {
   failureKind?: "empty_content" | "invalid_json" | "schema_violation" | "threshold_violation" | "prompt_budget_exceeded";
   validationIssues?: Array<{ code: string; path: string[] }>;
   validationField?: string;
-  validationRule?: "minimum_word_count";
+  validationRule?: "minimum_word_count" | "minimum_item_count";
   minimumWords?: number;
   actualWords?: number;
+  minimumItems?: number;
+  actualItems?: number;
 }
 export interface GroqAssessmentInput {
   evidence: Record<string, unknown>;
@@ -163,11 +165,13 @@ const EVIDENCE_SCORE_SYSTEM_PROMPT = [
 ].join(" ");
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
-function safeThresholdDiagnostic(group: string, value: unknown, message: string): Pick<ProviderAttemptDiagnostic, "validationField" | "validationRule" | "minimumWords" | "actualWords"> {
+function safeThresholdDiagnostic(group: string, value: unknown, message: string): Pick<ProviderAttemptDiagnostic, "validationField" | "validationRule" | "minimumWords" | "actualWords" | "minimumItems" | "actualItems"> {
   const d = value as Record<string, any>;
-  const match = message.match(/^(.+?) must contain at least ([0-9]+) words/);
+  const wordMatch = message.match(/^(.+?) must contain at least ([0-9]+) words/);
+  const itemMatch = message.match(/^(.+?) must contain at least ([0-9]+) items/);
+  const match = wordMatch ?? itemMatch;
   const label = match?.[1] ?? "unknown";
-  const minimumWords = Number(match?.[2] ?? 0);
+  const minimum = Number(match?.[2] ?? 0);
   const fieldMap: Record<string, string> = {
     "positioning rationale": "aAndRPositioning.rationale",
     "commercial rationale": "commercialRead.rationale",
@@ -181,8 +185,9 @@ function safeThresholdDiagnostic(group: string, value: unknown, message: string)
     days30: "executionPlan.days30", days60: "executionPlan.days60", days90: "executionPlan.days90",
   };
   const validationField = fieldMap[label] ?? label;
-  const actual = validationField.replace(/\[([0-9]+)\]/g, ".$1").split(".").filter(Boolean).reduce((current: any, key) => current?.[/^[0-9]+$/.test(key) ? Number(key) : key], d);
-  return { validationField, validationRule: "minimum_word_count", minimumWords, actualWords: typeof actual === "string" ? words(actual) : 0 };
+  const actual = validationField.replace(/\\[([0-9]+)\\]/g, ".$1").split(".").filter(Boolean).reduce((current: any, key) => current?.[/^[0-9]+$/.test(key) ? Number(key) : key], d);
+  if (itemMatch) return { validationField, validationRule: "minimum_item_count", minimumItems: minimum, actualItems: Array.isArray(actual) ? actual.length : 0 };
+  return { validationField, validationRule: "minimum_word_count", minimumWords: minimum, actualWords: typeof actual === "string" ? words(actual) : 0 };
 }
 function thresholdError(name: string, value: unknown): string | null {
   const d = value as Record<string, any>;
