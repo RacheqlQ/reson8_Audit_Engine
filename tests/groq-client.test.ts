@@ -19,6 +19,33 @@ const p=(group:string):Record<string,unknown>=>{
 };
 function fetchMock(invalid?:string){const counts=new Map<string,number>();const mock=vi.fn(async (_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const name=body.response_format.json_schema.name.replace(/^ar_/,"");const n=(counts.get(name)??0)+1;counts.set(name,n);const value=name===invalid&&n===1?{}:p(name);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});return {mock,counts};}
 describe("GroqClient section groups",()=>{
+ it("spells out the narrative minimums and corrects an under-length strengths array",async()=>{
+  let narrativeCalls=0;
+  const narrativePayloads:Array<Record<string,any>>=[];
+  let narrativeSystem="";
+  const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+   const body=JSON.parse(String(init?.body));
+   const payload=JSON.parse(body.messages[1].content);
+   if(payload.sectionGroup==="narrative"){
+    narrativeCalls++;
+    narrativeSystem=body.messages[0].content;
+    narrativePayloads.push(payload);
+    if(narrativeCalls===1){
+     const invalid=p("narrative");
+     invalid.strengths=(invalid.strengths as string[]).slice(0,2);
+     return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(invalid)}}]}),{status:200});
+    }
+   }
+   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
+  });
+  const client=new GeminiClient("test-gemini-key","test-model",mock as typeof fetch,async()=>{});
+  const result=await client.assess({evidence:{artist:"Fixture Artist"},sonicDna:null});
+  expect(narrativeSystem).toContain("at least 3 distinct evidence-grounded strengths");
+  expect(narrativeSystem).toContain("at least 2 distinct evidence-grounded risks");
+  expect(narrativeCalls).toBe(2);
+  expect(narrativePayloads[1].correction).toContain("strengths");
+  expect(result.strengths).toHaveLength(3);
+ });
  it("keeps all provider deadlines within the ten-minute assessment stage",()=>{
   expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBe(4*60_000);
   expect(GEMINI_ASSESSMENT_TIMEOUT_MS).toBe(3*60_000);
