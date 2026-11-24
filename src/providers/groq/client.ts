@@ -126,7 +126,7 @@ const SYSTEM_PROMPT = [
   "Absent verified commercial-performance evidence, marketability is undetermined; never infer demand from genre, tempo, catalog popularity or metadata. Release date is DETERMINED only from supplied verified date evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict remains PROPOSED unless deterministic evidence rules establish otherwise.",
   "Null score means insufficient evidence. RMS spread/dBFS are descriptive, not mastering readiness; keep delivery readiness unscored without destination-specific integrated loudness, range and true-peak targets. Near -11 LUFS alone is not a fault; never recommend loudness changes without measured fault and target. Centroid <=2,000 Hz is not bright. Mono is a compatibility risk to check, not proof of incompatibility.",
   "Do not score taste: hook, originality, production quality, replay value and lane clarity belong only in the unscored human listening checklist, with a distinct first-listen question for each. scorecard.rhythmicConsistency.rationale must contain at least 25 words even when null and explain missing timing evidence in a complete sentence.",
-  "Return complete JSON, obey schema and local word-count requirements, and do not pad with repeated boilerplate."
+  "Return JSON only as one complete object; obey schema and local word-count requirements without repeated boilerplate."
 ].join(" ");
 
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
@@ -297,7 +297,7 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
       delete projected.catalogSources;
       delete projected.sourceCombination;
     }
-    const compacted = compactEvidenceScoreValue(projected) as Record<string, unknown>;
+    const compacted = compactEvidenceScoreValue(projected, 0, group === "evidence-score" ? 72 : 112, group === "evidence-score" ? 3 : 4) as Record<string, unknown>;
     if (compacted.fieldProvenance && typeof compacted.fieldProvenance === "object") {
       compacted.fieldProvenance = Object.fromEntries(Object.entries(compacted.fieldProvenance as Record<string, unknown>).slice(0, 12));
     }
@@ -332,17 +332,17 @@ function compactPromptValue(value: unknown, depth = 0): unknown {
   return Object.fromEntries(selectedEntries.map(([key, item]) => [key, compactPromptValue(item, depth + 1)]));
 }
 
-function compactEvidenceScoreValue(value: unknown, depth = 0): unknown {
+function compactEvidenceScoreValue(value: unknown, depth = 0, stringLimit = 112, arrayLimit = 4): unknown {
   if (value === null || typeof value !== "object") {
-    return typeof value === "string" && value.length > 112 ? value.slice(0, 112) + "…" : value;
+    return typeof value === "string" && value.length > stringLimit ? value.slice(0, stringLimit) + "…" : value;
   }
   const sample = (items: unknown[], limit: number): unknown[] => items.length <= limit ? items
     : Array.from({ length: limit }, (_, index) => items[Math.round(index * (items.length - 1) / (limit - 1))]);
-  if (Array.isArray(value)) return sample(value, 4).map(item => compactEvidenceScoreValue(item, depth + 1));
+  if (Array.isArray(value)) return sample(value, arrayLimit).map(item => compactEvidenceScoreValue(item, depth + 1, stringLimit, arrayLimit));
   const entries = Object.entries(value as Record<string, unknown>);
   if (depth >= 4) return Object.fromEntries(entries.filter(([, item]) => item === null || typeof item !== "object")
-    .slice(0, 12).map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1)]));
-  return Object.fromEntries(entries.slice(0, depth === 0 ? 32 : 16).map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1)]));
+    .slice(0, 12).map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1, stringLimit, arrayLimit)]));
+  return Object.fromEntries(entries.slice(0, depth === 0 ? 32 : 16).map(([key, item]) => [key, compactEvidenceScoreValue(item, depth + 1, stringLimit, arrayLimit)]));
 }
 
 function compactStructuredSchema(schema: unknown): unknown {
@@ -398,7 +398,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     compact.harmonicFeatures = summary;
   }
 
-  const compacted = (group === "evidence-score" || group === "narrative" ? compactEvidenceScoreValue(compact) : compactPromptValue(compact)) as Record<string, unknown>;
+  const compacted = (group === "evidence-score" ? compactEvidenceScoreValue(compact, 0, 72, 3) : group === "narrative" ? compactEvidenceScoreValue(compact) : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
@@ -429,7 +429,7 @@ function compactCatalogMetadataForGroup(
   // Retain a bounded set of named provider records; long descriptions/raw
   // responses are already represented by normalized evidence and provenance.
   return Object.fromEntries(Object.entries(value).slice(0, 4)
-    .map(([provider, record]) => [provider, (group === "narrative" || group === "evidence-score") ? compactEvidenceScoreValue(record) : compactPromptValue(record)])) as Record<string, unknown>;
+    .map(([provider, record]) => [provider, group === "evidence-score" ? compactEvidenceScoreValue(record, 0, 72, 3) : group === "narrative" ? compactEvidenceScoreValue(record) : compactPromptValue(record)])) as Record<string, unknown>;
 }
 
 async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
@@ -789,7 +789,7 @@ export class GroqClient implements GroqAssessmentClient {
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"positioning","Write evidence-bounded A&R positioning and commercial read.",PositioningSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"release","Write a grounded release recommendation and priorities.",ReleaseSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"evidence-score","Score only evidence-derivable dimensions. Always include the evidenceLabels array with at least one item; every item must include label, claim and source. Use only source-grounded labels. If no track-specific source supports a label, include a clearly separated INDUSTRY PRACTICE item with source industry_practice where appropriate; never fabricate track-specific evidence. Return the unscored human listening checklist. Every evidenceGaps item and every limitations item must contain at least 8 words. Every scorecard rationale must contain at least 25 words. In particular, scorecard.rhythmicConsistency.rationale needs at least 25 words even for a null score; state which uploaded-master timing evidence is missing in a complete sentence. Every humanListeningChecklist item must contain at least 5 words. Do not use fragments or short labels; write complete, specific sentences. If the correction field identifies a word-count failure, repair that exact field while preserving the evidence-bounded meaning.",EvidenceScoreSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"evidence-score","Score evidence-derivable dimensions only. Include >=1 evidenceLabels item with label, claim and actual source; use INDUSTRY PRACTICE/source industry_practice only as separate general guidance. Return the unscored listening checklist. evidenceGaps and limitations: >=8 words each; every scorecard rationale: >=25 words, including null rhythmicConsistency with the missing master-timing evidence stated. Each checklist item: >=5 words. Write complete, specific sentences. Repair only the field named by correction; preserve evidence meaning.",EvidenceScoreSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"production","Give actionable production and arrangement guidance. Separate lane-general craft as INDUSTRY PRACTICE.",ProductionSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"comparables","Provide inferred lane descriptors and reference-search criteria to verify; do not invent named artists or tracks.",ComparableSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"promotion","Build a staged promotion plan, general pitching angles, content concepts and playlist categories only. Each playlist category must be a descriptive phrase of at least three words. Include INDUSTRY PRACTICE separately.",PromotionSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
