@@ -25,11 +25,11 @@ export function isReliableTempo(value: TempoEvidence): boolean {
   const verdictConfirmed = tempoVerdict?.confirmation_status === "CONFIRMED";
   const verdictBpm = verdictConfirmed && typeof tempoVerdict?.primary_candidate_bpm === "number" && Number.isFinite(tempoVerdict.primary_candidate_bpm)
     ? tempoVerdict.primary_candidate_bpm : null;
-  const bpm = typeof value.bpm === "number" && Number.isFinite(value.bpm) ? value.bpm : verdictBpm;
+  const bpm = verdictBpm ?? (typeof value.bpm === "number" && Number.isFinite(value.bpm) ? value.bpm : null);
   const verdictConfidence = verdictConfirmed && typeof tempoVerdict?.prominence_score === "number" && Number.isFinite(tempoVerdict.prominence_score)
     ? tempoVerdict.prominence_score : null;
-  const confidence = typeof value.tempoConfidence === "number" && Number.isFinite(value.tempoConfidence)
-    ? value.tempoConfidence : verdictConfidence;
+  const confidence = verdictConfidence ?? (typeof value.tempoConfidence === "number" && Number.isFinite(value.tempoConfidence)
+    ? value.tempoConfidence : null);
   if (bpm === null || bpm < 40 || bpm > 220) return false;
   if (confidence === null || confidence < MIN_RELIABLE_TEMPO_CONFIDENCE || confidence > 1) return false;
   if (typeof value.abstentionReason === "string" && value.abstentionReason.trim()) return false;

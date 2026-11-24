@@ -254,8 +254,8 @@ export function adaptReportV2(input: AuditReportInput): ReportV2Data {
   const tempoVerdict = record(rhythm?.tempoVerdict);
   const verdictTempo = tempoVerdict?.confirmation_status === "CONFIRMED" && finite(tempoVerdict.primary_candidate_bpm)
     ? tempoVerdict.primary_candidate_bpm : null;
-  const tempoBpm = finite(audio?.bpm) ? audio.bpm : verdictTempo;
-  const tempoConfidence = confidence(audio?.tempoConfidence ?? (tempoVerdict?.confirmation_status === "CONFIRMED" ? tempoVerdict.prominence_score : null));
+  const tempoBpm = verdictTempo ?? (finite(audio?.bpm) ? audio.bpm : null);
+  const tempoConfidence = confidence(tempoVerdict?.confirmation_status === "CONFIRMED" ? tempoVerdict.prominence_score : audio?.tempoConfidence);
   const tempoEvidence = audio ? { ...audio, bpm: tempoBpm, tempoConfidence } : null;
   const tempoReliable = isReliableTempo(tempoEvidence as Parameters<typeof isReliableTempo>[0]);
   const keyConfidence = confidence(audio?.keyConfidence);

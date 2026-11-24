@@ -223,29 +223,36 @@ export function buildTempoDiagnosticLines(input: AuditReportInput): string[] {
  const audio=rec(input.sonicDna),rhythm=rec(audio.rhythmFeatures);
  const lines:string[]=[];
  const verdict=rec(rhythm.tempoVerdict);
- const zeroProminence=(finite(audio.tempoConfidence)&&audio.tempoConfidence<=0)||(finite(verdict.prominence_score)&&verdict.prominence_score<=0);
- const candidate=zeroProminence?null:finite(verdict.primary_candidate_bpm)?verdict.primary_candidate_bpm:finite(rhythm.tempoCandidateBpm)?rhythm.tempoCandidateBpm:null;
+ const verdictConfirmed=verdict.confirmation_status==="CONFIRMED";
+ const zeroProminence=!verdictConfirmed&&((finite(audio.tempoConfidence)&&audio.tempoConfidence<=0)||(finite(verdict.prominence_score)&&verdict.prominence_score<=0));
+ const candidate=zeroProminence?null:
+  verdictConfirmed&&finite(verdict.primary_candidate_bpm)?verdict.primary_candidate_bpm:
+  finite(rhythm.tempoCandidateBpm)?rhythm.tempoCandidateBpm:
+  finite(audio.tempoCandidateBpm)?audio.tempoCandidateBpm:
+  finite(audio.bpm)?audio.bpm:null;
+ const confirmed=candidate!==null&&(verdictConfirmed||isReliableTempo(audio));
  const alternatives=zeroProminence?[]:arr(verdict.octave_alternatives).filter(finite).filter(value=>value>=40&&value<=220);
- if(verdict.confirmation_status==="CONFIRMED"&&candidate!==null)lines.push("Confirmed tempo: "+candidate+" BPM.");
+ if(confirmed)lines.push("Confirmed tempo: "+candidate+" BPM.");
  else if(candidate!==null)lines.push("Tempo candidate: "+candidate+" BPM; not confirmed.");
- const candidates=zeroProminence?[]:arr(rhythm.candidateScores).map(value=>rec(value))
+ const candidates=zeroProminence?[]:arr(rhythm.candidateScores??audio.candidateScores).map(value=>rec(value))
   .filter(item=>finite(item.bpm)&&item.bpm>=40&&item.bpm<=220)
   .slice(0,4).map(item=>String(item.bpm)+" BPM");
  if(alternatives.length)lines.push("Supported half/double-time alternatives: "+alternatives.join(" / ")+" BPM.");
  if(!candidate&&candidates.length)lines.push("Possible tempo readings: "+candidates.join("; ")+". Treat these as provisional until confirmed by listening.");
- else if(!zeroProminence&&!candidate&&Array.isArray(rhythm.candidateBpms)) {
-  const fallback=rhythm.candidateBpms.filter(value=>finite(value)&&value>=40&&value<=220).slice(0,4);
+ else if(!zeroProminence&&!candidate&&Array.isArray(rhythm.candidateBpms??audio.candidateBpms)) {
+  const fallback=arr(rhythm.candidateBpms??audio.candidateBpms).filter(value=>finite(value)&&value>=40&&value<=220).slice(0,4);
   if(fallback.length)lines.push("Possible tempo readings: "+fallback.join("; ")+" BPM. Treat these as provisional until confirmed by listening.");
  }
- if(!zeroProminence&&alternatives.length===0&&finite(rhythm.alternateTempo)&&rhythm.alternateTempo>=40&&rhythm.alternateTempo<=220)lines.push("Alternative pulse reading: "+Number(rhythm.alternateTempo).toFixed(1)+" BPM.");
- if(typeof verdict.explanation==="string"&&verdict.explanation.trim()&&verdict.confirmation_status!=="CONFIRMED")lines.push("Tempo confirmation reason: "+verdict.explanation);
- const consensus=rec(rhythm.windowConsensus);
+ if(!zeroProminence&&alternatives.length===0&&finite(rhythm.alternateTempo??audio.alternateTempo)&&(rhythm.alternateTempo??audio.alternateTempo)>=40&&(rhythm.alternateTempo??audio.alternateTempo)<=220)
+  lines.push("Alternative pulse reading: "+Number(rhythm.alternateTempo??audio.alternateTempo).toFixed(1)+" BPM.");
+ if(!confirmed&&typeof verdict.explanation==="string"&&verdict.explanation.trim())lines.push("Tempo confirmation reason: "+verdict.explanation);
+ const consensus=rec(rhythm.windowConsensus??audio.windowConsensus);
  if(finite(consensus.observedAgreement))lines.push(consensus.observedAgreement>=0.7
   ?"Tempo readings are broadly consistent across the analyzed sections."
   :"Tempo readings vary across the analyzed sections; no single tempo is confirmed.");
- if(arr(rhythm.beatTimesSeconds).length)lines.push("A tentative beat guide is available; confirm the beat placement by listening.");
- const abstention=str(rhythm.abstentionReason,"");
- if(abstention&&abstention!=="Not supplied")lines.push("Tempo not confirmed: "+abstention);
+ if(arr(rhythm.beatTimesSeconds??audio.beatTimesSeconds).length)lines.push("A tentative beat guide is available; confirm the beat placement by listening.");
+ const abstention=str(rhythm.abstentionReason??audio.abstentionReason,"");
+ if(!confirmed&&abstention&&abstention!=="Not supplied")lines.push("Tempo not confirmed: "+abstention);
  return lines.length?lines:["No tempo result is available from the supplied recording."];
 }
 export function buildKeyDiagnosticLines(input: AuditReportInput): string[] {
