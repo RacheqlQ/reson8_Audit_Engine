@@ -80,6 +80,45 @@ describe("GroqClient section groups",()=>{
   }
  });
 
+ it("projects Sonic DNA and catalog metadata to the assessment section that can use them", async () => {
+  const sonicDna = {
+   provenance:"uploaded_audio_master", evidenceClass:"OBSERVED", bpm:95, tempoConfidence:0.82,
+   key:"A", mode:"minor", moodTags:["Moderate Energy"], genreClassification:{primaryGenre:"R&B"},
+   rhythmFeatures:{status:"measured",bpm:95,onsetEnvelope:Array(100).fill(0.1)},
+   harmonicFeatures:{status:"measured",key:"A",segmentChroma:Array(100).fill(0.1)},
+   acousticFeatureProfile:{predictions:{energy:{status:"provisional",score:62}}},
+   vocalFeatures:{status:"analyzed",activity:0.7},
+   dynamicRangeDb:8.2, rmsLevelDbfs:-12, sampleRate:44100, channels:2,
+   privateRawWaveform:Array(1000).fill(0.2),
+  };
+  const catalogMetadata={apple_music:{title:"Track",isrc:"USAAA2600001"},spotify:{artist:"Artist"}};
+  const {mock}=fetchMock();
+  const client=new GroqClient("test-key","test-model",mock as typeof fetch);
+  await client.assess({evidence:{artist:"Artist",title:"Track"},sonicDna,catalogMetadata});
+  const payloads=mock.mock.calls.map(call=>{
+   const body=JSON.parse(String(call[1]?.body));
+   return JSON.parse(body.messages[1].content);
+  });
+  const byGroup=new Map(payloads.map(payload=>[payload.sectionGroup,payload]));
+  const evidence=byGroup.get("evidence-score") as Record<string,any>;
+  expect(evidence.sonicDna).toMatchObject({
+   rhythmFeatures:{status:"measured",bpm:95},
+   harmonicFeatures:{status:"measured",key:"A"},
+   acousticFeatureProfile:{predictions:{energy:{status:"provisional",score:62}}},
+   vocalFeatures:{status:"analyzed",activity:0.7},
+   dynamicRangeDb:8.2, sampleRate:44100,
+  });
+  expect(evidence.sonicDna).not.toHaveProperty("privateRawWaveform");
+  expect(evidence.catalogMetadata).toEqual(catalogMetadata);
+  const timeline=byGroup.get("timeline") as Record<string,any>;
+  expect(timeline.sonicDna).toMatchObject({provenance:"uploaded_audio_master",genreClassification:{primaryGenre:"R&B"}});
+  expect(timeline.sonicDna).not.toHaveProperty("rhythmFeatures");
+  expect(timeline.catalogMetadata).toBeNull();
+  const production=byGroup.get("production") as Record<string,any>;
+  expect(production.sonicDna).toHaveProperty("rhythmFeatures");
+  expect(production.sonicDna).toHaveProperty("vocalFeatures");
+  expect(production.catalogMetadata).toBeNull();
+ });
  it("records sanitized provider attempt diagnostics without prompt or credential material",async()=>{
   const {mock}=fetchMock();
   const attempts:Array<Record<string,unknown>>=[];
