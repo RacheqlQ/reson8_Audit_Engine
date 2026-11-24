@@ -1127,7 +1127,17 @@ function drawArNotesPage(page:PDFPage,input:AuditReportInput,data:ReportV2Data,f
  }
 }
 
-export async function generateAuditReportV2(source:AuditReportInput,tier:AuditReportTier="sample"):Promise<Uint8Array>{
+function assertRenderActive(signal?:AbortSignal):void{
+ if(signal?.aborted)throw signal.reason instanceof Error?signal.reason:new Error("PDF_RENDER_ABORTED");
+}
+async function yieldRenderTurn(signal?:AbortSignal):Promise<void>{
+ assertRenderActive(signal);
+ await new Promise<void>(resolve=>setImmediate(resolve));
+ assertRenderActive(signal);
+}
+
+export async function generateAuditReportV2(source:AuditReportInput,tier:AuditReportTier="sample",signal?:AbortSignal):Promise<Uint8Array>{
+ assertRenderActive(signal);
  const input:AuditReportInput={...source,assessment:sanitizeAssessmentForEvidence(rec(source.assessment),rec(source.sonicDna),rec(source.evidence)) as AuditReportInput["assessment"]};
  const data=adaptReportV2(input),pdf=await PDFDocument.create(),fonts=await loadReportFonts(pdf),form=pdf.getForm();
  const pages=buildReportSections(input,data,tier).map(spec=>({...spec,lines:sanitizePublicReportLines(spec.lines??[]),blocks:spec.blocks.map(block=>({...block,value:sanitizePublicReportLine(block.value),provenance:sanitizePublicReportLine(block.provenance??"")||(spec.kind==="narrative"?"":"From uploaded recording"),confidence:block.confidence}))})),total=pages.length;
@@ -1319,6 +1329,10 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
    }
   }
   drawFooter(page,"Reson8 A&R Audit",input.auditId,index+1,total,fonts);
+  // Yield between pages so the job timeout and lease heartbeat can run. Chart
+  // input is bounded before drawing, keeping each synchronous page slice finite.
+  await yieldRenderTurn(signal);
  }
+ assertRenderActive(signal);
  return pdf.save();
 }
