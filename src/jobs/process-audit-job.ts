@@ -93,6 +93,7 @@ export interface AuditStageFailureDiagnostic {
   stage: string;
   failureCode: AuditFailureCode;
   errorName: string;
+  errorMessage: string;
   timedOut: boolean;
   errorCode: string;
   stackFingerprint: string;
