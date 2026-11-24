@@ -626,6 +626,17 @@ describe("voting-confirmed tempo propagation",()=>{
 
 
 describe("v2 PDF renderer with verbose assessment context", () => {
+
+  it("observes cancellation between rendered pages", async () => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new Error("test PDF cancellation")), 0);
+    await expect(generateAuditReportV2(
+      structuredClone(fullAudioFixture) as any,
+      "sample",
+      controller.signal,
+    )).rejects.toThrow("test PDF cancellation");
+  });
+
   it("keeps master and DSP-only sample/full reports renderable without changing page allocation", async () => {
     for (const [source, fixture] of [
       ["uploaded-master", fullAudioFixture],
