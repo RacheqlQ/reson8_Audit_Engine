@@ -419,6 +419,46 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
       ? compactEvidenceScoreValue(value, 0, 72, 3)
       : compactPromptValue(value);
   }
+  if (group === "narrative") {
+    // The narrative needs the complete acoustic descriptor summary, not the
+    // 128-window raw summary series. Median/p10/p90 preserve measured spread;
+    // vocal intervals retain representative first/middle/last observations.
+    const profile = compacted.acousticFeatureProfile;
+    if (profile && typeof profile === "object" && !Array.isArray(profile)) {
+      const raw = profile as Record<string, unknown>;
+      const rawProvenance = raw.provenance && typeof raw.provenance === "object" && !Array.isArray(raw.provenance)
+        ? raw.provenance as Record<string, unknown> : {};
+      const provenanceKeys = [
+        "featureVersion", "algorithm", "sourceSampleRateHz", "analysisSampleRateHz",
+        "analysisResampling", "channels", "durationSeconds", "windowCount", "aggregation",
+      ];
+      compacted.acousticFeatureProfile = {
+        status: raw.status,
+        provenance: Object.fromEntries(provenanceKeys.filter(key => rawProvenance[key] !== undefined)
+          .map(key => [key, rawProvenance[key]])),
+        descriptors: compactPromptValue(raw.descriptors),
+        predictions: compactPromptValue(raw.predictions),
+        abstentionReasons: compactEvidenceScoreValue(raw.abstentionReasons, 0, 72, 3),
+      };
+    }
+
+    const vocal = compacted.vocalFeatures;
+    if (vocal && typeof vocal === "object" && !Array.isArray(vocal)) {
+      const raw = vocal as Record<string, unknown>;
+      const scalarFields = Object.entries(raw).filter(([, value]) =>
+        value === null || ["string", "number", "boolean"].includes(typeof value));
+      const vocalProjection: Record<string, unknown> = Object.fromEntries(scalarFields);
+      if (raw.model && typeof raw.model === "object" && !Array.isArray(raw.model)) {
+        const model = raw.model as Record<string, unknown>;
+        vocalProjection.model = Object.fromEntries(["name", "version"].filter(key => model[key] !== undefined)
+          .map(key => [key, model[key]]));
+      }
+      for (const key of ["activitySegments", "pitchSegments", "limitations"]) {
+        if (raw[key] !== undefined) vocalProjection[key] = compactEvidenceScoreValue(raw[key], 0, 72, 3);
+      }
+      compacted.vocalFeatures = vocalProjection;
+    }
+  }
   return compacted;
 }
 
