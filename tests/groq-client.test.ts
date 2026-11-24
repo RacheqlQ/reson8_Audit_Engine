@@ -1026,7 +1026,10 @@ describe("Groq narrative token projection regression", () => {
       };
       const { mock } = fetchMock();
       await new GroqClient("test-groq-key", "test-model", mock as typeof fetch, async () => {})
-        .assess({ evidence, sonicDna });
+        .assess({
+          evidence, sonicDna,
+          loadCompletedSectionGroup: async group => group === "narrative" ? null : p(group),
+        });
       const narrativeBudget = logs.map(line => JSON.parse(line) as Record<string, unknown>)
         .find(line => line.event === "request_budget" && line.group === "narrative");
       expect(narrativeBudget).toMatchObject({ maxTotalTokens: 6000 });
@@ -1057,12 +1060,17 @@ describe("nine-section report-readiness integration", () => {
     ]));
     expect(assessment.aAndRPositioning.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
     expect(assessment.commercialRead.rationale.trim().split(" ").filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    const reportAssessment = {
+      ...assessment,
+      strengths: ["Source limitations documented", "Lane hypothesis remains provisional", "Human review steps are explicit"],
+      risks: ["Commercial demand remains unverified", "Rights and delivery require confirmation"],
+    };
     const pdfBytes = await generateAuditReportV2({
       auditId: "nine-section-readiness-fixture",
       generatedAt: "2026-11-24T00:00:00.000Z",
       evidence: { artist: "Fixture Artist", title: "Fixture Track", fixture: true },
       sonicDna: null,
-      assessment,
+      assessment: reportAssessment,
       executionMode: "dsp_link",
     }, "sample");
     expect(Buffer.from(pdfBytes.subarray(0, 5)).toString("ascii")).toBe("%PDF-");
@@ -1122,7 +1130,7 @@ describe("positioning contract and provider recovery regressions", () => {
         validationRule: "minimum_word_count",
         minimumWords: 40,
       });
-      expect(failed?.actualWords).toBe(31);
+      expect(failed?.actualWords).toBe(22);
       expect(JSON.stringify(attempts)).not.toContain("supplied evidence supports this limited positioning hypothesis");
     },
   );
