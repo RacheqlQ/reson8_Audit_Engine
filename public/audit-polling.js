@@ -54,10 +54,13 @@ export function createAuditPoller({
         }
         if (!response.ok) throw new Error(payload.message || "Temporary status request failure (HTTP " + response.status + ")");
         onPayload(payload);
-        if (payload.status === "completed" && payload.full?.available) { stop(); return; }
+        if (payload.status === "completed") { stop(); return; }
         if (payload.status === "failed") {
           stop();
-          onMessage("Audit failed: " + (payload.errorMessage || "processing error"));
+          const hasDownloadableReport = payload.sample?.available === true || payload.full?.available === true;
+          onMessage(hasDownloadableReport
+            ? "One report stage failed, but any successfully generated PDF remains available for download."
+            : "Audit failed: " + (payload.errorMessage || "processing error"));
           return;
         }
         if (!longRunningNoticeSent && now() - startedAt >= maxWaitMs) {
