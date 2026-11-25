@@ -76,9 +76,9 @@ function summarizeProviderFailure(
     provider: candidate.provider,
     model: candidate.model,
     attemptCount: providerAttempts.reduce((maximum, item) => Math.max(maximum, item.attempt), 0),
-    statusCodes: [...new Set(providerAttempts.map(item => item.status).filter((item): item is number => typeof item === "number"))],
+    statusCodes: providerAttempts.map(item => item.status).filter((item): item is number => typeof item === "number"),
     failureClasses: classes,
-    estimatedInputTokens: [...new Set(providerAttempts.map(item => item.estimatedInputTokens).filter((item): item is number => typeof item === "number"))],
+    estimatedInputTokens: providerAttempts.map(item => item.estimatedInputTokens).filter((item): item is number => typeof item === "number"),
     actualUsage: usage ? {
       status: "reported",
       promptTokens: usage.promptTokens,
