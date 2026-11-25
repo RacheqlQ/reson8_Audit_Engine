@@ -800,8 +800,13 @@ function compactCatalogMetadataForGroup(
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   // Retain a bounded set of named provider records; long descriptions/raw
   // responses are already represented by normalized evidence and provenance.
-  return Object.fromEntries(Object.entries(value).slice(0, 4)
-    .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning", "release"].includes(group) ? compactEvidenceScoreValue(record, 0, 72, 3) : compactPromptValue(record)])) as Record<string, unknown>;
+  const compactNarrativeProviderRecords = ["narrative", "positioning"].includes(group);
+  const providerLimit = compactNarrativeProviderRecords ? 1 : 4;
+  const valueLimit = compactNarrativeProviderRecords ? 32 : 72;
+  return Object.fromEntries(Object.entries(value).slice(0, providerLimit)
+    .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning", "release"].includes(group)
+      ? compactEvidenceScoreValue(record, 0, valueLimit, compactNarrativeProviderRecords ? 2 : 3)
+      : compactPromptValue(record)])) as Record<string, unknown>;
 }
 
 async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
