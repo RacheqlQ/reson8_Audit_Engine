@@ -1542,7 +1542,7 @@ describe("assessment section cache lease fencing", () => {
 
 
 describe("Groq narrative completion recovery", () => {
-  it("raises the bounded completion allowance after the provider reports a length-truncated response", async () => {
+  it.each(["length", null])("raises the bounded completion allowance when finish_reason is %s", async finishReason => {
     const narrativeBudgets: number[] = [];
     const attempts: ProviderAttemptDiagnostic[] = [];
     let narrativeAttempts = 0;
@@ -1554,7 +1554,7 @@ describe("Groq narrative completion recovery", () => {
         narrativeAttempts++;
         if (narrativeAttempts === 1) {
           return new Response(JSON.stringify({
-            choices: [{ finish_reason: "length", message: { content: '{"assessmentVersion":"3.0","executiveSummary":' } }],
+            choices: [{ finish_reason: finishReason, message: { content: '{"assessmentVersion":"3.0","executiveSummary":' } }],
             usage: { prompt_tokens: 2500, completion_tokens: 850, total_tokens: 3350 },
           }), { status: 200 });
         }
@@ -1573,7 +1573,7 @@ describe("Groq narrative completion recovery", () => {
     expect(narrativeBudgets[0]).toBe(850);
     expect(narrativeBudgets[1]).toBeGreaterThan(narrativeBudgets[0]);
     expect(narrativeBudgets[1]).toBeLessThanOrEqual(1600);
-    expect(attempts).toContainEqual(expect.objectContaining({ failureKind: "completion_truncated", failureClass: "completion_truncated", actualUsage: { status: "reported", promptTokens: 2500, completionTokens: 850, totalTokens: 3350 } }));
+    expect(attempts).toContainEqual(expect.objectContaining({ failureKind: "completion_truncated", failureClass: "completion_truncated", finishReason, completionTokenBudget: 850, actualUsage: { status: "reported", promptTokens: 2500, completionTokens: 850, totalTokens: 3350 } }));
     expect(mock.mock.calls.every(call => {
       const body = JSON.parse(String(call[1]?.body));
       const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
