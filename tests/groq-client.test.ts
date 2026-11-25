@@ -1544,6 +1544,7 @@ describe("assessment section cache lease fencing", () => {
 describe("Groq narrative completion recovery", () => {
   it("raises the bounded completion allowance after the provider reports a length-truncated response", async () => {
     const narrativeBudgets: number[] = [];
+    const attempts: Array<Record<string, unknown>> = [];
     let narrativeAttempts = 0;
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
@@ -1565,13 +1566,14 @@ describe("Groq narrative completion recovery", () => {
     });
 
     const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
-      .assess({ evidence: { artist: "Completion Fixture" }, sonicDna: null });
+      .assess({ evidence: { artist: "Completion Fixture" }, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt); } });
 
     expect(result.assessmentVersion).toBe("3.0");
     expect(narrativeBudgets).toHaveLength(2);
     expect(narrativeBudgets[0]).toBe(850);
     expect(narrativeBudgets[1]).toBeGreaterThan(narrativeBudgets[0]);
     expect(narrativeBudgets[1]).toBeLessThanOrEqual(1600);
+    expect(attempts).toContainEqual(expect.objectContaining({ failureKind: "completion_truncated", failureClass: "completion_truncated", actualUsage: { status: "reported", promptTokens: 2500, completionTokens: 850, totalTokens: 3350 } }));
     expect(mock.mock.calls.every(call => {
       const body = JSON.parse(String(call[1]?.body));
       const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
