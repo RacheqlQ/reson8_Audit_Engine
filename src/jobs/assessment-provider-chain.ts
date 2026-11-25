@@ -62,7 +62,8 @@ export interface AssessmentProviderChainCallbacks<TInput, TResult> {
   ) => void;
 }
 
-function classifyAttempt(attempt: ProviderAttemptDiagnostic): ProviderFailureClassification {
+function classifyAttempt(attempt: ProviderAttemptDiagnostic): ProviderFailureClassification | null {
+  if (attempt.status === 200 && attempt.errorType === "none") return null;
   if (attempt.failureKind === "prompt_budget_exceeded") return "preflight_budget";
   if (attempt.status === 400 || attempt.failureKind === "invalid_json" || attempt.failureKind === "schema_violation") {
     return "schema_or_malformed_400";
@@ -89,10 +90,17 @@ function failureDetail(
   attempts: ProviderAttemptDiagnostic[],
 ): AssessmentProviderFailureDetail {
   const providerAttempts = attempts.filter((attempt) => attempt.provider === candidate.provider);
-  const classifications = [...new Set(providerAttempts.map(classifyAttempt))];
+  const classifications = [...new Set(providerAttempts.map(classifyAttempt).filter(
+    (value): value is ProviderFailureClassification => value !== null,
+  ))];
   if (!classifications.length) classifications.push(classifyError(error));
-  const statusCodes = providerAttempts.flatMap((attempt) => attempt.status === null ? [] : [attempt.status]);
-  const usage = providerAttempts.find((attempt) => attempt.actualUsage !== undefined && attempt.actualUsage !== null)?.actualUsage;
+  const uniqueHttpAttempts = new Map<string, ProviderAttemptDiagnostic>();
+  for (const attempt of providerAttempts) {
+    if (attempt.status !== null) uniqueHttpAttempts.set(String(attempt.group) + ":" + attempt.attempt + ":" + attempt.status, attempt);
+  }
+  const statusCodes = [...uniqueHttpAttempts.values()].map((attempt) => attempt.status as number);
+  const usage = [...providerAttempts].reverse()
+    .find((attempt) => attempt.actualUsage !== undefined && attempt.actualUsage !== null)?.actualUsage;
   const estimated = providerAttempts.map((attempt) => attempt.estimatedInputTokens)
     .filter((value): value is number => typeof value === "number");
   return {
