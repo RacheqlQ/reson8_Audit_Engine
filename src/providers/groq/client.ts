@@ -105,6 +105,8 @@ export interface ProviderAttemptDiagnostic {
   failureClass?: "preflight_budget" | "schema_or_malformed_400" | "capacity_or_503" | "network" | "timeout" | "completion_truncated";
   estimatedInputTokens?: number;
   actualUsage?: { status: "reported" | "unavailable"; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null };
+  finishReason?: string | null;
+  completionTokenBudget?: number;
   validationField?: string;
   validationRule?: "minimum_word_count" | "minimum_item_count";
   minimumWords?: number;
@@ -1124,12 +1126,16 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       });
     }
     const finishReason = payload.choices?.[0]?.finish_reason ?? null;
-    if (finishReason === "length") {
+    const completionUsageAtLimit = actualUsage.status === "reported"
+      && actualUsage.completionTokens !== null
+      && actualUsage.completionTokens >= Math.floor(completionTokenBudget * 0.98);
+    if (finishReason === "length" || completionUsageAtLimit) {
       await recordProviderAttempt(input, {
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
         errorType: "malformed_output", retryable: adaptiveCompletionTokenBudget < MAX_COMPLETION_TOKENS,
         attempt: attempt + 1, group: groupName, failureKind: "completion_truncated",
         failureClass: "completion_truncated", estimatedInputTokens, actualUsage,
+        finishReason, completionTokenBudget,
       });
       if (adaptiveCompletionTokenBudget < MAX_COMPLETION_TOKENS) {
         adaptiveCompletionTokenBudget = Math.min(
