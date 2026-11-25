@@ -47,8 +47,8 @@ export interface SupabaseAuditStore {
   saveIsrcLookupOutcome(jobId: string, claimToken: string, isrc: string, outcome: IsrcProviderOutcome, signal?: AbortSignal): Promise<void>;
   saveSonicDna(jobId: string, claimToken: string, dna: SonicDnaFeatures, signal?: AbortSignal): Promise<void>;
   saveAssessment(jobId: string, claimToken: string, assessment: ArAssessment, signal?: AbortSignal): Promise<void>;
-  loadAssessmentSectionGroup(jobId: string, group: string): Promise<unknown | null>;
-  saveAssessmentSectionGroup(jobId: string, claimToken: string, group: string, result: unknown, signal?: AbortSignal): Promise<void>;
+  loadAssessmentSectionGroup(jobId: string, group: string, provider: "groq" | "gemini" | "ollama", model: string): Promise<unknown | null>;
+  saveAssessmentSectionGroup(jobId: string, claimToken: string, group: string, result: unknown, provider: "groq" | "gemini" | "ollama", model: string, signal?: AbortSignal): Promise<void>;
   saveReport(jobId: string, claimToken: string, tier: AuditReportTier, pdf: Uint8Array, reportInput?: AuditReportInput, signal?: AbortSignal): Promise<void>;
   markCompleted(jobId: string, claimToken: string, signal?: AbortSignal): Promise<void>;
   markFailed(jobId: string, claimToken: string, message: string, signal?: AbortSignal, errorCode?: AuditFailureCode): Promise<void>;
@@ -467,7 +467,7 @@ export function createSupabaseAuditStore(
         },
       }, signal);
     },
-    async loadAssessmentSectionGroup(jobId, group) {
+    async loadAssessmentSectionGroup(jobId, group, provider, model) {
       const { data, error } = await admin.from("audit_events")
         .select("payload")
         .eq("audit_job_id", jobId)
@@ -479,11 +479,12 @@ export function createSupabaseAuditStore(
         const payload = event.payload as Record<string, unknown> | null;
         return payload?.group === group && payload.result !== undefined
           && payload.promptVersion === GROQ_PROMPT_VERSION
-          && payload.model === (process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL);
+          && payload.provider === provider
+          && payload.model === model;
       });
       return match ? (match.payload as Record<string, unknown>).result : null;
     },
-    async saveAssessmentSectionGroup(jobId, claimToken, group, result, signal) {
+    async saveAssessmentSectionGroup(jobId, claimToken, group, result, provider, model, signal) {
       signal?.throwIfAborted();
       const { data: activeJob, error: activeJobError } = await admin.from("audit_jobs")
         .select("status,claim_token")
@@ -496,15 +497,16 @@ export function createSupabaseAuditStore(
         audit_job_id: jobId,
         event_type: "groq_section_completed",
         status: "completed",
-        payload: { group, result, promptVersion: GROQ_PROMPT_VERSION, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL },
+        payload: { group, result, promptVersion: GROQ_PROMPT_VERSION, provider, model },
       });
       if (error) throw new Error("Unable to persist completed AI assessment section");
     },
     async saveAssessment(jobId, claimToken, assessment, signal) {
+      const { provider, model, promptVersion } = assessment.generationProvenance;
       await fencedStep(jobId, claimToken, "assessment", {
-        model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
-        promptVersion: GROQ_PROMPT_VERSION, assessment,
-        eventPayload: { provider: "groq", model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, promptVersion: GROQ_PROMPT_VERSION, confidence: assessment.confidence },
+        model,
+        promptVersion, assessment,
+        eventPayload: { provider, model, promptVersion, confidence: assessment.confidence },
       }, signal);
     },
     async saveReport(jobId, claimToken, tier, pdf, reportInput, signal) {
