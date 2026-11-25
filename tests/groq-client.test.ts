@@ -1027,13 +1027,7 @@ describe("Groq narrative token projection regression", () => {
         },
         vocalFeatures: { status: "analyzed", summary: "Vocal signal summary ".repeat(30), intervals: Array.from({ length: 128 }, (_, i) => ({ startSeconds: i, endSeconds: i + 1, confidence: 0.7, role: "unknown" })) },
       };
-      const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
-        const body = JSON.parse(String(init?.body));
-        const payload = JSON.parse(body.messages[1].content);
-        return new Response(JSON.stringify({
-          choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
-        }), { status: 200 });
-      });
+      const { mock } = fetchMock();
       await new GroqClient("test-groq-key", "test-model", mock as typeof fetch, async () => {})
         .assess({
           evidence, sonicDna,
@@ -1718,7 +1712,13 @@ describe("shared Groq and Gemini request token budget", () => {
         if (event.event === "request_budget") budgetLogs.push(event);
       } catch { /* Ignore unrelated console output. */ }
     });
-    const { mock } = fetchMock();
+          const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        const payload = JSON.parse(body.messages[1].content);
+        return new Response(JSON.stringify({
+          choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+        }), { status: 200 });
+      });
     try {
       const evidence = {
         artist: "Budget Fixture",
