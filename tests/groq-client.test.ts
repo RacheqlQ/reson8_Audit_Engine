@@ -571,7 +571,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   await expect(client.assess({evidence:{},sonicDna:null}))
-   .rejects.toThrow("Groq evidence-score response failed Zod validation after one retry");
+   .rejects.toThrow("Groq evidence-score response failed validation after bounded recovery");
   expect(evidenceScoreCalls).toBe(8);
   expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
