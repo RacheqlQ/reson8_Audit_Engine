@@ -102,7 +102,7 @@ export interface ProviderAttemptDiagnostic {
   group?: string;
   failureKind?: "empty_content" | "invalid_json" | "schema_violation" | "threshold_violation" | "prompt_budget_exceeded" | "completion_truncated";
   validationIssues?: Array<{ code: string; path: string[] }>;
-  failureClass?: "preflight_budget" | "schema_or_malformed_400" | "capacity_or_503" | "network" | "timeout" | "completion_truncated";
+  failureClass?: "preflight_budget" | "malformed_output" | "threshold_violation" | "capacity_or_503" | "network" | "timeout" | "completion_truncated";
   estimatedInputTokens?: number;
   actualUsage?: { status: "reported" | "unavailable"; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null };
   finishReason?: string | null;
@@ -536,7 +536,7 @@ function estimatePromptInputTokens(messages: Array<{ role: string; content: stri
   return Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: responseFormat })).length / 2) + 256;
 }
 
-function compactGroqPromptForBudget(
+function compactProviderPromptForBudget(
   messages: Array<{ role: string; content: string }>,
   responseFormat: unknown,
   groupName: string,
@@ -934,39 +934,48 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // The 256-token allowance covers framing.
     let estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
     const sectionOutputBudget = adaptiveCompletionTokenBudget;
-    const groqTpmBudgetApplies = providerName === "groq";
-    if (groqTpmBudgetApplies) {
-      const targetInputTokens = groupName === "narrative" && attempt === 0
-        ? MAX_GROQ_TOTAL_TOKENS - NARRATIVE_INITIAL_HEADROOM_TOKENS - sectionOutputBudget
-        : MAX_GROQ_TOTAL_TOKENS - Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget);
-      if (estimatedInputTokens > targetInputTokens) {
-        const compacted = compactGroqPromptForBudget(messages, requestBody.response_format, groupName, targetInputTokens);
-        estimatedInputTokens = compacted.after;
-        console.info(JSON.stringify({
-          provider: providerName, event: "prompt_budget_recovery", group: groupName,
-          attempt: attempt + 1, estimatedInputTokensBefore: compacted.before,
-          estimatedInputTokensAfter: compacted.after, targetInputTokens,
-          reservedCompletionTokens: Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget),
-          maxTotalTokens: MAX_GROQ_TOTAL_TOKENS,
-        }));
+    const sharedTotalBudgetApplies = providerName === "groq" || providerName === "gemini";
+    const targetInputTokens = MAX_GROQ_TOTAL_TOKENS
+      - Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget)
+      - (groupName === "narrative" && attempt === 0 ? NARRATIVE_INITIAL_HEADROOM_TOKENS : 0);
+    if (sharedTotalBudgetApplies && estimatedInputTokens > targetInputTokens) {
+      const before = estimatedInputTokens;
+      const compacted = compactProviderPromptForBudget(messages, requestBody.response_format, groupName, targetInputTokens);
+      estimatedInputTokens = compacted.after;
+      let compactionPass = 1;
+      if (groupName === "evidence-score" && estimatedInputTokens > targetInputTokens) {
+        const payload = JSON.parse(messages[1].content) as Record<string, unknown>;
+        // Evidence-score already has canonical identity/provenance. Tighten descriptive
+        // summaries and repeated acoustic context without dropping source/status labels.
+        payload.evidence = compactEvidenceScoreValue(payload.evidence, 0, 32, 2);
+        payload.sonicDna = compactEvidenceScoreValue(payload.sonicDna, 0, 32, 2);
+        payload.catalogMetadata = compactEvidenceScoreValue(payload.catalogMetadata, 0, 24, 2);
+        payload.correction = "Return one complete schema-valid evidence-score object. Preserve source labels, evidence classes, verified facts, nulls and all local validation minima.";
+        messages[1].content = JSON.stringify(payload);
+        estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
+        compactionPass = 2;
       }
+      console.info(JSON.stringify({
+        provider: providerName, event: "prompt_budget_recovery", group: groupName,
+        attempt: attempt + 1, estimatedInputTokensBefore: before,
+        estimatedInputTokensAfter: estimatedInputTokens, targetInputTokens,
+        reservedCompletionTokens: Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget),
+        maxTotalTokens: MAX_GROQ_TOTAL_TOKENS, compactionPass,
+      }));
     }
     const serializedPromptBytes = new TextEncoder().encode(JSON.stringify({
       messages, response_format: requestBody.response_format,
     })).length;
-    if (groqTpmBudgetApplies && lastReportedPromptTokens !== null && lastReportedPromptBytes !== null) {
+    if (providerName === "groq" && lastReportedPromptTokens !== null && lastReportedPromptBytes !== null) {
       const usageCalibratedEstimate = Math.ceil(
         (serializedPromptBytes / Math.max(1, lastReportedPromptBytes)) * lastReportedPromptTokens * 1.25,
       ) + 128;
       estimatedInputTokens = Math.min(estimatedInputTokens, usageCalibratedEstimate);
     }
-    // The 6,000-token ceiling is a Groq TPM safeguard, not a global model
-    // output limit. Applying it to Gemini/Ollama starved evidence-score of its
-    // 1,000-token module budget even when those providers had ample capacity.
-    completionTokenBudget = groqTpmBudgetApplies
+    completionTokenBudget = sharedTotalBudgetApplies
       ? Math.min(adaptiveCompletionTokenBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens)
       : adaptiveCompletionTokenBudget;
-    if (groqTpmBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS)) {
+    if (sharedTotalBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS)) {
       const userPrompt = JSON.parse(messages[1].content) as Record<string, unknown>;
       const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
       await recordProviderAttempt(input, {
@@ -987,16 +996,16 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           responseSchema: byteLength(requestBody.response_format),
         },
       }));
-      throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
+      throw new Error("PROVIDER_PROMPT_BUDGET_EXCEEDED: " + providerName + " section payload cannot fit within the shared 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
-    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: groqTpmBudgetApplies ? MAX_GROQ_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
+    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: sharedTotalBudgetApplies ? MAX_GROQ_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
     for (let networkAttempt = 0; networkAttempt < maxNetworkAttempts; networkAttempt++) {
       signal?.throwIfAborted();
       // Each retry is a new provider request and must consume its own rolling TPM reservation.
-      if (groqTpmBudgetApplies && process.env.NODE_ENV !== "test") {
+      if (providerName === "groq" && process.env.NODE_ENV !== "test") {
         await sharedGroqTokenLimiter.acquire(estimatedInputTokens + completionTokenBudget, sleepImpl, signal);
       }
       const requestTimeoutSignal = AbortSignal.timeout(requestTimeoutMs);
@@ -1053,7 +1062,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         retryable: !response.ok && !dailyLimit && (response.status === 429 || response.status >= 500),
         attempt: networkAttempt + 1,
         group: groupName,
-        failureClass: response.ok ? undefined : response.status === 400 ? "schema_or_malformed_400" : response.status === 503 || response.status === 429 ? "capacity_or_503" : response.status >= 500 ? "network" : undefined,
+        failureClass: response.ok ? undefined : response.status === 400 ? "malformed_output" : response.status === 503 || response.status === 429 ? "capacity_or_503" : response.status >= 500 ? "network" : undefined,
         estimatedInputTokens,
         actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null },
       });
@@ -1129,7 +1138,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       await recordProviderAttempt(input, {
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
         errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName,
-        failureKind: "invalid_json",
+        failureKind: "invalid_json", failureClass: "malformed_output",
       });
       if (scheduleCorrection("The provider returned an invalid JSON response envelope with HTTP success. Return one complete JSON object in the required response format.")) continue;
       break;
@@ -1189,7 +1198,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 
     const result = schema.safeParse(parsed);
     if (!result.success) {
-      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "schema_violation", validationIssues: result.error.issues.slice(0, 12).map(issue => ({ code: issue.code, path: issue.path.map(part => String(part)).slice(0, 8) })) });
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "schema_violation", failureClass: "malformed_output", validationIssues: result.error.issues.slice(0, 12).map(issue => ({ code: issue.code, path: issue.path.map(part => String(part)).slice(0, 8) })) });
       const detail = responseMode === "json_object" || responseMode === "prompt_only"
         ? "The " + responseMode + " response failed local Zod validation: " + result.error.message + "."
         : "Strict structured output failed local Zod validation: " + result.error.message + ".";
@@ -1203,7 +1212,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         await recordProviderAttempt(input, {
           provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
           errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName,
-          failureKind: "threshold_violation", ...safeThresholdDiagnostic(violation),
+          failureKind: "threshold_violation", failureClass: "threshold_violation", ...safeThresholdDiagnostic(violation),
         });
       }
       const correction = formatThresholdViolations(wordErrors);
