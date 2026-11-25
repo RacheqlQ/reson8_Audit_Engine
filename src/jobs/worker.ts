@@ -21,6 +21,7 @@ const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
 export function safeFailureCategory(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
+  if (/ASSESSMENT_PROVIDER_CHAIN_FAILED/i.test(message)) return "provider_chain_failed";
   if (/GROQ_PROMPT_BUDGET_EXCEEDED/i.test(message)) return "prompt_budget_exceeded";
   if (/HTTP 402|payment required|insufficient credits|billing required/i.test(message)) return "billing_required";
   if (/capacity|429|daily.limit|TPD/i.test(message)) return "capacity";
