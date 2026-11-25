@@ -74,7 +74,7 @@ describe("assessment provider chain diagnostics", () => {
         await received.recordProviderAttempt({
           provider: "groq", model: "openai/gpt-oss-120b", status: 400,
           errorType: "malformed_output", retryable: false, attempt: 1, group: "narrative",
-          failureClass: "schema_or_malformed_400", estimatedInputTokens: 5650,
+          failureClass: "malformed_output", estimatedInputTokens: 5650,
           actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null },
         });
         await received.recordProviderAttempt({
