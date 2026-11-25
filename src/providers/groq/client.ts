@@ -141,9 +141,9 @@ const EVIDENCE_SCORE_SYSTEM_PROMPT = [
   "Evidence only; never invent streams, sales, revenue, playlists, curators, audience metrics, label interest, placements or facts.",
   "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not a track fact. Name only providers with records.",
   "Tempo/key are CONFIRMED only via voting/window-consensus-stabilized results; BPM only when confirmed at confidence >=0.5. DSP/catalog links are not audio and cannot establish OBSERVED audio. Never invent audio for DSP links.",
-  "Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict is PROPOSED absent verified commercial telemetry. Mood/energy are heuristics, not probabilities or demand. Null score means insufficient evidence.",
+  "Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE framing. Market verdict is PROPOSED absent verified commercial telemetry. Mood/energy are heuristics, not probabilities or demand. Null score means insufficient evidence.",
   "RMS/dBFS do not prove mastering readiness; loudness changes need measured fault and destination target. Do not score taste, hook, originality, production, replay or lane clarity; keep them in the unscored human-listening checklist.",
-  "Always include evidenceLabels (label, claim, actual source). Every scorecard rationale must contain at least 25 words, including optional tonalConsensus."
+  "Always include the evidenceLabels array (label, claim, actual source). Every scorecard rationale must contain at least 25 words, including optional tonalConsensus."
 ].join(" ");
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
@@ -809,8 +809,8 @@ function compactCatalogMetadataForGroup(
   // responses are already represented by normalized evidence and provenance.
   const compactNarrativeProviderRecords = ["narrative", "positioning"].includes(group);
   const compactEvidenceScoreProviders = group === "evidence-score";
-  const providerLimit = compactNarrativeProviderRecords ? 1 : compactEvidenceScoreProviders ? 2 : 4;
-  const valueLimit = compactNarrativeProviderRecords ? 32 : compactEvidenceScoreProviders ? 48 : 72;
+  const providerLimit = compactNarrativeProviderRecords || compactEvidenceScoreProviders ? 1 : 4;
+  const valueLimit = compactNarrativeProviderRecords || compactEvidenceScoreProviders ? 32 : 72;
   const arrayLimit = compactNarrativeProviderRecords || compactEvidenceScoreProviders ? 2 : 3;
   return Object.fromEntries(Object.entries(value).slice(0, providerLimit)
     .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning", "release"].includes(group)
