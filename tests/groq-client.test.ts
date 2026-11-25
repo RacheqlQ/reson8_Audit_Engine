@@ -779,7 +779,6 @@ describe("evidence-score prompt budget compaction", () => {
         expect(schema.properties.evidenceLabels.items.properties.source).toBeDefined();
       }
       const recovered = p(payload.sectionGroup);
-      if (payload.sectionGroup === group && groupCalls >= 2) recoveredPayload = recovered as Record<string, any>;
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
     });
     await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
@@ -1049,7 +1048,6 @@ describe("nine-section report-readiness integration", () => {
       const body = JSON.parse(String(init?.body));
       const payload = JSON.parse(body.messages[1].content);
       const recovered = p(payload.sectionGroup);
-      if (payload.sectionGroup === group && groupCalls >= 2) recoveredPayload = recovered as Record<string, any>;
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
     });
     const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
