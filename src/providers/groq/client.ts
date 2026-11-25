@@ -137,7 +137,14 @@ const SYSTEM_PROMPT = [
 const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return exactly 3 distinct evidence-grounded strengths and exactly 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive. Keep executiveSummary to 45–60 words and creativeIdentity to 35–50 words. Use one concise sentence per strength and risk; omit preambles, repetition and commentary outside the requested JSON fields.";
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
 const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS are descriptive, not mastering readiness; loudness changes require a measured fault and destination target.";
-const EVIDENCE_SCORE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Always include the evidenceLabels array (label, claim, actual source). Every scorecard rationale must contain at least 25 words, including optional tonalConsensus when present. Null scores mean insufficient evidence; taste stays unscored.";
+const EVIDENCE_SCORE_SYSTEM_PROMPT = [
+  "Evidence only; never invent streams, sales, revenue, playlists, curators, audience metrics, label interest, placements or facts.",
+  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not a track fact. Name only providers with records.",
+  "Tempo/key are CONFIRMED only via voting/window-consensus-stabilized results; BPM only when confirmed at confidence >=0.5. DSP/catalog links are not audio and cannot establish OBSERVED audio. Never invent audio for DSP links.",
+  "Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict is PROPOSED absent verified commercial telemetry. Mood/energy are heuristics, not probabilities or demand. Null score means insufficient evidence.",
+  "RMS/dBFS do not prove mastering readiness; loudness changes need measured fault and destination target. Do not score taste, hook, originality, production, replay or lane clarity; keep them in the unscored human-listening checklist.",
+  "Always include evidenceLabels (label, claim, actual source). Every scorecard rationale must contain at least 25 words, including optional tonalConsensus."
+].join(" ");
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
 type SectionWordRule = {
@@ -801,11 +808,13 @@ function compactCatalogMetadataForGroup(
   // Retain a bounded set of named provider records; long descriptions/raw
   // responses are already represented by normalized evidence and provenance.
   const compactNarrativeProviderRecords = ["narrative", "positioning"].includes(group);
-  const providerLimit = compactNarrativeProviderRecords ? 1 : 4;
-  const valueLimit = compactNarrativeProviderRecords ? 32 : 72;
+  const compactEvidenceScoreProviders = group === "evidence-score";
+  const providerLimit = compactNarrativeProviderRecords ? 1 : compactEvidenceScoreProviders ? 2 : 4;
+  const valueLimit = compactNarrativeProviderRecords ? 32 : compactEvidenceScoreProviders ? 48 : 72;
+  const arrayLimit = compactNarrativeProviderRecords || compactEvidenceScoreProviders ? 2 : 3;
   return Object.fromEntries(Object.entries(value).slice(0, providerLimit)
     .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning", "release"].includes(group)
-      ? compactEvidenceScoreValue(record, 0, valueLimit, compactNarrativeProviderRecords ? 2 : 3)
+      ? compactEvidenceScoreValue(record, 0, valueLimit, arrayLimit)
       : compactPromptValue(record)])) as Record<string, unknown>;
 }
 
