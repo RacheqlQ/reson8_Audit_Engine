@@ -1704,11 +1704,13 @@ describe("provider completion finish-reason precedence", () => {
 describe("shared Groq and Gemini request token budget", () => {
   it("enforces the 6,000-token total ceiling and 256-token completion floor on every Gemini section", async () => {
     const budgetLogs: Array<Record<string, unknown>> = [];
+    const recoveryLogs: Array<Record<string, unknown>> = [];
     const info = vi.spyOn(console, "info").mockImplementation((message?: unknown) => {
       if (typeof message !== "string") return;
       try {
         const event = JSON.parse(message) as Record<string, unknown>;
         if (event.event === "request_budget") budgetLogs.push(event);
+        if (event.event === "prompt_budget_recovery") recoveryLogs.push(event);
       } catch { /* Ignore unrelated console output. */ }
     });
           const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -1739,6 +1741,7 @@ describe("shared Groq and Gemini request token budget", () => {
         expect(Number(budget.estimatedTotalTokens)).toBeLessThanOrEqual(6000);
         expect(Number(budget.maxCompletionTokens)).toBeGreaterThanOrEqual(256);
       }
+      console.log(JSON.stringify({ test: "gemini_shared_budget", requests: budgetLogs.map(({ group, estimatedInputTokens, maxCompletionTokens, estimatedTotalTokens }) => ({ group, estimatedInputTokens, maxCompletionTokens, estimatedTotalTokens })), compaction: recoveryLogs }));
     } finally {
       info.mockRestore();
     }
