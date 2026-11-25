@@ -18,7 +18,7 @@ describe("sample-report command",()=>{
   const v2=await readFile(new URL("scripts/sample-report-v2.mjs",root),"utf8");
   expect(v2).toContain("philloFullPdf.getPageCount()!==12");
   expect(v2).toContain('["v2-phillo-stunixx-reference",phillo,7]');
-  expect(v2).toContain("fullPdf.getPageCount()!==13");
+  expect(v2).toContain("fullPdf.getPageCount()!==12");
   expect(script).not.toContain("fetch(");
   const ambiguous=await readFile(new URL("scripts/fixtures/ambiguous-audio.mjs",root),"utf8");
   expect(ambiguous).toContain("insufficient_evidence");
