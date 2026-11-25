@@ -3,8 +3,8 @@ import { AI_ASSESSMENT_STAGE_TIMEOUT_MS, classifyAuditFailure } from "../src/job
 import { GEMINI_ASSESSMENT_TIMEOUT_MS, GROQ_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
 
 describe("AI assessment deadline contract", () => {
-  it("allows eleven minutes for the surrounding assessment stage", () => {
-    expect(AI_ASSESSMENT_STAGE_TIMEOUT_MS).toBe(11 * 60_000);
+  it("allows fifteen minutes for the surrounding assessment stage", () => {
+    expect(AI_ASSESSMENT_STAGE_TIMEOUT_MS).toBe(15 * 60_000);
   });
 
   it("keeps the Groq provider deadline below the outer stage deadline", () => {
