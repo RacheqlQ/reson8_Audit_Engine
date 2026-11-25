@@ -22,8 +22,8 @@ function id3Fixture(): Uint8Array {
 
 
 describe("audit failure classification", () => {
-  it("keeps the assessment stage at ten minutes inside a longer job deadline", () => {
-    expect(AI_ASSESSMENT_STAGE_TIMEOUT_MS).toBe(10 * 60_000);
+  it("keeps the assessment stage at eleven minutes inside a longer job deadline", () => {
+    expect(AI_ASSESSMENT_STAGE_TIMEOUT_MS).toBe(11 * 60_000);
     expect(AUDIT_JOB_DEADLINE_MS).toBe(20 * 60_000);
   });
 
