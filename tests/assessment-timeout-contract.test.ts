@@ -12,8 +12,8 @@ describe("AI assessment deadline contract", () => {
     expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBe(7 * 60_000);
   });
 
-  it("reserves one minute for handoff after the bounded Groq and Gemini provider deadlines", () => {
-    expect(GROQ_ASSESSMENT_TIMEOUT_MS + GEMINI_ASSESSMENT_TIMEOUT_MS + 60_000).toBeLessThanOrEqual(AI_ASSESSMENT_STAGE_TIMEOUT_MS);
+  it("reserves a bounded Groq recovery window and one-minute handoff after primary and Gemini fallback", () => {
+    expect(GROQ_ASSESSMENT_TIMEOUT_MS + GEMINI_ASSESSMENT_TIMEOUT_MS + 4 * 60_000 + 60_000).toBeLessThanOrEqual(AI_ASSESSMENT_STAGE_TIMEOUT_MS);
   });
 
   it("classifies exhausted Groq JSON validation responses as malformed output", () => {
