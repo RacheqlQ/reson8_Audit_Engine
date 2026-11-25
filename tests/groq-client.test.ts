@@ -1572,7 +1572,7 @@ describe("Groq narrative completion recovery", () => {
     expect(narrativeBudgets).toHaveLength(2);
     expect(narrativeBudgets[0]).toBe(850);
     expect(narrativeBudgets[1]).toBe(narrativeBudgets[0]);
-    expect(narrativeBudgets[1]).toBeLessThanOrEqual(2000);
+    expect(narrativeBudgets[1]).toBe(850);
     expect(attempts).toContainEqual(expect.objectContaining({ failureKind: "completion_truncated", failureClass: "completion_truncated", finishReason, completionTokenBudget: 850, actualUsage: { status: "reported", promptTokens: 2500, completionTokens: 850, totalTokens: 3350 } }));
     expect(mock.mock.calls.every(call => {
       const body = JSON.parse(String(call[1]?.body));
