@@ -138,13 +138,13 @@ const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return exactly 3 distinct evid
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
 const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS are descriptive, not mastering readiness; loudness changes require a measured fault and destination target.";
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
-  "Never invent streams, sales, revenue, playlists, curators, audience metrics, label interest, placements, audio or facts. DSP/catalog links are not audio; no external stem, separation or render workers.",
+  "Never invent streams, sales, revenue, playlists, curators, audience metrics, label interest, placements, audio or facts. DSP/catalog links are not audio. No external stem, separation or render workers.",
   "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not track fact. Name only recorded providers; reconcile identity/provenance and preserve ISRC conflicts/ambiguity.",
   "Tempo/key CONFIRMED only by voting/window-consensus-stabilized results; BPM only at confidence >=0.5. Tempo contributes at most 15% to genre scoring and never proves genre; preserve exact provider genres/scene tags; null primary genre if unconfirmed.",
   "Release date DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Without verified commercial telemetry, marketability=undetermined and verdict PROPOSED. Mood/energy are heuristics, not probabilities/demand.",
   "Vocal claims only if status=analyzed; otherwise no voice, lyrics or arrangement; require explicit section boundaries. Null score=insufficient evidence.",
   "RMS/dBFS do not prove mastering readiness; loudness changes require measured fault+destination target. Centroid<=2,000Hz is not bright; mono is risk, not incompatibility proof.",
-  "Do not score taste/hook/originality/production/replay/lane clarity; keep in unscored human-listening checklist. Include evidenceLabels array (label, claim, actual source); each rationale>=25 words."
+  "Do not score taste/hook/originality/production/replay/lane clarity; keep in unscored human-listening checklist. Always include the evidenceLabels array (label, claim, actual source); each rationale>=25 words."
 ].join(" ");
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
