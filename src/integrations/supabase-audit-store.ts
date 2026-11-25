@@ -793,6 +793,8 @@ export function createSupabaseAuditStore(
           attempt: attempt.attempt,
           ...(attempt.group ? { group: attempt.group } : {}),
           ...(attempt.failureKind ? { failureKind: attempt.failureKind } : {}),
+           ...(typeof attempt.estimatedInputTokens === "number" ? { estimatedInputTokens: attempt.estimatedInputTokens } : {}),
+           ...(attempt.actualUsage !== undefined ? { actualUsage: attempt.actualUsage } : {}),
           ...(attempt.validationIssues ? { validationIssues: attempt.validationIssues } : {}),
         },
       });
