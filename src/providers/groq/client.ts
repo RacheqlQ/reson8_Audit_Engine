@@ -138,11 +138,10 @@ const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return exactly 3 distinct evid
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
 const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS are descriptive, not mastering readiness; loudness changes require a measured fault and destination target.";
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
-  "Evidence only; never invent streams, sales, revenue, playlists, curators, audience metrics, label interest, placements or facts.",
+  "Evidence only: never fabricate streams, sales, revenue, playlists, curators, audience metrics, label interest, placements, audio or facts. DSP/catalog links are not audio; no external stem, separation or rendering workers are used.",
   "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not a track fact. Name only providers with records.",
-  "Tempo/key are CONFIRMED only via voting/window-consensus-stabilized results; BPM only when confirmed at confidence >=0.5. DSP/catalog links are not audio and cannot establish OBSERVED audio. Never invent audio for DSP links.",
-  "Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE framing. Market verdict is PROPOSED absent verified commercial telemetry. Mood/energy are heuristics, not probabilities or demand. Null score means insufficient evidence.",
-  "RMS/dBFS do not prove mastering readiness; loudness changes need measured fault and destination target. Do not score taste, hook, originality, production, replay or lane clarity; keep them in the unscored human-listening checklist.",
+  "Tempo/key are CONFIRMED only by voting/window-consensus-stabilized results; BPM only at confidence >=0.5. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict is PROPOSED without verified commercial telemetry. Mood/energy are heuristics; null score means insufficient evidence.",
+  "RMS/dBFS do not prove mastering readiness; loudness changes require measured fault and destination target. Do not score taste, hook, originality, production, replay or lane clarity; keep them in the unscored human-listening checklist.",
   "Always include the evidenceLabels array (label, claim, actual source). Every scorecard rationale must contain at least 25 words, including optional tonalConsensus."
 ].join(" ");
 
@@ -978,6 +977,19 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         payload.evidence = compactEvidenceScoreValue(payload.evidence, 0, evidenceStringLimit, 2);
         payload.sonicDna = compactEvidenceScoreValue(payload.sonicDna, 0, evidenceStringLimit, 2);
         payload.catalogMetadata = compactEvidenceScoreValue(payload.catalogMetadata, 0, 24, 2);
+        if (groupName === "evidence-score") {
+          const evidence = payload.evidence as Record<string, unknown> | null;
+          if (evidence && Array.isArray(evidence.sourceProviders) && evidence.fieldProvenance && typeof evidence.fieldProvenance === "object") {
+            // Canonical provider and field-level provenance supersede duplicate raw provider records.
+            payload.catalogMetadata = null;
+          }
+          const dna = payload.sonicDna as Record<string, unknown> | null;
+          if (dna?.acousticFeatureProfile && typeof dna.acousticFeatureProfile === "object") {
+            const profile = dna.acousticFeatureProfile as Record<string, unknown>;
+            // Top-level measured acoustic values remain; this descriptor map duplicates those values.
+            delete profile.descriptors;
+          }
+        }
         payload.correction = groupName === "evidence-score"
           ? "Return one complete schema-valid evidence-score object. Preserve source labels, evidence classes, verified facts, nulls and all local validation minima."
           : "Return one complete positioning object. Preserve the >=40-word rationale minima, source labels, verified facts, nulls and evidence gaps; do not add claims.";
