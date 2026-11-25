@@ -138,11 +138,13 @@ const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return exactly 3 distinct evid
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
 const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS are descriptive, not mastering readiness; loudness changes require a measured fault and destination target.";
 const EVIDENCE_SCORE_SYSTEM_PROMPT = [
-  "Evidence only: never fabricate streams, sales, revenue, playlists, curators, audience metrics, label interest, placements, audio or facts. DSP/catalog links are not audio; no external stem, separation or rendering workers are used.",
-  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not a track fact. Name only providers with records.",
-  "Tempo/key are CONFIRMED only by voting/window-consensus-stabilized results; BPM only at confidence >=0.5. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict is PROPOSED without verified commercial telemetry. Mood/energy are heuristics; null score means insufficient evidence.",
-  "RMS/dBFS do not prove mastering readiness; loudness changes require measured fault and destination target. Do not score taste, hook, originality, production, replay or lane clarity; keep them in the unscored human-listening checklist.",
-  "Always include the evidenceLabels array (label, claim, actual source). Every scorecard rationale must contain at least 25 words, including optional tonalConsensus."
+  "Never fabricate streams, sales, revenue, playlists, curators, audience metrics, label interest, placements, audio or facts. DSP/catalog links are not audio; no external stem, separation or rendering workers are used.",
+  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not a track fact. Name only providers with records. Reconcile identity/provenance; preserve ISRC conflicts and ambiguity.",
+  "Tempo/key are CONFIRMED only by voting/window-consensus-stabilized results; BPM only at confidence >=0.5. Tempo contributes at most 15% to genre scoring and never proves genre; preserve exact provider genres/scene tags and use null primary genre when unconfirmed.",
+  "Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Without verified commercial telemetry, marketability is undetermined and market verdict is PROPOSED. Mood/energy are heuristics, not probabilities or demand.",
+  "Vocal claims only when status=analyzed; otherwise infer no voice, lyrics or arrangement. Require explicit section boundaries. Null score means insufficient evidence.",
+  "RMS/dBFS do not prove mastering readiness; loudness changes require measured fault and destination target. Centroid <=2,000 Hz is not bright; mono is a risk, not proof of incompatibility.",
+  "Do not score taste, hook, originality, production, replay or lane clarity; keep them in the unscored human-listening checklist. Always include the evidenceLabels array (label, claim, actual source); every scorecard rationale must contain at least 25 words, including optional tonalConsensus."
 ].join(" ");
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
