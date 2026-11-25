@@ -73,6 +73,7 @@ if(fullPdf.getPageCount()!==12)throw new Error("v2-complete-synthetic-full expec
 await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
 const fullText=execFileSync("pdftotext",["-layout",new URL("v2-complete-synthetic-full.pdf",out).pathname,"-"],{encoding:"utf8"});
 const completePages=fullText.split("\f").filter(page=>page.trim().length>0);
+if(!fullText.includes("SONIC PROFILE")||!["Rhythm","Harmony","Texture","Vocal","Space"].every(axis=>fullText.includes(axis))||!fullText.includes("Synthetic test-only axis value"))throw new Error("Full-report sonic profile must retain all five supplied axis labels and their notes.");
 assertArNotes(fullPdf,completePages,"v2-complete-synthetic-full",complete.assessment?.humanListeningChecklist??[]);
 const cover=completePages[0]??"";
 const normalizedCover=cover.replace(/\s+/g," ");
