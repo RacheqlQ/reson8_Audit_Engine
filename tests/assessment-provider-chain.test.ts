@@ -115,7 +115,7 @@ describe("assessment provider chain diagnostics", () => {
     expect(error.diagnostics).toHaveLength(2);
     expect(error.diagnostics[0]).toMatchObject({
       provider: "groq", model: "openai/gpt-oss-120b", attemptCount: 2,
-      statusCodes: [400], failureClasses: ["schema_or_malformed_400", "preflight_budget"],
+      statusCodes: [400], failureClasses: ["malformed_output", "preflight_budget"],
       estimatedInputTokens: [5650, 6017],
       actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null },
     });
