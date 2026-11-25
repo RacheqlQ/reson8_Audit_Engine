@@ -120,19 +120,19 @@ export interface GroqAssessmentInput {
 export interface GroqAssessmentClient { assess(input: GroqAssessmentInput, signal?: AbortSignal): Promise<ArAssessment>; }
 
 const SYSTEM_PROMPT = [
-  "Evidence only: never invent streams, sales, revenue, playlists, curators, audience metrics, label interest, placements or external facts.",
-  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, never a track fact. Name only providers with returned records.",
-  "Preserve exact provider genres and separate scene tags; null primary genre means no confirmed lane. Tempo contributes at most 15% to genre scoring and never proves genre; use BPM only when confirmed at confidence >=0.5.",
-  "Tempo and key/mode are CONFIRMED only from voting/window-consensus-stabilized results; otherwise preserve candidates as provisional. Mood/energy are heuristics, not probabilities or demand. Use vocals only when status=analyzed; otherwise infer no voice, lyrics or arrangement. Sections need explicit boundaries.",
+  "Evidence-only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or facts.",
+  "Evidence labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not a track fact. Name only providers with returned records.",
+  "Preserve exact provider genres and separate scene tags; null genre means no confirmed lane. Tempo contributes at most 15% to genre scoring, never proves genre; use BPM only when confirmed at confidence >=0.5.",
+  "Tempo/key are CONFIRMED only from voting/window-consensus-stabilized results; otherwise candidates stay provisional. Mood/energy are heuristics, not probabilities or demand. Use vocals only when status=analyzed; otherwise infer no voice, lyrics or arrangement. Sections need explicit boundaries.",
   "Use reconciled identity/provenance; preserve ISRC conflicts and ambiguity. DSP/catalog links are not audio and cannot establish OBSERVED audio. No external stem, separation or render workers; No external stem/separation/render workers.",
-  "Without verified commercial telemetry, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE and PRE_RELEASE/POST_RELEASE. Market verdict remains PROPOSED absent deterministic evidence.",
-  "Null score means insufficient evidence. RMS/dBFS do not prove mastering readiness; loudness changes need a measured fault and destination target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
+  "Without verified commercial telemetry, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE and PRE_RELEASE/POST_RELEASE. Market verdict is PROPOSED absent deterministic evidence.",
+  "Null score means insufficient evidence. RMS/dBFS are not mastering readiness; loudness changes need a measured fault and destination target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
   "Do not score taste, hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return JSON only as one complete object and obey local validation."
 ].join(" ");
 const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive.";
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
 const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS are descriptive, not mastering readiness; loudness changes require a measured fault and destination target.";
-const EVIDENCE_SCORE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Always include the evidenceLabels array with label, claim and actual source. Every scorecard rationale must contain at least 25 words, including optional tonalConsensus when present. Null scores mean insufficient evidence; keep taste dimensions in the unscored listening checklist.";
+const EVIDENCE_SCORE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Always include the evidenceLabels array (label, claim, actual source). Every scorecard rationale must contain at least 25 words, including optional tonalConsensus when present. Null scores mean insufficient evidence; taste stays unscored.";
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
 type SectionWordRule = {
