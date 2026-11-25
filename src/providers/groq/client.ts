@@ -120,20 +120,19 @@ export interface GroqAssessmentInput {
 export interface GroqAssessmentClient { assess(input: GroqAssessmentInput, signal?: AbortSignal): Promise<ArAssessment>; }
 
 const SYSTEM_PROMPT = [
-  "Use supplied evidence only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or external facts.",
-  "Evidence labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=industry_practice guidance, never a track fact. Name only providers with returned records.",
-  "Preserve exact provider genre labels and separate scene tags; null primary genre means no confirmed lane. Tempo contributes at most 15% to genre scoring and never proves genre.",
-  "Tempo is usable only when confirmed and confidence >=0.5. Key/mode and tempo are CONFIRMED only from voting/window-consensus-stabilized results; null or disagreement stays provisional. Never promote candidates.",
-  "Mood/energy are heuristics, not probabilities, listener emotion or demand. Use vocals only when status=analyzed; otherwise infer no voice, delivery, layering or lyrics. Section labels require explicit boundaries.",
-  "Use reconciled identity, source provenance and catalog records; preserve ISRC conflicts and ambiguous matches. DSP/catalog links are not audio: never claim OBSERVED audio from a link. No external stem, separation or render workers; no external stem/separation/render workers.",
-  "Without verified commercial-performance telemetry, marketability is undetermined. Release date is DETERMINED only from verified date evidence; preserve PRE_RELEASE versus POST_RELEASE and PRE_RELEASE/POST_RELEASE. Market verdict remains PROPOSED unless deterministic evidence rules establish otherwise.",
-  "Null score means insufficient evidence. RMS/dBFS do not prove mastering readiness; do not recommend loudness changes without a measured fault and destination target. Centroid <=2,000 Hz is not bright; mono is a compatibility risk to check, not proof of incompatibility.",
-  "Do not score taste, hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return one complete JSON object only and obey every local validation rule."
+  "Evidence only: never invent streams, sales, revenue, playlists, curators, audience metrics, label interest, placements or external facts.",
+  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, never a track fact. Name only providers with returned records.",
+  "Preserve exact provider genres and separate scene tags; null primary genre means no confirmed lane. Tempo contributes at most 15% to genre scoring and never proves genre; use BPM only when confirmed at confidence >=0.5.",
+  "Tempo and key/mode are CONFIRMED only from voting/window-consensus-stabilized results; otherwise preserve candidates as provisional. Mood/energy are heuristics, not probabilities or demand. Use vocals only when status=analyzed; otherwise infer no voice, lyrics or arrangement. Sections need explicit boundaries.",
+  "Use reconciled identity/provenance; preserve ISRC conflicts and ambiguity. DSP/catalog links are not audio and cannot establish OBSERVED audio. No external stem, separation or render workers; No external stem/separation/render workers.",
+  "Without verified commercial telemetry, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE and PRE_RELEASE/POST_RELEASE. Market verdict remains PROPOSED absent deterministic evidence.",
+  "Null score means insufficient evidence. RMS/dBFS do not prove mastering readiness; loudness changes need a measured fault and destination target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
+  "Do not score taste, hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return one complete JSON object only and obey local validation."
 ].join(" ");
-const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks. Each must be a complete, specific statement tied to a supplied fact or explicit evidence limitation; do not pad with repeated or generic claims.";
-const POSITIONING_INSTRUCTIONS = "For aAndRPositioning.rationale and commercialRead.rationale, each must contain at least 40 words (>= 40 words each). Give one concise, evidence-bounded rationale per field; cite supplied evidence or explicitly name the evidence gap. Never pad, repeat boilerplate, or infer commercial demand without verified commercial telemetry. Keep marketability undetermined when such telemetry is absent.";
-const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS are descriptive, not mastering readiness; do not recommend loudness changes without a measured fault and destination target.";
-const EVIDENCE_SCORE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Always include evidenceLabels with label, claim and actual source. Null scores mean insufficient evidence. Every supplied scorecard rationale must contain at least 25 words, including optional tonalConsensus when present; explain evidence or abstention without inventing measurements. Do not score hook, originality, production quality, replay value or lane clarity; provide distinct unscored listening checks.";
+const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive.";
+const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
+const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS are descriptive, not mastering readiness; loudness changes require a measured fault and destination target.";
+const EVIDENCE_SCORE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Always include the evidenceLabels array with label, claim and actual source. Every scorecard rationale must contain at least 25 words, including optional tonalConsensus when present. Null scores mean insufficient evidence; keep taste dimensions in the unscored listening checklist.";
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
 type SectionWordRule = {
@@ -250,9 +249,9 @@ function formatThresholdViolations(violations: ThresholdViolation[]): string {
 function thresholdContractInstructions(group: string): string {
   const rules = SECTION_WORD_RULES[group] ?? [];
   const limits = rules.map(rule => rule.minItems !== undefined
-    ? rule.path + ": at least " + rule.minItems + " items" + (rule.itemMinWords !== undefined ? ", each at least " + rule.itemMinWords + " words" : "")
-    : rule.path + ": at least " + rule.minWords + " words" + (rule.optional ? " when present" : ""));
-  return limits.length ? "Mandatory locally validated word-count contract: " + limits.join("; ") + "." : "";
+    ? rule.path + " must contain at least " + rule.minItems + " items" + (rule.itemMinWords !== undefined ? "; each item must contain at least " + rule.itemMinWords + " words" : "")
+    : rule.path + " must contain at least " + rule.minWords + " words" + (rule.optional ? " when present" : ""));
+  return limits.length ? "Mandatory local word-count contract: " + limits.join("; ") + "." : "";
 }
 
 function compactedSchemaConstraintInstructions(schema: unknown): string {
@@ -260,24 +259,27 @@ function compactedSchemaConstraintInstructions(schema: unknown): string {
   const visit = (node: unknown, path: string): void => {
     if (!node || typeof node !== "object" || Array.isArray(node)) return;
     const record = node as Record<string, any>;
-    if (typeof record.minLength === "number") constraints.push(path + " string minimum " + record.minLength + " characters");
-    if (typeof record.maxLength === "number") constraints.push(path + " string maximum " + record.maxLength + " characters");
-    if (typeof record.minItems === "number") constraints.push(path + " array minimum " + record.minItems + " items");
-    if (typeof record.maxItems === "number") constraints.push(path + " array maximum " + record.maxItems + " items");
-    if (typeof record.minimum === "number") constraints.push(path + " numeric minimum " + record.minimum);
-    if (typeof record.maximum === "number") constraints.push(path + " numeric maximum " + record.maximum);
+    const bounds: string[] = [];
+    if (typeof record.minLength === "number") bounds.push(">=" + record.minLength + " chars");
+    if (typeof record.maxLength === "number") bounds.push("<=" + record.maxLength + " chars");
+    if (typeof record.minItems === "number" || typeof record.maxItems === "number") {
+      bounds.push("items " + (record.minItems ?? 0) + ".." + (record.maxItems ?? "∞"));
+    }
+    if (typeof record.minimum === "number" || typeof record.maximum === "number") {
+      bounds.push("number " + (record.minimum ?? "-∞") + ".." + (record.maximum ?? "∞"));
+    }
+    if (bounds.length) constraints.push(path + ":" + bounds.join(","));
     if (record.properties && typeof record.properties === "object") {
       for (const [key, child] of Object.entries(record.properties)) visit(child, path ? path + "." + key : key);
     }
     if (record.items) visit(record.items, path + "[]");
     for (const key of ["anyOf", "oneOf", "allOf"]) {
-      if (Array.isArray(record[key])) record[key].forEach((child: unknown, index: number) => visit(child, path + "<" + key + index + ">"));
+      if (Array.isArray(record[key])) record[key].forEach((child: unknown) => visit(child, path));
     }
   };
   visit(schema, "");
-  return constraints.length ? "Compacted JSON-schema constraints retained as mandatory instructions: " + constraints.join("; ") + "." : "";
+  return constraints.length ? "Retain these compacted local schema bounds exactly: " + constraints.join("; ") + "." : "";
 }
-
 function safeThresholdDiagnostic(violation: ThresholdViolation): ThresholdViolation {
   return violation;
 }
