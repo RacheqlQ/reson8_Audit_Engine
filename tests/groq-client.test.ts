@@ -404,7 +404,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
   await client.assess({evidence:{},sonicDna:null});
-  expect(evidenceScoreCalls).toBe(8);
+  expect(evidenceScoreCalls).toBe(2);
   expect(evidenceScorePrompts[0]).toContain("at least 8 words");
   expect(evidenceScorePrompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
@@ -572,7 +572,7 @@ describe("GroqClient section groups",()=>{
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   await expect(client.assess({evidence:{},sonicDna:null}))
    .rejects.toThrow("Groq evidence-score response failed Zod validation after one retry");
-  expect(evidenceScoreCalls).toBe(2);
+  expect(evidenceScoreCalls).toBe(8);
   expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
 
@@ -747,8 +747,7 @@ describe("evidence-score prompt budget compaction", () => {
             schemaBytes: new TextEncoder().encode(JSON.stringify(body.response_format.json_schema.schema)).length });
         }
         const recovered = p(payload.sectionGroup);
-      if (payload.sectionGroup === group && groupCalls >= 2) recoveredPayload = recovered as Record<string, any>;
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
       });
       await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
         .assess({ evidence, sonicDna });
@@ -779,7 +778,9 @@ describe("evidence-score prompt budget compaction", () => {
         expect(schema.properties.scorecard.properties.rhythmicConsistency).toBeDefined();
         expect(schema.properties.evidenceLabels.items.properties.source).toBeDefined();
       }
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      const recovered = p(payload.sectionGroup);
+      if (payload.sectionGroup === group && groupCalls >= 2) recoveredPayload = recovered as Record<string, any>;
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
     });
     await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
       .assess({ evidence: {}, sonicDna: null });
