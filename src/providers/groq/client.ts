@@ -644,7 +644,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     narrative: ["acousticFeatureProfile", "vocalFeatures"],
     positioning: ["acousticFeatureProfile", "vocalFeatures"],
     release: ["acousticFeatureProfile", "rhythmFeatures", "harmonicFeatures"],
-    "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
+    "evidence-score": ["vocalFeatures", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures"],
     production: ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
     comparables: [],
     promotion: ["acousticFeatureProfile"],
@@ -841,6 +841,17 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const outputSchema = ["evidence-score", "narrative", "positioning", "release", "promotion"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
   const schemaConstraintGuidance = compactedSchemaConstraintInstructions(rawOutputSchema);
   const wordContractGuidance = thresholdContractInstructions(groupName);
+  const sonicDnaForGroup = compactSonicDnaForGroq(input.sonicDna, groupName);
+  if (groupName === "evidence-score" && input.sonicDna) {
+    const originalBytes = new TextEncoder().encode(JSON.stringify(input.sonicDna)).length;
+    const projectedBytes = new TextEncoder().encode(JSON.stringify(sonicDnaForGroup)).length;
+    console.info(JSON.stringify({
+      provider: providerName, event: "evidence_score_context_projection",
+      estimatedSonicDnaTokensBefore: Math.ceil(originalBytes / 2),
+      estimatedSonicDnaTokensAfter: Math.ceil(projectedBytes / 2),
+      originalBytes, projectedBytes,
+    }));
+  }
   let completed: unknown | null = null;
   try {
     completed = await input.loadCompletedSectionGroup?.(cacheGroupName, providerName as "groq" | "gemini" | "ollama", model) ?? null;
@@ -904,7 +915,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           promptVersion: GROQ_PROMPT_VERSION,
           sectionGroup: groupName,
           evidence: compactPromptValue(compactEvidenceForGroq(input.evidence, groupName)),
-          sonicDna: compactSonicDnaForGroq(input.sonicDna, groupName),
+          sonicDna: sonicDnaForGroup,
           catalogMetadata: compactCatalogMetadataForGroup(input.catalogMetadata, groupName, input.evidence),
           correction: attempt === 0 ? null : compactCorrectionInstruction(lastError),
           ...(fallbackMode ? { outputSchema } : {}),
