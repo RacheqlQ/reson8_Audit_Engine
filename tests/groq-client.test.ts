@@ -1700,3 +1700,42 @@ describe("provider completion finish-reason precedence", () => {
     expect(attempts.some(attempt => attempt.failureKind === "completion_truncated")).toBe(false);
   });
 });
+
+
+describe("shared Groq and Gemini request token budget", () => {
+  it("enforces the 6,000-token total ceiling and 256-token completion floor on every Gemini section", async () => {
+    const budgetLogs: Array<Record<string, unknown>> = [];
+    const info = vi.spyOn(console, "info").mockImplementation((message?: unknown) => {
+      if (typeof message !== "string") return;
+      try {
+        const event = JSON.parse(message) as Record<string, unknown>;
+        if (event.event === "request_budget") budgetLogs.push(event);
+      } catch { /* Ignore unrelated console output. */ }
+    });
+    const { mock } = fetchMock();
+    try {
+      const evidence = {
+        artist: "Budget Fixture",
+        sourceProviders: ["musicbrainz", "audd", "lastfm"],
+        identity: { artist: "Budget Fixture", title: "Budget Track" },
+        reconciliation: { status: "RECONCILED", conflicts: [], matchedFields: ["artist", "title"] },
+        fieldProvenance: Object.fromEntries(Array.from({ length: 80 }, (_, index) => ["field" + index, {
+          source: "musicbrainz", provider: "musicbrainz", status: "recognized", confidence: 0.9,
+          evidenceClass: "RECOGNIZED", value: ("verified source fact " + index + " ").repeat(12),
+          normalizedValue: ("normalized source fact " + index + " ").repeat(12),
+        }])),
+      };
+      const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence, sonicDna: null });
+      expect(result.assessmentVersion).toBe("3.0");
+      expect(budgetLogs).toHaveLength(9);
+      for (const budget of budgetLogs) {
+        expect(budget.maxTotalTokens).toBe(6000);
+        expect(Number(budget.estimatedTotalTokens)).toBeLessThanOrEqual(6000);
+        expect(Number(budget.maxCompletionTokens)).toBeGreaterThanOrEqual(256);
+      }
+    } finally {
+      info.mockRestore();
+    }
+  });
+});
