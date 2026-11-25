@@ -580,14 +580,16 @@ describe("GroqClient section groups",()=>{
   expect(sleeps).toContain(60_000);
  });
 
- it("exhausts structured-output recovery modes when evidenceGaps remains below eight words",async()=>{
+ it("bounds strict-mode word-count recovery when evidenceGaps remains below eight words",async()=>{
   let evidenceScoreCalls=0;
   const prompts:string[]=[];
+  const responseFormats:string[]=[];
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
    const body=JSON.parse(String(init?.body)),group=JSON.parse(body.messages[1].content).sectionGroup;
    if(group==="evidence-score"){
     evidenceScoreCalls++;
     prompts.push(body.messages[1].content);
+    responseFormats.push(body.response_format?.type);
     const invalid={...p(group),evidenceGaps:["Missing audience data"]};
     return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(invalid)}}]}),{status:200});
    }
@@ -596,7 +598,10 @@ describe("GroqClient section groups",()=>{
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   await expect(client.assess({evidence:{},sonicDna:null}))
    .rejects.toThrow("Groq evidence-score response failed validation after bounded recovery");
-  expect(evidenceScoreCalls).toBe(8);
+  // One initial request plus six bounded mode-preserving retries. Groq no
+  // longer downgrades to json_object/prompt_only for a pure word-count miss.
+  expect(evidenceScoreCalls).toBe(7);
+  expect(responseFormats).toEqual(Array(7).fill("json_schema"));
   expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
 
@@ -1795,5 +1800,176 @@ describe("shared Groq and Gemini request token budget", () => {
     } finally {
       info.mockRestore();
     }
+  });
+});
+
+const ALL_SECTION_GROUPS = [
+  "narrative", "positioning", "release", "evidence-score", "production",
+  "comparables", "promotion", "label-fit", "timeline",
+];
+
+function okSectionResponse(group: string): Response {
+  return new Response(JSON.stringify({
+    choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(group)) } }],
+    usage: { prompt_tokens: 2500, completion_tokens: 500, total_tokens: 3000 },
+  }), { status: 200 });
+}
+
+function truncatedResponse(maxCompletionTokens: number): Response {
+  return new Response(JSON.stringify({
+    choices: [{ finish_reason: "length", message: { content: '{"assessmentVersion":"3.0","executiveSummary":' } }],
+    usage: { prompt_tokens: 2500, completion_tokens: maxCompletionTokens, total_tokens: 2500 + maxCompletionTokens },
+  }), { status: 200 });
+}
+
+/** Production estimator: bytes / 2 + 256 framing tokens. */
+function assertSharedBudgetRespected(mock: ReturnType<typeof vi.fn>): void {
+  for (const call of mock.mock.calls) {
+    const body = JSON.parse(String(call[1]?.body));
+    const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
+      messages: body.messages, response_format: body.response_format,
+    })).length / 2) + 256;
+    expect(estimate + body.max_completion_tokens).toBeLessThanOrEqual(6000);
+    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
+  }
+}
+
+describe("Groq mode-preserving recovery (production truncation regression)", () => {
+  it("keeps strict JSON-schema mode across repeated narrative truncation and completes all nine sections", async () => {
+    const narrativeFormats: string[] = [];
+    const narrativeBudgets: number[] = [];
+    const narrativePayloads: Array<Record<string, any>> = [];
+    const groupsSeen = new Set<string>();
+    const attempts: ProviderAttemptDiagnostic[] = [];
+    let narrativeCalls = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      groupsSeen.add(payload.sectionGroup);
+      if (payload.sectionGroup === "narrative") {
+        narrativeCalls++;
+        narrativeFormats.push(body.response_format?.type);
+        narrativeBudgets.push(body.max_completion_tokens);
+        narrativePayloads.push(payload);
+        if (narrativeCalls <= 3) return truncatedResponse(body.max_completion_tokens);
+      }
+      return okSectionResponse(payload.sectionGroup);
+    });
+
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: { artist: "Truncation Fixture" }, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt); } });
+
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(narrativeFormats).toEqual(["json_schema", "json_schema", "json_schema", "json_schema"]);
+    expect(narrativeBudgets).toEqual([850, 1275, 1913, 2000]);
+    // Strict mode never injects a duplicate outputSchema into the user payload.
+    expect(narrativePayloads.every(item => item.outputSchema === undefined)).toBe(true);
+    expect([...groupsSeen].sort()).toEqual([...ALL_SECTION_GROUPS].sort());
+    expect(attempts.filter(attempt => attempt.failureKind === "completion_truncated")).toHaveLength(3);
+    assertSharedBudgetRespected(mock);
+  });
+
+  it("keeps strict JSON-schema mode when a non-narrative section truncates, without dropping later sections", async () => {
+    const scoreFormats: string[] = [];
+    const scoreBudgets: number[] = [];
+    const groupsSeen = new Set<string>();
+    let scoreCalls = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      groupsSeen.add(payload.sectionGroup);
+      if (payload.sectionGroup === "evidence-score") {
+        scoreCalls++;
+        scoreFormats.push(body.response_format?.type);
+        scoreBudgets.push(body.max_completion_tokens);
+        if (scoreCalls === 1) return truncatedResponse(body.max_completion_tokens);
+      }
+      return okSectionResponse(payload.sectionGroup);
+    });
+
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: { artist: "Score Truncation Fixture" }, sonicDna: null });
+
+    expect(result.evidenceLabels).toHaveLength(1);
+    expect(scoreFormats).toEqual(["json_schema", "json_schema"]);
+    expect(scoreBudgets[1]).toBeGreaterThan(scoreBudgets[0]);
+    expect([...groupsSeen].sort()).toEqual([...ALL_SECTION_GROUPS].sort());
+    assertSharedBudgetRespected(mock);
+  });
+
+  it("retains exact field-level word minima when a large narrative repair prompt is compacted", async () => {
+    const verbose = (label: string, index: number) => (label + " " + index
+      + " with source-attributed supporting catalog detail ").repeat(12);
+    // All eight retained provenance keys carry long values so the initial
+    // narrative prompt exceeds the compaction target on the repair attempt.
+    const provenance = Object.fromEntries(Array.from({ length: 12 }, (_, index) => ["field" + index, {
+      source: verbose("source", index),
+      provider: verbose("provider", index),
+      status: verbose("status", index),
+      confidence: 0.91,
+      evidenceClass: verbose("evidenceClass", index),
+      value: verbose("value", index),
+      normalizedValue: verbose("normalizedValue", index),
+      matchStatus: verbose("matchStatus", index),
+    }]));
+    const evidence = {
+      auditType: "MASTER-BASED AUDIT", sourceType: "master", artist: "Compacted Repair Fixture",
+      title: "Long Evidence Track", isrc: "NGABC2600001",
+      sourceProviders: ["musicbrainz", "audD", "lastfm"],
+      fieldProvenance: provenance,
+      identity: { artist: "Compacted Repair Fixture", title: "Long Evidence Track", isrc: "NGABC2600001" },
+      reconciliation: { status: "RECONCILED", conflicts: [], matchedFields: ["artist", "title", "isrc"] },
+    };
+    let narrativeCalls = 0;
+    const retryFormats: string[] = [];
+    const retryCorrections: string[] = [];
+    const recoveryEvents: Array<Record<string, unknown>> = [];
+    const info = vi.spyOn(console, "info").mockImplementation((...args: unknown[]) => {
+      const text = String(args[0] ?? "");
+      if (!text.includes("prompt_budget_recovery")) return;
+      try {
+        const event = JSON.parse(text) as Record<string, unknown>;
+        if (event.group === "narrative") recoveryEvents.push(event);
+      } catch { /* non-JSON diagnostics are irrelevant here */ }
+    });
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative") {
+        narrativeCalls++;
+        if (narrativeCalls > 1) {
+          retryFormats.push(body.response_format?.type);
+          retryCorrections.push(String(payload.correction ?? ""));
+        }
+        if (narrativeCalls === 1) {
+          const value = p("narrative");
+          // 33 words against the 35-word creativeIdentity minimum.
+          value.creativeIdentity = Array.from({ length: 33 }, (_, index) => "identity" + index).join(" ");
+          return new Response(JSON.stringify({
+            choices: [{ finish_reason: "stop", message: { content: JSON.stringify(value) } }],
+            usage: { prompt_tokens: 2500, completion_tokens: 500, total_tokens: 3000 },
+          }), { status: 200 });
+        }
+      }
+      return okSectionResponse(payload.sectionGroup);
+    });
+
+    let result: Awaited<ReturnType<GroqClient["assess"]>>;
+    try {
+      result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence, sonicDna: null });
+    } finally {
+      info.mockRestore();
+    }
+
+    expect(result.assessmentVersion).toBe("3.0");
+    // The oversized production-shaped payload must actually exercise compaction.
+    expect(recoveryEvents.length).toBeGreaterThan(0);
+    expect(retryCorrections.length).toBeGreaterThan(0);
+    // Compaction must never discard the exact field/minimum repair guidance.
+    expect(retryCorrections[0]).toContain("creativeIdentity must contain at least 35 words");
+    expect(retryFormats[0]).toBe("json_schema");
+    expect(result.creativeIdentity.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(35);
+    assertSharedBudgetRespected(mock);
   });
 });
