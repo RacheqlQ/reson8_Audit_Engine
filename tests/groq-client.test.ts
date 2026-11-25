@@ -442,8 +442,8 @@ describe("GroqClient section groups",()=>{
   const result=await client.assess({evidence:{},sonicDna:{provenance:"uploaded_audio_master",bpm:120,tempoConfidence:0.8}});
   expect(evidenceScoreCalls).toBe(2);
   expect(prompts[0]).toContain("scorecard.rhythmicConsistency.rationale");
-  expect(prompts[0]).toContain("at least 25 words");
-  expect(prompts[1]).toContain("scorecard.rhythmicConsistency.rationale must contain at least 25 words");
+  expect(prompts[0]).toContain(">=25 words");
+  expect(prompts[1]).toContain("scorecard.rhythmicConsistency.rationale>=25 words");
   expect(result.scorecard.rhythmicConsistency.rationale.split(/\s+/).length).toBeGreaterThanOrEqual(25);
    expect(result.scorecard.rhythmicConsistency.rationale).toContain("Not scored:");
  });
@@ -1204,15 +1204,15 @@ describe("repeated structured-output validation recovery", () => {
 
 describe("complete local A&R provider contract", () => {
   it.each([
-    ["narrative", "executiveSummary must contain at least 45 words", "strengths must contain at least 3 items; each item must contain at least 10 words"],
-    ["positioning", "aAndRPositioning.rationale must contain at least 40 words", "commercialRead.rationale must contain at least 40 words"],
-    ["release", "releaseStrategy.recommendation must contain at least 40 words", "releaseStrategy.priorities must contain at least 3 items; each item must contain at least 8 words"],
-    ["evidence-score", "scorecard.tempoLaneFit.rationale must contain at least 25 words", "scorecard.tonalConsensus.rationale must contain at least 25 words when present"],
-    ["production", "productionArrangementGuidance must contain at least 40 words", "listeningChecks must contain at least 4 items; each item must contain at least 5 words"],
-    ["comparables", "laneHypothesis must contain at least 20 words", "referencesToVerify must contain at least 3 items; each item must contain at least 8 words"],
-    ["promotion", "promotionPlan.preRelease must contain at least 20 words", "promotionPlan.playlistCategories must contain at least 3 items; each item must contain at least 3 words"],
-    ["label-fit", "labelPartnerFit.partnerProfile must contain at least 25 words", "labelPartnerFit.criteriaToDemonstrate must contain at least 4 items; each item must contain at least 5 words"],
-    ["timeline", "executionPlan.days30 must contain at least 20 words", "executionPlan.days90 must contain at least 20 words"],
+    ["narrative", "executiveSummary>=45 words", "strengths>=3 items, each>=10 words"],
+    ["positioning", "aAndRPositioning.rationale>=40 words", "commercialRead.rationale>=40 words"],
+    ["release", "releaseStrategy.recommendation>=40 words", "releaseStrategy.priorities>=3 items, each>=8 words"],
+    ["evidence-score", "scorecard.tempoLaneFit.rationale>=25 words", "scorecard.tonalConsensus.rationale>=25 words if present"],
+    ["production", "productionArrangementGuidance>=40 words", "listeningChecks>=4 items, each>=5 words"],
+    ["comparables", "laneHypothesis>=20 words", "referencesToVerify>=3 items, each>=8 words"],
+    ["promotion", "promotionPlan.preRelease>=20 words", "promotionPlan.playlistCategories>=3 items, each>=3 words"],
+    ["label-fit", "labelPartnerFit.partnerProfile>=25 words", "labelPartnerFit.criteriaToDemonstrate>=4 items, each>=5 words"],
+    ["timeline", "executionPlan.days30>=20 words", "executionPlan.days90>=20 words"],
   ])("states every locally enforced threshold for the %s section", async (group, firstRule, secondRule) => {
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
@@ -1224,7 +1224,7 @@ describe("complete local A&R provider contract", () => {
     const request = mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)))
       .find(body => JSON.parse(body.messages[1].content).sectionGroup === group);
     expect(request).toBeDefined();
-    expect(request.messages[0].content).toContain("Mandatory local word-count contract");
+    expect(request.messages[0].content).toContain("Mandatory word minima (all enforced locally)");
     expect(request.messages[0].content).toContain(firstRule);
     expect(request.messages[0].content).toContain(secondRule);
     expect(request.messages[0].content).toContain("Compacted local schema bounds (all mandatory)");
