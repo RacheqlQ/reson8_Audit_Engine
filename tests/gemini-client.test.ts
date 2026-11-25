@@ -15,7 +15,7 @@ describe("Gemini assessment fallback transport", () => {
     const client = new GeminiClient("test-gemini-key", "gemini-2.5-flash", fetchMock as typeof fetch, async () => {});
 
     await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow("Gemini narrative assessment failed with HTTP 503");
-    expect(requests).toHaveLength(5);
+    expect(requests).toHaveLength(8);
     for (const request of requests) {
       expect(request.url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
       expect(request.headers.get("authorization")).toBe("Bearer test-gemini-key");
