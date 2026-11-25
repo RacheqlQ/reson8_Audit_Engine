@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
+import { sharedGroqTokenLimiter } from "../src/providers/token-per-minute-limiter.js";
 import { clearAssessmentProviderUnavailable, getAssessmentProviderReadiness } from "../src/providers/provider-policy.js";
 
 const long=(s:string,n=65)=>{let v=s;while(v.trim().split(/\s+/).length<n)v+=" "+s;return v;};
@@ -47,11 +48,12 @@ describe("GroqClient section groups",()=>{
   expect(narrativePayloads[1].correction).toContain("strengths");
   expect(result.strengths).toHaveLength(3);
  });
- it("keeps all provider deadlines within the ten-minute assessment stage",()=>{
-  expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBe(4*60_000);
+ it("keeps production provider fallback deadlines inside the eleven-minute assessment stage",()=>{
+  expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBe(7*60_000);
   expect(GEMINI_ASSESSMENT_TIMEOUT_MS).toBe(3*60_000);
   expect(OLLAMA_ASSESSMENT_TIMEOUT_MS).toBe(2*60_000);
-  expect(GROQ_ASSESSMENT_TIMEOUT_MS+GEMINI_ASSESSMENT_TIMEOUT_MS+OLLAMA_ASSESSMENT_TIMEOUT_MS).toBeLessThan(10*60_000);
+  expect(GROQ_ASSESSMENT_TIMEOUT_MS+GEMINI_ASSESSMENT_TIMEOUT_MS+60_000).toBeLessThanOrEqual(11*60_000);
+  expect(OLLAMA_ASSESSMENT_TIMEOUT_MS).toBeLessThan(11*60_000);
  });
  it("uses the bounded provider-specific deadline defaults",async()=>{
   const groqController=new AbortController();
@@ -405,7 +407,7 @@ describe("GroqClient section groups",()=>{
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
   await client.assess({evidence:{},sonicDna:null});
   expect(evidenceScoreCalls).toBe(2);
-  expect(evidenceScorePrompts[0]).toContain("at least 8 words");
+  expect(evidenceScorePrompts[0]).toContain("evidenceGaps>=1 items, each>=8 words");
   expect(evidenceScorePrompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
  it("retries schema-valid output that misses a section word threshold",async()=>{
@@ -431,7 +433,7 @@ describe("GroqClient section groups",()=>{
    if(group==="evidence-score"){
     evidenceScoreCalls++;
     prompts.push(body.messages[0].content+"\n"+body.messages[1].content);
-    const rationale=evidenceScoreCalls===1?"Timing is unclear.":minimum;
+    const rationale=evidenceScoreCalls===1?"The supplied timing evidence remains incomplete and does not support a reliable judgment about groove stability or temporal regularity.":minimum;
     const base=p(group) as any;
     value={...base,scorecard:{...base.scorecard,rhythmicConsistency:{...base.scorecard.rhythmicConsistency,rationale}}};
    }
@@ -441,8 +443,8 @@ describe("GroqClient section groups",()=>{
   const result=await client.assess({evidence:{},sonicDna:{provenance:"uploaded_audio_master",bpm:120,tempoConfidence:0.8}});
   expect(evidenceScoreCalls).toBe(2);
   expect(prompts[0]).toContain("scorecard.rhythmicConsistency.rationale");
-  expect(prompts[0]).toContain("at least 25 words");
-  expect(prompts[1]).toContain("scorecard.rhythmicConsistency.rationale must contain at least 25 words");
+  expect(prompts[0]).toContain(">=25 words");
+  expect(prompts[1]).toContain("scorecard.rhythmicConsistency.rationale>=25 words");
   expect(result.scorecard.rhythmicConsistency.rationale.split(/\s+/).length).toBeGreaterThanOrEqual(25);
    expect(result.scorecard.rhythmicConsistency.rationale).toContain("Not scored:");
  });
@@ -515,7 +517,7 @@ describe("GroqClient section groups",()=>{
   await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("Groq narrative assessment failed with HTTP 400");
   expect(calls).toBe(1);
  });
- it("exhausts structured-output recovery modes when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=JSON.parse(body.messages[1].content).sectionGroup;const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed Zod validation after one retry");expect(mock.mock.calls.filter(c=>JSON.parse(JSON.parse(String(c[1]?.body)).messages[1].content).sectionGroup==="narrative")).toHaveLength(8);});
+ it("exhausts structured-output recovery modes when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=JSON.parse(body.messages[1].content).sectionGroup;const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed validation after bounded recovery");expect(mock.mock.calls.filter(c=>JSON.parse(JSON.parse(String(c[1]?.body)).messages[1].content).sectionGroup==="narrative")).toHaveLength(8);});
 
  it("keeps playlist category JSON-schema constraints permissive and retries short category text locally",async()=>{
   let promotionCalls=0;
@@ -571,7 +573,7 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   await expect(client.assess({evidence:{},sonicDna:null}))
-   .rejects.toThrow("Groq evidence-score response failed Zod validation after one retry");
+   .rejects.toThrow("Groq evidence-score response failed validation after bounded recovery");
   expect(evidenceScoreCalls).toBe(8);
   expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
@@ -770,7 +772,7 @@ describe("evidence-score prompt budget compaction", () => {
         const system = body.messages[0].content;
         for (const invariant of ["CONFIRMED", "voting/window-consensus-stabilized", "DETERMINED",
           "PRE_RELEASE/POST_RELEASE", "PROPOSED", "DSP/catalog links are not audio",
-          "No external stem/separation/render workers", "OBSERVED", "RECONCILED", "industry_practice"]) {
+          "No external stem, separation or render workers", "OBSERVED", "RECONCILED", "industry_practice"]) {
           expect(system).toContain(invariant);
         }
         const schema = body.response_format.json_schema.schema;
@@ -824,7 +826,7 @@ describe("Groq request deadlines", () => {
     await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow(
       "Groq narrative request timed out after 5ms",
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(requestSignal?.aborted).toBe(true);
   });
 });
@@ -953,7 +955,7 @@ describe("safe assessment validation diagnostics", () => {
   await expect(client.assess({
    evidence: { privatePrompt: "must not be logged" }, sonicDna: null,
    recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); },
-  })).rejects.toThrow("failed Zod validation");
+  })).rejects.toThrow("failed validation after bounded recovery");
   const failed = attempts.find(attempt => attempt.failureKind === "schema_violation");
   expect(failed).toMatchObject({ provider: "gemini", group: "evidence-score", failureKind: "schema_violation" });
   expect(failed?.validationIssues).toEqual(expect.arrayContaining([
@@ -976,7 +978,7 @@ describe("safe assessment validation diagnostics", () => {
   await expect(client.assess({
    evidence: {}, sonicDna: null,
    recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); },
-  })).rejects.toThrow("evidence-score response failed Zod validation");
+  })).rejects.toThrow("evidence-score response failed validation after bounded recovery");
   expect(attempts.some(attempt => attempt.group === "evidence-score" && attempt.failureKind === "threshold_violation")).toBe(true);
  });
 });
@@ -1197,5 +1199,255 @@ describe("repeated structured-output validation recovery", () => {
     const groupRequests = mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)))
       .filter(body => JSON.parse(body.messages[1].content).sectionGroup === group);
     expect(groupRequests[2].response_format).toEqual({ type: "json_object" });
+  });
+});
+
+
+describe("complete local A&R provider contract", () => {
+  it.each([
+    ["narrative", "executiveSummary>=45 words", "strengths>=3 items, each>=10 words"],
+    ["positioning", "aAndRPositioning.rationale>=40 words", "commercialRead.rationale>=40 words"],
+    ["release", "releaseStrategy.recommendation>=40 words", "releaseStrategy.priorities>=3 items, each>=8 words"],
+    ["evidence-score", "scorecard.tempoLaneFit.rationale>=25 words", "scorecard.tonalConsensus.rationale>=25 words if present"],
+    ["production", "productionArrangementGuidance>=40 words", "listeningChecks>=4 items, each>=5 words"],
+    ["comparables", "laneHypothesis>=20 words", "referencesToVerify>=3 items, each>=8 words"],
+    ["promotion", "promotionPlan.preRelease>=20 words", "promotionPlan.playlistCategories>=3 items, each>=3 words"],
+    ["label-fit", "labelPartnerFit.partnerProfile>=25 words", "labelPartnerFit.criteriaToDemonstrate>=4 items, each>=5 words"],
+    ["timeline", "executionPlan.days30>=20 words", "executionPlan.days90>=20 words"],
+  ])("states every locally enforced threshold for the %s section", async (group, firstRule, secondRule) => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null });
+    const request = mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)))
+      .find(body => JSON.parse(body.messages[1].content).sectionGroup === group);
+    expect(request).toBeDefined();
+    expect(request.messages[0].content).toContain("Mandatory word minima (all enforced locally)");
+    expect(request.messages[0].content).toContain(firstRule);
+    expect(request.messages[0].content).toContain(secondRule);
+    expect(request.messages[0].content).toContain("Compacted local schema bounds (all mandatory)");
+  });
+
+  it("retries rejected network fetches with bounded backoff instead of immediately abandoning the section", async () => {
+    let narrativeCalls = 0;
+    const sleeps: number[] = [];
+    const attempts: Array<Record<string, unknown>> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative" && narrativeCalls++ < 2) throw new TypeError("fetch failed");
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async ms => { sleeps.push(ms); })
+      .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(narrativeCalls).toBe(3);
+    expect(sleeps).toHaveLength(2);
+    expect(sleeps.every(ms => ms >= 800 && ms <= 2400)).toBe(true);
+    expect(attempts.filter(attempt => attempt.group === "narrative" && attempt.status === null)).toHaveLength(2);
+  });
+
+  it("recovers when a provider returns an HTTP-success response with a malformed JSON envelope", async () => {
+    let narrativeCalls = 0;
+    const attempts: Array<Record<string, unknown>> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative") {
+        const attempt = narrativeCalls++;
+        if (attempt === 0) return new Response("not-json", { status: 200 });
+        if (attempt === 1) return new Response("null", { status: 200 });
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(narrativeCalls).toBe(3);
+    expect(attempts.filter(attempt => attempt.group === "narrative" && attempt.failureKind === "invalid_json")).toHaveLength(2);
+  });
+
+  it("applies the same 25-word scorecard rationale contract to optional tonalConsensus when present", async () => {
+    let evidenceCalls = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      let value = p(payload.sectionGroup) as Record<string, any>;
+      if (payload.sectionGroup === "evidence-score") {
+        evidenceCalls++;
+        value = { ...value, scorecard: { ...value.scorecard, tonalConsensus: {
+          score: null,
+          rationale: evidenceCalls === 1 ? "The tonal consensus remains provisional because the available evidence does not establish a stable result for this recording." : long("Tonal consensus remains unscored because the supplied key and mode evidence does not meet the voting and window agreement requirements for a confirmed result.", 30),
+        } } };
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(value) } }] }), { status: 200 });
+    });
+    const attempts: Array<Record<string, unknown>> = [];
+    await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+    expect(evidenceCalls).toBe(2);
+    expect(attempts).toContainEqual(expect.objectContaining({
+      group: "evidence-score", failureKind: "threshold_violation",
+      validationField: "scorecard.tonalConsensus.rationale", validationRule: "minimum_word_count", minimumWords: 25,
+    }));
+  });
+});
+
+
+describe("nine-section master and DSP-link execution modes", () => {
+  it.each([
+    {
+      mode: "master",
+      sonicDna: { provenance: "uploaded_audio_master", evidenceClass: "OBSERVED", bpm: 112, tempoConfidence: 0.86, key: "A", mode: "minor", tonalResolution: { status: "CONFIRMED", tonic: "A", mode: "minor", confidence: 0.9, voteConsensus: 0.84 } },
+      evidence: { auditType: "MASTER-BASED AUDIT", sourceType: "master", artist: "Master Fixture", title: "Master Fixture Track" },
+    },
+    {
+      mode: "dsp_link",
+      sonicDna: null,
+      evidence: { auditType: "DSP-LINK AUDIT", sourceType: "dsp_link", artist: "DSP Fixture", title: "DSP Fixture Track", catalogUrl: "https://music.example/track/123" },
+    },
+  ])("completes all nine assessment groups and report adaptation for $mode input", async ({ mode, sonicDna, evidence }) => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const assessment = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence, sonicDna });
+    const groups = mock.mock.calls.map(call => {
+      const body = JSON.parse(String(call[1]?.body));
+      return JSON.parse(body.messages[1].content).sectionGroup;
+    });
+    expect(new Set(groups)).toEqual(new Set(["narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline"]));
+    expect(groups).toHaveLength(9);
+    expect(assessment.aAndRPositioning.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    if (mode === "dsp_link") {
+      expect(assessment.scorecard.rhythmicConsistency.score).toBeNull();
+      expect(assessment.scorecard.tempoLaneFit.score).toBeNull();
+    }
+    const report = adaptReportV2({
+      auditId: "nine-section-" + mode,
+      generatedAt: "2026-11-25T00:00:00.000Z",
+      evidence,
+      sonicDna,
+      assessment,
+      executionMode: mode,
+    });
+    expect(report.decisionDimensions).toHaveLength(4);
+    if (mode === "dsp_link") {
+      expect(report.tempo.value).toBeNull();
+      expect(report.key.value).toBeNull();
+      expect(report.hasVerifiedCommercialEvidence).toBe(false);
+    }
+  });
+
+  it("keys completed section caching and persistence by the actual provider and model", async () => {
+    const loaded: Array<{ group: string; provider: string; model: string }> = [];
+    const saved: Array<{ group: string; provider: string; model: string }> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    await new GroqClient("test-key", "cache-model", mock as typeof fetch, async () => {})
+      .assess({
+        evidence: {}, sonicDna: null,
+        loadCompletedSectionGroup: async (group, provider, model) => { loaded.push({ group, provider, model }); return null; },
+        saveCompletedSectionGroup: async (group, _result, provider, model) => { saved.push({ group, provider, model }); },
+      });
+    expect(loaded).toHaveLength(9);
+    expect(saved).toHaveLength(9);
+    expect(loaded.every(item => item.provider === "groq" && item.model === "cache-model")).toBe(true);
+    expect(saved.every(item => item.provider === "groq" && item.model === "cache-model")).toBe(true);
+  });
+});
+
+
+describe("Groq rolling TPM retry accounting", () => {
+  it("reserves the full estimated request cost again for every network retry", async () => {
+    const acquire = vi.spyOn(sharedGroqTokenLimiter, "acquire").mockResolvedValue();
+    vi.stubEnv("NODE_ENV", "production");
+    let narrativeCalls = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative" && narrativeCalls++ < 2) throw new TypeError("fetch failed");
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    try {
+      await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence: {}, sonicDna: null });
+      expect(narrativeCalls).toBe(3);
+      expect(acquire).toHaveBeenCalledTimes(11);
+    } finally {
+      vi.unstubAllEnvs();
+      acquire.mockRestore();
+    }
+  });
+});
+
+
+describe("Gemini section cache provenance", () => {
+  it("loads and saves fallback sections under Gemini identity rather than Groq identity", async () => {
+    const loaded: Array<{ group: string; provider: string; model: string }> = [];
+    const saved: Array<{ group: string; provider: string; model: string }> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    await new GeminiClient("test-gemini-key", "gemini-cache-model", mock as typeof fetch, async () => {})
+      .assess({
+        evidence: {}, sonicDna: null,
+        loadCompletedSectionGroup: async (group, provider, model) => { loaded.push({ group, provider, model }); return null; },
+        saveCompletedSectionGroup: async (group, _result, provider, model) => { saved.push({ group, provider, model }); },
+      });
+    expect(loaded).toHaveLength(9);
+    expect(saved).toHaveLength(9);
+    expect(loaded.every(item => item.provider === "gemini" && item.model === "gemini-cache-model")).toBe(true);
+    expect(saved.every(item => item.provider === "gemini" && item.model === "gemini-cache-model")).toBe(true);
+  });
+});
+
+
+describe("assessment section cache resilience", () => {
+  it("does not fail a valid nine-section assessment when cache persistence is temporarily unavailable", async () => {
+    let loadCalls = 0;
+    let saveCalls = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const assessment = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({
+        evidence: {}, sonicDna: null,
+        loadCompletedSectionGroup: async () => { loadCalls++; throw new Error("temporary cache read failure"); },
+        saveCompletedSectionGroup: async () => { saveCalls++; throw new Error("temporary cache write failure"); },
+      });
+    expect(assessment.assessmentVersion).toBe("3.0");
+    expect(loadCalls).toBe(9);
+    expect(saveCalls).toBe(9);
+  });
+});
+
+
+describe("assessment section cache lease fencing", () => {
+  it("does not swallow a lost worker lease while persisting a completed section", async () => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    await expect(new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({
+        evidence: {}, sonicDna: null,
+        saveCompletedSectionGroup: async () => { throw new Error("AUDIT_LEASE_LOST"); },
+      })).rejects.toThrow("AUDIT_LEASE_LOST");
+    expect(mock).toHaveBeenCalledTimes(1);
   });
 });

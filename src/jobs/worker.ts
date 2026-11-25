@@ -111,8 +111,8 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       const assessmentInput = {
         ...input,
         recordProviderAttempt: (attempt: ProviderAttemptDiagnostic) => store.recordProviderAttempt(job.id, attempt),
-        loadCompletedSectionGroup: (group: string) => store.loadAssessmentSectionGroup(job.id, group),
-        saveCompletedSectionGroup: (group: string, result: unknown) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, signal),
+        loadCompletedSectionGroup: (group: string, provider: "groq" | "gemini" | "ollama", model: string) => store.loadAssessmentSectionGroup(job.id, group, provider, model),
+        saveCompletedSectionGroup: (group: string, result: unknown, provider: "groq" | "gemini" | "ollama", model: string) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, provider, model, signal),
       };
       const providers = [
         { provider: "groq" as const, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, client: groq },
