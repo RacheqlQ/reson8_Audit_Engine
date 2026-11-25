@@ -292,12 +292,12 @@ function safeThresholdDiagnostic(violation: ThresholdViolation): ThresholdViolat
 const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
 let groqDailyCapUntil = 0;
 const MAX_NETWORK_ATTEMPTS = 3;
-const MAX_GEMINI_NETWORK_ATTEMPTS = 5;
+const MAX_GEMINI_NETWORK_ATTEMPTS = 8;
 export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
 export const GROQ_ASSESSMENT_TIMEOUT_MS = 7 * 60_000;
 export const GEMINI_ASSESSMENT_TIMEOUT_MS = 3 * 60_000;
 export const OLLAMA_ASSESSMENT_TIMEOUT_MS = 2 * 60_000;
-const MAX_COMPLETION_TOKENS = 1600;
+const MAX_COMPLETION_TOKENS = 2000;
 const MAX_GROQ_TOTAL_TOKENS = 6000;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
   narrative: 850, positioning: 650, release: 500, "evidence-score": 1000,
@@ -1129,7 +1129,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     const completionUsageAtLimit = actualUsage.status === "reported"
       && actualUsage.completionTokens !== null
       && actualUsage.completionTokens >= Math.floor(completionTokenBudget * 0.98);
-    if (finishReason === "length" || completionUsageAtLimit) {
+    if (finishReason === "length" || (finishReason == null && completionUsageAtLimit)) {
       await recordProviderAttempt(input, {
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
         errorType: "malformed_output", retryable: adaptiveCompletionTokenBudget < MAX_COMPLETION_TOKENS,
