@@ -270,6 +270,9 @@ function compactedSchemaConstraintInstructions(schema: unknown): string {
       for (const [key, child] of Object.entries(record.properties)) visit(child, path ? path + "." + key : key);
     }
     if (record.items) visit(record.items, path + "[]");
+    for (const key of ["anyOf", "oneOf", "allOf"]) {
+      if (Array.isArray(record[key])) record[key].forEach((child: unknown, index: number) => visit(child, path + "<" + key + index + ">"));
+    }
   };
   visit(schema, "");
   return constraints.length ? "Compacted JSON-schema constraints retained as mandatory instructions: " + constraints.join("; ") + "." : "";
