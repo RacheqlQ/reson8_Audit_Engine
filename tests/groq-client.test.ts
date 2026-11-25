@@ -1583,3 +1583,67 @@ describe("Groq narrative completion recovery", () => {
     })).toBe(true);
   });
 });
+
+
+describe("production A&R provider capacity regressions", () => {
+  it("continues adaptive Groq narrative recovery beyond 1,600 tokens without crossing the 6,000-token ceiling", async () => {
+    const budgets: number[] = [];
+    let narrativeCalls = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative") {
+        budgets.push(body.max_completion_tokens);
+        narrativeCalls++;
+        if (narrativeCalls <= 3) {
+          const completion = budgets[budgets.length - 1];
+          return new Response(JSON.stringify({
+            choices: [{ finish_reason: "length", message: { content: '{"assessmentVersion":"3.0","executiveSummary":' } }],
+            usage: { prompt_tokens: 2500, completion_tokens: completion, total_tokens: 2500 + completion },
+          }), { status: 200 });
+        }
+      }
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+        usage: { prompt_tokens: 2500, completion_tokens: 500, total_tokens: 3000 },
+      }), { status: 200 });
+    });
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: { artist: "Long Narrative Fixture" }, sonicDna: null });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(budgets).toHaveLength(4);
+    expect(budgets[0]).toBe(850);
+    expect(budgets[1]).toBe(1275);
+    expect(budgets[2]).toBe(1913);
+    expect(budgets[3]).toBe(1913);
+    expect(mock.mock.calls.every(call => {
+      const body = JSON.parse(String(call[1]?.body));
+      const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
+        messages: body.messages, response_format: body.response_format,
+      })).length / 3) + 256;
+      return estimate + body.max_completion_tokens <= 6000;
+    })).toBe(true);
+  });
+
+  it("keeps retrying a transient Gemini 503 through the eighth bounded attempt", async () => {
+    let evidenceScoreCalls = 0;
+    const attempts: ProviderAttemptDiagnostic[] = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "evidence-score" && ++evidenceScoreCalls <= 7) {
+        return new Response(JSON.stringify({ error: { message: "Temporary capacity unavailable" } }), { status: 503 });
+      }
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+        usage: { prompt_tokens: 3000, completion_tokens: 500, total_tokens: 3500 },
+      }), { status: 200 });
+    });
+    const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: { artist: "Gemini Capacity Fixture" }, sonicDna: null,
+        recordProviderAttempt: async attempt => { attempts.push(attempt); } });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(evidenceScoreCalls).toBe(8);
+    expect(attempts.filter(attempt => attempt.group === "evidence-score" && attempt.status === 503)).toHaveLength(7);
+  });
+});
