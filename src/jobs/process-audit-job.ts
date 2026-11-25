@@ -84,7 +84,7 @@ function assertLeaseActive(deps: AuditProcessorDependencies): void {
   if (deps.signal?.aborted) throw leaseLostError(deps.signal);
 }
 
-export const AI_ASSESSMENT_STAGE_TIMEOUT_MS = 10 * 60_000;
+export const AI_ASSESSMENT_STAGE_TIMEOUT_MS = 11 * 60_000;
 export const AUDIT_JOB_DEADLINE_MS = 20 * 60_000;
 
 export type AuditFailureCode = "capacity" | "auth" | "malformed_output" | "timeout" | "provider_unavailable" | "processing_error";
