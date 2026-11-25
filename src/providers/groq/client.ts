@@ -108,6 +108,8 @@ export interface ProviderAttemptDiagnostic {
   actualWords?: number;
   minimumItems?: number;
   actualItems?: number;
+  estimatedInputTokens?: number;
+  actualUsage?: { promptTokens: number | null; completionTokens: number | null; totalTokens: number | null } | null;
 }
 export interface GroqAssessmentInput {
   evidence: Record<string, unknown>;
@@ -252,6 +254,20 @@ function thresholdContractInstructions(group: string): string {
     ? rule.path + ">=" + rule.minItems + " items" + (rule.itemMinWords !== undefined ? ", each>=" + rule.itemMinWords + " words" : "")
     : rule.path + ">=" + rule.minWords + " words" + (rule.optional ? " if present" : ""));
   return limits.length ? "Mandatory word minima (all enforced locally): " + limits.join("; ") + "." : "";
+}
+
+function compactCorrectionInstruction(reason: string): string {
+  const normalized = reason.replace(/\\s+/g, " ").trim();
+  if (/strict JSON-schema validation failed|json_validate_failed/i.test(normalized)) {
+    return "Strict JSON-schema output was rejected (HTTP 400). Switch to JSON-object mode; return one complete object matching outputSchema. Preserve evidence and all local word minima.";
+  }
+  if (/must contain at least|must be at least/i.test(normalized)) {
+    return normalized.slice(0, 220) + " Correct every named field; preserve evidence and all schema minima.";
+  }
+  if (/invalid JSON|not valid JSON|no JSON content|response envelope/i.test(normalized)) {
+    return "Previous response was not valid complete JSON. Return one complete JSON object matching outputSchema; preserve evidence and all local word minima.";
+  }
+  return normalized.slice(0, 180) + (normalized.length > 180 ? "…" : "") + " Preserve evidence and all local word minima.";
 }
 
 function compactedSchemaConstraintInstructions(schema: unknown): string {
@@ -571,14 +587,14 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   }
 
   const compacted = (["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
-    ? compactEvidenceScoreValue(compact, 0, group === "production" ? 40 : group === "narrative" ? 48 : 72, ["evidence-score", "production", "narrative"].includes(group) ? 2 : 3)
+    ? compactEvidenceScoreValue(compact, 0, group === "production" ? 40 : group === "narrative" ? 32 : 72, ["evidence-score", "production", "narrative"].includes(group) ? 2 : 3)
     : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
     if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
-      ? compactEvidenceScoreValue(value, 0, group === "production" ? 40 : group === "narrative" ? 48 : 72, group === "narrative" ? 3 : group === "evidence-score" ? 4 : 3)
+      ? compactEvidenceScoreValue(value, 0, group === "production" ? 40 : group === "narrative" ? 32 : 72, group === "narrative" ? 3 : group === "evidence-score" ? 4 : 3)
       : compactPromptValue(value);
   }
   if (["evidence-score", "production"].includes(group) && compacted.vocalArrangementAnalysis && typeof compacted.vocalArrangementAnalysis === "object" && !Array.isArray(compacted.vocalArrangementAnalysis)) {
@@ -791,10 +807,12 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         content: JSON.stringify({
           promptVersion: GROQ_PROMPT_VERSION,
           sectionGroup: groupName,
-          evidence: compactPromptValue(compactEvidenceForGroq(input.evidence, groupName)),
+          evidence: groupName === "narrative"
+            ? compactEvidenceScoreValue(compactEvidenceForGroq(input.evidence, groupName), 0, 32, 2)
+            : compactPromptValue(compactEvidenceForGroq(input.evidence, groupName)),
           sonicDna: compactSonicDnaForGroq(input.sonicDna, groupName),
           catalogMetadata: compactCatalogMetadataForGroup(input.catalogMetadata, groupName, input.evidence),
-          correction: attempt === 0 ? null : lastError,
+          correction: attempt === 0 ? null : compactCorrectionInstruction(lastError),
           ...(fallbackMode ? { outputSchema } : {}),
         }),
       },
@@ -819,7 +837,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // serialized prompt and structured-output schema. A strict 1-byte-per-token
     // ceiling overcounts JSON schema syntax so heavily that normal sections are
     // rejected before reaching Groq; the 256-token allowance covers framing.
-    const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 2) + 256;
+    let estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 2) + 256;
     const sectionOutputBudget = Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
     const groqTpmBudgetApplies = providerName === "groq";
     // The 6,000-token ceiling is a Groq TPM safeguard, not a global model
@@ -829,8 +847,28 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens)
       : sectionOutputBudget;
     if (groqTpmBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS)) {
+      const beforeCompactionTokens = estimatedInputTokens;
       const userPrompt = JSON.parse(messages[1].content) as Record<string, unknown>;
+      userPrompt.correction = typeof userPrompt.correction === "string" ? compactCorrectionInstruction(userPrompt.correction) : null;
+      userPrompt.evidence = compactEvidenceScoreValue(userPrompt.evidence, 0, 24, 2);
+      userPrompt.sonicDna = compactEvidenceScoreValue(userPrompt.sonicDna, 0, 32, 2);
+      userPrompt.catalogMetadata = compactEvidenceScoreValue(userPrompt.catalogMetadata, 0, 24, 2);
+      messages[1].content = JSON.stringify(userPrompt);
+      // The strict response schema or the explicit outputSchema in the user
+      // payload remains authoritative. Repeating its prose bounds adds tokens
+      // without adding a contract, so remove only this duplicate guidance.
+      messages[0].content = messages[0].content.replace(schemaConstraintGuidance, "").replace(schemaGuidance, "").replace(/\\s+/g, " ").trim();
+      estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 2) + 256;
+      completionTokenBudget = Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens);
+      if (estimatedInputTokens < beforeCompactionTokens) {
+        console.info(JSON.stringify({ event: "provider_prompt_compacted", provider: providerName, model, group: groupName, beforeEstimatedInputTokens: beforeCompactionTokens, afterEstimatedInputTokens: estimatedInputTokens, reservedCompletionTokens: Math.max(MIN_COMPLETION_TOKENS, completionTokenBudget), maxTotalTokens: MAX_GROQ_TOTAL_TOKENS }));
+      }
       const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
+      await recordProviderAttempt(input, {
+        provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
+        errorType: "provider_unavailable", retryable: false, attempt: attempt + 1, group: groupName,
+        failureKind: "prompt_budget_exceeded", estimatedInputTokens, actualUsage: null,
+      });
       console.warn(JSON.stringify({
         event: "provider_preflight_rejection", provider: providerName, model, group: groupName,
         failureKind: "prompt_budget_exceeded", estimatedInputTokens,
@@ -843,7 +881,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           responseSchema: byteLength(requestBody.response_format),
         },
       }));
-      throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
+      throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: compacted section payload cannot fit within the 6,000-token request budget while reserving 256 completion tokens");
     }
     requestBody[tokenField] = completionTokenBudget;
     console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: groqTpmBudgetApplies ? MAX_GROQ_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
@@ -873,6 +911,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
           errorType: timedOut ? "timeout" : "provider_unavailable",
           retryable: !signal?.aborted, attempt: networkAttempt + 1, group: groupName,
+          estimatedInputTokens, actualUsage: null,
         });
         if (signal?.aborted) throw error;
         if (retryable) {
@@ -907,6 +946,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         retryable: !response.ok && !dailyLimit && (response.status === 429 || response.status >= 500),
         attempt: networkAttempt + 1,
         group: groupName,
+        estimatedInputTokens,
+        actualUsage: null,
       });
       if (dailyLimit) {
         const tomorrow = new Date();
@@ -951,8 +992,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         if (responseMode === "json_schema" && strictSchemaRetries < 1) {
           strictSchemaRetries++;
           responseMode = "json_object";
-          lastError = "" + providerLabel + " strict JSON-schema validation failed for " + groupName + ": " + message + "." + diagnostic
-            + " Switch immediately to JSON-object mode and return one complete object matching the exact outputSchema. The application will enforce local Zod and section word-count validation.";
+          lastError = "Strict JSON-schema output was rejected (HTTP 400). Switch to JSON-object mode; return one complete object matching outputSchema. Preserve evidence and all local word minima.";
           continue;
         }
 
@@ -960,19 +1000,16 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           jsonObjectProviderRetries++;
           if (jsonObjectProviderRetries === 2) {
             responseMode = "prompt_only";
-            lastError = "" + providerLabel + " also rejected JSON-object mode for " + groupName + ": " + message + "." + diagnostic
-              + " Omit response_format on the next request, return raw JSON only, and match every field in outputSchema.";
+            lastError = "JSON-object output was rejected (HTTP 400). Omit response_format; return raw JSON matching outputSchema. Preserve evidence and all local word minima.";
           } else {
-            lastError = "" + providerLabel + " rejected JSON-object mode for " + groupName + ": " + message + "." + diagnostic
-              + " Retry JSON-object mode with the exact outputSchema and a complete JSON object.";
+            lastError = "JSON-object output was rejected (HTTP 400). Retry with one complete JSON object matching outputSchema. Preserve evidence and all local word minima.";
           }
           continue;
         }
 
         if (responseMode === "prompt_only" && promptOnlyProviderRetries < 1) {
           promptOnlyProviderRetries++;
-          lastError = "" + providerLabel + " rejected prompt-only JSON for " + groupName + ": " + message + "." + diagnostic
-            + " Retry once with a complete raw JSON object matching outputSchema exactly.";
+          lastError = "Prompt-only JSON was rejected (HTTP 400). Retry one complete raw JSON object matching outputSchema. Preserve evidence and all local word minima.";
           continue;
         }
 
