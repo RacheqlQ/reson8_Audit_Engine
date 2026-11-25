@@ -1726,8 +1726,6 @@ describe("shared Groq and Gemini request token budget", () => {
       const evidence = {
         artist: "Budget Fixture",
         sourceProviders: ["musicbrainz", "audd", "lastfm"],
-        identity: { artist: "Budget Fixture", title: "Budget Track" },
-        reconciliation: { status: "RECONCILED", conflicts: [], matchedFields: ["artist", "title"] },
         fieldProvenance: Object.fromEntries(Array.from({ length: 80 }, (_, index) => ["field" + index, {
           source: "musicbrainz", provider: "musicbrainz", status: "recognized", confidence: 0.9,
           evidenceClass: "RECOGNIZED", value: ("verified source fact " + index + " ").repeat(12),
@@ -1748,12 +1746,21 @@ describe("shared Groq and Gemini request token budget", () => {
         sampleRate: 44100, channels: 2, durationSeconds: 180,
         audioProperties: Object.fromEntries(Array.from({ length: 48 }, (_, i) => ["property" + i, "fixture-value-" + i])),
       };
+      const catalogMetadata = Object.fromEntries(Array.from({ length: 4 }, (_, provider) => [
+        "catalog-provider-" + provider,
+        Object.fromEntries(Array.from({ length: 32 }, (_, field) => [
+          "field-" + field, ("provider-returned supporting catalog detail " + provider + "-" + field + " ").repeat(12),
+        ])),
+      ]));
       const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
-        .assess({ evidence, sonicDna });
+        .assess({ evidence, sonicDna, catalogMetadata });
       expect(result.assessmentVersion).toBe("3.0");
       expect(budgetLogs).toHaveLength(9);
       expect(projectionLogs).toHaveLength(1);
       expect(Number(projectionLogs[0].estimatedSonicDnaTokensAfter)).toBeLessThan(Number(projectionLogs[0].estimatedSonicDnaTokensBefore));
+      const evidenceScoreCompaction = recoveryLogs.find(event => event.group === "evidence-score");
+      expect(evidenceScoreCompaction).toBeDefined();
+      expect(Number(evidenceScoreCompaction?.estimatedInputTokensAfter)).toBeLessThan(Number(evidenceScoreCompaction?.estimatedInputTokensBefore));
       for (const budget of budgetLogs) {
         expect(budget.maxTotalTokens).toBe(6000);
         expect(Number(budget.estimatedTotalTokens)).toBeLessThanOrEqual(6000);
