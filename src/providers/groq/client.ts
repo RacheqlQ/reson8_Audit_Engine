@@ -942,15 +942,17 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         try { malformedProviderOutput = (JSON.parse(errorBody) as { error?: { code?: unknown } }).error?.code === "json_validate_failed"; }
         catch { malformedProviderOutput = false; }
       }
-      await recordProviderAttempt(input, {
-        provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
-        errorType: dailyLimit ? "capacity" : malformedProviderOutput ? "malformed_output" : response.ok ? "none" : providerErrorType(response.status),
-        retryable: !response.ok && !dailyLimit && (response.status === 429 || response.status >= 500),
-        attempt: networkAttempt + 1,
-        group: groupName,
-        estimatedInputTokens,
-        actualUsage: null,
-      });
+      if (!response.ok) {
+        await recordProviderAttempt(input, {
+          provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
+          errorType: dailyLimit ? "capacity" : malformedProviderOutput ? "malformed_output" : providerErrorType(response.status),
+          retryable: !dailyLimit && (response.status === 429 || response.status >= 500),
+          attempt: networkAttempt + 1,
+          group: groupName,
+          estimatedInputTokens,
+          actualUsage: null,
+        });
+      }
       if (dailyLimit) {
         const tomorrow = new Date();
         tomorrow.setUTCHours(24, 0, 0, 0);
@@ -981,16 +983,6 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 400 && providerError.error?.code === "json_validate_failed") {
-        const message = typeof providerError.error.message === "string"
-          ? providerError.error.message
-          : "The provider rejected its generated JSON.";
-        const failedGeneration = typeof providerError.error.failed_generation === "string"
-          ? providerError.error.failed_generation.trim()
-          : "";
-        const diagnostic = failedGeneration
-          ? " " + providerLabel + " returned failed_generation diagnostics; do not copy unsupported content."
-          : " " + providerLabel + " supplied no failed_generation diagnostics.";
-
         if (responseMode === "json_schema" && strictSchemaRetries < 1) {
           strictSchemaRetries++;
           responseMode = "json_object";
@@ -1038,6 +1030,14 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (scheduleCorrection("The provider returned an invalid JSON response envelope with HTTP success. Return one complete JSON object in the required response format.")) continue;
       break;
     }
+    const actualUsage = payload.usage && (typeof payload.usage.prompt_tokens === "number" || typeof payload.usage.completion_tokens === "number" || typeof payload.usage.total_tokens === "number")
+      ? { promptTokens: payload.usage.prompt_tokens ?? null, completionTokens: payload.usage.completion_tokens ?? null, totalTokens: payload.usage.total_tokens ?? null }
+      : null;
+    await recordProviderAttempt(input, {
+      provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
+      errorType: "none", retryable: false, attempt: attempt + 1, group: groupName,
+      estimatedInputTokens, actualUsage,
+    });
     console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, actualPromptTokens: payload.usage?.prompt_tokens ?? null, actualCompletionTokens: payload.usage?.completion_tokens ?? null, actualTotalTokens: payload.usage?.total_tokens ?? null }));
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
