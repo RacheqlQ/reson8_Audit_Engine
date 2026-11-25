@@ -436,7 +436,9 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
         const record = raw as Record<string, unknown>;
         const retained = ["source", "provider", "status", "confidence", "evidenceClass", "value", "normalizedValue", "matchStatus"];
         return [field, Object.fromEntries(retained.filter((key) => record[key] !== undefined)
-          .map((key) => [key, compactPromptValue(record[key])]))];
+          .map((key) => [key, group === "evidence-score" && ["value", "normalizedValue"].includes(key) && typeof record[key] === "string"
+            ? (record[key] as string).slice(0, 64)
+            : compactPromptValue(record[key])]))];
       }),
     );
   }
