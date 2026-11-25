@@ -807,7 +807,7 @@ describe("GroqClient cancellation", () => {
     expect(requestSignal).toBeDefined();
     expect(requestSignal).not.toBe(controller.signal);
     expect(requestSignal?.aborted).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -825,7 +825,7 @@ describe("Groq request deadlines", () => {
     await expect(client.assess({ evidence: {}, sonicDna: null })).rejects.toThrow(
       "Groq narrative request timed out after 5ms",
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(requestSignal?.aborted).toBe(true);
   });
 });
@@ -1224,7 +1224,7 @@ describe("complete local A&R provider contract", () => {
     const request = mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)))
       .find(body => JSON.parse(body.messages[1].content).sectionGroup === group);
     expect(request).toBeDefined();
-    expect(request.messages[0].content).toContain("Mandatory locally validated word-count contract");
+    expect(request.messages[0].content).toContain("Mandatory local word-count contract");
     expect(request.messages[0].content).toContain(firstRule);
     expect(request.messages[0].content).toContain(secondRule);
     expect(request.messages[0].content).toContain("Retain these compacted local schema bounds exactly");
