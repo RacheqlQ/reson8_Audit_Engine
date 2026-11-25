@@ -841,14 +841,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
-    if (groqTpmBudgetApplies && process.env.NODE_ENV !== "test") {
-      await sharedGroqTokenLimiter.acquire(estimatedInputTokens + completionTokenBudget, sleepImpl, signal);
-    }
     console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: groqTpmBudgetApplies ? MAX_GROQ_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
     for (let networkAttempt = 0; networkAttempt < MAX_NETWORK_ATTEMPTS; networkAttempt++) {
       signal?.throwIfAborted();
+      // Each retry is a new provider request and must consume its own rolling TPM reservation.
+      if (groqTpmBudgetApplies && process.env.NODE_ENV !== "test") {
+        await sharedGroqTokenLimiter.acquire(estimatedInputTokens + completionTokenBudget, sleepImpl, signal);
+      }
       const requestTimeoutSignal = AbortSignal.timeout(requestTimeoutMs);
       const requestSignal = signal
         ? AbortSignal.any([signal, requestTimeoutSignal])
