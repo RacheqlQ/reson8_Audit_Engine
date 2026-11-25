@@ -120,14 +120,14 @@ export interface GroqAssessmentInput {
 export interface GroqAssessmentClient { assess(input: GroqAssessmentInput, signal?: AbortSignal): Promise<ArAssessment>; }
 
 const SYSTEM_PROMPT = [
-  "Evidence-only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or facts.",
-  "Evidence labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not a track fact. Name only providers with returned records.",
-  "Preserve exact provider genres and separate scene tags; null genre means no confirmed lane. Tempo contributes at most 15% to genre scoring, never proves genre; use BPM only when confirmed at confidence >=0.5.",
-  "Tempo/key are CONFIRMED only from voting/window-consensus-stabilized results; otherwise candidates stay provisional. Mood/energy are heuristics, not probabilities or demand. Use vocals only when status=analyzed; otherwise infer no voice, lyrics or arrangement. Sections need explicit boundaries.",
-  "Use reconciled identity/provenance; preserve ISRC conflicts and ambiguity. DSP/catalog links are not audio and cannot establish OBSERVED audio. No external stem, separation or render workers; No external stem/separation/render workers.",
-  "Without verified commercial telemetry, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE and PRE_RELEASE/POST_RELEASE. Market verdict is PROPOSED absent deterministic evidence.",
-  "Null score means insufficient evidence. RMS/dBFS are not mastering readiness; loudness changes need a measured fault and destination target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
-  "Do not score taste, hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return JSON only as one complete object and obey local validation."
+  "Evidence-only; never invent streams, sales, revenue, playlists, curators, demographics, audience, label interest, placements or external facts.",
+  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not track fact. Name only providers with records.",
+  "Preserve exact provider genres and scene tags; null primary genre=no confirmed lane. Tempo contributes at most 15% to genre scoring, never proves genre; BPM only when confirmed at confidence >=0.5.",
+  "Tempo/key are CONFIRMED only from voting/window-consensus-stabilized results; otherwise provisional. Mood/energy are heuristics, not probabilities or demand. Vocals only when status=analyzed; otherwise infer no voice, lyrics or arrangement. Track sections need explicit boundaries.",
+  "Use reconciled identity/provenance; preserve ISRC conflicts/ambiguity. DSP/catalog links are not audio and cannot establish OBSERVED audio. No external stem, separation or render workers; No external stem/separation/render workers.",
+  "Without verified commercial telemetry, marketability=undetermined. Release date DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE and PRE_RELEASE/POST_RELEASE. Market verdict PROPOSED absent deterministic evidence.",
+  "Null score=insufficient evidence. RMS/dBFS not mastering readiness; loudness changes need measured fault+destination target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
+  "Do not score taste/hook/originality/production/replay/lane clarity; keep in the unscored human-listening checklist. Return JSON only as one complete object; obey local validation."
 ].join(" ");
 const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive.";
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
@@ -249,9 +249,9 @@ function formatThresholdViolations(violations: ThresholdViolation[]): string {
 function thresholdContractInstructions(group: string): string {
   const rules = SECTION_WORD_RULES[group] ?? [];
   const limits = rules.map(rule => rule.minItems !== undefined
-    ? rule.path + " must contain at least " + rule.minItems + " items" + (rule.itemMinWords !== undefined ? "; each item must contain at least " + rule.itemMinWords + " words" : "")
-    : rule.path + " must contain at least " + rule.minWords + " words" + (rule.optional ? " when present" : ""));
-  return limits.length ? "Mandatory local word-count contract: " + limits.join("; ") + "." : "";
+    ? rule.path + ">=" + rule.minItems + " items" + (rule.itemMinWords !== undefined ? ", each>=" + rule.itemMinWords + " words" : "")
+    : rule.path + ">=" + rule.minWords + " words" + (rule.optional ? " if present" : ""));
+  return limits.length ? "Mandatory word minima (all enforced locally): " + limits.join("; ") + "." : "";
 }
 
 function compactedSchemaConstraintInstructions(schema: unknown): string {
