@@ -698,6 +698,11 @@ describe("narrative prompt budget compaction",()=>{
     expect(initial.estimated).toBeLessThanOrEqual(5500);
     expect(corrected.estimated).toBeLessThanOrEqual(5744);
     expect(corrected.estimated+corrected.completion).toBeLessThanOrEqual(6000);
+    const compaction = logs.map(line => JSON.parse(line) as Record<string, unknown>)
+     .find(line => line.event === "provider_prompt_compacted" && line.group === "narrative");
+    expect(compaction).toBeDefined();
+    expect(Number(compaction?.beforeEstimatedInputTokens)).toBeGreaterThan(5744);
+    expect(Number(compaction?.afterEstimatedInputTokens)).toBeLessThanOrEqual(5744);
     expect(corrected.completion).toBeGreaterThanOrEqual(256);
     expect(corrected.payload.correction).toContain("HTTP 400");
     expect(String(corrected.payload.correction).length).toBeLessThan(240);
