@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
 import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
+import { sharedGroqTokenLimiter } from "../src/providers/token-per-minute-limiter.js";
 import { clearAssessmentProviderUnavailable, getAssessmentProviderReadiness } from "../src/providers/provider-policy.js";
 
 const long=(s:string,n=65)=>{let v=s;while(v.trim().split(/\s+/).length<n)v+=" "+s;return v;};
@@ -1357,5 +1358,29 @@ describe("nine-section master and DSP-link execution modes", () => {
     expect(saved).toHaveLength(9);
     expect(loaded.every(item => item.provider === "groq" && item.model === "cache-model")).toBe(true);
     expect(saved.every(item => item.provider === "groq" && item.model === "cache-model")).toBe(true);
+  });
+});
+
+
+describe("Groq rolling TPM retry accounting", () => {
+  it("reserves the full estimated request cost again for every network retry", async () => {
+    const acquire = vi.spyOn(sharedGroqTokenLimiter, "acquire").mockResolvedValue();
+    vi.stubEnv("NODE_ENV", "production");
+    let narrativeCalls = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative" && narrativeCalls++ < 2) throw new TypeError("fetch failed");
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    try {
+      await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence: {}, sonicDna: null });
+      expect(narrativeCalls).toBe(3);
+      expect(acquire).toHaveBeenCalledTimes(11);
+    } finally {
+      vi.unstubAllEnvs();
+      acquire.mockRestore();
+    }
   });
 });
