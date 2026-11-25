@@ -1539,3 +1539,45 @@ describe("assessment section cache lease fencing", () => {
     expect(mock).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe("Groq narrative completion recovery", () => {
+  it("raises the bounded completion allowance after the provider reports a length-truncated response", async () => {
+    const narrativeBudgets: number[] = [];
+    let narrativeAttempts = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative") {
+        narrativeBudgets.push(body.max_completion_tokens);
+        narrativeAttempts++;
+        if (narrativeAttempts === 1) {
+          return new Response(JSON.stringify({
+            choices: [{ finish_reason: "length", message: { content: '{"assessmentVersion":"3.0","executiveSummary":' } }],
+            usage: { prompt_tokens: 2500, completion_tokens: 850, total_tokens: 3350 },
+          }), { status: 200 });
+        }
+      }
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+        usage: { prompt_tokens: 2500, completion_tokens: 500, total_tokens: 3000 },
+      }), { status: 200 });
+    });
+
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: { artist: "Completion Fixture" }, sonicDna: null });
+
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(narrativeBudgets).toHaveLength(2);
+    expect(narrativeBudgets[0]).toBe(850);
+    expect(narrativeBudgets[1]).toBeGreaterThan(narrativeBudgets[0]);
+    expect(narrativeBudgets[1]).toBeLessThanOrEqual(1600);
+    expect(mock.mock.calls.every(call => {
+      const body = JSON.parse(String(call[1]?.body));
+      const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
+        messages: body.messages, response_format: body.response_format,
+      })).length / 3) + 256;
+      return estimate + body.max_completion_tokens <= 6000;
+    })).toBe(true);
+  });
+});
