@@ -1411,3 +1411,25 @@ describe("Gemini section cache provenance", () => {
     expect(saved.every(item => item.provider === "gemini" && item.model === "gemini-cache-model")).toBe(true);
   });
 });
+
+
+describe("assessment section cache resilience", () => {
+  it("does not fail a valid nine-section assessment when cache persistence is temporarily unavailable", async () => {
+    let loadCalls = 0;
+    let saveCalls = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const assessment = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({
+        evidence: {}, sonicDna: null,
+        loadCompletedSectionGroup: async () => { loadCalls++; throw new Error("temporary cache read failure"); },
+        saveCompletedSectionGroup: async () => { saveCalls++; throw new Error("temporary cache write failure"); },
+      });
+    expect(assessment.assessmentVersion).toBe("3.0");
+    expect(loadCalls).toBe(9);
+    expect(saveCalls).toBe(9);
+  });
+});
