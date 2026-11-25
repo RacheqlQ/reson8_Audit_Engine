@@ -1141,6 +1141,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; it was not retried. Completion budgets remain unchanged for subsequent audits.");
       }
 
+      if (response?.status === 400 && responseMode === "json_schema" && providerError.error?.code !== "json_validate_failed") {
+        // Some Groq-compatible deployments reject strict JSON-schema requests with
+        // a generic HTTP 400 code. Retry once in JSON-object mode; local Zod and
+        // section word-count validation remain authoritative.
+        responseMode = "json_object";
+        lastError = "Groq rejected strict JSON-schema response mode with HTTP 400. Retry in locally validated JSON-object mode.";
+        continue;
+      }
+
       if (response?.status === 400 && providerError.error?.code === "json_validate_failed") {
         if (responseMode === "json_schema" && strictSchemaRetries < 1) {
           strictSchemaRetries++;
@@ -1219,7 +1228,19 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       const conciseRecovery = groupName === "narrative"
         ? "The previous narrative was truncated. Retry with the SAME completion-token allowance. Return exactly 3 concise strengths and 2 concise risks; keep executiveSummary 45–60 words and creativeIdentity 35–50 words. Preserve every schema minimum and evidence constraint."
         : "The previous section was truncated. Retry with the SAME completion-token allowance; keep every field concise at the minimum length required by outputSchema and the word contract. Return JSON only.";
-      if (scheduleCorrection(conciseRecovery)) continue;
+      if (scheduleCorrection(conciseRecovery)) {
+        // A length finish proves the current completion allowance is insufficient.
+        // Increase only the output reserve; the next request still compacts input
+        // and is hard-capped by the shared 6,000-token budget.
+        if (providerName === "groq") {
+          const nextBudget = Math.min(
+            maxCompletionTokens,
+            Math.max(adaptiveCompletionTokenBudget + MIN_COMPLETION_TOKENS, Math.ceil(adaptiveCompletionTokenBudget * 1.5)),
+          );
+          adaptiveCompletionTokenBudget = Math.max(adaptiveCompletionTokenBudget, nextBudget);
+        }
+        continue;
+      }
       break;
     }
 
