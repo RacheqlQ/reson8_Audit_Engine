@@ -1141,10 +1141,16 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; it was not retried. Completion budgets remain unchanged for subsequent audits.");
       }
 
-      if (response?.status === 400 && responseMode === "json_schema" && providerError.error?.code !== "json_validate_failed") {
+      const providerErrorCode = typeof providerError.error?.code === "string" ? providerError.error.code : "";
+      const providerErrorMessage = typeof providerError.error?.message === "string" ? providerError.error.message : "";
+      const strictSchemaRejected = /json.?schema|response.?format|structured.?output/i.test(providerErrorMessage)
+        || /invalid_json_schema|unsupported_json_schema/i.test(providerErrorCode);
+      if (response?.status === 400 && responseMode === "json_schema"
+        && providerErrorCode !== "json_validate_failed" && strictSchemaRejected) {
         // Some Groq-compatible deployments reject strict JSON-schema requests with
         // a generic HTTP 400 code. Retry once in JSON-object mode; local Zod and
-        // section word-count validation remain authoritative.
+        // section word-count validation remain authoritative. Unrelated 400s
+        // (especially authentication/configuration errors) remain terminal.
         responseMode = "json_object";
         lastError = "Groq rejected strict JSON-schema response mode with HTTP 400. Retry in locally validated JSON-object mode.";
         continue;
