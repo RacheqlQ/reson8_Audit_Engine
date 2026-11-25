@@ -168,7 +168,7 @@ describe("Gemini capacity recovery back to Groq", () => {
       { provider: "groq", model: "gpt-oss", client: groq },
     ], { trackId: "capacity-fallback-fixture" });
     expect(result).toEqual({ verdict: "completed-by-groq" });
-    expect(groq).toHaveBeenCalledTimes(2);
-    expect(gemini).toHaveBeenCalledOnce();
+    expect(groq.assess).toHaveBeenCalledTimes(2);
+    expect(gemini.assess).toHaveBeenCalledOnce();
   });
 });
