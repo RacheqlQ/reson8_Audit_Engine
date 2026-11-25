@@ -515,7 +515,7 @@ describe("GroqClient section groups",()=>{
   await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("Groq narrative assessment failed with HTTP 400");
   expect(calls).toBe(1);
  });
- it("stops after one retry when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=body.response_format.json_schema.name.replace(/^ar_/,"");const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed Zod validation after one retry");expect(mock.mock.calls.filter(c=>JSON.parse(String(c[1]?.body)).response_format.json_schema.name==="ar_narrative")).toHaveLength(2);});
+ it("exhausts structured-output recovery modes when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=JSON.parse(body.messages[1].content).sectionGroup;const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed Zod validation after one retry");expect(mock.mock.calls.filter(c=>JSON.parse(JSON.parse(String(c[1]?.body)).messages[1].content).sectionGroup==="narrative")).toHaveLength(8);});
 
  it("keeps playlist category JSON-schema constraints permissive and retries short category text locally",async()=>{
   let promotionCalls=0;
@@ -556,11 +556,11 @@ describe("GroqClient section groups",()=>{
   expect(sleeps).toContain(60_000);
  });
 
- it("stops after the corrective retry when evidenceGaps remains below eight words",async()=>{
+ it("exhausts structured-output recovery modes when evidenceGaps remains below eight words",async()=>{
   let evidenceScoreCalls=0;
   const prompts:string[]=[];
   const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{
-   const body=JSON.parse(String(init?.body)),group=body.response_format.json_schema.name.replace(/^ar_/,"");
+   const body=JSON.parse(String(init?.body)),group=JSON.parse(body.messages[1].content).sectionGroup;
    if(group==="evidence-score"){
     evidenceScoreCalls++;
     prompts.push(body.messages[1].content);
@@ -572,7 +572,7 @@ describe("GroqClient section groups",()=>{
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   await expect(client.assess({evidence:{},sonicDna:null}))
    .rejects.toThrow("Groq evidence-score response failed Zod validation after one retry");
-  expect(evidenceScoreCalls).toBe(2);
+  expect(evidenceScoreCalls).toBe(8);
   expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
 
@@ -746,7 +746,8 @@ describe("evidence-score prompt budget compaction", () => {
           observed.push({ name: profile.name, estimated, completion: body.max_completion_tokens,
             schemaBytes: new TextEncoder().encode(JSON.stringify(body.response_format.json_schema.schema)).length });
         }
-        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+        const recovered = p(payload.sectionGroup);
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
       });
       await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
         .assess({ evidence, sonicDna });
@@ -777,7 +778,8 @@ describe("evidence-score prompt budget compaction", () => {
         expect(schema.properties.scorecard.properties.rhythmicConsistency).toBeDefined();
         expect(schema.properties.evidenceLabels.items.properties.source).toBeDefined();
       }
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      const recovered = p(payload.sectionGroup);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
     });
     await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
       .assess({ evidence: {}, sonicDna: null });
@@ -1045,7 +1047,8 @@ describe("nine-section report-readiness integration", () => {
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       const payload = JSON.parse(body.messages[1].content);
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      const recovered = p(payload.sectionGroup);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
     });
     const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
       .assess({ evidence: { artist: "Fixture Artist", title: "Fixture Track", fixture: true }, sonicDna: null });
@@ -1156,3 +1159,43 @@ describe("positioning contract and provider recovery regressions", () => {
   );
 });
 
+
+
+describe("repeated structured-output validation recovery", () => {
+  it.each([
+    { group: "positioning", field: "commercialRead.rationale", minimum: 40, short: "Commercial rationale remains limited by the absence of verified performance evidence and requires further independent validation before marketability can be assessed." },
+    { group: "evidence-score", field: "scorecard.tempoLaneFit.rationale", minimum: 25, short: "Tempo evidence is unavailable and no score can be supported from the supplied material." },
+  ])("switches output mode and recovers repeated $field violations", async ({ group, field, minimum, short }) => {
+    let groupCalls = 0;
+    const attempts: Array<Record<string, unknown>> = [];
+    let recoveredPayload: Record<string, any> | null = null;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === group && groupCalls++ < 2) {
+        const invalid = p(group) as any;
+        if (field === "commercialRead.rationale") invalid.commercialRead.rationale = short;
+        else invalid.scorecard.tempoLaneFit.rationale = short;
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(invalid) } }] }), { status: 200 });
+      }
+      const recovered = p(payload.sectionGroup);
+      if (payload.sectionGroup === group && groupCalls >= 2) recoveredPayload = recovered as Record<string, any>;
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
+    });
+    const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+    expect(groupCalls).toBe(3);
+    const diagnostics = attempts.filter(attempt => attempt.group === group && attempt.failureKind === "threshold_violation");
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics[0]).toMatchObject({ validationField: field, validationRule: "minimum_word_count", minimumWords: minimum });
+    expect(Number(diagnostics[0].actualWords)).toBeLessThan(minimum);
+    expect(diagnostics[1]).toMatchObject({ validationField: field, validationRule: "minimum_word_count", minimumWords: minimum });
+    const recoveredRationale = field === "commercialRead.rationale"
+      ? recoveredPayload?.commercialRead?.rationale
+      : recoveredPayload?.scorecard?.tempoLaneFit?.rationale;
+    expect(String(recoveredRationale).split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(minimum);
+    const groupRequests = mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)))
+      .filter(body => JSON.parse(body.messages[1].content).sectionGroup === group);
+    expect(groupRequests[2].response_format).toEqual({ type: "json_object" });
+  });
+});

@@ -160,7 +160,7 @@ const EVIDENCE_SCORE_SYSTEM_PROMPT = [
   "Tempo/key are CONFIRMED only by voting/window-consensus-stabilized results; null/candidates stay provisional and disagreement visible. Missing tempo or confidence <0.5 means no BPM, tempoLaneFit or rhythmicConsistency score. Tempo is <=15% of genre scoring; preserve provider genres and separate scene tags.",
   "Mood/energy are heuristics, not probability, emotion or demand. Use vocals only when analyzed; sections need explicit boundaries. Preserve provider names, identity conflicts, ISRC ambiguity and provenance; name only providers with returned records.",
   "Without verified commercial evidence, marketability is undetermined. Release date DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict PROPOSED unless deterministic rules establish otherwise; never infer demand from genre, tempo, popularity or metadata.",
-  "Each evidenceGaps and limitations item must contain at least 8 words; null scores mean insufficient evidence. RMS/dBFS do not prove mastering readiness; no delivery score without destination targets or loudness change without measured fault/target. Centroid <=2,000 Hz is not bright; mono is risk, not incompatibility.",
+  "Each evidenceGaps and limitations item must contain at least 8 words; null scores mean insufficient evidence. Every scorecard rationale, including tempoLaneFit, rhythmicConsistency, dynamicRangeLoudness, metadataCompleteness and releaseReadiness, must contain at least 25 words even when its score is null; explain the evidence, limitation or reason for abstention without inventing measurements. RMS/dBFS do not prove mastering readiness; no delivery score without destination targets or loudness change without measured fault/target. Centroid <=2,000 Hz is not bright; mono is risk, not incompatibility.",
   "Do not score hook, originality, production quality, replay value or lane clarity; keep them unscored with distinct listening checks. scorecard.rhythmicConsistency.rationale must contain at least 25 words even when null. Separate track evidence from INDUSTRY PRACTICE. JSON only; local Zod/word-count validation is authoritative."
 ].join(" ");
 
@@ -678,7 +678,11 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       lastError += " Retry strict structured-output mode once with the complete corrected schema object.";
       return true;
     }
-    if (responseMode === "json_schema") return false;
+    if (responseMode === "json_schema") {
+      responseMode = "json_object";
+      lastError += " Strict structured output repeated the local validation failure. Switch to JSON-object mode and repair the exact field paths while preserving all valid evidence.";
+      return true;
+    }
     if (responseMode === "json_object" && jsonObjectContentRetries < 2) {
       jsonObjectContentRetries++;
       lastError += " Correct every reported issue and return one complete object matching outputSchema.";
