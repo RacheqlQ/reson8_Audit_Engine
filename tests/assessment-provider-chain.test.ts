@@ -121,7 +121,7 @@ describe("assessment provider chain diagnostics", () => {
     });
     expect(error.diagnostics[1]).toMatchObject({
       provider: "gemini", model: "gemini-3.5-flash-lite", attemptCount: 3,
-      statusCodes: [503], failureClasses: ["capacity_or_503"], estimatedInputTokens: [5829],
+      statusCodes: [503, 503, 503], failureClasses: ["capacity_or_503"], estimatedInputTokens: [5829, 5829, 5829],
       actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null },
     });
     expect(attempts).toHaveLength(5);
