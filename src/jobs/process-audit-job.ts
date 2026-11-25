@@ -115,6 +115,11 @@ function safeAuditErrorCode(error: unknown): string {
     [/Report v2 renderer did not return a PDF/i, "PDF_RENDERER_INVALID_OUTPUT"],
     [/Report JSON payload does not contain a valid audit report input/i, "PDF_REPORT_INPUT_INVALID"],
     [/Report source is neither a PDF nor valid JSON/i, "PDF_REPORT_SOURCE_INVALID"],
+    [/PROVIDER_PROMPT_BUDGET_EXCEEDED|preflight_budget/i, "AI_PROVIDER_PREFLIGHT_BUDGET_EXCEEDED"],
+    [/completion_truncated/i, "AI_PROVIDER_COMPLETION_TRUNCATED"],
+    [/threshold_violation/i, "AI_PROVIDER_THRESHOLD_VIOLATION"],
+    [/malformed_output|HTTP 400|json_validate_failed/i, "AI_PROVIDER_MALFORMED_OUTPUT"],
+    [/capacity_or_503|HTTP 503|HTTP 429/i, "AI_PROVIDER_CAPACITY_EXHAUSTED"],
     [/HTTP 402|payment required|insufficient credits|billing required/i, "AI_PROVIDER_BILLING_REQUIRED"],
     [/Maximum call stack size exceeded|too many arguments|Maximum call stack/i, "PDF_RENDERER_ARGUMENT_LIMIT"],
     [/WinAnsi|cannot encode|encode.*character|glyph/i, "PDF_FONT_ENCODING_ERROR"],
@@ -153,9 +158,9 @@ export function classifyAuditFailure(error: unknown): AuditFailureCode {
   const message = error instanceof Error ? error.message : String(error);
   if (/AI_PROVIDERS_UNAVAILABLE|provider unavailable|provider_error|HTTP 402|payment required|insufficient credits|billing required|HTTP 5\d\d|service unavailable|bad gateway|gateway timeout|not configured|fetch failed|ECONNRESET|ENOTFOUND|EHOSTUNREACH/i.test(message)) return "provider_unavailable";
   if (/HTTP 401|HTTP 403|unauthorized|forbidden|authentication/i.test(message)) return "auth";
-  if (/capacity|HTTP 413|HTTP 429|TPD|tokens per day|GROQ_REQUEST_TOO_LARGE/i.test(message)) return "capacity";
+  if (/preflight_budget|PROVIDER_PROMPT_BUDGET_EXCEEDED|capacity|HTTP 413|HTTP 429|TPD|tokens per day|GROQ_REQUEST_TOO_LARGE/i.test(message)) return "capacity";
   if (/timed out|timeout|ETIMEDOUT|GROQ_ASSESSMENT_TIMEOUT|AUDIT_STAGE_TIMEOUT|AUDIT_JOB_DEADLINE_EXCEEDED/i.test(message)) return "timeout";
-  if (/json_validate_failed|failed to validate JSON|Zod validation|malformed JSON|not valid JSON/i.test(message)) return "malformed_output";
+  if (/completion_truncated|threshold_violation|malformed_output|json_validate_failed|failed to validate JSON|Zod validation|malformed JSON|not valid JSON/i.test(message)) return "malformed_output";
   return "processing_error";
 }
 
