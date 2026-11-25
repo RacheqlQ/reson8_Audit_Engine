@@ -151,3 +151,24 @@ describe("assessment provider chain diagnostics", () => {
     });
   });
 });
+
+
+describe("Gemini capacity recovery back to Groq", () => {
+  it("retries the Groq provider after Gemini exhausts its bounded capacity attempts", async () => {
+    let groqCalls = 0;
+    const groq = { assess: vi.fn(async () => {
+      groqCalls++;
+      if (groqCalls === 1) throw new Error("Groq narrative completion_truncated");
+      return { verdict: "completed-by-groq" };
+    }) };
+    const gemini = { assess: vi.fn().mockRejectedValue(new Error("Gemini evidence-score failed with HTTP 503 capacity_or_503")) };
+    const result = await runAssessmentProviderChain([
+      { provider: "groq", model: "gpt-oss", client: groq },
+      { provider: "gemini", model: "gemini-flash-lite", client: gemini },
+      { provider: "groq", model: "gpt-oss", client: groq },
+    ], { trackId: "capacity-fallback-fixture" });
+    expect(result).toEqual({ verdict: "completed-by-groq" });
+    expect(groq).toHaveBeenCalledTimes(2);
+    expect(gemini).toHaveBeenCalledOnce();
+  });
+});
