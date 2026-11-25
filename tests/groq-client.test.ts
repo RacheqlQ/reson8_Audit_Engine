@@ -1289,3 +1289,73 @@ describe("complete local A&R provider contract", () => {
     }));
   });
 });
+
+
+describe("nine-section master and DSP-link execution modes", () => {
+  it.each([
+    {
+      mode: "master",
+      sonicDna: { provenance: "uploaded_audio_master", evidenceClass: "OBSERVED", bpm: 112, tempoConfidence: 0.86, key: "A", mode: "minor", tonalResolution: { status: "CONFIRMED", tonic: "A", mode: "minor", confidence: 0.9, voteConsensus: 0.84 } },
+      evidence: { auditType: "MASTER-BASED AUDIT", sourceType: "master", artist: "Master Fixture", title: "Master Fixture Track" },
+    },
+    {
+      mode: "dsp_link",
+      sonicDna: null,
+      evidence: { auditType: "DSP-LINK AUDIT", sourceType: "dsp_link", artist: "DSP Fixture", title: "DSP Fixture Track", catalogUrl: "https://music.example/track/123" },
+    },
+  ])("completes all nine assessment groups and report adaptation for $mode input", async ({ mode, sonicDna, evidence }) => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const assessment = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence, sonicDna });
+    const groups = mock.mock.calls.map(call => {
+      const body = JSON.parse(String(call[1]?.body));
+      return JSON.parse(body.messages[1].content).sectionGroup;
+    });
+    expect(new Set(groups)).toEqual(new Set(["narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline"]));
+    expect(groups).toHaveLength(9);
+    expect(assessment.aAndRPositioning.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    if (mode === "dsp_link") {
+      expect(assessment.scorecard.rhythmicConsistency.score).toBeNull();
+      expect(assessment.scorecard.tempoLaneFit.score).toBeNull();
+    }
+    const report = adaptReportV2({
+      auditId: "nine-section-" + mode,
+      generatedAt: "2026-11-25T00:00:00.000Z",
+      evidence,
+      sonicDna,
+      assessment,
+      executionMode: mode,
+    });
+    expect(report.decisionDimensions).toHaveLength(4);
+    if (mode === "dsp_link") {
+      expect(report.tempo.value).toBeNull();
+      expect(report.key.value).toBeNull();
+      expect(report.hasVerifiedCommercialEvidence).toBe(false);
+    }
+  });
+
+  it("keys completed section caching and persistence by the actual provider and model", async () => {
+    const loaded: Array<{ group: string; provider: string; model: string }> = [];
+    const saved: Array<{ group: string; provider: string; model: string }> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    await new GroqClient("test-key", "cache-model", mock as typeof fetch, async () => {})
+      .assess({
+        evidence: {}, sonicDna: null,
+        loadCompletedSectionGroup: async (group, provider, model) => { loaded.push({ group, provider, model }); return null; },
+        saveCompletedSectionGroup: async (group, _result, provider, model) => { saved.push({ group, provider, model }); },
+      });
+    expect(loaded).toHaveLength(9);
+    expect(saved).toHaveLength(9);
+    expect(loaded.every(item => item.provider === "groq" && item.model === "cache-model")).toBe(true);
+    expect(saved.every(item => item.provider === "groq" && item.model === "cache-model")).toBe(true);
+  });
+});
