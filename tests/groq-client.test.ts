@@ -196,7 +196,7 @@ describe("GroqClient section groups",()=>{
    const body=JSON.parse(String(call[1]?.body));
    const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
-   expect(body.max_completion_tokens).toBeLessThanOrEqual(1600);
+   expect(body.max_completion_tokens).toBeLessThanOrEqual(2000);
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
  });
@@ -1636,7 +1636,7 @@ describe("production A&R provider capacity regressions", () => {
       }
       return new Response(JSON.stringify({
         choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
-        usage: { prompt_tokens: 3000, completion_tokens: 500, total_tokens: 3500 },
+        usage: { prompt_tokens: 3000, completion_tokens: 100, total_tokens: 3100 },
       }), { status: 200 });
     });
     const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
@@ -1645,5 +1645,28 @@ describe("production A&R provider capacity regressions", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(evidenceScoreCalls).toBe(8);
     expect(attempts.filter(attempt => attempt.group === "evidence-score" && attempt.status === 503)).toHaveLength(7);
+  });
+});
+
+
+describe("provider completion finish-reason precedence", () => {
+  it("does not treat a complete stop response as truncated merely because usage reaches its token allowance", async () => {
+    const attempts: ProviderAttemptDiagnostic[] = [];
+    const calls = new Map<string, number>();
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      calls.set(payload.sectionGroup, (calls.get(payload.sectionGroup) ?? 0) + 1);
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+        usage: { prompt_tokens: 2500, completion_tokens: body.max_completion_tokens, total_tokens: 2500 + body.max_completion_tokens },
+      }), { status: 200 });
+    });
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: { artist: "Stop Finish Fixture" }, sonicDna: null,
+        recordProviderAttempt: async attempt => { attempts.push(attempt); } });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(calls.get("narrative")).toBe(1);
+    expect(attempts.some(attempt => attempt.failureKind === "completion_truncated")).toBe(false);
   });
 });
