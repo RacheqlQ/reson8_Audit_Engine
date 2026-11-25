@@ -1761,6 +1761,9 @@ describe("shared Groq and Gemini request token budget", () => {
       const evidenceScoreCompaction = recoveryLogs.find(event => event.group === "evidence-score");
       expect(evidenceScoreCompaction).toBeDefined();
       expect(Number(evidenceScoreCompaction?.estimatedInputTokensAfter)).toBeLessThan(Number(evidenceScoreCompaction?.estimatedInputTokensBefore));
+      const evidenceScoreBudget = budgetLogs.find(event => event.group === "evidence-score");
+      expect(Number(evidenceScoreBudget?.estimatedInputTokens)).toBeLessThanOrEqual(5000);
+      expect(Number(evidenceScoreBudget?.maxCompletionTokens)).toBe(1000);
       for (const budget of budgetLogs) {
         expect(budget.maxTotalTokens).toBe(6000);
         expect(Number(budget.estimatedTotalTokens)).toBeLessThanOrEqual(6000);
