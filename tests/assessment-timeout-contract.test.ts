@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AI_ASSESSMENT_STAGE_TIMEOUT_MS, classifyAuditFailure } from "../src/jobs/process-audit-job.js";
-import { GROQ_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
+import { GEMINI_ASSESSMENT_TIMEOUT_MS, GROQ_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
 
 describe("AI assessment deadline contract", () => {
   it("allows eleven minutes for the surrounding assessment stage", () => {
@@ -10,6 +10,10 @@ describe("AI assessment deadline contract", () => {
   it("keeps the Groq provider deadline below the outer stage deadline", () => {
     expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBeLessThan(AI_ASSESSMENT_STAGE_TIMEOUT_MS);
     expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBe(7 * 60_000);
+  });
+
+  it("reserves one minute for handoff after the bounded Groq and Gemini provider deadlines", () => {
+    expect(GROQ_ASSESSMENT_TIMEOUT_MS + GEMINI_ASSESSMENT_TIMEOUT_MS + 60_000).toBeLessThanOrEqual(AI_ASSESSMENT_STAGE_TIMEOUT_MS);
   });
 
   it("classifies exhausted Groq JSON validation responses as malformed output", () => {
