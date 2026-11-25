@@ -20,6 +20,28 @@ const p=(group:string):Record<string,unknown>=>{
  }
 };
 function fetchMock(invalid?:string){const counts=new Map<string,number>();const mock=vi.fn(async (_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const name=body.response_format.json_schema.name.replace(/^ar_/,"");const n=(counts.get(name)??0)+1;counts.set(name,n);const value=name===invalid&&n===1?{}:p(name);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});return {mock,counts};}
+describe("Groq strict-schema compatibility recovery", () => {
+  it("switches to locally validated JSON-object mode when Groq rejects strict schema with HTTP 400", async () => {
+    const narrativeModes: unknown[] = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative") {
+        narrativeModes.push(body.response_format);
+        if (narrativeModes.length === 1) {
+          return new Response(JSON.stringify({ error: { code: "invalid_request_error", message: "response_format json_schema is unsupported" } }), { status: 400 });
+        }
+      }
+      return new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: { artist: "Strict Schema Recovery Fixture" }, sonicDna: null });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(narrativeModes[0]).toMatchObject({ type: "json_schema" });
+    expect(narrativeModes[1]).toEqual({ type: "json_object" });
+  });
+});
+
 describe("GroqClient section groups",()=>{
  it("spells out the narrative minimums and corrects an under-length strengths array",async()=>{
   let narrativeCalls=0;
@@ -1571,8 +1593,8 @@ describe("Groq narrative completion recovery", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(narrativeBudgets).toHaveLength(2);
     expect(narrativeBudgets[0]).toBe(850);
-    expect(narrativeBudgets[1]).toBe(narrativeBudgets[0]);
-    expect(narrativeBudgets[1]).toBe(850);
+    expect(narrativeBudgets[1]).toBeGreaterThan(narrativeBudgets[0]);
+    expect(narrativeBudgets[1]).toBe(1275);
     expect(attempts).toContainEqual(expect.objectContaining({ failureKind: "completion_truncated", failureClass: "completion_truncated", finishReason, completionTokenBudget: 850, actualUsage: { status: "reported", promptTokens: 2500, completionTokens: 850, totalTokens: 3350 } }));
     expect(mock.mock.calls.every(call => {
       const body = JSON.parse(String(call[1]?.body));
@@ -1613,9 +1635,9 @@ describe("production A&R provider capacity regressions", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(budgets).toHaveLength(4);
     expect(budgets[0]).toBe(850);
-    expect(budgets[1]).toBe(850);
-    expect(budgets[2]).toBe(850);
-    expect(budgets[3]).toBe(850);
+    expect(budgets[1]).toBe(1275);
+    expect(budgets[2]).toBe(1913);
+    expect(budgets[3]).toBe(2000);
     expect(mock.mock.calls.every(call => {
       const body = JSON.parse(String(call[1]?.body));
       const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
@@ -1673,7 +1695,7 @@ describe("Groq retry prompt-usage calibration", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(narrativeBudgets.length).toBeGreaterThanOrEqual(2);
     expect(narrativeBudgets[0]).toBe(850);
-    expect(narrativeBudgets[1]).toBe(850);
+    expect(narrativeBudgets[1]).toBe(1275);
   });
 });
 

@@ -122,13 +122,15 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
       const groqModel = process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL;
       const providers = [
         { provider: "groq" as const, model: groqModel, client: groq },
-        { provider: "gemini" as const, model: readiness.find((item) => item.provider === "gemini")?.model ?? "gemini-3.5-flash-lite", client: gemini },
-        // If Gemini exhausts transient capacity after the primary Groq attempt,
-        // retry Groq once. Provider-scoped section cache skips groups already
-        // completed by Groq, so recovery resumes at the first missing section.
+        // Prioritize Groq recovery before any secondary provider. The provider-scoped
+        // section cache resumes at the first missing group and avoids regenerating
+        // sections already completed successfully by the primary Groq attempt.
         ...(groq ? [{ provider: "groq" as const, model: groqModel, client: new GroqClient(
           process.env.GROQ_API_KEY ?? process.env.GROQ_API, groqModel, fetch, undefined, undefined, 4 * 60_000,
         ) }] : []),
+        // Gemini is a last-resort fallback; its capacity and narrative threshold
+        // behavior must not pre-empt the bounded Groq recovery attempt.
+        { provider: "gemini" as const, model: readiness.find((item) => item.provider === "gemini")?.model ?? "gemini-3.5-flash-lite", client: gemini },
       ];
       return runAssessmentProviderChain(providers, assessmentInput, signal, {
         onSkipped: async (candidate) => {
