@@ -984,14 +984,18 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 
     let payload: { choices?: Array<{ message?: { content?: string | null } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
     try {
-      payload = await response.json() as typeof payload;
+      const decoded: unknown = await response.json();
+      if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+        throw new Error("Provider response envelope must be a JSON object");
+      }
+      payload = decoded as typeof payload;
     } catch {
       await recordProviderAttempt(input, {
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
         errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName,
         failureKind: "invalid_json",
       });
-      if (scheduleCorrection("The provider returned a non-JSON response envelope with HTTP success. Return one complete JSON object in the required response format.")) continue;
+      if (scheduleCorrection("The provider returned an invalid JSON response envelope with HTTP success. Return one complete JSON object in the required response format.")) continue;
       break;
     }
     console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, actualPromptTokens: payload.usage?.prompt_tokens ?? null, actualCompletionTokens: payload.usage?.completion_tokens ?? null, actualTotalTokens: payload.usage?.total_tokens ?? null }));
