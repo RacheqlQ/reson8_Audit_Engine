@@ -486,7 +486,7 @@ function compactNarrativeContext(value: unknown, field = ""): unknown {
   if (value === null || typeof value !== "object") {
     if (typeof value !== "string") return value;
     const preserveLongValue = /^(claim|value|normalizedValue|source|provider|artist|title|isrc)$/i.test(field);
-    const limit = preserveLongValue ? 120 : /^(description|commentary|notes|detail|reason|rawPayload)$/i.test(field) ? 32 : 48;
+    const limit = preserveLongValue ? 120 : /^(description|commentary|notes|detail|reason|rawPayload)$/i.test(field) ? 24 : 32;
     return value.length > limit ? value.slice(0, limit) + "…" : value;
   }
   if (Array.isArray(value)) {
@@ -530,6 +530,15 @@ function compactGroqPromptForBudget(
   const payload = JSON.parse(messages[1].content) as Record<string, unknown>;
   payload.correction = compactCorrectionInstruction(String(payload.correction ?? ""));
   payload.evidence = compactNarrativeContext(payload.evidence);
+  if (groupName === "narrative" && payload.evidence && typeof payload.evidence === "object" && !Array.isArray(payload.evidence)) {
+    const evidence = payload.evidence as Record<string, unknown>;
+    if (Array.isArray(evidence.sourceProviders) && evidence.fieldProvenance && typeof evidence.fieldProvenance === "object") {
+      // These are duplicate catalog summaries; source names and field-level
+      // provenance remain in the mandatory canonical evidence fields.
+      delete evidence.catalogSources;
+      delete evidence.metadataSourcesChecked;
+    }
+  }
   payload.sonicDna = groupName === "narrative" ? compactNarrativeSonicDna(payload.sonicDna) : compactNarrativeContext(payload.sonicDna);
   payload.catalogMetadata = compactNarrativeContext(payload.catalogMetadata);
   messages[1].content = JSON.stringify(payload);
