@@ -127,7 +127,7 @@ const SYSTEM_PROMPT = [
   "Use reconciled identity/provenance; preserve ISRC conflicts and ambiguity. DSP/catalog links are not audio and cannot establish OBSERVED audio. No external stem, separation or render workers; No external stem/separation/render workers.",
   "Without verified commercial telemetry, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE and PRE_RELEASE/POST_RELEASE. Market verdict remains PROPOSED absent deterministic evidence.",
   "Null score means insufficient evidence. RMS/dBFS do not prove mastering readiness; loudness changes need a measured fault and destination target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
-  "Do not score taste, hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return one complete JSON object only and obey local validation."
+  "Do not score taste, hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return JSON only as one complete object and obey local validation."
 ].join(" ");
 const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive.";
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
@@ -255,20 +255,23 @@ function thresholdContractInstructions(group: string): string {
 }
 
 function compactedSchemaConstraintInstructions(schema: unknown): string {
-  const constraints: string[] = [];
+  const constraints = new Map<string, Set<string>>();
   const visit = (node: unknown, path: string): void => {
     if (!node || typeof node !== "object" || Array.isArray(node)) return;
     const record = node as Record<string, any>;
-    const bounds: string[] = [];
-    if (typeof record.minLength === "number") bounds.push(">=" + record.minLength + " chars");
-    if (typeof record.maxLength === "number") bounds.push("<=" + record.maxLength + " chars");
+    let normalizedPath = path
+      .replace(/^scorecard\\.[^.]+\\.score$/, "scorecard.*.score")
+      .replace(/^scorecard\\.[^.]+\\.rationale$/, "scorecard.*.rationale");
+    const bounds = constraints.get(normalizedPath) ?? new Set<string>();
+    if (typeof record.minLength === "number") bounds.add(">=" + record.minLength + "ch");
+    if (typeof record.maxLength === "number") bounds.add("<=" + record.maxLength + "ch");
     if (typeof record.minItems === "number" || typeof record.maxItems === "number") {
-      bounds.push("items " + (record.minItems ?? 0) + ".." + (record.maxItems ?? "∞"));
+      bounds.add("items=" + (record.minItems ?? 0) + ".." + (record.maxItems ?? "∞"));
     }
     if (typeof record.minimum === "number" || typeof record.maximum === "number") {
-      bounds.push("number " + (record.minimum ?? "-∞") + ".." + (record.maximum ?? "∞"));
+      bounds.add("number=" + (record.minimum ?? "-∞") + ".." + (record.maximum ?? "∞"));
     }
-    if (bounds.length) constraints.push(path + ":" + bounds.join(","));
+    if (bounds.size) constraints.set(normalizedPath, bounds);
     if (record.properties && typeof record.properties === "object") {
       for (const [key, child] of Object.entries(record.properties)) visit(child, path ? path + "." + key : key);
     }
@@ -278,7 +281,8 @@ function compactedSchemaConstraintInstructions(schema: unknown): string {
     }
   };
   visit(schema, "");
-  return constraints.length ? "Retain these compacted local schema bounds exactly: " + constraints.join("; ") + "." : "";
+  const limits = [...constraints.entries()].map(([path, bounds]) => path + " " + [...bounds].join(" "));
+  return limits.length ? "Compacted local schema bounds (all mandatory): " + limits.join("; ") + "." : "";
 }
 function safeThresholdDiagnostic(violation: ThresholdViolation): ThresholdViolation {
   return violation;
