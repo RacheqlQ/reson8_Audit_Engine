@@ -115,9 +115,16 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         loadCompletedSectionGroup: (group: string, provider: "groq" | "gemini" | "ollama", model: string) => store.loadAssessmentSectionGroup(job.id, group, provider, model),
         saveCompletedSectionGroup: (group: string, result: unknown, provider: "groq" | "gemini" | "ollama", model: string) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, provider, model, signal),
       };
+      const groqModel = process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL;
       const providers = [
-        { provider: "groq" as const, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, client: groq },
+        { provider: "groq" as const, model: groqModel, client: groq },
         { provider: "gemini" as const, model: readiness.find((item) => item.provider === "gemini")?.model ?? "gemini-3.5-flash-lite", client: gemini },
+        // If Gemini exhausts transient capacity after the primary Groq attempt,
+        // retry Groq once. Provider-scoped section cache skips groups already
+        // completed by Groq, so recovery resumes at the first missing section.
+        ...(groq ? [{ provider: "groq" as const, model: groqModel, client: new GroqClient(
+          process.env.GROQ_API_KEY ?? process.env.GROQ_API, groqModel, fetch, undefined, undefined, 4 * 60_000,
+        ) }] : []),
       ];
       return runAssessmentProviderChain(providers, assessmentInput, signal, {
         onSkipped: async (candidate) => {
