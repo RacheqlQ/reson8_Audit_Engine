@@ -540,7 +540,6 @@ function compactGroqPromptForBudget(
   if (after > targetInputTokens && groupName === "narrative") {
     const compactPayload = JSON.parse(messages[1].content) as Record<string, unknown>;
     compactPayload.correction = "Return one complete schema-valid JSON object. Preserve evidence, provenance, verdicts and nulls; repair only the failed output.";
-    compactPayload.catalogMetadata = null;
     messages[1].content = JSON.stringify(compactPayload);
     after = estimatePromptInputTokens(messages, responseFormat);
   }
