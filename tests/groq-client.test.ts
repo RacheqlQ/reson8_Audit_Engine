@@ -1358,7 +1358,10 @@ describe("Groq narrative prompt budget recovery", () => {
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
     });
     const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
-      .assess({ evidence, sonicDna });
+      .assess({
+        evidence, sonicDna,
+        loadCompletedSectionGroup: async group => group === "narrative" ? null : p(group),
+      });
 
     const narrativeRequests = requests.filter(request =>
       JSON.parse(request.body.messages[1].content).sectionGroup === "narrative");
