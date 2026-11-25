@@ -3,7 +3,7 @@ import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails
 import { sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
 import { markAssessmentProviderUnavailable } from "../provider-policy.js";
 
-export const GROQ_PROMPT_VERSION = "audit-ar-v9-positioning-reliability-2026-11-24";
+export const GROQ_PROMPT_VERSION = "audit-ar-v10-contract-recovery-2026-11-25";
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 
 const EvidenceLabelSchema = z.object({
@@ -114,8 +114,8 @@ export interface GroqAssessmentInput {
   recordProviderAttempt?: (attempt: ProviderAttemptDiagnostic) => Promise<void>;
   sonicDna: Record<string, unknown> | null;
   catalogMetadata?: Record<string, unknown> | null;
-  loadCompletedSectionGroup?: (group: string) => Promise<unknown | null>;
-  saveCompletedSectionGroup?: (group: string, result: unknown) => Promise<void>;
+  loadCompletedSectionGroup?: (group: string, provider: "groq" | "gemini" | "ollama", model: string) => Promise<unknown | null>;
+  saveCompletedSectionGroup?: (group: string, result: unknown, provider: "groq" | "gemini" | "ollama", model: string) => Promise<void>;
 }
 export interface GroqAssessmentClient { assess(input: GroqAssessmentInput, signal?: AbortSignal): Promise<ArAssessment>; }
 
@@ -736,7 +736,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const outputSchema = ["evidence-score", "narrative", "positioning", "release", "promotion"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
   const schemaConstraintGuidance = compactedSchemaConstraintInstructions(rawOutputSchema);
   const wordContractGuidance = thresholdContractInstructions(groupName);
-  const completed = await input.loadCompletedSectionGroup?.(cacheGroupName);
+  const completed = await input.loadCompletedSectionGroup?.(cacheGroupName, providerName as "groq" | "gemini" | "ollama", model);
   if (completed !== null && completed !== undefined) {
     const cached = schema.safeParse(completed);
     if (cached.success && thresholdViolations(groupName, cached.data).length === 0) return cached.data;
@@ -1029,7 +1029,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (scheduleCorrection(correction + " Repair every named field and preserve the evidence-bounded meaning.")) continue;
       break;
     }
-    await input.saveCompletedSectionGroup?.(cacheGroupName, result.data);
+    await input.saveCompletedSectionGroup?.(cacheGroupName, result.data, providerName as "groq" | "gemini" | "ollama", model);
     return result.data;
   }
 
