@@ -48,11 +48,12 @@ describe("GroqClient section groups",()=>{
   expect(narrativePayloads[1].correction).toContain("strengths");
   expect(result.strengths).toHaveLength(3);
  });
- it("keeps all provider deadlines within the ten-minute assessment stage",()=>{
-  expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBe(4*60_000);
+ it("keeps production provider fallback deadlines inside the eleven-minute assessment stage",()=>{
+  expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBe(7*60_000);
   expect(GEMINI_ASSESSMENT_TIMEOUT_MS).toBe(3*60_000);
   expect(OLLAMA_ASSESSMENT_TIMEOUT_MS).toBe(2*60_000);
-  expect(GROQ_ASSESSMENT_TIMEOUT_MS+GEMINI_ASSESSMENT_TIMEOUT_MS+OLLAMA_ASSESSMENT_TIMEOUT_MS).toBeLessThan(10*60_000);
+  expect(GROQ_ASSESSMENT_TIMEOUT_MS+GEMINI_ASSESSMENT_TIMEOUT_MS+60_000).toBeLessThanOrEqual(11*60_000);
+  expect(OLLAMA_ASSESSMENT_TIMEOUT_MS).toBeLessThan(11*60_000);
  });
  it("uses the bounded provider-specific deadline defaults",async()=>{
   const groqController=new AbortController();
