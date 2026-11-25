@@ -127,7 +127,7 @@ const SYSTEM_PROMPT = [
   "Reconcile identity/provenance; preserve ISRC conflicts and ambiguity. DSP/catalog links are not audio and cannot establish OBSERVED audio. No external stem, separation or render workers.",
   "Without verified commercial telemetry, marketability=undetermined. Release date DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE and PRE_RELEASE/POST_RELEASE. Market verdict PROPOSED absent deterministic evidence.",
   "Null score=insufficient evidence. RMS/dBFS do not prove mastering readiness; loudness changes need measured fault+destination target. Centroid <=2,000 Hz is not bright; mono is a risk, not proof of incompatibility.",
-  "Do not score taste/hook/originality/production/replay/lane clarity; keep in the unscored human-listening checklist. Return one complete JSON object; obey local validation."
+  "Do not score taste/hook/originality/production/replay/lane clarity; keep in the unscored human-listening checklist. Return JSON only as one complete object; obey local validation."
 ].join(" ");
 const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive.";
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
