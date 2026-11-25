@@ -1746,7 +1746,7 @@ describe("shared Groq and Gemini request token budget", () => {
         dynamicRangeDb: 8.2, rmsLevelDbfs: -18, rmsEnergy: 0.1, loudnessLufs: null, loudnessRangeLu: null, truePeakDbfs: -1,
         spectralCentroidHz: 1900, spectralBandwidthHz: 1200, spectralRolloffHz: 7000, zeroCrossingRate: 0.04,
         sampleRate: 44100, channels: 2, durationSeconds: 180,
-        audioProperties: Object.fromEntries(Array.from({ length: 48 }, (_, i) => ["property" + i, "fixture-value-" + i]),
+        audioProperties: Object.fromEntries(Array.from({ length: 48 }, (_, i) => ["property" + i, "fixture-value-" + i])),
       };
       const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
         .assess({ evidence, sonicDna });
