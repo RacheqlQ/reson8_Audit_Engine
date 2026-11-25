@@ -286,7 +286,6 @@ function safeThresholdDiagnostic(violation: ThresholdViolation): ThresholdViolat
 
 const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
 let groqDailyCapUntil = 0;
-let groqCompletionBudgetScale = 1;
 const MAX_NETWORK_ATTEMPTS = 3;
 export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
 export const GROQ_ASSESSMENT_TIMEOUT_MS = 4 * 60_000;
@@ -816,7 +815,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // ceiling overcounts JSON schema syntax so heavily that normal sections are
     // rejected before reaching Groq; the 256-token allowance covers framing.
     const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 2) + 256;
-    const sectionOutputBudget = Math.floor(Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600) * (providerName === "groq" ? groqCompletionBudgetScale : 1));
+    const sectionOutputBudget = Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
     const groqTpmBudgetApplies = providerName === "groq";
     // The 6,000-token ceiling is a Groq TPM safeguard, not a global model
     // output limit. Applying it to Gemini/Ollama starved evidence-score of its
@@ -929,8 +928,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 413) {
-        if (process.env.NODE_ENV !== "test") groqCompletionBudgetScale = Math.max(0.25, groqCompletionBudgetScale * 0.5);
-        throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; it was not retried and future Groq completion budgets were reduced");
+        throw new Error("GROQ_REQUEST_TOO_LARGE: provider rejected the request; it was not retried. Completion budgets remain unchanged for subsequent audits.");
       }
 
       if (response?.status === 400 && providerError.error?.code === "json_validate_failed") {
