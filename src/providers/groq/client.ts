@@ -290,6 +290,7 @@ function safeThresholdDiagnostic(violation: ThresholdViolation): ThresholdViolat
 const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
 let groqDailyCapUntil = 0;
 const MAX_NETWORK_ATTEMPTS = 3;
+const MAX_GEMINI_NETWORK_ATTEMPTS = 5;
 export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
 export const GROQ_ASSESSMENT_TIMEOUT_MS = 7 * 60_000;
 export const GEMINI_ASSESSMENT_TIMEOUT_MS = 3 * 60_000;
@@ -827,6 +828,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   let responseMode: "json_schema" | "json_object" | "prompt_only" = providerName === "groq" ? "json_schema" : "json_object";
   const cacheGroupName = groupName;
   const providerLabel = providerName === "gemini" ? "Gemini" : providerName === "ollama" ? "Ollama" : "Groq";
+  const maxNetworkAttempts = providerName === "gemini" ? MAX_GEMINI_NETWORK_ATTEMPTS : MAX_NETWORK_ATTEMPTS;
   const tokenField = providerName === "groq" ? "max_completion_tokens" : "max_tokens";
   const rawOutputSchema = z.toJSONSchema(schema);
   const outputSchema = ["evidence-score", "narrative", "positioning", "release", "promotion"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
@@ -969,7 +971,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: groqTpmBudgetApplies ? MAX_GROQ_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
-    for (let networkAttempt = 0; networkAttempt < MAX_NETWORK_ATTEMPTS; networkAttempt++) {
+    for (let networkAttempt = 0; networkAttempt < maxNetworkAttempts; networkAttempt++) {
       signal?.throwIfAborted();
       // Each retry is a new provider request and must consume its own rolling TPM reservation.
       if (groqTpmBudgetApplies && process.env.NODE_ENV !== "test") {
@@ -988,7 +990,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         });
       } catch (error) {
         const timedOut = requestTimeoutSignal.aborted && !signal?.aborted;
-        const retryable = !signal?.aborted && networkAttempt < MAX_NETWORK_ATTEMPTS - 1;
+        const retryable = !signal?.aborted && networkAttempt < maxNetworkAttempts - 1;
         await recordProviderAttempt(input, {
           provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
           errorType: timedOut ? "timeout" : "provider_unavailable",
@@ -1044,7 +1046,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
       if (response.ok) break;
       const transient = response.status === 429 || response.status >= 500;
-      if (!transient || networkAttempt >= 2) break;
+      if (!transient || networkAttempt >= maxNetworkAttempts - 1) break;
       await sleepImpl(Math.min(60_000, await providerRetryDelayMs(response, networkAttempt)), signal);
       signal?.throwIfAborted();
     }
