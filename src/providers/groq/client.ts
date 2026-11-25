@@ -972,8 +972,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         const payload = JSON.parse(messages[1].content) as Record<string, unknown>;
         // These sections can share canonical source facts; tighten repeated provider
         // commentary and descriptive audio context while retaining source/status labels.
-        payload.evidence = compactEvidenceScoreValue(payload.evidence, 0, 32, 2);
-        payload.sonicDna = compactEvidenceScoreValue(payload.sonicDna, 0, 32, 2);
+        const evidenceStringLimit = groupName === "evidence-score" ? 24 : 32;
+        payload.evidence = compactEvidenceScoreValue(payload.evidence, 0, evidenceStringLimit, 2);
+        payload.sonicDna = compactEvidenceScoreValue(payload.sonicDna, 0, evidenceStringLimit, 2);
         payload.catalogMetadata = compactEvidenceScoreValue(payload.catalogMetadata, 0, 24, 2);
         payload.correction = groupName === "evidence-score"
           ? "Return one complete schema-valid evidence-score object. Preserve source labels, evidence classes, verified facts, nulls and all local validation minima."
