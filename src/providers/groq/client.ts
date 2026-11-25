@@ -475,10 +475,20 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
 }
 
 function compactCorrectionInstruction(reason: string): string {
-  if (/json.schema|json.object|json_validate_failed|rejected/i.test(reason)) {
-    return "Return one complete JSON object matching the supplied schema. Correct the structured-output format only; preserve all evidence, provenance, verdicts, nulls and required fields.";
+  if (/strict JSON-schema validation failed/i.test(reason)) {
+    return "Groq strict JSON-schema validation failed. Retry in JSON-object mode with one complete object matching outputSchema; preserve evidence, provenance, verdicts and nulls.";
   }
-  const safeReason = reason.replace(/\s+/g, " ").trim();
+  const localValidation = reason.match(/(?:json_object|prompt_only) response failed local Zod validation:\s*([\s\S]*?)(?:\. Correct every reported field|$)/i);
+  if (localValidation) {
+    const issues = localValidation[1].replace(/\s+/g, " ").trim();
+    return "Local schema validation issues: " + (issues.length > 300 ? issues.slice(0, 297) + "..." : issues)
+      + ". Correct the named fields; return one complete object and preserve all evidence.";
+  }
+  const safeReason = reason
+    .replace(/(?:The )?(?:json_schema|json_object|prompt_only) response failed local Zod validation:\s*/i, "Schema validation issues: ")
+    .replace(/Compacted local schema bounds \(all mandatory\):[^.]*\./g, "")
+    .replace(/The user payload includes outputSchema,[^.]*\./g, "")
+    .replace(/\s+/g, " ").trim();
   return safeReason.length > 360 ? safeReason.slice(0, 357) + "..." : safeReason;
 }
 
@@ -870,7 +880,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? " Match the supplied outputSchema exactly. Return one complete JSON object only; do not include outputSchema in the result. Local Zod and word-count validation remain mandatory."
       : "";
     const messages = [
-      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release", "promotion"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + " " + wordContractGuidance + (groupName === "narrative" || fallbackMode ? "" : " " + schemaConstraintGuidance) + schemaGuidance },
+      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release", "promotion"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + " " + wordContractGuidance + (fallbackMode ? "" : " " + schemaConstraintGuidance) + schemaGuidance },
       {
         role: "user",
         content: JSON.stringify({
@@ -1101,11 +1111,13 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? { status: "reported" as const, promptTokens: payload.usage.prompt_tokens ?? null, completionTokens: payload.usage.completion_tokens ?? null, totalTokens: payload.usage.total_tokens ?? null }
       : { status: "unavailable" as const, promptTokens: null, completionTokens: null, totalTokens: null };
     console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, usageStatus: actualUsage.status, actualPromptTokens: actualUsage.promptTokens, actualCompletionTokens: actualUsage.completionTokens, actualTotalTokens: actualUsage.totalTokens }));
-    await recordProviderAttempt(input, {
-      provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
-      errorType: "none", retryable: false, attempt: attempt + 1, group: groupName,
-      estimatedInputTokens, actualUsage,
-    });
+    if (actualUsage.status === "reported") {
+      await recordProviderAttempt(input, {
+        provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
+        errorType: "none", retryable: false, attempt: attempt + 1, group: groupName,
+        estimatedInputTokens, actualUsage,
+      });
+    }
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
       await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "empty_content" });
