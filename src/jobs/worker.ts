@@ -128,8 +128,12 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
           });
           console.info(JSON.stringify({ worker: "audit", jobId: job.id, event: "provider_skipped", provider: candidate.provider, model: candidate.model, reason: status?.reason ?? "not_configured" }));
         },
-        onFailure: (candidate, error) => {
-          console.warn(JSON.stringify({ worker: "audit", jobId: job.id, event: "provider_fallback", provider: candidate.provider, model: candidate.model, reason: safeFailureCategory(error) }));
+        onFailure: (candidate, error, diagnostic) => {
+          console.warn(JSON.stringify({
+            worker: "audit", jobId: job.id, event: "provider_fallback",
+            provider: candidate.provider, model: candidate.model,
+            reason: safeFailureCategory(error), diagnostic,
+          }));
         },
       });
     },
