@@ -959,14 +959,16 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       const compacted = compactProviderPromptForBudget(messages, requestBody.response_format, groupName, targetInputTokens);
       estimatedInputTokens = compacted.after;
       let compactionPass = 1;
-      if (groupName === "evidence-score" && estimatedInputTokens > targetInputTokens) {
+      if (["evidence-score", "positioning"].includes(groupName) && estimatedInputTokens > targetInputTokens) {
         const payload = JSON.parse(messages[1].content) as Record<string, unknown>;
-        // Evidence-score already has canonical identity/provenance. Tighten descriptive
-        // summaries and repeated acoustic context without dropping source/status labels.
+        // These sections can share canonical source facts; tighten repeated provider
+        // commentary and descriptive audio context while retaining source/status labels.
         payload.evidence = compactEvidenceScoreValue(payload.evidence, 0, 32, 2);
         payload.sonicDna = compactEvidenceScoreValue(payload.sonicDna, 0, 32, 2);
         payload.catalogMetadata = compactEvidenceScoreValue(payload.catalogMetadata, 0, 24, 2);
-        payload.correction = "Return one complete schema-valid evidence-score object. Preserve source labels, evidence classes, verified facts, nulls and all local validation minima.";
+        payload.correction = groupName === "evidence-score"
+          ? "Return one complete schema-valid evidence-score object. Preserve source labels, evidence classes, verified facts, nulls and all local validation minima."
+          : "Return one complete positioning object. Preserve the >=40-word rationale minima, source labels, verified facts, nulls and evidence gaps; do not add claims.";
         messages[1].content = JSON.stringify(payload);
         estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
         compactionPass = 2;
