@@ -69,7 +69,7 @@ process.stdout.write("v2-phillo-stunixx-full: "+philloFullPdf.getPageCount()+" p
 
 const fullBytes=await generateAuditReportV2({...complete,generatedAt:"2026-11-20T00:00:00.000Z"},"full");
 const fullPdf=await PDFDocument.load(fullBytes);
-if(fullPdf.getPageCount()!==13)throw new Error("v2-complete-synthetic-full expected 13 pages (6 core + 5 narrative + 1 evidence-gated deep dive + final A&R notes); got "+fullPdf.getPageCount());
+if(fullPdf.getPageCount()!==12)throw new Error("v2-complete-synthetic-full expected 12 pages (6 core + 5 narrative + final A&R notes); got "+fullPdf.getPageCount());
 await writeFile(new URL("v2-complete-synthetic-full.pdf",out),fullBytes);
 const fullText=execFileSync("pdftotext",["-layout",new URL("v2-complete-synthetic-full.pdf",out).pathname,"-"],{encoding:"utf8"});
 const completePages=fullText.split("\f").filter(page=>page.trim().length>0);
