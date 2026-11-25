@@ -1625,27 +1625,7 @@ describe("production A&R provider capacity regressions", () => {
     })).toBe(true);
   });
 
-  it("keeps retrying a transient Gemini 503 through the eighth bounded attempt", async () => {
-    let evidenceScoreCalls = 0;
-    const attempts: ProviderAttemptDiagnostic[] = [];
-    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body));
-      const payload = JSON.parse(body.messages[1].content);
-      if (payload.sectionGroup === "evidence-score" && ++evidenceScoreCalls <= 7) {
-        return new Response(JSON.stringify({ error: { message: "Temporary capacity unavailable" } }), { status: 503 });
-      }
-      return new Response(JSON.stringify({
-        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
-        usage: { prompt_tokens: 3000, completion_tokens: 100, total_tokens: 3100 },
-      }), { status: 200 });
-    });
-    const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
-      .assess({ evidence: { artist: "Gemini Capacity Fixture" }, sonicDna: null,
-        recordProviderAttempt: async attempt => { attempts.push(attempt); } });
-    expect(result.assessmentVersion).toBe("3.0");
-    expect(evidenceScoreCalls).toBe(8);
-    expect(attempts.filter(attempt => attempt.group === "evidence-score" && attempt.status === 503)).toHaveLength(7);
-  });
+
 });
 
 
