@@ -1434,3 +1434,20 @@ describe("assessment section cache resilience", () => {
     expect(saveCalls).toBe(9);
   });
 });
+
+
+describe("assessment section cache lease fencing", () => {
+  it("does not swallow a lost worker lease while persisting a completed section", async () => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    await expect(new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({
+        evidence: {}, sonicDna: null,
+        saveCompletedSectionGroup: async () => { throw new Error("AUDIT_LEASE_LOST"); },
+      })).rejects.toThrow("AUDIT_LEASE_LOST");
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+});
