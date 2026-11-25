@@ -1255,14 +1255,18 @@ describe("complete local A&R provider contract", () => {
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       const payload = JSON.parse(body.messages[1].content);
-      if (payload.sectionGroup === "narrative" && narrativeCalls++ === 0) return new Response("not-json", { status: 200 });
+      if (payload.sectionGroup === "narrative") {
+        const attempt = narrativeCalls++;
+        if (attempt === 0) return new Response("not-json", { status: 200 });
+        if (attempt === 1) return new Response("null", { status: 200 });
+      }
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
     });
     const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
       .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
     expect(result.assessmentVersion).toBe("3.0");
-    expect(narrativeCalls).toBe(2);
-    expect(attempts).toContainEqual(expect.objectContaining({ group: "narrative", failureKind: "invalid_json", status: 200 }));
+    expect(narrativeCalls).toBe(3);
+    expect(attempts.filter(attempt => attempt.group === "narrative" && attempt.failureKind === "invalid_json")).toHaveLength(2);
   });
 
   it("applies the same 25-word scorecard rationale contract to optional tonalConsensus when present", async () => {
@@ -1382,5 +1386,28 @@ describe("Groq rolling TPM retry accounting", () => {
       vi.unstubAllEnvs();
       acquire.mockRestore();
     }
+  });
+});
+
+
+describe("Gemini section cache provenance", () => {
+  it("loads and saves fallback sections under Gemini identity rather than Groq identity", async () => {
+    const loaded: Array<{ group: string; provider: string; model: string }> = [];
+    const saved: Array<{ group: string; provider: string; model: string }> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    await new GeminiClient("test-gemini-key", "gemini-cache-model", mock as typeof fetch, async () => {})
+      .assess({
+        evidence: {}, sonicDna: null,
+        loadCompletedSectionGroup: async (group, provider, model) => { loaded.push({ group, provider, model }); return null; },
+        saveCompletedSectionGroup: async (group, _result, provider, model) => { saved.push({ group, provider, model }); },
+      });
+    expect(loaded).toHaveLength(9);
+    expect(saved).toHaveLength(9);
+    expect(loaded.every(item => item.provider === "gemini" && item.model === "gemini-cache-model")).toBe(true);
+    expect(saved.every(item => item.provider === "gemini" && item.model === "gemini-cache-model")).toBe(true);
   });
 });
