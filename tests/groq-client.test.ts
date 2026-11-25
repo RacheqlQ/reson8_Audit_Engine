@@ -1156,3 +1156,39 @@ describe("positioning contract and provider recovery regressions", () => {
   );
 });
 
+
+
+describe("repeated structured-output validation recovery", () => {
+  it.each([
+    { group: "positioning", field: "commercialRead.rationale", minimum: 40, short: "Commercial rationale remains limited by the absence of verified performance evidence and requires further independent validation before marketability can be assessed." },
+    { group: "evidence-score", field: "scorecard.tempoLaneFit.rationale", minimum: 25, short: "Tempo evidence is unavailable and no score can be supported from the supplied material." },
+  ])("switches output mode and recovers repeated $field violations", async ({ group, field, minimum, short }) => {
+    let groupCalls = 0;
+    const attempts: Array<Record<string, unknown>> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === group && groupCalls++ < 2) {
+        const invalid = p(group) as any;
+        if (field === "commercialRead.rationale") invalid.commercialRead.rationale = short;
+        else invalid.scorecard.tempoLaneFit.rationale = short;
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(invalid) } }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+    expect(groupCalls).toBe(3);
+    const diagnostics = attempts.filter(attempt => attempt.group === group && attempt.failureKind === "threshold_violation");
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics[0]).toMatchObject({ validationField: field, validationRule: "minimum_word_count", minimumWords: minimum });
+    expect(Number(diagnostics[0].actualWords)).toBeLessThan(minimum);
+    expect(diagnostics[1]).toMatchObject({ validationField: field, validationRule: "minimum_word_count", minimumWords: minimum });
+    expect(assessment.aAndRPositioning.rationale.split(/\\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.split(/\\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.scorecard.tempoLaneFit.rationale.split(/\\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(25);
+    const groupRequests = mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)))
+      .filter(body => JSON.parse(body.messages[1].content).sectionGroup === group);
+    expect(groupRequests[2].response_format).toEqual({ type: "json_object" });
+  });
+});
