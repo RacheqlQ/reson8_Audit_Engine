@@ -1203,15 +1203,15 @@ describe("repeated structured-output validation recovery", () => {
 
 describe("complete local A&R provider contract", () => {
   it.each([
-    ["narrative", "executiveSummary: at least 45 words", "strengths: at least 3 items, each at least 10 words"],
-    ["positioning", "aAndRPositioning.rationale: at least 40 words", "commercialRead.rationale: at least 40 words"],
-    ["release", "releaseStrategy.recommendation: at least 40 words", "releaseStrategy.priorities: at least 3 items, each at least 8 words"],
-    ["evidence-score", "scorecard.tempoLaneFit.rationale: at least 25 words", "scorecard.tonalConsensus.rationale: at least 25 words when present"],
-    ["production", "productionArrangementGuidance: at least 40 words", "listeningChecks: at least 4 items, each at least 5 words"],
-    ["comparables", "laneHypothesis: at least 20 words", "referencesToVerify: at least 3 items, each at least 8 words"],
-    ["promotion", "promotionPlan.preRelease: at least 20 words", "promotionPlan.playlistCategories: at least 3 items, each at least 3 words"],
-    ["label-fit", "labelPartnerFit.partnerProfile: at least 25 words", "labelPartnerFit.criteriaToDemonstrate: at least 4 items, each at least 5 words"],
-    ["timeline", "executionPlan.days30: at least 20 words", "executionPlan.days90: at least 20 words"],
+    ["narrative", "executiveSummary must contain at least 45 words", "strengths must contain at least 3 items; each item must contain at least 10 words"],
+    ["positioning", "aAndRPositioning.rationale must contain at least 40 words", "commercialRead.rationale must contain at least 40 words"],
+    ["release", "releaseStrategy.recommendation must contain at least 40 words", "releaseStrategy.priorities must contain at least 3 items; each item must contain at least 8 words"],
+    ["evidence-score", "scorecard.tempoLaneFit.rationale must contain at least 25 words", "scorecard.tonalConsensus.rationale must contain at least 25 words when present"],
+    ["production", "productionArrangementGuidance must contain at least 40 words", "listeningChecks must contain at least 4 items; each item must contain at least 5 words"],
+    ["comparables", "laneHypothesis must contain at least 20 words", "referencesToVerify must contain at least 3 items; each item must contain at least 8 words"],
+    ["promotion", "promotionPlan.preRelease must contain at least 20 words", "promotionPlan.playlistCategories must contain at least 3 items; each item must contain at least 3 words"],
+    ["label-fit", "labelPartnerFit.partnerProfile must contain at least 25 words", "labelPartnerFit.criteriaToDemonstrate must contain at least 4 items; each item must contain at least 5 words"],
+    ["timeline", "executionPlan.days30 must contain at least 20 words", "executionPlan.days90 must contain at least 20 words"],
   ])("states every locally enforced threshold for the %s section", async (group, firstRule, secondRule) => {
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
@@ -1226,7 +1226,7 @@ describe("complete local A&R provider contract", () => {
     expect(request.messages[0].content).toContain("Mandatory locally validated word-count contract");
     expect(request.messages[0].content).toContain(firstRule);
     expect(request.messages[0].content).toContain(secondRule);
-    expect(request.messages[0].content).toContain("Compacted JSON-schema constraints retained as mandatory instructions");
+    expect(request.messages[0].content).toContain("Retain these compacted local schema bounds exactly");
   });
 
   it("retries rejected network fetches with bounded backoff instead of immediately abandoning the section", async () => {
