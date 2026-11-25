@@ -1615,7 +1615,7 @@ describe("production A&R provider capacity regressions", () => {
     expect(budgets[0]).toBe(850);
     expect(budgets[1]).toBe(1275);
     expect(budgets[2]).toBe(1913);
-    expect(budgets[3]).toBe(1913);
+    expect(budgets[3]).toBe(2000);
     expect(mock.mock.calls.every(call => {
       const body = JSON.parse(String(call[1]?.body));
       const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
