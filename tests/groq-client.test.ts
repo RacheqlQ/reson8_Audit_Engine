@@ -676,29 +676,40 @@ describe("narrative prompt budget compaction",()=>{
   };
   const catalogMetadata=Object.fromEntries(Array.from({length:32},(_,i)=>["provider"+i,{status:"matched",source:"catalog provider "+i,detail,rawPayload:detail}]));
   const {mock}=fetchMock();
-  let narrative:{payload:Record<string,any>;system:string;estimated:number;completion:number}|null=null;
-  mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
-   const body=JSON.parse(String(init?.body));
-   const payload=JSON.parse(body.messages[1].content);
-   if(payload.sectionGroup==="narrative"){
-    const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
-    narrative={payload,system:body.messages[0].content,estimated,completion:body.max_completion_tokens};
-   }
-   return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
-  });
-  await new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{}).assess({evidence,sonicDna,catalogMetadata});
-  expect(narrative).not.toBeNull();
-  expect(narrative!.estimated).toBeLessThanOrEqual(5744);
-  expect(narrative!.estimated+narrative!.completion).toBeLessThanOrEqual(6000);
-  expect(narrative!.completion).toBeGreaterThanOrEqual(256);
-  expect(narrative!.payload.evidence.identity).toMatchObject({artist:"Fixture Artist",isrc:"USAAA2600001"});
-  expect(narrative!.payload.evidence.fieldProvenance.field0).toMatchObject({source:"musicbrainz",value:"normalized identity value 0"});
-  expect(narrative!.payload.sonicDna.acousticFeatureProfile.descriptors.spectralCentroidHz).toMatchObject({median:0.42,unit:"ratio"});
-  expect(narrative!.payload.sonicDna.vocalFeatures).toMatchObject({status:"analyzed",voicePresence:"likely_present"});
-  expect(narrative!.payload.catalogMetadata).toBeNull();
-  for(const invariant of ["CONFIRMED","voting/window-consensus-stabilized","DETERMINED","PRE_RELEASE versus POST_RELEASE","PROPOSED","DSP/catalog links are not audio","No external stem, separation or render workers","OBSERVED","RECONCILED","industry_practice"]){
-   expect(narrative!.system).toContain(invariant);
-  }
+   const logs:string[]=[];
+   const info=vi.spyOn(console,"info").mockImplementation((message?:unknown)=>{if(typeof message==="string")logs.push(message);});
+   const narrativeRequests:Array<{payload:Record<string,any>;system:string;estimated:number;completion:number}>=[];
+   let narrativeCalls=0;
+   mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
+    const body=JSON.parse(String(init?.body));
+    const payload=JSON.parse(body.messages[1].content);
+    if(payload.sectionGroup==="narrative"){
+     const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
+     narrativeRequests.push({payload,system:body.messages[0].content,estimated,completion:body.max_completion_tokens});
+     if(narrativeCalls++===0)return new Response(JSON.stringify({error:{code:"json_validate_failed",message:"strict schema validation failed"}}),{status:400});
+    }
+    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
+   });
+   try{
+    await new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{}).assess({evidence,sonicDna,catalogMetadata});
+    expect(narrativeRequests).toHaveLength(2);
+    const initial=narrativeRequests[0];
+    const corrected=narrativeRequests[1];
+    expect(initial.estimated).toBeLessThanOrEqual(5500);
+    expect(corrected.estimated).toBeLessThanOrEqual(5744);
+    expect(corrected.estimated+corrected.completion).toBeLessThanOrEqual(6000);
+    expect(corrected.completion).toBeGreaterThanOrEqual(256);
+    expect(corrected.payload.correction).toContain("HTTP 400");
+    expect(String(corrected.payload.correction).length).toBeLessThan(240);
+    expect(corrected.payload.evidence.identity).toMatchObject({artist:"Fixture Artist",isrc:"USAAA2600001"});
+    expect(corrected.payload.evidence.fieldProvenance.field0).toMatchObject({source:"musicbrainz",value:"normalized identity value 0"});
+    expect(corrected.payload.sonicDna.acousticFeatureProfile.descriptors.spectralCentroidHz).toMatchObject({median:0.42,unit:"ratio"});
+    expect(corrected.payload.sonicDna.vocalFeatures).toMatchObject({status:"analyzed",voicePresence:"likely_present"});
+    expect(corrected.payload.catalogMetadata).toBeNull();
+    for(const invariant of ["CONFIRMED","voting/window-consensus-stabilized","DETERMINED","PRE_RELEASE versus POST_RELEASE","PROPOSED","DSP/catalog links are not audio","No external stem, separation or render workers","OBSERVED","RECONCILED","industry_practice"]){
+     expect(corrected.system).toContain(invariant);
+    }
+   }finally{info.mockRestore();}
  });
 });
 
