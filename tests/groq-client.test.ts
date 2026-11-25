@@ -1321,19 +1321,29 @@ describe("nine-section master and DSP-link execution modes", () => {
       evidence: { auditType: "DSP-LINK AUDIT", sourceType: "dsp_link", artist: "DSP Fixture", title: "DSP Fixture Track", catalogUrl: "https://music.example/track/123" },
     },
   ])("completes all nine assessment groups and report adaptation for $mode input", async ({ mode, sonicDna, evidence }) => {
-    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body));
-      const payload = JSON.parse(body.messages[1].content);
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
-    });
-    const assessment = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
-      .assess({ evidence, sonicDna });
-    const groups = mock.mock.calls.map(call => {
-      const body = JSON.parse(String(call[1]?.body));
-      return JSON.parse(body.messages[1].content).sectionGroup;
-    });
-    expect(new Set(groups)).toEqual(new Set(["narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline"]));
-    expect(groups).toHaveLength(9);
+     let narrativeCalls = 0;
+     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+       const body = JSON.parse(String(init?.body));
+       const payload = JSON.parse(body.messages[1].content);
+       if (payload.sectionGroup === "narrative" && narrativeCalls++ === 0) {
+         return new Response(JSON.stringify({ error: { code: "json_validate_failed", message: "strict schema validation failed" } }), { status: 400 });
+       }
+       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+     });
+     const assessment = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+       .assess({ evidence, sonicDna });
+     const groups = mock.mock.calls.map(call => {
+       const body = JSON.parse(String(call[1]?.body));
+       return JSON.parse(body.messages[1].content).sectionGroup;
+     });
+     expect(new Set(groups)).toEqual(new Set(["narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline"]));
+     expect(groups).toHaveLength(10);
+     expect(groups.filter(group => group === "narrative")).toHaveLength(2);
+     const narrativePayloads = mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)))
+       .map(body => JSON.parse(body.messages[1].content)).filter(payload => payload.sectionGroup === "narrative");
+     expect(narrativePayloads).toHaveLength(2);
+     expect(narrativePayloads[1].correction).toContain("HTTP 400");
+     if (mode === "dsp_link") expect(narrativePayloads[1].sonicDna).toBeNull();
     expect(assessment.aAndRPositioning.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
     expect(assessment.commercialRead.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
     if (mode === "dsp_link") {
