@@ -120,14 +120,14 @@ export interface GroqAssessmentInput {
 export interface GroqAssessmentClient { assess(input: GroqAssessmentInput, signal?: AbortSignal): Promise<ArAssessment>; }
 
 const SYSTEM_PROMPT = [
-  "Evidence-only; never invent streams, sales, revenue, playlists, curators, demographics, audience, label interest, placements or external facts.",
-  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not track fact. Name only providers with records.",
-  "Preserve exact provider genres and scene tags; null primary genre=no confirmed lane. Tempo contributes at most 15% to genre scoring, never proves genre; BPM only when confirmed at confidence >=0.5.",
-  "Tempo/key are CONFIRMED only from voting/window-consensus-stabilized results; otherwise provisional. Mood/energy are heuristics, not probabilities or demand. Vocals only when status=analyzed; otherwise infer no voice, lyrics or arrangement. Track sections need explicit boundaries.",
-  "Use reconciled identity/provenance; preserve ISRC conflicts/ambiguity. DSP/catalog links are not audio and cannot establish OBSERVED audio. No external stem, separation or render workers; No external stem/separation/render workers.",
+  "Evidence only; never invent streams, sales, revenue, playlists, curators, audience metrics, label interest, placements or facts.",
+  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not a track fact. Name only providers with records.",
+  "Preserve exact provider genres and scene tags; null primary genre=no confirmed lane. Tempo contributes at most 15% to genre scoring and never proves genre; BPM only when confirmed at confidence >=0.5.",
+  "Tempo/key are CONFIRMED only via voting/window-consensus-stabilized results; otherwise provisional. Mood/energy are heuristics, not probabilities or demand. Vocals only when status=analyzed; otherwise infer no voice, lyrics or arrangement. Require explicit section boundaries.",
+  "Reconcile identity/provenance; preserve ISRC conflicts and ambiguity. DSP/catalog links are not audio and cannot establish OBSERVED audio. No external stem, separation or render workers.",
   "Without verified commercial telemetry, marketability=undetermined. Release date DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE and PRE_RELEASE/POST_RELEASE. Market verdict PROPOSED absent deterministic evidence.",
-  "Null score=insufficient evidence. RMS/dBFS not mastering readiness; loudness changes need measured fault+destination target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.",
-  "Do not score taste/hook/originality/production/replay/lane clarity; keep in the unscored human-listening checklist. Return JSON only as one complete object; obey local validation."
+  "Null score=insufficient evidence. RMS/dBFS do not prove mastering readiness; loudness changes need measured fault+destination target. Centroid <=2,000 Hz is not bright; mono is a risk, not proof of incompatibility.",
+  "Do not score taste/hook/originality/production/replay/lane clarity; keep in the unscored human-listening checklist. Return one complete JSON object; obey local validation."
 ].join(" ");
 const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive.";
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
@@ -259,18 +259,14 @@ function compactedSchemaConstraintInstructions(schema: unknown): string {
   const visit = (node: unknown, path: string): void => {
     if (!node || typeof node !== "object" || Array.isArray(node)) return;
     const record = node as Record<string, any>;
-    let normalizedPath = path
+    const normalizedPath = path
       .replace(/^scorecard\.[^.]+\.score$/, "scorecard.*.score")
       .replace(/^scorecard\.[^.]+\.rationale$/, "scorecard.*.rationale");
     const bounds = constraints.get(normalizedPath) ?? new Set<string>();
     if (typeof record.minLength === "number") bounds.add(">=" + record.minLength + "ch");
     if (typeof record.maxLength === "number") bounds.add("<=" + record.maxLength + "ch");
-    if (typeof record.minItems === "number" || typeof record.maxItems === "number") {
-      bounds.add("items=" + (record.minItems ?? 0) + ".." + (record.maxItems ?? "∞"));
-    }
-    if (typeof record.minimum === "number" || typeof record.maximum === "number") {
-      bounds.add("number=" + (record.minimum ?? "-∞") + ".." + (record.maximum ?? "∞"));
-    }
+    if (typeof record.minItems === "number" || typeof record.maxItems === "number") bounds.add("items=" + (record.minItems ?? 0) + ".." + (record.maxItems ?? "∞"));
+    if (typeof record.minimum === "number" || typeof record.maximum === "number") bounds.add("number=" + (record.minimum ?? "-∞") + ".." + (record.maximum ?? "∞"));
     if (bounds.size) constraints.set(normalizedPath, bounds);
     if (record.properties && typeof record.properties === "object") {
       for (const [key, child] of Object.entries(record.properties)) visit(child, path ? path + "." + key : key);
