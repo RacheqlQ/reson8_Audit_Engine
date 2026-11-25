@@ -668,7 +668,11 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   const timeline=Array.isArray(release.executionTimeline)?release.executionTimeline:Array.isArray(assessment.executionTimeline)?assessment.executionTimeline:[];
   const hasScore=data.headlineScore!==null||(data.scoreDrivers?.length??0)>0;
   const hasPlaybackMeasurements=["integrated_loudness_lufs","true_peak_dbfs","rms_level_dbfs"].some(key=>typeof contract[key]==="number"&&Number.isFinite(contract[key]));
-  if(hasScore||timeline.length>0||hasPlaybackMeasurements)
+  // When the Sonic DNA dashboard is present, keep the full report at its
+  // approved 12-page allocation. The cover already carries the supplied score,
+  // the execution-plan narrative carries the campaign timeline, and the track
+  // snapshot carries available playback measurements; avoid a redundant extra page.
+  if((hasScore||timeline.length>0||hasPlaybackMeasurements)&&!data.sonicAxes)
    pages.push({title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"});
  }
  pages.push({title:"A&R notes",blocks:[],lines:[
