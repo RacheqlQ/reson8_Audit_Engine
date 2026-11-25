@@ -1232,8 +1232,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         finishReason, completionTokenBudget,
       });
       const conciseRecovery = groupName === "narrative"
-        ? "The previous narrative was truncated. Retry with the SAME completion-token allowance. Return exactly 3 concise strengths and 2 concise risks; keep executiveSummary 45–60 words and creativeIdentity 35–50 words. Preserve every schema minimum and evidence constraint."
-        : "The previous section was truncated. Retry with the SAME completion-token allowance; keep every field concise at the minimum length required by outputSchema and the word contract. Return JSON only.";
+        ? "The previous narrative was truncated. Use the larger bounded completion allowance available on this retry, but keep the requested fields concise. Return exactly 3 concise strengths and 2 concise risks; keep executiveSummary 45–60 words and creativeIdentity 35–50 words. Preserve every schema minimum and evidence constraint."
+        : "The previous section was truncated. Use the larger bounded completion allowance available on this retry; keep every field concise at the minimum length required by outputSchema and the word contract. Return JSON only.";
       if (scheduleCorrection(conciseRecovery)) {
         // A length finish proves the current completion allowance is insufficient.
         // Increase only the output reserve; the next request still compacts input
