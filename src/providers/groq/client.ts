@@ -884,6 +884,12 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     return false;
   };
 
+  // Recalibrate subsequent retries from Groq's reported prompt usage. The
+  // serialized JSON estimator is intentionally conservative on the first call,
+  // but a same-group retry should not keep reserving tokens the provider did not use.
+  let lastReportedPromptTokens: number | null = null;
+  let lastReportedPromptBytes: number | null = null;
+
   for (let attempt = 0; attempt < MAX_SECTION_REQUEST_ATTEMPTS; attempt++) {
     signal?.throwIfAborted();
     const fallbackMode = responseMode !== "json_schema";
@@ -944,6 +950,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           maxTotalTokens: MAX_GROQ_TOTAL_TOKENS,
         }));
       }
+    }
+    const serializedPromptBytes = new TextEncoder().encode(JSON.stringify({
+      messages, response_format: requestBody.response_format,
+    })).length;
+    if (groqTpmBudgetApplies && lastReportedPromptTokens !== null && lastReportedPromptBytes !== null) {
+      const usageCalibratedEstimate = Math.ceil(
+        (serializedPromptBytes / Math.max(1, lastReportedPromptBytes)) * lastReportedPromptTokens * 1.25,
+      ) + 128;
+      estimatedInputTokens = Math.min(estimatedInputTokens, usageCalibratedEstimate);
     }
     // The 6,000-token ceiling is a Groq TPM safeguard, not a global model
     // output limit. Applying it to Gemini/Ollama starved evidence-score of its
@@ -1123,6 +1138,10 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? { status: "reported" as const, promptTokens: payload.usage.prompt_tokens ?? null, completionTokens: payload.usage.completion_tokens ?? null, totalTokens: payload.usage.total_tokens ?? null }
       : { status: "unavailable" as const, promptTokens: null, completionTokens: null, totalTokens: null };
     console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, usageStatus: actualUsage.status, actualPromptTokens: actualUsage.promptTokens, actualCompletionTokens: actualUsage.completionTokens, actualTotalTokens: actualUsage.totalTokens }));
+    if (providerName === "groq" && actualUsage.status === "reported" && actualUsage.promptTokens !== null) {
+      lastReportedPromptTokens = actualUsage.promptTokens;
+      lastReportedPromptBytes = serializedPromptBytes;
+    }
     if (actualUsage.status === "reported") {
       await recordProviderAttempt(input, {
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
