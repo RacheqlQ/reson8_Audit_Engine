@@ -772,7 +772,7 @@ describe("evidence-score prompt budget compaction", () => {
         const system = body.messages[0].content;
         for (const invariant of ["CONFIRMED", "voting/window-consensus-stabilized", "DETERMINED",
           "PRE_RELEASE/POST_RELEASE", "PROPOSED", "DSP/catalog links are not audio",
-          "No external stem/separation/render workers", "OBSERVED", "RECONCILED", "industry_practice"]) {
+          "No external stem, separation or render workers", "OBSERVED", "RECONCILED", "industry_practice"]) {
           expect(system).toContain(invariant);
         }
         const schema = body.response_format.json_schema.schema;
