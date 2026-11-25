@@ -471,7 +471,7 @@ export function createSupabaseAuditStore(
       const { data, error } = await admin.from("audit_events")
         .select("payload")
         .eq("audit_job_id", jobId)
-        .eq("event_type", "groq_section_completed")
+        .eq("event_type", "assessment_section_completed")
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw new Error("Unable to resume completed AI assessment section");
@@ -495,7 +495,7 @@ export function createSupabaseAuditStore(
       }
       const { error } = await admin.from("audit_events").insert({
         audit_job_id: jobId,
-        event_type: "groq_section_completed",
+        event_type: "assessment_section_completed",
         status: "completed",
         payload: { group, result, promptVersion: GROQ_PROMPT_VERSION, provider, model },
       });
