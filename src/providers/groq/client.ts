@@ -1063,7 +1063,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         if (responseMode === "json_schema" && strictSchemaRetries < 1) {
           strictSchemaRetries++;
           responseMode = "json_object";
-          lastError = "The provider rejected strict JSON-schema output for " + groupName + ". Retry once in JSON-object mode; preserve the complete schema contract and all evidence.";
+          lastError = "Groq strict JSON-schema validation failed for " + groupName + ". Retry once in JSON-object mode; preserve the complete schema contract and all evidence.";
           continue;
         }
 
