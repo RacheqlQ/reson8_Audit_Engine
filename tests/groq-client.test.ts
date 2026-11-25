@@ -406,7 +406,7 @@ describe("GroqClient section groups",()=>{
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
   await client.assess({evidence:{},sonicDna:null});
   expect(evidenceScoreCalls).toBe(2);
-  expect(evidenceScorePrompts[0]).toContain("at least 8 words");
+  expect(evidenceScorePrompts[0]).toContain("evidenceGaps>=1 items, each>=8 words");
   expect(evidenceScorePrompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
  it("retries schema-valid output that misses a section word threshold",async()=>{
