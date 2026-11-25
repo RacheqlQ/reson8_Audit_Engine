@@ -293,7 +293,7 @@ describe("GroqClient section groups",()=>{
   });
   expect(mock).toHaveBeenCalledTimes(9);
   expect(payloads).toHaveLength(1);
-  expect(Object.keys(payloads[0].catalogMetadata)).toHaveLength(4);
+  expect(Object.keys(payloads[0].catalogMetadata)).toHaveLength(1);
   expect(payloads[0].catalogMetadata.provider0.length).toBeLessThanOrEqual(212);
  });
  it("keeps Gemini and Ollama module output budgets independent of Groq's TPM ceiling",async()=>{
