@@ -478,14 +478,15 @@ function compactCorrectionInstruction(reason: string): string {
   if (/json.schema|json.object|json_validate_failed|rejected/i.test(reason)) {
     return "Return one complete JSON object matching the supplied schema. Correct the structured-output format only; preserve all evidence, provenance, verdicts, nulls and required fields.";
   }
-  const safeReason = reason.replace(/\\s+/g, " ").trim();
+  const safeReason = reason.replace(/\s+/g, " ").trim();
   return safeReason.length > 360 ? safeReason.slice(0, 357) + "..." : safeReason;
 }
 
 function compactNarrativeContext(value: unknown, field = ""): unknown {
   if (value === null || typeof value !== "object") {
     if (typeof value !== "string") return value;
-    const limit = /^(description|commentary|notes|detail|reason|rawPayload)$/i.test(field) ? 48 : 160;
+    const preserveLongValue = /^(claim|value|normalizedValue|source|provider|artist|title|isrc)$/i.test(field);
+    const limit = preserveLongValue ? 120 : /^(description|commentary|notes|detail|reason|rawPayload)$/i.test(field) ? 32 : 48;
     return value.length > limit ? value.slice(0, limit) + "…" : value;
   }
   if (Array.isArray(value)) {
@@ -493,7 +494,7 @@ function compactNarrativeContext(value: unknown, field = ""): unknown {
     const items = preserve || value.length <= 3 ? value : [value[0], value[Math.floor((value.length - 1) / 2)], value[value.length - 1]];
     return items.map(item => compactNarrativeContext(item, field));
   }
-  const omitted = new Set(["rawPayload", "rawProviderPayload", "rawResponse", "responseBody", "debugPayload", "failed_generation"]);
+  const omitted = new Set(["rawPayload", "rawProviderPayload", "rawResponse", "responseBody", "debugPayload", "failed_generation", "description", "commentary", "notes", "debug"]);
   return Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([key]) => !omitted.has(key))
     .map(([key, item]) => [key, compactNarrativeContext(item, key)]));
 }
@@ -533,8 +534,8 @@ function compactGroqPromptForBudget(
   payload.catalogMetadata = compactNarrativeContext(payload.catalogMetadata);
   messages[1].content = JSON.stringify(payload);
   messages[0].content = messages[0].content
-    .replace(/ Compacted local schema bounds \\(all mandatory\\):[^.]*\\./g, "")
-    .replace(/ The user payload includes outputSchema,[^.]*\\./g, " Match the supplied outputSchema exactly; local validation remains mandatory.");
+    .replace(/ Compacted local schema bounds \(all mandatory\):[^.]*\./g, "")
+    .replace(/ The user payload includes outputSchema,[^.]*\./g, " Match the supplied outputSchema exactly; local validation remains mandatory.");
   let after = estimatePromptInputTokens(messages, responseFormat);
   if (after > targetInputTokens && groupName === "narrative") {
     const compactPayload = JSON.parse(messages[1].content) as Record<string, unknown>;
@@ -1041,16 +1042,6 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 400 && providerError.error?.code === "json_validate_failed") {
-        const message = typeof providerError.error.message === "string"
-          ? providerError.error.message
-          : "The provider rejected its generated JSON.";
-        const failedGeneration = typeof providerError.error.failed_generation === "string"
-          ? providerError.error.failed_generation.trim()
-          : "";
-        const diagnostic = failedGeneration
-          ? " " + providerLabel + " returned failed_generation diagnostics; do not copy unsupported content."
-          : " " + providerLabel + " supplied no failed_generation diagnostics.";
-
         if (responseMode === "json_schema" && strictSchemaRetries < 1) {
           strictSchemaRetries++;
           responseMode = "json_object";
