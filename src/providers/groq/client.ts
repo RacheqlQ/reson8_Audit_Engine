@@ -1023,7 +1023,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 
     const wordErrors = thresholdViolations(groupName, result.data);
     if (wordErrors.length) {
-      for (const violation of wordErrors.slice(0, 12)) {
+      for (const violation of wordErrors) {
         await recordProviderAttempt(input, {
           provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
           errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName,
