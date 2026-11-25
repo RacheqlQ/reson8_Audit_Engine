@@ -431,7 +431,7 @@ describe("GroqClient section groups",()=>{
    if(group==="evidence-score"){
     evidenceScoreCalls++;
     prompts.push(body.messages[0].content+"\n"+body.messages[1].content);
-    const rationale=evidenceScoreCalls===1?"Timing is unclear.":minimum;
+    const rationale=evidenceScoreCalls===1?"The supplied timing evidence remains incomplete and does not support a reliable judgment about groove stability or temporal regularity.":minimum;
     const base=p(group) as any;
     value={...base,scorecard:{...base.scorecard,rhythmicConsistency:{...base.scorecard.rhythmicConsistency,rationale}}};
    }
@@ -806,7 +806,7 @@ describe("GroqClient cancellation", () => {
     expect(requestSignal).toBeDefined();
     expect(requestSignal).not.toBe(controller.signal);
     expect(requestSignal?.aborted).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -953,7 +953,7 @@ describe("safe assessment validation diagnostics", () => {
   await expect(client.assess({
    evidence: { privatePrompt: "must not be logged" }, sonicDna: null,
    recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); },
-  })).rejects.toThrow("failed Zod validation");
+  })).rejects.toThrow("failed validation after bounded recovery");
   const failed = attempts.find(attempt => attempt.failureKind === "schema_violation");
   expect(failed).toMatchObject({ provider: "gemini", group: "evidence-score", failureKind: "schema_violation" });
   expect(failed?.validationIssues).toEqual(expect.arrayContaining([
@@ -976,7 +976,7 @@ describe("safe assessment validation diagnostics", () => {
   await expect(client.assess({
    evidence: {}, sonicDna: null,
    recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); },
-  })).rejects.toThrow("evidence-score response failed Zod validation");
+  })).rejects.toThrow("evidence-score response failed validation after bounded recovery");
   expect(attempts.some(attempt => attempt.group === "evidence-score" && attempt.failureKind === "threshold_violation")).toBe(true);
  });
 });
