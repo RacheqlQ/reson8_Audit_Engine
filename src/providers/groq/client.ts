@@ -809,9 +809,11 @@ function compactCatalogMetadataForGroup(
   // responses are already represented by normalized evidence and provenance.
   const compactNarrativeProviderRecords = ["narrative", "positioning"].includes(group);
   const compactEvidenceScoreProviders = group === "evidence-score";
-  const providerLimit = compactNarrativeProviderRecords || compactEvidenceScoreProviders ? 1 : 4;
-  const valueLimit = compactNarrativeProviderRecords || compactEvidenceScoreProviders ? 32 : 72;
-  const arrayLimit = compactNarrativeProviderRecords || compactEvidenceScoreProviders ? 2 : 3;
+  const metadataBytes = new TextEncoder().encode(JSON.stringify(value)).length;
+  const oversizedMetadata = metadataBytes > 1200;
+  const providerLimit = oversizedMetadata && (compactNarrativeProviderRecords || compactEvidenceScoreProviders) ? 1 : 4;
+  const valueLimit = oversizedMetadata && (compactNarrativeProviderRecords || compactEvidenceScoreProviders) ? 32 : 72;
+  const arrayLimit = oversizedMetadata && (compactNarrativeProviderRecords || compactEvidenceScoreProviders) ? 2 : 3;
   return Object.fromEntries(Object.entries(value).slice(0, providerLimit)
     .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning", "release"].includes(group)
       ? compactEvidenceScoreValue(record, 0, valueLimit, arrayLimit)
