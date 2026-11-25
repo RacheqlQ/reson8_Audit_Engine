@@ -134,7 +134,7 @@ const SYSTEM_PROMPT = [
   "Null score=insufficient evidence. RMS/dBFS do not prove mastering readiness; loudness changes need measured fault+destination target. Centroid <=2,000 Hz is not bright; mono is a risk, not proof of incompatibility.",
   "Do not score taste/hook/originality/production/replay/lane clarity; keep in the unscored human-listening checklist. Return JSON only as one complete object; obey local validation."
 ].join(" ");
-const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive.";
+const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return exactly 3 distinct evidence-grounded strengths and exactly 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive. Keep executiveSummary to 45–60 words and creativeIdentity to 35–50 words. Use one concise sentence per strength and risk; omit preambles, repetition and commentary outside the requested JSON fields.";
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
 const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS are descriptive, not mastering readiness; loudness changes require a measured fault and destination target.";
 const EVIDENCE_SCORE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Always include the evidenceLabels array (label, claim, actual source). Every scorecard rationale must contain at least 25 words, including optional tonalConsensus when present. Null scores mean insufficient evidence; taste stays unscored.";
@@ -1165,18 +1165,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     if (finishReason === "length" || (finishReason == null && completionUsageAtLimit)) {
       await recordProviderAttempt(input, {
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
-        errorType: "malformed_output", retryable: adaptiveCompletionTokenBudget < maxCompletionTokens,
+        errorType: "malformed_output", retryable: true,
         attempt: attempt + 1, group: groupName, failureKind: "completion_truncated",
         failureClass: "completion_truncated", estimatedInputTokens, actualUsage,
         finishReason, completionTokenBudget,
       });
-      if (adaptiveCompletionTokenBudget < maxCompletionTokens) {
-        adaptiveCompletionTokenBudget = Math.min(
-          maxCompletionTokens,
-          Math.max(adaptiveCompletionTokenBudget + 400, Math.ceil(adaptiveCompletionTokenBudget * 1.5)),
-        );
-      }
-      if (scheduleCorrection("The previous response reached the provider completion-token limit and may be truncated. Return one complete JSON object; the next attempt has a larger bounded completion allowance.")) continue;
+      const conciseRecovery = groupName === "narrative"
+        ? "The previous narrative was truncated. Retry with the SAME completion-token allowance. Return exactly 3 concise strengths and 2 concise risks; keep executiveSummary 45–60 words and creativeIdentity 35–50 words. Preserve every schema minimum and evidence constraint."
+        : "The previous section was truncated. Retry with the SAME completion-token allowance; keep every field concise at the minimum length required by outputSchema and the word contract. Return JSON only.";
+      if (scheduleCorrection(conciseRecovery)) continue;
       break;
     }
 
@@ -1295,7 +1292,7 @@ export class GroqClient implements GroqAssessmentClient {
       sonicDna: input.sonicDna,
     };
     const tasks=[
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"narrative","Write the executive assessment, identity, strengths and risks. Keep executiveSummary 45–60 words and creativeIdentity 35–50 words. Return exactly 3 strengths and 2 risks, one concise sentence each, with no preamble or repeated points.",NarrativeSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"positioning",POSITIONING_INSTRUCTIONS,PositioningSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"release","Write a grounded release recommendation and priorities.",ReleaseSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"evidence-score","Score only evidence-derivable dimensions; preserve evidence meaning. Repair only named fields.",EvidenceScoreSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
