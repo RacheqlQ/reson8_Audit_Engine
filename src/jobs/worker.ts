@@ -21,8 +21,12 @@ const SHUTDOWN_JOB_ABORT_TIMEOUT_MS = 18_000;
 
 export function safeFailureCategory(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
+  if (/preflight_budget|PROVIDER_PROMPT_BUDGET_EXCEEDED|GROQ_PROMPT_BUDGET_EXCEEDED/i.test(message)) return "preflight_budget";
+  if (/completion_truncated/i.test(message)) return "completion_truncated";
+  if (/threshold_violation/i.test(message)) return "threshold_violation";
+  if (/malformed_output|HTTP 400|json_validate_failed/i.test(message)) return "malformed_output";
+  if (/capacity_or_503|HTTP 503|HTTP 429|capacity/i.test(message)) return "capacity_or_503";
   if (/ASSESSMENT_PROVIDER_CHAIN_FAILED/i.test(message)) return "provider_chain_failed";
-  if (/GROQ_PROMPT_BUDGET_EXCEEDED/i.test(message)) return "prompt_budget_exceeded";
   if (/HTTP 402|payment required|insufficient credits|billing required/i.test(message)) return "billing_required";
   if (/capacity|429|daily.limit|TPD/i.test(message)) return "capacity";
   if (/timed out|ETIMEDOUT/i.test(message)) return "timeout";
@@ -115,9 +119,16 @@ export async function processNextQueuedAudit(signal?: AbortSignal): Promise<{ jo
         loadCompletedSectionGroup: (group: string, provider: "groq" | "gemini" | "ollama", model: string) => store.loadAssessmentSectionGroup(job.id, group, provider, model),
         saveCompletedSectionGroup: (group: string, result: unknown, provider: "groq" | "gemini" | "ollama", model: string) => store.saveAssessmentSectionGroup(job.id, job.claimToken, group, result, provider, model, signal),
       };
+      const groqModel = process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL;
       const providers = [
-        { provider: "groq" as const, model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL, client: groq },
+        { provider: "groq" as const, model: groqModel, client: groq },
         { provider: "gemini" as const, model: readiness.find((item) => item.provider === "gemini")?.model ?? "gemini-3.5-flash-lite", client: gemini },
+        // If Gemini exhausts transient capacity after the primary Groq attempt,
+        // retry Groq once. Provider-scoped section cache skips groups already
+        // completed by Groq, so recovery resumes at the first missing section.
+        ...(groq ? [{ provider: "groq" as const, model: groqModel, client: new GroqClient(
+          process.env.GROQ_API_KEY ?? process.env.GROQ_API, groqModel, fetch, undefined, undefined, 4 * 60_000,
+        ) }] : []),
       ];
       return runAssessmentProviderChain(providers, assessmentInput, signal, {
         onSkipped: async (candidate) => {

@@ -54,8 +54,10 @@ export class AssessmentProviderChainError extends Error {
 
 function classifyError(error: unknown): ProviderFailureClass | null {
   const message = error instanceof Error ? error.message : String(error);
-  if (/GROQ_PROMPT_BUDGET_EXCEEDED/i.test(message)) return "preflight_budget";
-  if (/HTTP 400|json_validate_failed|schema|malformed/i.test(message)) return "schema_or_malformed_400";
+  if (/GROQ_PROMPT_BUDGET_EXCEEDED|PROVIDER_PROMPT_BUDGET_EXCEEDED/i.test(message)) return "preflight_budget";
+  if (/completion_truncated|finish_reason.{0,12}length/i.test(message)) return "completion_truncated";
+  if (/threshold_violation/i.test(message)) return "threshold_violation";
+  if (/HTTP 400|json_validate_failed|schema|malformed/i.test(message)) return "malformed_output";
   if (/HTTP 503|HTTP 429|capacity|rate.limit/i.test(message)) return "capacity_or_503";
   if (/timed out|timeout|ETIMEDOUT/i.test(message)) return "timeout";
   if (/network|fetch failed|ECONNRESET|HTTP 5\d\d/i.test(message)) return "network";
@@ -122,12 +124,13 @@ export async function runAssessmentProviderChain<TInput, TResult>(
         } as TInput
       : input;
 
+    const attemptStart = allAttempts.length;
     try {
       return await candidate.client.assess(providerInput, signal);
     } catch (error) {
       if (signal?.aborted) throw error;
       lastProviderError = error;
-      failedCandidates.push(summarizeProviderFailure(candidate, allAttempts, error));
+      failedCandidates.push(summarizeProviderFailure(candidate, allAttempts.slice(attemptStart), error));
       callbacks.onFailure?.(candidate, error);
     }
   }

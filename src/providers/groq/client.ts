@@ -102,7 +102,7 @@ export interface ProviderAttemptDiagnostic {
   group?: string;
   failureKind?: "empty_content" | "invalid_json" | "schema_violation" | "threshold_violation" | "prompt_budget_exceeded" | "completion_truncated";
   validationIssues?: Array<{ code: string; path: string[] }>;
-  failureClass?: "preflight_budget" | "schema_or_malformed_400" | "capacity_or_503" | "network" | "timeout" | "completion_truncated";
+  failureClass?: "preflight_budget" | "malformed_output" | "threshold_violation" | "capacity_or_503" | "network" | "timeout" | "completion_truncated";
   estimatedInputTokens?: number;
   actualUsage?: { status: "reported" | "unavailable"; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null };
   finishReason?: string | null;
@@ -134,10 +134,18 @@ const SYSTEM_PROMPT = [
   "Null score=insufficient evidence. RMS/dBFS do not prove mastering readiness; loudness changes need measured fault+destination target. Centroid <=2,000 Hz is not bright; mono is a risk, not proof of incompatibility.",
   "Do not score taste/hook/originality/production/replay/lane clarity; keep in the unscored human-listening checklist. Return JSON only as one complete object; obey local validation."
 ].join(" ");
-const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive.";
+const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return exactly 3 distinct evidence-grounded strengths and exactly 2 distinct evidence-grounded risks; each must be specific, evidence-linked and non-repetitive. Keep executiveSummary to 45–60 words and creativeIdentity to 35–50 words. Use one concise sentence per strength and risk; omit preambles, repetition and commentary outside the requested JSON fields.";
 const POSITIONING_INSTRUCTIONS = "aAndRPositioning.rationale and commercialRead.rationale must each contain at least 40 words. Ground each in supplied evidence or explicitly name the evidence gap; never pad or infer demand without verified commercial telemetry.";
 const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS are descriptive, not mastering readiness; loudness changes require a measured fault and destination target.";
-const EVIDENCE_SCORE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Always include the evidenceLabels array (label, claim, actual source). Every scorecard rationale must contain at least 25 words, including optional tonalConsensus when present. Null scores mean insufficient evidence; taste stays unscored.";
+const EVIDENCE_SCORE_SYSTEM_PROMPT = [
+  "Never invent streams, sales, revenue, playlists, curators, audience metrics, label interest, placements, audio or facts. DSP/catalog links are not audio. No external stem, separation or render workers.",
+  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment; INDUSTRY PRACTICE=industry_practice, not track fact. Name only recorded providers; reconcile identity/provenance and preserve ISRC conflicts/ambiguity.",
+  "Tempo/key CONFIRMED only by voting/window-consensus-stabilized results; BPM only at confidence >=0.5. Tempo contributes at most 15% to genre scoring and never proves genre; preserve exact provider genres/scene tags; null primary genre if unconfirmed.",
+  "Release date DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Without verified commercial telemetry, marketability=undetermined and verdict PROPOSED. Mood/energy are heuristics, not probabilities/demand.",
+  "Vocal claims only if status=analyzed; otherwise no voice, lyrics or arrangement; require explicit section boundaries. Null score=insufficient evidence.",
+  "RMS/dBFS do not prove mastering readiness; loudness changes require measured fault+destination target. Centroid<=2,000Hz is not bright; mono is risk, not incompatibility proof.",
+  "Do not score taste/hook/originality/production/replay/lane clarity; keep in unscored human-listening checklist. Always include the evidenceLabels array (label, claim, actual source); each rationale>=25 words."
+].join(" ");
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
 type SectionWordRule = {
@@ -299,7 +307,7 @@ export const GEMINI_ASSESSMENT_TIMEOUT_MS = 3 * 60_000;
 export const OLLAMA_ASSESSMENT_TIMEOUT_MS = 2 * 60_000;
 const MAX_COMPLETION_TOKENS = 1600;
 const MAX_GROQ_COMPLETION_TOKENS = 2000;
-const MAX_GROQ_TOTAL_TOKENS = 6000;
+const MAX_SHARED_PROVIDER_TOTAL_TOKENS = 6000;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
   narrative: 850, positioning: 650, release: 500, "evidence-score": 1000,
   production: 650, comparables: 450, promotion: 900, "label-fit": 650, timeline: 500,
@@ -428,7 +436,9 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
         const record = raw as Record<string, unknown>;
         const retained = ["source", "provider", "status", "confidence", "evidenceClass", "value", "normalizedValue", "matchStatus"];
         return [field, Object.fromEntries(retained.filter((key) => record[key] !== undefined)
-          .map((key) => [key, compactPromptValue(record[key])]))];
+          .map((key) => [key, group === "evidence-score" && ["value", "normalizedValue"].includes(key) && typeof record[key] === "string"
+            ? (record[key] as string).slice(0, 64)
+            : compactPromptValue(record[key])]))];
       }),
     );
   }
@@ -536,7 +546,7 @@ function estimatePromptInputTokens(messages: Array<{ role: string; content: stri
   return Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: responseFormat })).length / 2) + 256;
 }
 
-function compactGroqPromptForBudget(
+function compactProviderPromptForBudget(
   messages: Array<{ role: string; content: string }>,
   responseFormat: unknown,
   groupName: string,
@@ -644,7 +654,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     narrative: ["acousticFeatureProfile", "vocalFeatures"],
     positioning: ["acousticFeatureProfile", "vocalFeatures"],
     release: ["acousticFeatureProfile", "rhythmFeatures", "harmonicFeatures"],
-    "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
+    "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures"],
     production: ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
     comparables: [],
     promotion: ["acousticFeatureProfile"],
@@ -800,8 +810,17 @@ function compactCatalogMetadataForGroup(
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   // Retain a bounded set of named provider records; long descriptions/raw
   // responses are already represented by normalized evidence and provenance.
-  return Object.fromEntries(Object.entries(value).slice(0, 4)
-    .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning", "release"].includes(group) ? compactEvidenceScoreValue(record, 0, 72, 3) : compactPromptValue(record)])) as Record<string, unknown>;
+  const compactNarrativeProviderRecords = ["narrative", "positioning"].includes(group);
+  const compactEvidenceScoreProviders = group === "evidence-score";
+  const metadataBytes = new TextEncoder().encode(JSON.stringify(value)).length;
+  const oversizedMetadata = metadataBytes > 1200;
+  const providerLimit = oversizedMetadata && (compactNarrativeProviderRecords || compactEvidenceScoreProviders) ? 1 : 4;
+  const valueLimit = oversizedMetadata && (compactNarrativeProviderRecords || compactEvidenceScoreProviders) ? 32 : 72;
+  const arrayLimit = oversizedMetadata && (compactNarrativeProviderRecords || compactEvidenceScoreProviders) ? 2 : 3;
+  return Object.fromEntries(Object.entries(value).slice(0, providerLimit)
+    .map(([provider, record]) => [provider, ["evidence-score", "narrative", "positioning", "release"].includes(group)
+      ? compactEvidenceScoreValue(record, 0, valueLimit, arrayLimit)
+      : compactPromptValue(record)])) as Record<string, unknown>;
 }
 
 async function recordProviderAttempt(input: GroqAssessmentInput, detail: ProviderAttemptDiagnostic): Promise<void> {
@@ -841,6 +860,17 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const outputSchema = ["evidence-score", "narrative", "positioning", "release", "promotion"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
   const schemaConstraintGuidance = compactedSchemaConstraintInstructions(rawOutputSchema);
   const wordContractGuidance = thresholdContractInstructions(groupName);
+  const sonicDnaForGroup = compactSonicDnaForGroq(input.sonicDna, groupName);
+  if (groupName === "evidence-score" && input.sonicDna) {
+    const originalBytes = new TextEncoder().encode(JSON.stringify(input.sonicDna)).length;
+    const projectedBytes = new TextEncoder().encode(JSON.stringify(sonicDnaForGroup)).length;
+    console.info(JSON.stringify({
+      provider: providerName, event: "evidence_score_context_projection",
+      estimatedSonicDnaTokensBefore: Math.ceil(originalBytes / 2),
+      estimatedSonicDnaTokensAfter: Math.ceil(projectedBytes / 2),
+      originalBytes, projectedBytes,
+    }));
+  }
   let completed: unknown | null = null;
   try {
     completed = await input.loadCompletedSectionGroup?.(cacheGroupName, providerName as "groq" | "gemini" | "ollama", model) ?? null;
@@ -904,7 +934,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           promptVersion: GROQ_PROMPT_VERSION,
           sectionGroup: groupName,
           evidence: compactPromptValue(compactEvidenceForGroq(input.evidence, groupName)),
-          sonicDna: compactSonicDnaForGroq(input.sonicDna, groupName),
+          sonicDna: sonicDnaForGroup,
           catalogMetadata: compactCatalogMetadataForGroup(input.catalogMetadata, groupName, input.evidence),
           correction: attempt === 0 ? null : compactCorrectionInstruction(lastError),
           ...(fallbackMode ? { outputSchema } : {}),
@@ -934,39 +964,64 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // The 256-token allowance covers framing.
     let estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
     const sectionOutputBudget = adaptiveCompletionTokenBudget;
-    const groqTpmBudgetApplies = providerName === "groq";
-    if (groqTpmBudgetApplies) {
-      const targetInputTokens = groupName === "narrative" && attempt === 0
-        ? MAX_GROQ_TOTAL_TOKENS - NARRATIVE_INITIAL_HEADROOM_TOKENS - sectionOutputBudget
-        : MAX_GROQ_TOTAL_TOKENS - Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget);
-      if (estimatedInputTokens > targetInputTokens) {
-        const compacted = compactGroqPromptForBudget(messages, requestBody.response_format, groupName, targetInputTokens);
-        estimatedInputTokens = compacted.after;
-        console.info(JSON.stringify({
-          provider: providerName, event: "prompt_budget_recovery", group: groupName,
-          attempt: attempt + 1, estimatedInputTokensBefore: compacted.before,
-          estimatedInputTokensAfter: compacted.after, targetInputTokens,
-          reservedCompletionTokens: Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget),
-          maxTotalTokens: MAX_GROQ_TOTAL_TOKENS,
-        }));
+    const sharedTotalBudgetApplies = providerName === "groq" || providerName === "gemini";
+    const targetInputTokens = MAX_SHARED_PROVIDER_TOTAL_TOKENS
+      - Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget)
+      - (groupName === "narrative" && attempt === 0 ? NARRATIVE_INITIAL_HEADROOM_TOKENS : 0);
+    if (sharedTotalBudgetApplies && estimatedInputTokens > targetInputTokens) {
+      const before = estimatedInputTokens;
+      const compacted = compactProviderPromptForBudget(messages, requestBody.response_format, groupName, targetInputTokens);
+      estimatedInputTokens = compacted.after;
+      let compactionPass = 1;
+      if (["evidence-score", "positioning"].includes(groupName) && estimatedInputTokens > targetInputTokens) {
+        const payload = JSON.parse(messages[1].content) as Record<string, unknown>;
+        // These sections can share canonical source facts; tighten repeated provider
+        // commentary and descriptive audio context while retaining source/status labels.
+        const evidenceStringLimit = groupName === "evidence-score" ? 24 : 32;
+        payload.evidence = compactEvidenceScoreValue(payload.evidence, 0, evidenceStringLimit, 2);
+        payload.sonicDna = compactEvidenceScoreValue(payload.sonicDna, 0, evidenceStringLimit, 2);
+        payload.catalogMetadata = compactEvidenceScoreValue(payload.catalogMetadata, 0, 24, 2);
+        if (groupName === "evidence-score") {
+          const evidence = payload.evidence as Record<string, unknown> | null;
+          if (evidence && Array.isArray(evidence.sourceProviders) && evidence.fieldProvenance && typeof evidence.fieldProvenance === "object") {
+            // Canonical provider and field-level provenance supersede duplicate raw provider records.
+            payload.catalogMetadata = null;
+          }
+          const dna = payload.sonicDna as Record<string, unknown> | null;
+          if (dna?.acousticFeatureProfile && typeof dna.acousticFeatureProfile === "object") {
+            const profile = dna.acousticFeatureProfile as Record<string, unknown>;
+            // Top-level measured acoustic values remain; this descriptor map duplicates those values.
+            delete profile.descriptors;
+          }
+        }
+        payload.correction = groupName === "evidence-score"
+          ? "Return one complete schema-valid evidence-score object. Preserve source labels, evidence classes, verified facts, nulls and all local validation minima."
+          : "Return one complete positioning object. Preserve the >=40-word rationale minima, source labels, verified facts, nulls and evidence gaps; do not add claims.";
+        messages[1].content = JSON.stringify(payload);
+        estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
+        compactionPass = 2;
       }
+      console.info(JSON.stringify({
+        provider: providerName, event: "prompt_budget_recovery", group: groupName,
+        attempt: attempt + 1, estimatedInputTokensBefore: before,
+        estimatedInputTokensAfter: estimatedInputTokens, targetInputTokens,
+        reservedCompletionTokens: Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget),
+        maxTotalTokens: MAX_SHARED_PROVIDER_TOTAL_TOKENS, compactionPass,
+      }));
     }
     const serializedPromptBytes = new TextEncoder().encode(JSON.stringify({
       messages, response_format: requestBody.response_format,
     })).length;
-    if (groqTpmBudgetApplies && lastReportedPromptTokens !== null && lastReportedPromptBytes !== null) {
+    if (providerName === "groq" && lastReportedPromptTokens !== null && lastReportedPromptBytes !== null) {
       const usageCalibratedEstimate = Math.ceil(
         (serializedPromptBytes / Math.max(1, lastReportedPromptBytes)) * lastReportedPromptTokens * 1.25,
       ) + 128;
       estimatedInputTokens = Math.min(estimatedInputTokens, usageCalibratedEstimate);
     }
-    // The 6,000-token ceiling is a Groq TPM safeguard, not a global model
-    // output limit. Applying it to Gemini/Ollama starved evidence-score of its
-    // 1,000-token module budget even when those providers had ample capacity.
-    completionTokenBudget = groqTpmBudgetApplies
-      ? Math.min(adaptiveCompletionTokenBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens)
+    completionTokenBudget = sharedTotalBudgetApplies
+      ? Math.min(adaptiveCompletionTokenBudget, MAX_SHARED_PROVIDER_TOTAL_TOKENS - estimatedInputTokens)
       : adaptiveCompletionTokenBudget;
-    if (groqTpmBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS)) {
+    if (sharedTotalBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_SHARED_PROVIDER_TOTAL_TOKENS)) {
       const userPrompt = JSON.parse(messages[1].content) as Record<string, unknown>;
       const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
       await recordProviderAttempt(input, {
@@ -978,7 +1033,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       console.warn(JSON.stringify({
         event: "provider_preflight_rejection", provider: providerName, model, group: groupName,
         failureKind: "prompt_budget_exceeded", failureClass: "preflight_budget", estimatedInputTokens,
-        minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS,
+        minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: MAX_SHARED_PROVIDER_TOTAL_TOKENS,
         promptBytes: {
           system: byteLength(messages[0].content),
           evidence: byteLength(userPrompt.evidence),
@@ -987,16 +1042,16 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           responseSchema: byteLength(requestBody.response_format),
         },
       }));
-      throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: section payload cannot fit within the 6,000-token request budget");
+      throw new Error("PROVIDER_PROMPT_BUDGET_EXCEEDED: " + providerName + " section payload cannot fit within the shared 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
-    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: groqTpmBudgetApplies ? MAX_GROQ_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
+    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: sharedTotalBudgetApplies ? MAX_SHARED_PROVIDER_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
     for (let networkAttempt = 0; networkAttempt < maxNetworkAttempts; networkAttempt++) {
       signal?.throwIfAborted();
       // Each retry is a new provider request and must consume its own rolling TPM reservation.
-      if (groqTpmBudgetApplies && process.env.NODE_ENV !== "test") {
+      if (providerName === "groq" && process.env.NODE_ENV !== "test") {
         await sharedGroqTokenLimiter.acquire(estimatedInputTokens + completionTokenBudget, sleepImpl, signal);
       }
       const requestTimeoutSignal = AbortSignal.timeout(requestTimeoutMs);
@@ -1053,7 +1108,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         retryable: !response.ok && !dailyLimit && (response.status === 429 || response.status >= 500),
         attempt: networkAttempt + 1,
         group: groupName,
-        failureClass: response.ok ? undefined : response.status === 400 ? "schema_or_malformed_400" : response.status === 503 || response.status === 429 ? "capacity_or_503" : response.status >= 500 ? "network" : undefined,
+        failureClass: response.ok ? undefined : response.status === 400 ? "malformed_output" : response.status === 503 || response.status === 429 ? "capacity_or_503" : response.status >= 500 ? "network" : undefined,
         estimatedInputTokens,
         actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null },
       });
@@ -1129,7 +1184,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       await recordProviderAttempt(input, {
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
         errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName,
-        failureKind: "invalid_json",
+        failureKind: "invalid_json", failureClass: "malformed_output",
       });
       if (scheduleCorrection("The provider returned an invalid JSON response envelope with HTTP success. Return one complete JSON object in the required response format.")) continue;
       break;
@@ -1156,24 +1211,21 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     if (finishReason === "length" || (finishReason == null && completionUsageAtLimit)) {
       await recordProviderAttempt(input, {
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
-        errorType: "malformed_output", retryable: adaptiveCompletionTokenBudget < maxCompletionTokens,
+        errorType: "malformed_output", retryable: true,
         attempt: attempt + 1, group: groupName, failureKind: "completion_truncated",
         failureClass: "completion_truncated", estimatedInputTokens, actualUsage,
         finishReason, completionTokenBudget,
       });
-      if (adaptiveCompletionTokenBudget < maxCompletionTokens) {
-        adaptiveCompletionTokenBudget = Math.min(
-          maxCompletionTokens,
-          Math.max(adaptiveCompletionTokenBudget + 400, Math.ceil(adaptiveCompletionTokenBudget * 1.5)),
-        );
-      }
-      if (scheduleCorrection("The previous response reached the provider completion-token limit and may be truncated. Return one complete JSON object; the next attempt has a larger bounded completion allowance.")) continue;
+      const conciseRecovery = groupName === "narrative"
+        ? "The previous narrative was truncated. Retry with the SAME completion-token allowance. Return exactly 3 concise strengths and 2 concise risks; keep executiveSummary 45–60 words and creativeIdentity 35–50 words. Preserve every schema minimum and evidence constraint."
+        : "The previous section was truncated. Retry with the SAME completion-token allowance; keep every field concise at the minimum length required by outputSchema and the word contract. Return JSON only.";
+      if (scheduleCorrection(conciseRecovery)) continue;
       break;
     }
 
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
-      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "empty_content" });
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "empty_content", failureClass: "malformed_output" });
       if (scheduleCorrection("The response contained no JSON content. Return one complete JSON object matching outputSchema.")) continue;
       break;
     }
@@ -1182,14 +1234,14 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     try {
       parsed = JSON.parse(content);
     } catch {
-      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "invalid_json" });
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "invalid_json", failureClass: "malformed_output" });
       if (scheduleCorrection("The response was not valid JSON. Return raw JSON only, without markdown or surrounding prose.")) continue;
       break;
     }
 
     const result = schema.safeParse(parsed);
     if (!result.success) {
-      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "schema_violation", validationIssues: result.error.issues.slice(0, 12).map(issue => ({ code: issue.code, path: issue.path.map(part => String(part)).slice(0, 8) })) });
+      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "schema_violation", failureClass: "malformed_output", validationIssues: result.error.issues.slice(0, 12).map(issue => ({ code: issue.code, path: issue.path.map(part => String(part)).slice(0, 8) })) });
       const detail = responseMode === "json_object" || responseMode === "prompt_only"
         ? "The " + responseMode + " response failed local Zod validation: " + result.error.message + "."
         : "Strict structured output failed local Zod validation: " + result.error.message + ".";
@@ -1203,7 +1255,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         await recordProviderAttempt(input, {
           provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
           errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName,
-          failureKind: "threshold_violation", ...safeThresholdDiagnostic(violation),
+          failureKind: "threshold_violation", failureClass: "threshold_violation", ...safeThresholdDiagnostic(violation),
         });
       }
       const correction = formatThresholdViolations(wordErrors);
@@ -1286,7 +1338,7 @@ export class GroqClient implements GroqAssessmentClient {
       sonicDna: input.sonicDna,
     };
     const tasks=[
-      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"narrative","Write the executive assessment, identity, strengths and risks.",NarrativeSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
+      ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"narrative","Write the executive assessment, identity, strengths and risks. Keep executiveSummary 45–60 words and creativeIdentity 35–50 words. Return exactly 3 strengths and 2 risks, one concise sentence each, with no preamble or repeated points.",NarrativeSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"positioning",POSITIONING_INSTRUCTIONS,PositioningSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"release","Write a grounded release recommendation and priorities.",ReleaseSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),
       ()=>requestGroup(this.fetchImpl,this.apiKey,this.model,promptInput,"evidence-score","Score only evidence-derivable dimensions; preserve evidence meaning. Repair only named fields.",EvidenceScoreSchema,this.sleepImpl,signal,this.requestTimeoutMs,this.endpoint,this.providerName),

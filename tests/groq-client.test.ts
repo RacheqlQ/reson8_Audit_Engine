@@ -42,18 +42,18 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GeminiClient("test-gemini-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{artist:"Fixture Artist"},sonicDna:null});
-  expect(narrativeSystem).toContain("at least 3 distinct evidence-grounded strengths");
-  expect(narrativeSystem).toContain("at least 2 distinct evidence-grounded risks");
+  expect(narrativeSystem).toContain("exactly 3 distinct evidence-grounded strengths");
+  expect(narrativeSystem).toContain("exactly 2 distinct evidence-grounded risks");
   expect(narrativeCalls).toBe(2);
   expect(narrativePayloads[1].correction).toContain("strengths");
   expect(result.strengths).toHaveLength(3);
  });
- it("keeps production provider fallback deadlines inside the eleven-minute assessment stage",()=>{
+ it("keeps primary, Gemini fallback and bounded Groq recovery deadlines inside the fifteen-minute assessment stage",()=>{
   expect(GROQ_ASSESSMENT_TIMEOUT_MS).toBe(7*60_000);
   expect(GEMINI_ASSESSMENT_TIMEOUT_MS).toBe(3*60_000);
   expect(OLLAMA_ASSESSMENT_TIMEOUT_MS).toBe(2*60_000);
-  expect(GROQ_ASSESSMENT_TIMEOUT_MS+GEMINI_ASSESSMENT_TIMEOUT_MS+60_000).toBeLessThanOrEqual(11*60_000);
-  expect(OLLAMA_ASSESSMENT_TIMEOUT_MS).toBeLessThan(11*60_000);
+  expect(GROQ_ASSESSMENT_TIMEOUT_MS+GEMINI_ASSESSMENT_TIMEOUT_MS+4*60_000+60_000).toBeLessThanOrEqual(15*60_000);
+  expect(OLLAMA_ASSESSMENT_TIMEOUT_MS).toBeLessThan(15*60_000);
  });
  it("uses the bounded provider-specific deadline defaults",async()=>{
   const groqController=new AbortController();
@@ -293,7 +293,7 @@ describe("GroqClient section groups",()=>{
   });
   expect(mock).toHaveBeenCalledTimes(9);
   expect(payloads).toHaveLength(1);
-  expect(Object.keys(payloads[0].catalogMetadata)).toHaveLength(4);
+  expect(Object.keys(payloads[0].catalogMetadata)).toHaveLength(1);
   expect(payloads[0].catalogMetadata.provider0.length).toBeLessThanOrEqual(212);
  });
  it("keeps Gemini and Ollama module output budgets independent of Groq's TPM ceiling",async()=>{
@@ -1542,7 +1542,7 @@ describe("assessment section cache lease fencing", () => {
 
 
 describe("Groq narrative completion recovery", () => {
-  it.each(["length", null])("raises the bounded completion allowance when finish_reason is %s", async finishReason => {
+  it.each(["length", null])("retries concisely without raising the bounded completion allowance when finish_reason is %s", async finishReason => {
     const narrativeBudgets: number[] = [];
     const attempts: ProviderAttemptDiagnostic[] = [];
     let narrativeAttempts = 0;
@@ -1571,8 +1571,8 @@ describe("Groq narrative completion recovery", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(narrativeBudgets).toHaveLength(2);
     expect(narrativeBudgets[0]).toBe(850);
-    expect(narrativeBudgets[1]).toBeGreaterThan(narrativeBudgets[0]);
-    expect(narrativeBudgets[1]).toBeLessThanOrEqual(2000);
+    expect(narrativeBudgets[1]).toBe(narrativeBudgets[0]);
+    expect(narrativeBudgets[1]).toBe(850);
     expect(attempts).toContainEqual(expect.objectContaining({ failureKind: "completion_truncated", failureClass: "completion_truncated", finishReason, completionTokenBudget: 850, actualUsage: { status: "reported", promptTokens: 2500, completionTokens: 850, totalTokens: 3350 } }));
     expect(mock.mock.calls.every(call => {
       const body = JSON.parse(String(call[1]?.body));
@@ -1586,7 +1586,7 @@ describe("Groq narrative completion recovery", () => {
 
 
 describe("production A&R provider capacity regressions", () => {
-  it("continues adaptive Groq narrative recovery beyond 1,600 tokens without crossing the 6,000-token ceiling", async () => {
+  it("continues concise Groq narrative recovery without escalating completion tokens or crossing the 6,000-token ceiling", async () => {
     const budgets: number[] = [];
     let narrativeCalls = 0;
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -1613,9 +1613,9 @@ describe("production A&R provider capacity regressions", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(budgets).toHaveLength(4);
     expect(budgets[0]).toBe(850);
-    expect(budgets[1]).toBe(1275);
-    expect(budgets[2]).toBe(1913);
-    expect(budgets[3]).toBe(2000);
+    expect(budgets[1]).toBe(850);
+    expect(budgets[2]).toBe(850);
+    expect(budgets[3]).toBe(850);
     expect(mock.mock.calls.every(call => {
       const body = JSON.parse(String(call[1]?.body));
       const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
@@ -1630,7 +1630,7 @@ describe("production A&R provider capacity regressions", () => {
 
 
 describe("Groq retry prompt-usage calibration", () => {
-  it("uses reported prompt usage to restore completion headroom on a truncated narrative retry", async () => {
+  it("uses reported prompt usage without escalating the completion allowance on a truncated narrative retry", async () => {
     const provenance = Object.fromEntries(Array.from({ length: 60 }, (_, index) => ["field" + index, {
       source: "musicbrainz_catalog_provider_" + index,
       provider: "musicbrainz",
@@ -1673,8 +1673,7 @@ describe("Groq retry prompt-usage calibration", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(narrativeBudgets.length).toBeGreaterThanOrEqual(2);
     expect(narrativeBudgets[0]).toBe(850);
-    expect(narrativeBudgets[1]).toBeGreaterThanOrEqual(1275);
-    expect(narrativeBudgets[1]).toBeLessThanOrEqual(2000);
+    expect(narrativeBudgets[1]).toBe(850);
   });
 });
 
@@ -1698,5 +1697,81 @@ describe("provider completion finish-reason precedence", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(calls.get("narrative")).toBe(1);
     expect(attempts.some(attempt => attempt.failureKind === "completion_truncated")).toBe(false);
+  });
+});
+
+
+describe("shared Groq and Gemini request token budget", () => {
+  it("enforces the 6,000-token total ceiling and 256-token completion floor on every Gemini section", async () => {
+    const budgetLogs: Array<Record<string, unknown>> = [];
+    const recoveryLogs: Array<Record<string, unknown>> = [];
+    const projectionLogs: Array<Record<string, unknown>> = [];
+    const info = vi.spyOn(console, "info").mockImplementation((message?: unknown) => {
+      if (typeof message !== "string") return;
+      try {
+        const event = JSON.parse(message) as Record<string, unknown>;
+        if (event.event === "request_budget") budgetLogs.push(event);
+        if (event.event === "prompt_budget_recovery") recoveryLogs.push(event);
+        if (event.event === "evidence_score_context_projection") projectionLogs.push(event);
+      } catch { /* Ignore unrelated console output. */ }
+    });
+          const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        const payload = JSON.parse(body.messages[1].content);
+        return new Response(JSON.stringify({
+          choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+        }), { status: 200 });
+      });
+    try {
+      const evidence = {
+        artist: "Budget Fixture",
+        sourceProviders: ["musicbrainz", "audd", "lastfm"],
+        fieldProvenance: Object.fromEntries(Array.from({ length: 80 }, (_, index) => ["field" + index, {
+          source: "musicbrainz", provider: "musicbrainz", status: "recognized", confidence: 0.9,
+          evidenceClass: "RECOGNIZED", value: ("verified source fact " + index + " ").repeat(12),
+          normalizedValue: ("normalized source fact " + index + " ").repeat(12),
+        }])),
+      };
+      const sonicDna = {
+        provenance: "uploaded_audio_master", evidenceClass: "OBSERVED", analysisVersion: "fixture-v1",
+        sourceProviders: ["essentia"], confidence: 0.91, bpm: 96, tempoConfidence: 0.92,
+        key: "A minor", mode: "minor", moodTags: ["warm", "reflective"], genreTags: ["Afro R&B"],
+        rhythmFeatures: { stability: 0.8, beatTimesSeconds: Array.from({ length: 128 }, (_, i) => i * 0.6) },
+        harmonicFeatures: { tonalClarity: 0.7, segmentChroma: Array.from({ length: 128 }, () => Array(12).fill(0.1)) },
+        acousticFeatureProfile: { status: "analyzed", descriptors: Object.fromEntries(Array.from({ length: 48 }, (_, i) => ["descriptor" + i, { median: i, p10: i - 1, p90: i + 1, unit: "fixture" }])) },
+        vocalFeatures: { status: "analyzed", provenance: "fixture", confidence: 0.8, activitySegments: Array.from({ length: 128 }, (_, i) => ({ startSeconds: i, endSeconds: i + 1, meanLevelDbfs: -20 })) },
+        vocalArrangementAnalysis: { status: "analyzed", segments: Array.from({ length: 128 }, (_, i) => ({ startSeconds: i, endSeconds: i + 1, role: "unknown", confidence: 0.7 })) },
+        dynamicRangeDb: 8.2, rmsLevelDbfs: -18, rmsEnergy: 0.1, loudnessLufs: null, loudnessRangeLu: null, truePeakDbfs: -1,
+        spectralCentroidHz: 1900, spectralBandwidthHz: 1200, spectralRolloffHz: 7000, zeroCrossingRate: 0.04,
+        sampleRate: 44100, channels: 2, durationSeconds: 180,
+        audioProperties: Object.fromEntries(Array.from({ length: 48 }, (_, i) => ["property" + i, "fixture-value-" + i])),
+      };
+      const catalogMetadata = Object.fromEntries(Array.from({ length: 4 }, (_, provider) => [
+        "catalog-provider-" + provider,
+        Object.fromEntries(Array.from({ length: 32 }, (_, field) => [
+          "field-" + field, ("provider-returned supporting catalog detail " + provider + "-" + field + " ").repeat(12),
+        ])),
+      ]));
+      const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence, sonicDna, catalogMetadata });
+      expect(result.assessmentVersion).toBe("3.0");
+      expect(budgetLogs).toHaveLength(9);
+      expect(projectionLogs).toHaveLength(1);
+      expect(Number(projectionLogs[0].estimatedSonicDnaTokensAfter)).toBeLessThan(Number(projectionLogs[0].estimatedSonicDnaTokensBefore));
+      const evidenceScoreCompaction = recoveryLogs.find(event => event.group === "evidence-score");
+      expect(evidenceScoreCompaction).toBeDefined();
+      expect(Number(evidenceScoreCompaction?.estimatedInputTokensAfter)).toBeLessThan(Number(evidenceScoreCompaction?.estimatedInputTokensBefore));
+      const evidenceScoreBudget = budgetLogs.find(event => event.group === "evidence-score");
+      expect(Number(evidenceScoreBudget?.estimatedInputTokens)).toBeLessThanOrEqual(5000);
+      expect(Number(evidenceScoreBudget?.maxCompletionTokens)).toBe(1000);
+      for (const budget of budgetLogs) {
+        expect(budget.maxTotalTokens).toBe(6000);
+        expect(Number(budget.estimatedTotalTokens)).toBeLessThanOrEqual(6000);
+        expect(Number(budget.maxCompletionTokens)).toBeGreaterThanOrEqual(256);
+      }
+      console.log(JSON.stringify({ test: "gemini_shared_budget", requests: budgetLogs.map(({ group, estimatedInputTokens, maxCompletionTokens, estimatedTotalTokens }) => ({ group, estimatedInputTokens, maxCompletionTokens, estimatedTotalTokens })), compaction: recoveryLogs, sonicDnaProjection: projectionLogs }));
+    } finally {
+      info.mockRestore();
+    }
   });
 });
