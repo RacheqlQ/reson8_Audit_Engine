@@ -741,7 +741,12 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const outputSchema = ["evidence-score", "narrative", "positioning", "release", "promotion"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
   const schemaConstraintGuidance = compactedSchemaConstraintInstructions(rawOutputSchema);
   const wordContractGuidance = thresholdContractInstructions(groupName);
-  const completed = await input.loadCompletedSectionGroup?.(cacheGroupName, providerName as "groq" | "gemini" | "ollama", model);
+  let completed: unknown | null = null;
+  try {
+    completed = await input.loadCompletedSectionGroup?.(cacheGroupName, providerName as "groq" | "gemini" | "ollama", model) ?? null;
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "assessment_section_cache_read_failed", provider: providerName, model, group: groupName, errorName: error instanceof Error ? error.name : "UnknownError" }));
+  }
   if (completed !== null && completed !== undefined) {
     const cached = schema.safeParse(completed);
     if (cached.success && thresholdViolations(groupName, cached.data).length === 0) return cached.data;
@@ -1038,7 +1043,11 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (scheduleCorrection(correction + " Repair every named field and preserve the evidence-bounded meaning.")) continue;
       break;
     }
-    await input.saveCompletedSectionGroup?.(cacheGroupName, result.data, providerName as "groq" | "gemini" | "ollama", model);
+    try {
+      await input.saveCompletedSectionGroup?.(cacheGroupName, result.data, providerName as "groq" | "gemini" | "ollama", model);
+    } catch (error) {
+      console.warn(JSON.stringify({ event: "assessment_section_cache_write_failed", provider: providerName, model, group: groupName, errorName: error instanceof Error ? error.name : "UnknownError" }));
+    }
     return result.data;
   }
 
