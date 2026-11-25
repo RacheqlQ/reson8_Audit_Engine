@@ -102,6 +102,9 @@ export interface ProviderAttemptDiagnostic {
   group?: string;
   failureKind?: "empty_content" | "invalid_json" | "schema_violation" | "threshold_violation" | "prompt_budget_exceeded";
   validationIssues?: Array<{ code: string; path: string[] }>;
+  failureClass?: "preflight_budget" | "schema_or_malformed_400" | "capacity_or_503" | "network" | "timeout";
+  estimatedInputTokens?: number;
+  actualUsage?: { status: "reported" | "unavailable"; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null };
   validationField?: string;
   validationRule?: "minimum_word_count" | "minimum_item_count";
   minimumWords?: number;
@@ -298,6 +301,7 @@ const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
   production: 650, comparables: 450, promotion: 900, "label-fit": 650, timeline: 500,
 };
 const MIN_COMPLETION_TOKENS = 256;
+const NARRATIVE_INITIAL_HEADROOM_TOKENS = 500;
 const MAX_SECTION_REQUEST_ATTEMPTS = 16;
 
 async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
@@ -468,6 +472,97 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
     return compacted;
   }
   return compactPromptValue(projected) as Record<string, unknown>;
+}
+
+function compactCorrectionInstruction(reason: string): string {
+  if (/strict JSON-schema validation failed/i.test(reason)) {
+    return "Groq strict JSON-schema validation failed. Retry in JSON-object mode with one complete object matching outputSchema; preserve evidence, provenance, verdicts and nulls.";
+  }
+  const localValidation = reason.match(/(?:json_object|prompt_only) response failed local Zod validation:\s*([\s\S]*?)(?:\. Correct every reported field|$)/i);
+  if (localValidation) {
+    const issues = localValidation[1].replace(/\s+/g, " ").trim();
+    return "Local schema validation issues: " + (issues.length > 300 ? issues.slice(0, 297) + "..." : issues)
+      + ". Correct the named fields using outputSchema; return one complete object and preserve all evidence.";
+  }
+  const safeReason = reason
+    .replace(/(?:The )?(?:json_schema|json_object|prompt_only) response failed local Zod validation:\s*/i, "Schema validation issues: ")
+    .replace(/Compacted local schema bounds \(all mandatory\):[^.]*\./g, "")
+    .replace(/The user payload includes outputSchema,[^.]*\./g, "")
+    .replace(/\s+/g, " ").trim();
+  return safeReason.length > 360 ? safeReason.slice(0, 357) + "..." : safeReason;
+}
+
+function compactNarrativeContext(value: unknown, field = ""): unknown {
+  if (value === null || typeof value !== "object") {
+    if (typeof value !== "string") return value;
+    const preserveLongValue = /^(claim|value|normalizedValue|source|provider|artist|title|isrc)$/i.test(field);
+    const limit = preserveLongValue ? 120 : /^(description|commentary|notes|detail|reason|rawPayload)$/i.test(field) ? 24 : 32;
+    return value.length > limit ? value.slice(0, limit) + "…" : value;
+  }
+  if (Array.isArray(value)) {
+    const preserve = /^(sourceProviders|genres|catalogSources|matchedFields)$/i.test(field);
+    const items = preserve || value.length <= 3 ? value : [value[0], value[Math.floor((value.length - 1) / 2)], value[value.length - 1]];
+    return items.map(item => compactNarrativeContext(item, field));
+  }
+  const omitted = new Set(["rawPayload", "rawProviderPayload", "rawResponse", "responseBody", "debugPayload", "failed_generation", "description", "commentary", "notes", "debug"]);
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([key]) => !omitted.has(key))
+    .map(([key, item]) => [key, compactNarrativeContext(item, key)]));
+}
+
+function compactNarrativeSonicDna(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const compacted = compactNarrativeContext(value) as Record<string, unknown>;
+  const vocal = compacted.vocalFeatures;
+  if (vocal && typeof vocal === "object" && !Array.isArray(vocal)) {
+    const record = vocal as Record<string, unknown>;
+    const keep = ["status", "provenance", "evidenceClass", "confidence", "method", "model", "voicePresence", "vocalPresence", "language", "limitations"];
+    compacted.vocalFeatures = Object.fromEntries(keep.filter(key => record[key] !== undefined).map(key => [key, record[key]]));
+  }
+  const profile = compacted.acousticFeatureProfile;
+  if (profile && typeof profile === "object" && !Array.isArray(profile)) {
+    delete (profile as Record<string, unknown>).predictions;
+  }
+  return compacted;
+}
+
+function estimatePromptInputTokens(messages: Array<{ role: string; content: string }>, responseFormat: unknown): number {
+  return Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: responseFormat })).length / 2) + 256;
+}
+
+function compactGroqPromptForBudget(
+  messages: Array<{ role: string; content: string }>,
+  responseFormat: unknown,
+  groupName: string,
+  targetInputTokens: number,
+): { before: number; after: number } {
+  const before = estimatePromptInputTokens(messages, responseFormat);
+  if (before <= targetInputTokens) return { before, after: before };
+  const payload = JSON.parse(messages[1].content) as Record<string, unknown>;
+  payload.correction = compactCorrectionInstruction(String(payload.correction ?? ""));
+  payload.evidence = compactNarrativeContext(payload.evidence);
+  if (groupName === "narrative" && payload.evidence && typeof payload.evidence === "object" && !Array.isArray(payload.evidence)) {
+    const evidence = payload.evidence as Record<string, unknown>;
+    if (Array.isArray(evidence.sourceProviders) && evidence.fieldProvenance && typeof evidence.fieldProvenance === "object") {
+      // These are duplicate catalog summaries; source names and field-level
+      // provenance remain in the mandatory canonical evidence fields.
+      delete evidence.catalogSources;
+      delete evidence.metadataSourcesChecked;
+    }
+  }
+  payload.sonicDna = groupName === "narrative" ? compactNarrativeSonicDna(payload.sonicDna) : compactNarrativeContext(payload.sonicDna);
+  payload.catalogMetadata = compactNarrativeContext(payload.catalogMetadata);
+  messages[1].content = JSON.stringify(payload);
+  messages[0].content = messages[0].content
+    .replace(/ Compacted local schema bounds \(all mandatory\):[^.]*\./g, "")
+    .replace(/ The user payload includes outputSchema,[^.]*\./g, " Match the supplied outputSchema exactly; local validation remains mandatory.");
+  let after = estimatePromptInputTokens(messages, responseFormat);
+  if (after > targetInputTokens && groupName === "narrative") {
+    const compactPayload = JSON.parse(messages[1].content) as Record<string, unknown>;
+    compactPayload.correction = "Return one complete schema-valid JSON object. Preserve evidence, provenance, verdicts and nulls; repair only the failed output.";
+    messages[1].content = JSON.stringify(compactPayload);
+    after = estimatePromptInputTokens(messages, responseFormat);
+  }
+  return { before, after };
 }
 
 function compactPromptValue(value: unknown, depth = 0): unknown {
@@ -782,10 +877,10 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     signal?.throwIfAborted();
     const fallbackMode = responseMode !== "json_schema";
     const schemaGuidance = fallbackMode
-      ? " The user payload includes outputSchema, the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value, array bound and minimum length. Return one complete JSON object only. Do not include outputSchema in the returned object. Local Zod and section word-count validation are mandatory."
+      ? " Match the supplied outputSchema exactly. Return one complete JSON object only; do not include outputSchema in the result. Local Zod and word-count validation remain mandatory."
       : "";
     const messages = [
-      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release", "promotion"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + " " + wordContractGuidance + " " + schemaConstraintGuidance + schemaGuidance },
+      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release", "promotion"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + " " + wordContractGuidance + (fallbackMode ? "" : " " + schemaConstraintGuidance) + schemaGuidance },
       {
         role: "user",
         content: JSON.stringify({
@@ -794,7 +889,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           evidence: compactPromptValue(compactEvidenceForGroq(input.evidence, groupName)),
           sonicDna: compactSonicDnaForGroq(input.sonicDna, groupName),
           catalogMetadata: compactCatalogMetadataForGroup(input.catalogMetadata, groupName, input.evidence),
-          correction: attempt === 0 ? null : lastError,
+          correction: attempt === 0 ? null : compactCorrectionInstruction(lastError),
           ...(fallbackMode ? { outputSchema } : {}),
         }),
       },
@@ -819,9 +914,25 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // serialized prompt and structured-output schema. A strict 1-byte-per-token
     // ceiling overcounts JSON schema syntax so heavily that normal sections are
     // rejected before reaching Groq; the 256-token allowance covers framing.
-    const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 2) + 256;
+    let estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
     const sectionOutputBudget = Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
     const groqTpmBudgetApplies = providerName === "groq";
+    if (groqTpmBudgetApplies) {
+      const targetInputTokens = groupName === "narrative" && attempt === 0
+        ? MAX_GROQ_TOTAL_TOKENS - NARRATIVE_INITIAL_HEADROOM_TOKENS - sectionOutputBudget
+        : MAX_GROQ_TOTAL_TOKENS - Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget);
+      if (estimatedInputTokens > targetInputTokens) {
+        const compacted = compactGroqPromptForBudget(messages, requestBody.response_format, groupName, targetInputTokens);
+        estimatedInputTokens = compacted.after;
+        console.info(JSON.stringify({
+          provider: providerName, event: "prompt_budget_recovery", group: groupName,
+          attempt: attempt + 1, estimatedInputTokensBefore: compacted.before,
+          estimatedInputTokensAfter: compacted.after, targetInputTokens,
+          reservedCompletionTokens: Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget),
+          maxTotalTokens: MAX_GROQ_TOTAL_TOKENS,
+        }));
+      }
+    }
     // The 6,000-token ceiling is a Groq TPM safeguard, not a global model
     // output limit. Applying it to Gemini/Ollama starved evidence-score of its
     // 1,000-token module budget even when those providers had ample capacity.
@@ -831,9 +942,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     if (groqTpmBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS)) {
       const userPrompt = JSON.parse(messages[1].content) as Record<string, unknown>;
       const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
+      await recordProviderAttempt(input, {
+        provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
+        errorType: "provider_error", retryable: false, attempt: attempt + 1, group: groupName,
+        failureKind: "prompt_budget_exceeded", failureClass: "preflight_budget",
+        estimatedInputTokens, actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null },
+      });
       console.warn(JSON.stringify({
         event: "provider_preflight_rejection", provider: providerName, model, group: groupName,
-        failureKind: "prompt_budget_exceeded", estimatedInputTokens,
+        failureKind: "prompt_budget_exceeded", failureClass: "preflight_budget", estimatedInputTokens,
         minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: MAX_GROQ_TOTAL_TOKENS,
         promptBytes: {
           system: byteLength(messages[0].content),
@@ -873,6 +990,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
           errorType: timedOut ? "timeout" : "provider_unavailable",
           retryable: !signal?.aborted, attempt: networkAttempt + 1, group: groupName,
+          failureClass: timedOut ? "timeout" : "network", estimatedInputTokens,
+          actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null },
         });
         if (signal?.aborted) throw error;
         if (retryable) {
@@ -907,6 +1026,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         retryable: !response.ok && !dailyLimit && (response.status === 429 || response.status >= 500),
         attempt: networkAttempt + 1,
         group: groupName,
+        failureClass: response.ok ? undefined : response.status === 400 ? "schema_or_malformed_400" : response.status === 503 || response.status === 429 ? "capacity_or_503" : response.status >= 500 ? "network" : undefined,
+        estimatedInputTokens,
+        actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null },
       });
       if (dailyLimit) {
         const tomorrow = new Date();
@@ -938,21 +1060,10 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
 
       if (response?.status === 400 && providerError.error?.code === "json_validate_failed") {
-        const message = typeof providerError.error.message === "string"
-          ? providerError.error.message
-          : "The provider rejected its generated JSON.";
-        const failedGeneration = typeof providerError.error.failed_generation === "string"
-          ? providerError.error.failed_generation.trim()
-          : "";
-        const diagnostic = failedGeneration
-          ? " " + providerLabel + " returned failed_generation diagnostics; do not copy unsupported content."
-          : " " + providerLabel + " supplied no failed_generation diagnostics.";
-
         if (responseMode === "json_schema" && strictSchemaRetries < 1) {
           strictSchemaRetries++;
           responseMode = "json_object";
-          lastError = "" + providerLabel + " strict JSON-schema validation failed for " + groupName + ": " + message + "." + diagnostic
-            + " Switch immediately to JSON-object mode and return one complete object matching the exact outputSchema. The application will enforce local Zod and section word-count validation.";
+          lastError = "Groq strict JSON-schema validation failed for " + groupName + ". Retry once in JSON-object mode; preserve the complete schema contract and all evidence.";
           continue;
         }
 
@@ -960,19 +1071,16 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           jsonObjectProviderRetries++;
           if (jsonObjectProviderRetries === 2) {
             responseMode = "prompt_only";
-            lastError = "" + providerLabel + " also rejected JSON-object mode for " + groupName + ": " + message + "." + diagnostic
-              + " Omit response_format on the next request, return raw JSON only, and match every field in outputSchema.";
+            lastError = "JSON-object output was rejected for " + groupName + ". Omit response_format and return one complete raw JSON object matching outputSchema.";
           } else {
-            lastError = "" + providerLabel + " rejected JSON-object mode for " + groupName + ": " + message + "." + diagnostic
-              + " Retry JSON-object mode with the exact outputSchema and a complete JSON object.";
+            lastError = "JSON-object output was rejected for " + groupName + ". Retry with the supplied outputSchema and a complete JSON object.";
           }
           continue;
         }
 
         if (responseMode === "prompt_only" && promptOnlyProviderRetries < 1) {
           promptOnlyProviderRetries++;
-          lastError = "" + providerLabel + " rejected prompt-only JSON for " + groupName + ": " + message + "." + diagnostic
-            + " Retry once with a complete raw JSON object matching outputSchema exactly.";
+          lastError = "Prompt-only JSON was rejected for " + groupName + ". Retry once with a complete raw JSON object matching outputSchema.";
           continue;
         }
 
@@ -999,7 +1107,17 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (scheduleCorrection("The provider returned an invalid JSON response envelope with HTTP success. Return one complete JSON object in the required response format.")) continue;
       break;
     }
-    console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, actualPromptTokens: payload.usage?.prompt_tokens ?? null, actualCompletionTokens: payload.usage?.completion_tokens ?? null, actualTotalTokens: payload.usage?.total_tokens ?? null }));
+    const actualUsage = payload.usage && [payload.usage.prompt_tokens, payload.usage.completion_tokens, payload.usage.total_tokens].some(value => typeof value === "number")
+      ? { status: "reported" as const, promptTokens: payload.usage.prompt_tokens ?? null, completionTokens: payload.usage.completion_tokens ?? null, totalTokens: payload.usage.total_tokens ?? null }
+      : { status: "unavailable" as const, promptTokens: null, completionTokens: null, totalTokens: null };
+    console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, usageStatus: actualUsage.status, actualPromptTokens: actualUsage.promptTokens, actualCompletionTokens: actualUsage.completionTokens, actualTotalTokens: actualUsage.totalTokens }));
+    if (actualUsage.status === "reported") {
+      await recordProviderAttempt(input, {
+        provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
+        errorType: "none", retryable: false, attempt: attempt + 1, group: groupName,
+        estimatedInputTokens, actualUsage,
+      });
+    }
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
       await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "empty_content" });

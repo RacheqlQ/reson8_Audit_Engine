@@ -176,17 +176,21 @@ describe("DSP provider failure persistence", () => {
     await store.recordProviderAttempt("job-provider-attempt", {
       provider: "gemini", model: "gemini-2.5-flash", status: 503,
       errorType: "provider_error", retryable: true, attempt: 2,
-      group: "evidence-score", failureKind: "schema_violation", validationIssues: [{ code: "too_small", path: ["evidenceLabels"] }],
+      group: "evidence-score", failureKind: "schema_violation", failureClass: "capacity_or_503",
+      estimatedInputTokens: 5829,
+      actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null },
+      validationIssues: [{ code: "too_small", path: ["evidenceLabels"] }],
     });
     const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(requestBody).toMatchObject({
       audit_job_id: "job-provider-attempt",
       event_type: "provider_attempt",
       status: "failed",
-      payload: { provider: "gemini", model: "gemini-2.5-flash", httpStatus: 503, errorType: "provider_error", retryable: true, attempt: 2, group: "evidence-score", failureKind: "schema_violation", validationIssues: [{ code: "too_small", path: ["evidenceLabels"] }] },
+      payload: { provider: "gemini", model: "gemini-2.5-flash", httpStatus: 503, errorType: "provider_error", retryable: true, attempt: 2, group: "evidence-score", failureKind: "schema_violation", failureClass: "capacity_or_503", estimatedInputTokens: 5829, actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null }, validationIssues: [{ code: "too_small", path: ["evidenceLabels"] }] },
     });
     expect(JSON.stringify(requestBody)).not.toContain("api_key");
-    expect(JSON.stringify(requestBody)).not.toContain("prompt");
+    expect(JSON.stringify(requestBody)).not.toContain('"prompt":');
+    expect(JSON.stringify(requestBody)).not.toContain("Private fixture evidence");
   });
 
   it("persists Spotify API failure status and a bounded reason for audit polling", async () => {

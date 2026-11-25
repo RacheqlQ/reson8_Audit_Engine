@@ -661,14 +661,18 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
     list("Commercial verification gates",arr(rec(input.marketPlacement?.commercialStrategy).kpis).slice(0,4).map(value=>{const item=rec(value);return str(item.metric,"Metric")+": "+str(item.target,"Target")+" — "+str(item.verification,"Verify with source records");}))
    ],kind:"narrative"}
   );
-  // Deep-dive pages are evidence-gated; do not emit pages that contain only missing-data placeholders.
-  if(data.sonicAxes) pages.push({title:"Sonic DNA dashboard",blocks:[],kind:"full-axes"});
+  // Keep supplied Sonic DNA axis scores and notes inside the existing
+  // comparable-lanes narrative page; do not allocate a redundant thirteenth page.
 
   const assessment=rec(input.assessment),release=rec(assessment.releaseStrategy),contract=rec(input.realMasterContract);
   const timeline=Array.isArray(release.executionTimeline)?release.executionTimeline:Array.isArray(assessment.executionTimeline)?assessment.executionTimeline:[];
   const hasScore=data.headlineScore!==null||(data.scoreDrivers?.length??0)>0;
   const hasPlaybackMeasurements=["integrated_loudness_lufs","true_peak_dbfs","rms_level_dbfs"].some(key=>typeof contract[key]==="number"&&Number.isFinite(contract[key]));
-  if(hasScore||timeline.length>0||hasPlaybackMeasurements)
+  // When the Sonic DNA dashboard is present, keep the full report at its
+  // approved 12-page allocation. The cover already carries the supplied score,
+  // the execution-plan narrative carries the campaign timeline, and the track
+  // snapshot carries available playback measurements; avoid a redundant extra page.
+  if((hasScore||timeline.length>0||hasPlaybackMeasurements)&&!data.sonicAxes)
    pages.push({title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"});
  }
  pages.push({title:"A&R notes",blocks:[],lines:[
@@ -772,17 +776,27 @@ function drawCircleOfFifths(page:PDFPage,input:AuditReportInput,data:ReportV2Dat
 }
 function drawCompactSonicAxes(page:PDFPage,data:ReportV2Data,fonts:Fonts,top:number):number{
  if(!data.sonicAxes)return 0;
- const axes=Object.entries(data.sonicAxes),height=128,bottom=top-height,x=M,width=W-2*M;
+ const axes=Object.entries(data.sonicAxes).slice(0,5),x=M,width=W-2*M;
+ const rowLayouts=axes.map(([name,axis])=>({
+  name,axis,
+  notes:wrap(axis.note??"Axis note not supplied.",fonts.regular,4.8,172)
+ }));
+ const rowHeights=rowLayouts.map(row=>Math.max(22,row.notes.length*5.5+8));
+ const height=31+rowHeights.reduce((sum,value)=>sum+value,0)+8,bottom=top-height;
  page.drawRectangle({x,y:bottom,width,height,color:C.white,borderColor:C.line,borderWidth:.7});
  page.drawRectangle({x,y:top-3,width,height:3,color:C.gold});
- page.drawText("SONIC PROFILE",{x:x+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
- axes.slice(0,5).forEach(([name,axis],index)=>{
-  const y=top-39-index*17;
-  page.drawText(name,{x:x+12,y,size:6.7,font:fonts.bold,color:C.ink});
-  page.drawRectangle({x:x+145,y:y-2,width:210,height:6,color:C.line});
-  draw3DSolidBar(page,x+145,y-2,210*Math.max(0,Math.min(100,axis.value))/100,6,axis.value<60?C.amber:C.teal);
-  page.drawText(String(axis.value),{x:x+365,y:y-1,size:6.7,font:fonts.bold,color:C.ink});
+ page.drawText("SONIC PROFILE · SUPPLIED AXIS SCORES",{x:x+12,y:top-17,size:7,font:fonts.bold,color:C.gold});
+ let rowTop=top-29;
+ rowLayouts.forEach((row,index)=>{
+  const rowHeight=rowHeights[index]??22,y=rowTop-9;
+  page.drawText(row.name,{x:x+12,y,size:6.2,font:fonts.bold,color:C.ink});
+  page.drawRectangle({x:x+105,y:y-2,width:135,height:5,color:C.line});
+  draw3DSolidBar(page,x+105,y-2,135*Math.max(0,Math.min(100,row.axis.value))/100,5,row.axis.value<60?C.amber:C.teal);
+  page.drawText(String(row.axis.value)+"/100",{x:x+247,y:y-1,size:5.8,font:fonts.bold,color:C.ink});
+  row.notes.forEach((line,n)=>page.drawText(line,{x:x+300,y:y-n*5.5,size:4.8,font:fonts.regular,color:C.muted}));
+  rowTop-=rowHeight;
  });
+ page.drawText("Source: supplied Sonic DNA axis values and notes; scores are not independently validated by this report.",{x:x+12,y:bottom+5,size:4.8,font:fonts.italic,color:C.muted});
  return height;
 }
 function formatSnapshotTime(seconds:number):string{
@@ -1298,6 +1312,10 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
     const h=card(page,M,y,W-2*M,b.label,[b.value],fonts,{accent:C.gold,provenance:b.provenance,compact:compactNarrative});
     y-=h+(compactNarrative?3:6);
     if(b.arrangementBar?.length){const barHeight=drawProposedArrangementBar(page,y,b.arrangementBar,fonts);y-=barHeight+5;}
+   }
+   if(spec.title==="Comparable lanes and listening references"&&data.sonicAxes){
+    const axesHeight=drawCompactSonicAxes(page,data,fonts,y);
+    y-=axesHeight+5;
    }
    if(y<76)throw new Error("Report v2 narrative page content exceeds safe footer clearance: "+spec.title);
   }else if(spec.kind==="axes"||spec.kind==="comparables"||spec.kind==="moments"){

@@ -1297,6 +1297,89 @@ describe("complete local A&R provider contract", () => {
 });
 
 
+describe("Groq narrative prompt budget recovery", () => {
+  it("compacts an HTTP 400 correction prompt under the 6,000-token ceiling without losing canonical evidence", async () => {
+    const provenance = Object.fromEntries(Array.from({ length: 12 }, (_, index) => ["field" + index, {
+      source: "musicbrainz_catalog_provider_" + index,
+      provider: "musicbrainz",
+      status: "recognized",
+      confidence: 0.91,
+      evidenceClass: "RECOGNIZED",
+      value: ("source-attributed identity value " + index + " with supporting catalog detail ").repeat(3),
+      normalizedValue: ("normalized identity value " + index + " with reconciled catalog detail ").repeat(3),
+    }]));
+    const evidence = {
+      auditType: "MASTER-BASED AUDIT", sourceType: "master", artist: "Budget Fixture",
+      title: "Budget Recovery Track", isrc: "NGABC2600001",
+      sourceProviders: ["musicbrainz", "audD", "lastfm"],
+      fieldProvenance: provenance,
+      identity: { artist: "Budget Fixture", title: "Budget Recovery Track", isrc: "NGABC2600001" },
+      reconciliation: { status: "RECONCILED", conflicts: [], matchedFields: ["artist", "title", "isrc"] },
+      catalogSources: Array.from({ length: 12 }, (_, index) => ({ platform: "provider-" + index, status: "matched", provider: "provider-" + index, source: "catalog" })),
+    };
+    const sonicDna = {
+      provenance: "uploaded_audio_master", evidenceClass: "OBSERVED", bpm: 112, tempoConfidence: 0.86,
+      key: "A", mode: "minor", genreTags: ["Alternative R&B"],
+      acousticFeatureProfile: {
+        status: "measured",
+        provenance: { featureVersion: "1.0", algorithm: "fixture", sourceSampleRateHz: 44100, analysisSampleRateHz: 22050, windowCount: 128 },
+        descriptors: { spectralCentroid: { median: 1200, p10: 900, p90: 1800, unit: "Hz" } },
+        predictions: Object.fromEntries(Array.from({ length: 16 }, (_, index) => ["prediction" + index, {
+          label: "optional interpretation " + index,
+          detail: ("non-mandatory model interpretation context " + index + " ").repeat(8),
+          probability: 0.4,
+          method: "optional-model-prediction",
+        }])),
+      },
+      vocalFeatures: {
+        status: "analyzed", provenance: "uploaded_audio_master", confidence: 0.8, method: "fixture",
+        activitySegments: Array.from({ length: 30 }, (_, index) => ({
+          startSeconds: index * 2, endSeconds: index * 2 + 1, meanLevelDbfs: -18, peakLevelDbfs: -4,
+          commentary: ("optional vocal timeline commentary " + index + " ").repeat(8),
+        })),
+        pitchSegments: Array.from({ length: 30 }, (_, index) => ({
+          startSeconds: index * 2, endSeconds: index * 2 + 1, medianHz: 220, confidence: 0.8,
+          method: "optional pitch timeline",
+        })),
+      },
+    };
+    const requests: Array<{ body: any; estimatedInputTokens: number }> = [];
+    let narrativeCalls = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({
+        messages: body.messages, response_format: body.response_format,
+      })).length / 2) + 256;
+      requests.push({ body, estimatedInputTokens });
+      if (payload.sectionGroup === "narrative" && narrativeCalls++ === 0) {
+        return new Response(JSON.stringify({ error: { code: "json_validate_failed", message: "Structured output validation failed" } }), { status: 400 });
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({
+        evidence, sonicDna,
+        loadCompletedSectionGroup: async group => group === "narrative" ? null : p(group),
+      });
+
+    const narrativeRequests = requests.filter(request =>
+      JSON.parse(request.body.messages[1].content).sectionGroup === "narrative");
+    expect(narrativeRequests).toHaveLength(2);
+    expect(narrativeRequests[0].estimatedInputTokens).toBeLessThanOrEqual(6000 - 500 - 850);
+    expect(narrativeRequests[1].estimatedInputTokens + narrativeRequests[1].body.max_completion_tokens).toBeLessThanOrEqual(6000);
+    expect(narrativeRequests[1].body.max_completion_tokens).toBeGreaterThanOrEqual(256);
+    const correctedPayload = JSON.parse(narrativeRequests[1].body.messages[1].content);
+    expect(correctedPayload.evidence).toMatchObject({
+      artist: "Budget Fixture", title: "Budget Recovery Track", isrc: "NGABC2600001",
+      sourceProviders: ["musicbrainz", "audD", "lastfm"],
+    });
+    expect(correctedPayload.evidence.fieldProvenance).toHaveProperty("field0");
+    expect(correctedPayload.evidence.identity).toBeDefined();
+    expect(result.assessmentVersion).toBe("3.0");
+  });
+});
+
 describe("nine-section master and DSP-link execution modes", () => {
   it.each([
     {
@@ -1310,9 +1393,13 @@ describe("nine-section master and DSP-link execution modes", () => {
       evidence: { auditType: "DSP-LINK AUDIT", sourceType: "dsp_link", artist: "DSP Fixture", title: "DSP Fixture Track", catalogUrl: "https://music.example/track/123" },
     },
   ])("completes all nine assessment groups and report adaptation for $mode input", async ({ mode, sonicDna, evidence }) => {
+    let narrativeAttempts = 0;
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative" && narrativeAttempts++ === 0) {
+        return new Response(JSON.stringify({ error: { code: "json_validate_failed", message: "Structured output rejected" } }), { status: 400 });
+      }
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
     });
     const assessment = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
@@ -1322,7 +1409,8 @@ describe("nine-section master and DSP-link execution modes", () => {
       return JSON.parse(body.messages[1].content).sectionGroup;
     });
     expect(new Set(groups)).toEqual(new Set(["narrative", "positioning", "release", "evidence-score", "production", "comparables", "promotion", "label-fit", "timeline"]));
-    expect(groups).toHaveLength(9);
+    expect(groups).toHaveLength(10);
+    expect(groups.filter(group => group === "narrative")).toHaveLength(2);
     expect(assessment.aAndRPositioning.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
     expect(assessment.commercialRead.rationale.trim().split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
     if (mode === "dsp_link") {

@@ -329,7 +329,7 @@ describe("v2 gated report pages", () => {
     };
     input.evidence.verifiedComparables = [{ title: "Fixture Comparable", year: 2024, lane: "Fixture lane", similarity: 75, basis: "Test basis", source: "fixture source" }];
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "full"));
-    expect(pdf.getPageCount()).toBe(13);
+    expect(pdf.getPageCount()).toBe(12);
   });
 
   it("omits every gated page for a minimal audio-only fixture", async () => {
