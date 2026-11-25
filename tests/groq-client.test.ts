@@ -42,8 +42,8 @@ describe("GroqClient section groups",()=>{
   });
   const client=new GeminiClient("test-gemini-key","test-model",mock as typeof fetch,async()=>{});
   const result=await client.assess({evidence:{artist:"Fixture Artist"},sonicDna:null});
-  expect(narrativeSystem).toContain("at least 3 distinct evidence-grounded strengths");
-  expect(narrativeSystem).toContain("at least 2 distinct evidence-grounded risks");
+  expect(narrativeSystem).toContain("exactly 3 distinct evidence-grounded strengths");
+  expect(narrativeSystem).toContain("exactly 2 distinct evidence-grounded risks");
   expect(narrativeCalls).toBe(2);
   expect(narrativePayloads[1].correction).toContain("strengths");
   expect(result.strengths).toHaveLength(3);
