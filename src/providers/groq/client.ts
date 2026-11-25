@@ -102,7 +102,7 @@ export interface ProviderAttemptDiagnostic {
   group?: string;
   failureKind?: "empty_content" | "invalid_json" | "schema_violation" | "threshold_violation" | "prompt_budget_exceeded" | "completion_truncated";
   validationIssues?: Array<{ code: string; path: string[] }>;
-  failureClass?: "preflight_budget" | "schema_or_malformed_400" | "capacity_or_503" | "network" | "timeout";
+  failureClass?: "preflight_budget" | "schema_or_malformed_400" | "capacity_or_503" | "network" | "timeout" | "completion_truncated";
   estimatedInputTokens?: number;
   actualUsage?: { status: "reported" | "unavailable"; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null };
   validationField?: string;
@@ -1129,7 +1129,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
         errorType: "malformed_output", retryable: adaptiveCompletionTokenBudget < MAX_COMPLETION_TOKENS,
         attempt: attempt + 1, group: groupName, failureKind: "completion_truncated",
-        estimatedInputTokens, actualUsage,
+        failureClass: "completion_truncated", estimatedInputTokens, actualUsage,
       });
       if (adaptiveCompletionTokenBudget < MAX_COMPLETION_TOKENS) {
         adaptiveCompletionTokenBudget = Math.min(
