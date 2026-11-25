@@ -1048,7 +1048,9 @@ describe("nine-section report-readiness integration", () => {
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       const payload = JSON.parse(body.messages[1].content);
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      const recovered = p(payload.sectionGroup);
+      if (payload.sectionGroup === group && groupCalls >= 2) recoveredPayload = recovered as Record<string, any>;
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
     });
     const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
       .assess({ evidence: { artist: "Fixture Artist", title: "Fixture Track", fixture: true }, sonicDna: null });
