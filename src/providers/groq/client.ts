@@ -292,12 +292,13 @@ function safeThresholdDiagnostic(violation: ThresholdViolation): ThresholdViolat
 const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
 let groqDailyCapUntil = 0;
 const MAX_NETWORK_ATTEMPTS = 3;
-const MAX_GEMINI_NETWORK_ATTEMPTS = 8;
+const MAX_GEMINI_NETWORK_ATTEMPTS = 5;
 export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
 export const GROQ_ASSESSMENT_TIMEOUT_MS = 7 * 60_000;
 export const GEMINI_ASSESSMENT_TIMEOUT_MS = 3 * 60_000;
 export const OLLAMA_ASSESSMENT_TIMEOUT_MS = 2 * 60_000;
-const MAX_COMPLETION_TOKENS = 2000;
+const MAX_COMPLETION_TOKENS = 1600;
+const MAX_GROQ_COMPLETION_TOKENS = 2000;
 const MAX_GROQ_TOTAL_TOKENS = 6000;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
   narrative: 850, positioning: 650, release: 500, "evidence-score": 1000,
@@ -819,7 +820,8 @@ function providerErrorType(status: number): ProviderAttemptDiagnostic["errorType
 async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: string, input: GroqAssessmentInput,
   groupName: string, instructions: string, schema: z.ZodType<T>, sleepImpl:(ms:number, signal?:AbortSignal)=>Promise<void>, signal?: AbortSignal, requestTimeoutMs = GROQ_REQUEST_TIMEOUT_MS, endpoint = "https://api.groq.com/openai/v1/chat/completions", providerName = "groq"): Promise<T> {
   let lastError = "No valid response was returned";
-  let completionTokenBudget = MAX_COMPLETION_TOKENS;
+  const maxCompletionTokens = providerName === "groq" ? MAX_GROQ_COMPLETION_TOKENS : MAX_COMPLETION_TOKENS;
+  let completionTokenBudget = maxCompletionTokens;
   let strictSchemaRetries = 0;
   let jsonObjectProviderRetries = 0;
   let promptOnlyProviderRetries = 0;
@@ -847,7 +849,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     if (cached.success && thresholdViolations(groupName, cached.data).length === 0) return cached.data;
   }
 
-  let adaptiveCompletionTokenBudget = Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
+  let adaptiveCompletionTokenBudget = Math.min(maxCompletionTokens, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
 
   const scheduleCorrection = (reason: string): boolean => {
     lastError = reason;
@@ -1132,14 +1134,14 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     if (finishReason === "length" || (finishReason == null && completionUsageAtLimit)) {
       await recordProviderAttempt(input, {
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
-        errorType: "malformed_output", retryable: adaptiveCompletionTokenBudget < MAX_COMPLETION_TOKENS,
+        errorType: "malformed_output", retryable: adaptiveCompletionTokenBudget < maxCompletionTokens,
         attempt: attempt + 1, group: groupName, failureKind: "completion_truncated",
         failureClass: "completion_truncated", estimatedInputTokens, actualUsage,
         finishReason, completionTokenBudget,
       });
-      if (adaptiveCompletionTokenBudget < MAX_COMPLETION_TOKENS) {
+      if (adaptiveCompletionTokenBudget < maxCompletionTokens) {
         adaptiveCompletionTokenBudget = Math.min(
-          MAX_COMPLETION_TOKENS,
+          maxCompletionTokens,
           Math.max(adaptiveCompletionTokenBudget + 400, Math.ceil(adaptiveCompletionTokenBudget * 1.5)),
         );
       }
