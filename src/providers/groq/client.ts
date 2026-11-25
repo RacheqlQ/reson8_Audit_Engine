@@ -530,7 +530,10 @@ function compactNarrativeSonicDna(value: unknown): unknown {
 }
 
 function estimatePromptInputTokens(messages: Array<{ role: string; content: string }>, responseFormat: unknown): number {
-  return Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: responseFormat })).length / 3) + 256;
+  // Production telemetry showed a 3-byte estimate undercounted Groq actual prompt usage.
+  // Use a conservative 2-byte ratio plus framing headroom to reserve completion capacity
+  // before dispatch, including adaptive narrative retries.
+  return Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: responseFormat })).length / 2) + 256;
 }
 
 function compactGroqPromptForBudget(
