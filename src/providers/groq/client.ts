@@ -482,7 +482,7 @@ function compactCorrectionInstruction(reason: string): string {
   if (localValidation) {
     const issues = localValidation[1].replace(/\s+/g, " ").trim();
     return "Local schema validation issues: " + (issues.length > 300 ? issues.slice(0, 297) + "..." : issues)
-      + ". Correct the named fields; return one complete object and preserve all evidence.";
+      + ". Correct the named fields using outputSchema; return one complete object and preserve all evidence.";
   }
   const safeReason = reason
     .replace(/(?:The )?(?:json_schema|json_object|prompt_only) response failed local Zod validation:\s*/i, "Schema validation issues: ")
