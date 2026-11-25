@@ -260,8 +260,8 @@ function compactedSchemaConstraintInstructions(schema: unknown): string {
     if (!node || typeof node !== "object" || Array.isArray(node)) return;
     const record = node as Record<string, any>;
     let normalizedPath = path
-      .replace(/^scorecard\\.[^.]+\\.score$/, "scorecard.*.score")
-      .replace(/^scorecard\\.[^.]+\\.rationale$/, "scorecard.*.rationale");
+      .replace(/^scorecard\.[^.]+\.score$/, "scorecard.*.score")
+      .replace(/^scorecard\.[^.]+\.rationale$/, "scorecard.*.rationale");
     const bounds = constraints.get(normalizedPath) ?? new Set<string>();
     if (typeof record.minLength === "number") bounds.add(">=" + record.minLength + "ch");
     if (typeof record.maxLength === "number") bounds.add("<=" + record.maxLength + "ch");
