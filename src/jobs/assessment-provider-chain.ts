@@ -42,7 +42,9 @@ export class AssessmentProviderChainError extends Error {
       + " statuses=" + (item.statusCodes.length ? item.statusCodes.join(",") : "none")
       + " failures=" + (item.failureClasses.length ? item.failureClasses.join(",") : "unclassified")
       + " estimatedInputTokens=" + (item.estimatedInputTokens.length ? item.estimatedInputTokens.join(",") : "unavailable")
-      + " actualUsage=" + item.actualUsage.status
+      + " actualUsage=" + (item.actualUsage.status === "reported"
+        ? "reported(prompt=" + item.actualUsage.promptTokens + ",completion=" + item.actualUsage.completionTokens + ",total=" + item.actualUsage.totalTokens + ")"
+        : "unavailable")
     ).join("; ");
     super("ASSESSMENT_PROVIDER_CHAIN_FAILED: " + summary, { cause });
     this.name = "AssessmentProviderChainError";
