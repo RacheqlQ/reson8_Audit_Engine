@@ -205,8 +205,8 @@ interface ThresholdViolation {
 }
 
 function readAssessmentPath(value: unknown, path: string): unknown {
-  return path.replace(/\\[(\\d+)\\]/g, ".$1").split(".").filter(Boolean)
-    .reduce((current: any, key) => current?.[/^\\d+$/.test(key) ? Number(key) : key], value);
+  return path.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean)
+    .reduce((current: any, key) => current?.[/^\d+$/.test(key) ? Number(key) : key], value);
 }
 
 function thresholdViolations(group: string, value: unknown): ThresholdViolation[] {
