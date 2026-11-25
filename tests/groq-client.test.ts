@@ -1542,7 +1542,7 @@ describe("assessment section cache lease fencing", () => {
 
 
 describe("Groq narrative completion recovery", () => {
-  it.each(["length", null])("raises the bounded completion allowance when finish_reason is %s", async finishReason => {
+  it.each(["length", null])("retries concisely without raising the bounded completion allowance when finish_reason is %s", async finishReason => {
     const narrativeBudgets: number[] = [];
     const attempts: ProviderAttemptDiagnostic[] = [];
     let narrativeAttempts = 0;
@@ -1571,7 +1571,7 @@ describe("Groq narrative completion recovery", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(narrativeBudgets).toHaveLength(2);
     expect(narrativeBudgets[0]).toBe(850);
-    expect(narrativeBudgets[1]).toBeGreaterThan(narrativeBudgets[0]);
+    expect(narrativeBudgets[1]).toBe(narrativeBudgets[0]);
     expect(narrativeBudgets[1]).toBeLessThanOrEqual(2000);
     expect(attempts).toContainEqual(expect.objectContaining({ failureKind: "completion_truncated", failureClass: "completion_truncated", finishReason, completionTokenBudget: 850, actualUsage: { status: "reported", promptTokens: 2500, completionTokens: 850, totalTokens: 3350 } }));
     expect(mock.mock.calls.every(call => {
@@ -1586,7 +1586,7 @@ describe("Groq narrative completion recovery", () => {
 
 
 describe("production A&R provider capacity regressions", () => {
-  it("continues adaptive Groq narrative recovery beyond 1,600 tokens without crossing the 6,000-token ceiling", async () => {
+  it("continues concise Groq narrative recovery without escalating completion tokens or crossing the 6,000-token ceiling", async () => {
     const budgets: number[] = [];
     let narrativeCalls = 0;
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -1613,9 +1613,9 @@ describe("production A&R provider capacity regressions", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(budgets).toHaveLength(4);
     expect(budgets[0]).toBe(850);
-    expect(budgets[1]).toBe(1275);
-    expect(budgets[2]).toBe(1913);
-    expect(budgets[3]).toBe(2000);
+    expect(budgets[1]).toBe(850);
+    expect(budgets[2]).toBe(850);
+    expect(budgets[3]).toBe(850);
     expect(mock.mock.calls.every(call => {
       const body = JSON.parse(String(call[1]?.body));
       const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
@@ -1630,7 +1630,7 @@ describe("production A&R provider capacity regressions", () => {
 
 
 describe("Groq retry prompt-usage calibration", () => {
-  it("uses reported prompt usage to restore completion headroom on a truncated narrative retry", async () => {
+  it("uses reported prompt usage without escalating the completion allowance on a truncated narrative retry", async () => {
     const provenance = Object.fromEntries(Array.from({ length: 60 }, (_, index) => ["field" + index, {
       source: "musicbrainz_catalog_provider_" + index,
       provider: "musicbrainz",
@@ -1673,8 +1673,7 @@ describe("Groq retry prompt-usage calibration", () => {
     expect(result.assessmentVersion).toBe("3.0");
     expect(narrativeBudgets.length).toBeGreaterThanOrEqual(2);
     expect(narrativeBudgets[0]).toBe(850);
-    expect(narrativeBudgets[1]).toBeGreaterThanOrEqual(1275);
-    expect(narrativeBudgets[1]).toBeLessThanOrEqual(2000);
+    expect(narrativeBudgets[1]).toBe(850);
   });
 });
 
