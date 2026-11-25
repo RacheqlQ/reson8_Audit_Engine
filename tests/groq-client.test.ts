@@ -1705,12 +1705,14 @@ describe("shared Groq and Gemini request token budget", () => {
   it("enforces the 6,000-token total ceiling and 256-token completion floor on every Gemini section", async () => {
     const budgetLogs: Array<Record<string, unknown>> = [];
     const recoveryLogs: Array<Record<string, unknown>> = [];
+    const projectionLogs: Array<Record<string, unknown>> = [];
     const info = vi.spyOn(console, "info").mockImplementation((message?: unknown) => {
       if (typeof message !== "string") return;
       try {
         const event = JSON.parse(message) as Record<string, unknown>;
         if (event.event === "request_budget") budgetLogs.push(event);
         if (event.event === "prompt_budget_recovery") recoveryLogs.push(event);
+        if (event.event === "evidence_score_context_projection") projectionLogs.push(event);
       } catch { /* Ignore unrelated console output. */ }
     });
           const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -1732,16 +1734,32 @@ describe("shared Groq and Gemini request token budget", () => {
           normalizedValue: ("normalized source fact " + index + " ").repeat(12),
         }])),
       };
+      const sonicDna = {
+        provenance: "uploaded_audio_master", evidenceClass: "OBSERVED", analysisVersion: "fixture-v1",
+        sourceProviders: ["essentia"], confidence: 0.91, bpm: 96, tempoConfidence: 0.92,
+        key: "A minor", mode: "minor", moodTags: ["warm", "reflective"], genreTags: ["Afro R&B"],
+        rhythmFeatures: { stability: 0.8, beatTimesSeconds: Array.from({ length: 128 }, (_, i) => i * 0.6) },
+        harmonicFeatures: { tonalClarity: 0.7, segmentChroma: Array.from({ length: 128 }, () => Array(12).fill(0.1)) },
+        acousticFeatureProfile: { status: "analyzed", descriptors: Object.fromEntries(Array.from({ length: 48 }, (_, i) => ["descriptor" + i, { median: i, p10: i - 1, p90: i + 1, unit: "fixture" }])) },
+        vocalFeatures: { status: "analyzed", provenance: "fixture", confidence: 0.8, activitySegments: Array.from({ length: 128 }, (_, i) => ({ startSeconds: i, endSeconds: i + 1, meanLevelDbfs: -20 })) },
+        vocalArrangementAnalysis: { status: "analyzed", segments: Array.from({ length: 128 }, (_, i) => ({ startSeconds: i, endSeconds: i + 1, role: "unknown", confidence: 0.7 })) },
+        dynamicRangeDb: 8.2, rmsLevelDbfs: -18, rmsEnergy: 0.1, loudnessLufs: null, loudnessRangeLu: null, truePeakDbfs: -1,
+        spectralCentroidHz: 1900, spectralBandwidthHz: 1200, spectralRolloffHz: 7000, zeroCrossingRate: 0.04,
+        sampleRate: 44100, channels: 2, durationSeconds: 180,
+        audioProperties: Object.fromEntries(Array.from({ length: 48 }, (_, i) => ["property" + i, "fixture-value-" + i]),
+      };
       const result = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
-        .assess({ evidence, sonicDna: null });
+        .assess({ evidence, sonicDna });
       expect(result.assessmentVersion).toBe("3.0");
       expect(budgetLogs).toHaveLength(9);
+      expect(projectionLogs).toHaveLength(1);
+      expect(Number(projectionLogs[0].estimatedSonicDnaTokensAfter)).toBeLessThan(Number(projectionLogs[0].estimatedSonicDnaTokensBefore));
       for (const budget of budgetLogs) {
         expect(budget.maxTotalTokens).toBe(6000);
         expect(Number(budget.estimatedTotalTokens)).toBeLessThanOrEqual(6000);
         expect(Number(budget.maxCompletionTokens)).toBeGreaterThanOrEqual(256);
       }
-      console.log(JSON.stringify({ test: "gemini_shared_budget", requests: budgetLogs.map(({ group, estimatedInputTokens, maxCompletionTokens, estimatedTotalTokens }) => ({ group, estimatedInputTokens, maxCompletionTokens, estimatedTotalTokens })), compaction: recoveryLogs }));
+      console.log(JSON.stringify({ test: "gemini_shared_budget", requests: budgetLogs.map(({ group, estimatedInputTokens, maxCompletionTokens, estimatedTotalTokens }) => ({ group, estimatedInputTokens, maxCompletionTokens, estimatedTotalTokens })), compaction: recoveryLogs, sonicDnaProjection: projectionLogs }));
     } finally {
       info.mockRestore();
     }
