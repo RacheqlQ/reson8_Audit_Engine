@@ -933,15 +933,6 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // 3 bytes remains above observed usage while reserving room for valid output.
     // The 256-token allowance covers framing.
     let estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
-    const serializedPromptBytes = new TextEncoder().encode(JSON.stringify({
-      messages, response_format: requestBody.response_format,
-    })).length;
-    if (groqTpmBudgetApplies && lastReportedPromptTokens !== null && lastReportedPromptBytes !== null) {
-      const usageCalibratedEstimate = Math.ceil(
-        (serializedPromptBytes / Math.max(1, lastReportedPromptBytes)) * lastReportedPromptTokens * 1.25,
-      ) + 128;
-      estimatedInputTokens = Math.min(estimatedInputTokens, usageCalibratedEstimate);
-    }
     const sectionOutputBudget = adaptiveCompletionTokenBudget;
     const groqTpmBudgetApplies = providerName === "groq";
     if (groqTpmBudgetApplies) {
@@ -959,6 +950,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           maxTotalTokens: MAX_GROQ_TOTAL_TOKENS,
         }));
       }
+    }
+    const serializedPromptBytes = new TextEncoder().encode(JSON.stringify({
+      messages, response_format: requestBody.response_format,
+    })).length;
+    if (groqTpmBudgetApplies && lastReportedPromptTokens !== null && lastReportedPromptBytes !== null) {
+      const usageCalibratedEstimate = Math.ceil(
+        (serializedPromptBytes / Math.max(1, lastReportedPromptBytes)) * lastReportedPromptTokens * 1.25,
+      ) + 128;
+      estimatedInputTokens = Math.min(estimatedInputTokens, usageCalibratedEstimate);
     }
     // The 6,000-token ceiling is a Groq TPM safeguard, not a global model
     // output limit. Applying it to Gemini/Ollama starved evidence-score of its
