@@ -257,7 +257,7 @@ function thresholdContractInstructions(group: string): string {
 }
 
 function compactCorrectionInstruction(reason: string): string {
-  const normalized = reason.replace(/\\s+/g, " ").trim();
+  const normalized = reason.replace(/\s+/g, " ").trim();
   if (/strict JSON-schema validation failed|json_validate_failed/i.test(normalized)) {
     return "Strict JSON-schema output was rejected (HTTP 400). Switch to JSON-object mode; return one complete object matching outputSchema. Preserve evidence and all local word minima.";
   }
@@ -857,14 +857,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       // The strict response schema or the explicit outputSchema in the user
       // payload remains authoritative. Repeating its prose bounds adds tokens
       // without adding a contract, so remove only this duplicate guidance.
-      messages[0].content = messages[0].content.replace(schemaConstraintGuidance, "").replace(schemaGuidance, "").replace(/\\s+/g, " ").trim();
+      messages[0].content = messages[0].content.replace(schemaConstraintGuidance, "").replace(schemaGuidance, "").replace(/\s+/g, " ").trim();
       estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: requestBody.response_format })).length / 2) + 256;
       completionTokenBudget = Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens);
       if (estimatedInputTokens < beforeCompactionTokens) {
         console.info(JSON.stringify({ event: "provider_prompt_compacted", provider: providerName, model, group: groupName, beforeEstimatedInputTokens: beforeCompactionTokens, afterEstimatedInputTokens: estimatedInputTokens, reservedCompletionTokens: Math.max(MIN_COMPLETION_TOKENS, completionTokenBudget), maxTotalTokens: MAX_GROQ_TOTAL_TOKENS }));
       }
-      const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
-      await recordProviderAttempt(input, {
+      if (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS) {
+        const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
+        await recordProviderAttempt(input, {
         provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
         errorType: "provider_unavailable", retryable: false, attempt: attempt + 1, group: groupName,
         failureKind: "prompt_budget_exceeded", estimatedInputTokens, actualUsage: null,
@@ -881,7 +882,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           responseSchema: byteLength(requestBody.response_format),
         },
       }));
-      throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: compacted section payload cannot fit within the 6,000-token request budget while reserving 256 completion tokens");
+        throw new Error("GROQ_PROMPT_BUDGET_EXCEEDED: compacted section payload cannot fit within the 6,000-token request budget while reserving 256 completion tokens");
+      }
     }
     requestBody[tokenField] = completionTokenBudget;
     console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: groqTpmBudgetApplies ? MAX_GROQ_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
