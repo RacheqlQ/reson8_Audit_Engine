@@ -1274,7 +1274,7 @@ describe("complete local A&R provider contract", () => {
         evidenceCalls++;
         value = { ...value, scorecard: { ...value.scorecard, tonalConsensus: {
           score: null,
-          rationale: evidenceCalls === 1 ? "No stable key consensus." : long("Tonal consensus remains unscored because the supplied key and mode evidence does not meet the voting and window agreement requirements for a confirmed result.", 30),
+          rationale: evidenceCalls === 1 ? "The tonal consensus remains provisional because the available evidence does not establish a stable result for this recording." : long("Tonal consensus remains unscored because the supplied key and mode evidence does not meet the voting and window agreement requirements for a confirmed result.", 30),
         } } };
       }
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(value) } }] }), { status: 200 });
