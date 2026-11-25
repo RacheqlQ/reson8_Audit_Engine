@@ -515,7 +515,7 @@ describe("GroqClient section groups",()=>{
   await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("Groq narrative assessment failed with HTTP 400");
   expect(calls).toBe(1);
  });
- it("exhausts structured-output recovery modes when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=JSON.parse(body.messages[1].content).sectionGroup;const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed Zod validation after one retry");expect(mock.mock.calls.filter(c=>JSON.parse(JSON.parse(String(c[1]?.body)).messages[1].content).sectionGroup==="narrative")).toHaveLength(8);});
+ it("exhausts structured-output recovery modes when a section remains invalid",async()=>{const mock=vi.fn(async(_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const group=JSON.parse(body.messages[1].content).sectionGroup;const value=group==="narrative"?{}:p(group);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});const client=new GroqClient("test-key","test-model",mock as typeof fetch);await expect(client.assess({evidence:{},sonicDna:null})).rejects.toThrow("failed validation after bounded recovery");expect(mock.mock.calls.filter(c=>JSON.parse(JSON.parse(String(c[1]?.body)).messages[1].content).sectionGroup==="narrative")).toHaveLength(8);});
 
  it("keeps playlist category JSON-schema constraints permissive and retries short category text locally",async()=>{
   let promotionCalls=0;
@@ -1197,5 +1197,95 @@ describe("repeated structured-output validation recovery", () => {
     const groupRequests = mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)))
       .filter(body => JSON.parse(body.messages[1].content).sectionGroup === group);
     expect(groupRequests[2].response_format).toEqual({ type: "json_object" });
+  });
+});
+
+
+describe("complete local A&R provider contract", () => {
+  it.each([
+    ["narrative", "executiveSummary: at least 45 words", "strengths: at least 3 items, each at least 10 words"],
+    ["positioning", "aAndRPositioning.rationale: at least 40 words", "commercialRead.rationale: at least 40 words"],
+    ["release", "releaseStrategy.recommendation: at least 40 words", "releaseStrategy.priorities: at least 3 items, each at least 8 words"],
+    ["evidence-score", "scorecard.tempoLaneFit.rationale: at least 25 words", "scorecard.tonalConsensus.rationale: at least 25 words when present"],
+    ["production", "productionArrangementGuidance: at least 40 words", "listeningChecks: at least 4 items, each at least 5 words"],
+    ["comparables", "laneHypothesis: at least 20 words", "referencesToVerify: at least 3 items, each at least 8 words"],
+    ["promotion", "promotionPlan.preRelease: at least 20 words", "promotionPlan.playlistCategories: at least 3 items, each at least 3 words"],
+    ["label-fit", "labelPartnerFit.partnerProfile: at least 25 words", "labelPartnerFit.criteriaToDemonstrate: at least 4 items, each at least 5 words"],
+    ["timeline", "executionPlan.days30: at least 20 words", "executionPlan.days90: at least 20 words"],
+  ])("states every locally enforced threshold for the %s section", async (group, firstRule, secondRule) => {
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null });
+    const request = mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)))
+      .find(body => JSON.parse(body.messages[1].content).sectionGroup === group);
+    expect(request).toBeDefined();
+    expect(request.messages[0].content).toContain("Mandatory locally validated word-count contract");
+    expect(request.messages[0].content).toContain(firstRule);
+    expect(request.messages[0].content).toContain(secondRule);
+    expect(request.messages[0].content).toContain("Compacted JSON-schema constraints retained as mandatory instructions");
+  });
+
+  it("retries rejected network fetches with bounded backoff instead of immediately abandoning the section", async () => {
+    let narrativeCalls = 0;
+    const sleeps: number[] = [];
+    const attempts: Array<Record<string, unknown>> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative" && narrativeCalls++ < 2) throw new TypeError("fetch failed");
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async ms => { sleeps.push(ms); })
+      .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(narrativeCalls).toBe(3);
+    expect(sleeps).toHaveLength(2);
+    expect(sleeps.every(ms => ms >= 800 && ms <= 2400)).toBe(true);
+    expect(attempts.filter(attempt => attempt.group === "narrative" && attempt.status === null)).toHaveLength(2);
+  });
+
+  it("recovers when a provider returns an HTTP-success response with a malformed JSON envelope", async () => {
+    let narrativeCalls = 0;
+    const attempts: Array<Record<string, unknown>> = [];
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative" && narrativeCalls++ === 0) return new Response("not-json", { status: 200 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+    });
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(narrativeCalls).toBe(2);
+    expect(attempts).toContainEqual(expect.objectContaining({ group: "narrative", failureKind: "invalid_json", status: 200 }));
+  });
+
+  it("applies the same 25-word scorecard rationale contract to optional tonalConsensus when present", async () => {
+    let evidenceCalls = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      let value = p(payload.sectionGroup) as Record<string, any>;
+      if (payload.sectionGroup === "evidence-score") {
+        evidenceCalls++;
+        value = { ...value, scorecard: { ...value.scorecard, tonalConsensus: {
+          score: null,
+          rationale: evidenceCalls === 1 ? "No stable key consensus." : long("Tonal consensus remains unscored because the supplied key and mode evidence does not meet the voting and window agreement requirements for a confirmed result.", 30),
+        } } };
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(value) } }] }), { status: 200 });
+    });
+    const attempts: Array<Record<string, unknown>> = [];
+    await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
+    expect(evidenceCalls).toBe(2);
+    expect(attempts).toContainEqual(expect.objectContaining({
+      group: "evidence-score", failureKind: "threshold_violation",
+      validationField: "scorecard.tonalConsensus.rationale", validationRule: "minimum_word_count", minimumWords: 25,
+    }));
   });
 });
