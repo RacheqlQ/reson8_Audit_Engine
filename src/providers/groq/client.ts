@@ -1046,6 +1046,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     try {
       await input.saveCompletedSectionGroup?.(cacheGroupName, result.data, providerName as "groq" | "gemini" | "ollama", model);
     } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.message === "AUDIT_LEASE_LOST")) throw error;
       console.warn(JSON.stringify({ event: "assessment_section_cache_write_failed", provider: providerName, model, group: groupName, errorName: error instanceof Error ? error.name : "UnknownError" }));
     }
     return result.data;
