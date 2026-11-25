@@ -1227,7 +1227,7 @@ describe("complete local A&R provider contract", () => {
     expect(request.messages[0].content).toContain("Mandatory local word-count contract");
     expect(request.messages[0].content).toContain(firstRule);
     expect(request.messages[0].content).toContain(secondRule);
-    expect(request.messages[0].content).toContain("Retain these compacted local schema bounds exactly");
+    expect(request.messages[0].content).toContain("Compacted local schema bounds (all mandatory)");
   });
 
   it("retries rejected network fetches with bounded backoff instead of immediately abandoning the section", async () => {
