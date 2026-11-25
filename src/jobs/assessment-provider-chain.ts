@@ -78,7 +78,7 @@ function classifyError(error: unknown): ProviderFailureClassification {
   const message = error instanceof Error ? error.message : String(error);
   if (/GROQ_PROMPT_BUDGET_EXCEEDED|prompt_budget_exceeded/i.test(message)) return "preflight_budget";
   if (/HTTP 400|json_validate_failed|malformed|schema/i.test(message)) return "schema_or_malformed_400";
-  if (/HTTP 429|HTTP 503|HTTP 5\\d\\d|capacity|temporarily unavailable/i.test(message)) return "capacity_or_503";
+  if (/HTTP 429|HTTP 503|HTTP 5\d\d|capacity|temporarily unavailable/i.test(message)) return "capacity_or_503";
   if (/timeout|timed out|ETIMEDOUT/i.test(message)) return "timeout";
   return "network";
 }
