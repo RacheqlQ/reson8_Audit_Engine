@@ -100,11 +100,13 @@ export interface ProviderAttemptDiagnostic {
   retryable: boolean;
   attempt: number;
   group?: string;
-  failureKind?: "empty_content" | "invalid_json" | "schema_violation" | "threshold_violation" | "prompt_budget_exceeded";
+  failureKind?: "empty_content" | "invalid_json" | "schema_violation" | "threshold_violation" | "prompt_budget_exceeded" | "completion_truncated";
   validationIssues?: Array<{ code: string; path: string[] }>;
-  failureClass?: "preflight_budget" | "schema_or_malformed_400" | "capacity_or_503" | "network" | "timeout";
+  failureClass?: "preflight_budget" | "schema_or_malformed_400" | "capacity_or_503" | "network" | "timeout" | "completion_truncated";
   estimatedInputTokens?: number;
   actualUsage?: { status: "reported" | "unavailable"; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null };
+  finishReason?: string | null;
+  completionTokenBudget?: number;
   validationField?: string;
   validationRule?: "minimum_word_count" | "minimum_item_count";
   minimumWords?: number;
@@ -290,11 +292,12 @@ function safeThresholdDiagnostic(violation: ThresholdViolation): ThresholdViolat
 const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
 let groqDailyCapUntil = 0;
 const MAX_NETWORK_ATTEMPTS = 3;
+const MAX_GEMINI_NETWORK_ATTEMPTS = 5;
 export const GROQ_REQUEST_TIMEOUT_MS = 55_000;
 export const GROQ_ASSESSMENT_TIMEOUT_MS = 7 * 60_000;
 export const GEMINI_ASSESSMENT_TIMEOUT_MS = 3 * 60_000;
 export const OLLAMA_ASSESSMENT_TIMEOUT_MS = 2 * 60_000;
-const MAX_COMPLETION_TOKENS = 1200;
+const MAX_COMPLETION_TOKENS = 1600;
 const MAX_GROQ_TOTAL_TOKENS = 6000;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
   narrative: 850, positioning: 650, release: 500, "evidence-score": 1000,
@@ -526,7 +529,7 @@ function compactNarrativeSonicDna(value: unknown): unknown {
 }
 
 function estimatePromptInputTokens(messages: Array<{ role: string; content: string }>, responseFormat: unknown): number {
-  return Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: responseFormat })).length / 2) + 256;
+  return Math.ceil(new TextEncoder().encode(JSON.stringify({ messages, response_format: responseFormat })).length / 3) + 256;
 }
 
 function compactGroqPromptForBudget(
@@ -827,6 +830,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   let responseMode: "json_schema" | "json_object" | "prompt_only" = providerName === "groq" ? "json_schema" : "json_object";
   const cacheGroupName = groupName;
   const providerLabel = providerName === "gemini" ? "Gemini" : providerName === "ollama" ? "Ollama" : "Groq";
+  const maxNetworkAttempts = providerName === "gemini" ? MAX_GEMINI_NETWORK_ATTEMPTS : MAX_NETWORK_ATTEMPTS;
   const tokenField = providerName === "groq" ? "max_completion_tokens" : "max_tokens";
   const rawOutputSchema = z.toJSONSchema(schema);
   const outputSchema = ["evidence-score", "narrative", "positioning", "release", "promotion"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
@@ -842,6 +846,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     const cached = schema.safeParse(completed);
     if (cached.success && thresholdViolations(groupName, cached.data).length === 0) return cached.data;
   }
+
+  let adaptiveCompletionTokenBudget = Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
 
   const scheduleCorrection = (reason: string): boolean => {
     lastError = reason;
@@ -910,12 +916,13 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     }
     // prompt_only deliberately omits response_format. The exact schema is still
     // supplied to the model, and no response is accepted without local Zod checks.
-    // Use a deliberately conservative 2-bytes-per-token estimate over the complete
-    // serialized prompt and structured-output schema. A strict 1-byte-per-token
-    // ceiling overcounts JSON schema syntax so heavily that normal sections are
-    // rejected before reaching Groq; the 256-token allowance covers framing.
+    // Use a conservative 3-bytes-per-token estimate over the complete serialized
+    // prompt and structured-output schema. Production telemetry showed the former
+    // 2-byte estimate was roughly 2x actual prompt usage for this JSON workload;
+    // 3 bytes remains above observed usage while reserving room for valid output.
+    // The 256-token allowance covers framing.
     let estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
-    const sectionOutputBudget = Math.min(MAX_COMPLETION_TOKENS, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
+    const sectionOutputBudget = adaptiveCompletionTokenBudget;
     const groqTpmBudgetApplies = providerName === "groq";
     if (groqTpmBudgetApplies) {
       const targetInputTokens = groupName === "narrative" && attempt === 0
@@ -937,8 +944,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // output limit. Applying it to Gemini/Ollama starved evidence-score of its
     // 1,000-token module budget even when those providers had ample capacity.
     completionTokenBudget = groqTpmBudgetApplies
-      ? Math.min(sectionOutputBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens)
-      : sectionOutputBudget;
+      ? Math.min(adaptiveCompletionTokenBudget, MAX_GROQ_TOTAL_TOKENS - estimatedInputTokens)
+      : adaptiveCompletionTokenBudget;
     if (groqTpmBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_GROQ_TOTAL_TOKENS)) {
       const userPrompt = JSON.parse(messages[1].content) as Record<string, unknown>;
       const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
@@ -966,7 +973,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: groqTpmBudgetApplies ? MAX_GROQ_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
-    for (let networkAttempt = 0; networkAttempt < MAX_NETWORK_ATTEMPTS; networkAttempt++) {
+    for (let networkAttempt = 0; networkAttempt < maxNetworkAttempts; networkAttempt++) {
       signal?.throwIfAborted();
       // Each retry is a new provider request and must consume its own rolling TPM reservation.
       if (groqTpmBudgetApplies && process.env.NODE_ENV !== "test") {
@@ -985,7 +992,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         });
       } catch (error) {
         const timedOut = requestTimeoutSignal.aborted && !signal?.aborted;
-        const retryable = !signal?.aborted && networkAttempt < MAX_NETWORK_ATTEMPTS - 1;
+        const retryable = !signal?.aborted && networkAttempt < maxNetworkAttempts - 1;
         await recordProviderAttempt(input, {
           provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
           errorType: timedOut ? "timeout" : "provider_unavailable",
@@ -1041,7 +1048,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       }
       if (response.ok) break;
       const transient = response.status === 429 || response.status >= 500;
-      if (!transient || networkAttempt >= 2) break;
+      if (!transient || networkAttempt >= maxNetworkAttempts - 1) break;
       await sleepImpl(Math.min(60_000, await providerRetryDelayMs(response, networkAttempt)), signal);
       signal?.throwIfAborted();
     }
@@ -1091,7 +1098,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         + (detail ? ": " + detail.slice(0, 300) : ""));
     }
 
-    let payload: { choices?: Array<{ message?: { content?: string | null } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
+    let payload: { choices?: Array<{ finish_reason?: string | null; message?: { content?: string | null } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
     try {
       const decoded: unknown = await response.json();
       if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
@@ -1118,6 +1125,28 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         estimatedInputTokens, actualUsage,
       });
     }
+    const finishReason = payload.choices?.[0]?.finish_reason ?? null;
+    const completionUsageAtLimit = actualUsage.status === "reported"
+      && actualUsage.completionTokens !== null
+      && actualUsage.completionTokens >= Math.floor(completionTokenBudget * 0.98);
+    if (finishReason === "length" || completionUsageAtLimit) {
+      await recordProviderAttempt(input, {
+        provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
+        errorType: "malformed_output", retryable: adaptiveCompletionTokenBudget < MAX_COMPLETION_TOKENS,
+        attempt: attempt + 1, group: groupName, failureKind: "completion_truncated",
+        failureClass: "completion_truncated", estimatedInputTokens, actualUsage,
+        finishReason, completionTokenBudget,
+      });
+      if (adaptiveCompletionTokenBudget < MAX_COMPLETION_TOKENS) {
+        adaptiveCompletionTokenBudget = Math.min(
+          MAX_COMPLETION_TOKENS,
+          Math.max(adaptiveCompletionTokenBudget + 400, Math.ceil(adaptiveCompletionTokenBudget * 1.5)),
+        );
+      }
+      if (scheduleCorrection("The previous response reached the provider completion-token limit and may be truncated. Return one complete JSON object; the next attempt has a larger bounded completion allowance.")) continue;
+      break;
+    }
+
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
       await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "empty_content" });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
-import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS, type ProviderAttemptDiagnostic } from "../src/providers/groq/client.js";
 import { sharedGroqTokenLimiter } from "../src/providers/token-per-minute-limiter.js";
 import { clearAssessmentProviderUnavailable, getAssessmentProviderReadiness } from "../src/providers/provider-policy.js";
 
@@ -194,9 +194,9 @@ describe("GroqClient section groups",()=>{
   await client.assess({evidence:{},sonicDna:null});
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
+   const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
-   expect(body.max_completion_tokens).toBeLessThanOrEqual(1200);
+   expect(body.max_completion_tokens).toBeLessThanOrEqual(1600);
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
   }
  });
@@ -268,7 +268,7 @@ describe("GroqClient section groups",()=>{
   expect(evidenceScorePayloads[0].catalogMetadata).toBeNull();
   for(const call of mock.mock.calls){
    const body=JSON.parse(String(call[1]?.body));
-   const estimatedInputTokens=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
+   const estimatedInputTokens=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
    expect(estimatedInputTokens).toBeGreaterThan(256);
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
    expect(estimatedInputTokens+body.max_completion_tokens).toBeLessThanOrEqual(6000);
@@ -609,7 +609,7 @@ describe("GroqClient section groups",()=>{
   mock.mockImplementation(async(_url:RequestInfo|URL,init?:RequestInit)=>{
    const body=JSON.parse(String(init?.body));
    const payload=JSON.parse(body.messages[1].content);
-   const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
+   const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
    requests.push({group:payload.sectionGroup,payload,total:estimated+body.max_completion_tokens});
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
   });
@@ -681,7 +681,7 @@ describe("narrative prompt budget compaction",()=>{
    const body=JSON.parse(String(init?.body));
    const payload=JSON.parse(body.messages[1].content);
    if(payload.sectionGroup==="narrative"){
-    const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
+    const estimated=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/3)+256;
     narrative={payload,system:body.messages[0].content,estimated,completion:body.max_completion_tokens};
    }
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(payload.sectionGroup))}}]}),{status:200});
@@ -743,7 +743,7 @@ describe("evidence-score prompt budget compaction", () => {
         const payload = JSON.parse(body.messages[1].content);
         const estimated = Math.ceil(new TextEncoder().encode(JSON.stringify({
           messages: body.messages, response_format: body.response_format,
-        })).length / 2) + 256;
+        })).length / 3) + 256;
         if (payload.sectionGroup === "evidence-score") {
           observed.push({ name: profile.name, estimated, completion: body.max_completion_tokens,
             schemaBytes: new TextEncoder().encode(JSON.stringify(body.response_format.json_schema.schema)).length });
@@ -1350,7 +1350,7 @@ describe("Groq narrative prompt budget recovery", () => {
       const payload = JSON.parse(body.messages[1].content);
       const estimatedInputTokens = Math.ceil(new TextEncoder().encode(JSON.stringify({
         messages: body.messages, response_format: body.response_format,
-      })).length / 2) + 256;
+      })).length / 3) + 256;
       requests.push({ body, estimatedInputTokens });
       if (payload.sectionGroup === "narrative" && narrativeCalls++ === 0) {
         return new Response(JSON.stringify({ error: { code: "json_validate_failed", message: "Structured output validation failed" } }), { status: 400 });
@@ -1537,5 +1537,49 @@ describe("assessment section cache lease fencing", () => {
         saveCompletedSectionGroup: async () => { throw new Error("AUDIT_LEASE_LOST"); },
       })).rejects.toThrow("AUDIT_LEASE_LOST");
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe("Groq narrative completion recovery", () => {
+  it.each(["length", null])("raises the bounded completion allowance when finish_reason is %s", async finishReason => {
+    const narrativeBudgets: number[] = [];
+    const attempts: ProviderAttemptDiagnostic[] = [];
+    let narrativeAttempts = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative") {
+        narrativeBudgets.push(body.max_completion_tokens);
+        narrativeAttempts++;
+        if (narrativeAttempts === 1) {
+          return new Response(JSON.stringify({
+            choices: [{ finish_reason: finishReason, message: { content: '{"assessmentVersion":"3.0","executiveSummary":' } }],
+            usage: { prompt_tokens: 2500, completion_tokens: 850, total_tokens: 3350 },
+          }), { status: 200 });
+        }
+      }
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+        usage: { prompt_tokens: 2500, completion_tokens: 500, total_tokens: 3000 },
+      }), { status: 200 });
+    });
+
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence: { artist: "Completion Fixture" }, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt); } });
+
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(narrativeBudgets).toHaveLength(2);
+    expect(narrativeBudgets[0]).toBe(850);
+    expect(narrativeBudgets[1]).toBeGreaterThan(narrativeBudgets[0]);
+    expect(narrativeBudgets[1]).toBeLessThanOrEqual(1600);
+    expect(attempts).toContainEqual(expect.objectContaining({ failureKind: "completion_truncated", failureClass: "completion_truncated", finishReason, completionTokenBudget: 850, actualUsage: { status: "reported", promptTokens: 2500, completionTokens: 850, totalTokens: 3350 } }));
+    expect(mock.mock.calls.every(call => {
+      const body = JSON.parse(String(call[1]?.body));
+      const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
+        messages: body.messages, response_format: body.response_format,
+      })).length / 3) + 256;
+      return estimate + body.max_completion_tokens <= 6000;
+    })).toBe(true);
   });
 });
