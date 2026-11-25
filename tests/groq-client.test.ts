@@ -1184,9 +1184,9 @@ describe("repeated structured-output validation recovery", () => {
     expect(diagnostics[0]).toMatchObject({ validationField: field, validationRule: "minimum_word_count", minimumWords: minimum });
     expect(Number(diagnostics[0].actualWords)).toBeLessThan(minimum);
     expect(diagnostics[1]).toMatchObject({ validationField: field, validationRule: "minimum_word_count", minimumWords: minimum });
-    expect(assessment.aAndRPositioning.rationale.split(/\\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
-    expect(assessment.commercialRead.rationale.split(/\\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
-    expect(assessment.scorecard.tempoLaneFit.rationale.split(/\\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(25);
+    expect(assessment.aAndRPositioning.rationale.split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.commercialRead.rationale.split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(assessment.scorecard.tempoLaneFit.rationale.split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(25);
     const groupRequests = mock.mock.calls.map(call => JSON.parse(String(call[1]?.body)))
       .filter(body => JSON.parse(body.messages[1].content).sectionGroup === group);
     expect(groupRequests[2].response_format).toEqual({ type: "json_object" });
