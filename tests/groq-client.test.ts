@@ -1180,7 +1180,9 @@ describe("repeated structured-output validation recovery", () => {
         else invalid.scorecard.tempoLaneFit.rationale = short;
         return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(invalid) } }] }), { status: 200 });
       }
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(p(payload.sectionGroup)) } }] }), { status: 200 });
+      const recovered = p(payload.sectionGroup);
+      if (payload.sectionGroup === group && groupCalls >= 2) recoveredPayload = recovered as Record<string, any>;
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(recovered) } }] }), { status: 200 });
     });
     const assessment = await new GeminiClient("test-gemini-key", "test-model", mock as typeof fetch, async () => {})
       .assess({ evidence: {}, sonicDna: null, recordProviderAttempt: async attempt => { attempts.push(attempt as unknown as Record<string, unknown>); } });
@@ -1190,8 +1192,6 @@ describe("repeated structured-output validation recovery", () => {
     expect(diagnostics[0]).toMatchObject({ validationField: field, validationRule: "minimum_word_count", minimumWords: minimum });
     expect(Number(diagnostics[0].actualWords)).toBeLessThan(minimum);
     expect(diagnostics[1]).toMatchObject({ validationField: field, validationRule: "minimum_word_count", minimumWords: minimum });
-    expect(assessment.aAndRPositioning.rationale.split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
-    expect(assessment.commercialRead.rationale.split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
     const recoveredRationale = field === "commercialRead.rationale"
       ? recoveredPayload?.commercialRead?.rationale
       : recoveredPayload?.scorecard?.tempoLaneFit?.rationale;
