@@ -189,7 +189,8 @@ describe("DSP provider failure persistence", () => {
       payload: { provider: "gemini", model: "gemini-2.5-flash", httpStatus: 503, errorType: "provider_error", retryable: true, attempt: 2, group: "evidence-score", failureKind: "schema_violation", failureClass: "capacity_or_503", estimatedInputTokens: 5829, actualUsage: { status: "unavailable", promptTokens: null, completionTokens: null, totalTokens: null }, validationIssues: [{ code: "too_small", path: ["evidenceLabels"] }] },
     });
     expect(JSON.stringify(requestBody)).not.toContain("api_key");
-    expect(JSON.stringify(requestBody)).not.toContain("prompt");
+    expect(JSON.stringify(requestBody)).not.toContain('"prompt":');
+    expect(JSON.stringify(requestBody)).not.toContain("Private fixture evidence");
   });
 
   it("persists Spotify API failure status and a bounded reason for audit polling", async () => {
