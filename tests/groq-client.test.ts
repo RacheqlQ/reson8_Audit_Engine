@@ -1629,6 +1629,56 @@ describe("production A&R provider capacity regressions", () => {
 });
 
 
+describe("Groq retry prompt-usage calibration", () => {
+  it("uses reported prompt usage to restore completion headroom on a truncated narrative retry", async () => {
+    const provenance = Object.fromEntries(Array.from({ length: 60 }, (_, index) => ["field" + index, {
+      source: "musicbrainz_catalog_provider_" + index,
+      provider: "musicbrainz",
+      status: "recognized",
+      confidence: 0.91,
+      evidenceClass: "RECOGNIZED",
+      value: ("source-attributed identity value " + index + " with supporting catalog detail ").repeat(3),
+      normalizedValue: ("normalized identity value " + index + " with reconciled catalog detail ").repeat(3),
+    }]));
+    const evidence = {
+      auditType: "MASTER-BASED AUDIT", sourceType: "master", artist: "Usage Calibration Fixture",
+      title: "Long Evidence Track", isrc: "NGABC2600001",
+      sourceProviders: ["musicbrainz", "audD", "lastfm"],
+      fieldProvenance: provenance,
+      identity: { artist: "Usage Calibration Fixture", title: "Long Evidence Track", isrc: "NGABC2600001" },
+      reconciliation: { status: "RECONCILED", conflicts: [], matchedFields: ["artist", "title", "isrc"] },
+    };
+    const narrativeBudgets: number[] = [];
+    let narrativeAttempts = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "narrative") {
+        narrativeBudgets.push(body.max_completion_tokens);
+        narrativeAttempts++;
+        if (narrativeAttempts === 1) {
+          return new Response(JSON.stringify({
+            choices: [{ finish_reason: "length", message: { content: '{"assessmentVersion":"3.0","executiveSummary":' } }],
+            usage: { prompt_tokens: 2517, completion_tokens: body.max_completion_tokens, total_tokens: 2517 + body.max_completion_tokens },
+          }), { status: 200 });
+        }
+      }
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+        usage: { prompt_tokens: 2517, completion_tokens: 500, total_tokens: 3017 },
+      }), { status: 200 });
+    });
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence, sonicDna: null });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(narrativeBudgets.length).toBeGreaterThanOrEqual(2);
+    expect(narrativeBudgets[0]).toBe(850);
+    expect(narrativeBudgets[1]).toBeGreaterThanOrEqual(1275);
+    expect(narrativeBudgets[1]).toBeLessThanOrEqual(2000);
+  });
+});
+
+
 describe("provider completion finish-reason precedence", () => {
   it("does not treat a complete stop response as truncated merely because usage reaches its token allowance", async () => {
     const attempts: ProviderAttemptDiagnostic[] = [];
