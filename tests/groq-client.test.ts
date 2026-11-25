@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { adaptReportV2 } from "../src/reports/v2/adapters.js";
-import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS } from "../src/providers/groq/client.js";
+import { DEFAULT_GROQ_MODEL, GeminiClient, GroqClient, OllamaClient, GROQ_PROMPT_VERSION, GROQ_ASSESSMENT_TIMEOUT_MS, GEMINI_ASSESSMENT_TIMEOUT_MS, OLLAMA_ASSESSMENT_TIMEOUT_MS, type ProviderAttemptDiagnostic } from "../src/providers/groq/client.js";
 import { sharedGroqTokenLimiter } from "../src/providers/token-per-minute-limiter.js";
 import { clearAssessmentProviderUnavailable, getAssessmentProviderReadiness } from "../src/providers/provider-policy.js";
 
@@ -1544,7 +1544,7 @@ describe("assessment section cache lease fencing", () => {
 describe("Groq narrative completion recovery", () => {
   it("raises the bounded completion allowance after the provider reports a length-truncated response", async () => {
     const narrativeBudgets: number[] = [];
-    const attempts: Array<Record<string, unknown>> = [];
+    const attempts: ProviderAttemptDiagnostic[] = [];
     let narrativeAttempts = 0;
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
