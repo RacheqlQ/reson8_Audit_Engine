@@ -575,7 +575,12 @@ function compactProviderPromptForBudget(
   let after = estimatePromptInputTokens(messages, responseFormat);
   if (after > targetInputTokens && groupName === "narrative") {
     const compactPayload = JSON.parse(messages[1].content) as Record<string, unknown>;
-    compactPayload.correction = "Return one complete schema-valid JSON object. Preserve evidence, provenance, verdicts and nulls; repair only the failed output.";
+    // Never discard field-level minima: they are the only signal telling the
+    // model which field missed its word/item contract and by how much.
+    const correction = String(compactPayload.correction ?? "");
+    const minima = correction.match(/[^.]*must contain at least \d+ (?:words|items)[^.]*\./g)?.join(" ") ?? "";
+    compactPayload.correction = ("Return one complete schema-valid JSON object. Preserve evidence, provenance, verdicts and nulls; repair only the failed output."
+      + (minima ? " " + minima : "")).trim();
     messages[1].content = JSON.stringify(compactPayload);
     after = estimatePromptInputTokens(messages, responseFormat);
   }
@@ -884,8 +889,21 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
 
   let adaptiveCompletionTokenBudget = Math.min(maxCompletionTokens, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
 
-  const scheduleCorrection = (reason: string): boolean => {
+  // A truncated completion or a word-count miss is an output-content defect,
+  // not a structured-output/schema defect. Reusing the schema-recovery ladder
+  // for those cases removes Groq's server-side JSON enforcement, injects a
+  // duplicate outputSchema into the user payload (shrinking the completion
+  // headroom) and makes verbose/truncated output more likely on every retry.
+  // Keep the current response mode and bound these retries separately.
+  const MAX_MODE_PRESERVING_CONTENT_RETRIES = 6;
+  let modePreservingContentRetries = 0;
+  const scheduleCorrection = (reason: string, preserveResponseMode = false): boolean => {
     lastError = reason;
+    if (preserveResponseMode) {
+      if (modePreservingContentRetries >= MAX_MODE_PRESERVING_CONTENT_RETRIES) return false;
+      modePreservingContentRetries++;
+      return true;
+    }
     if (responseMode === "json_schema" && strictContentRetries < 1) {
       strictContentRetries++;
       lastError += " Retry strict structured-output mode once with the complete corrected schema object.";
@@ -1234,16 +1252,25 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       const conciseRecovery = groupName === "narrative"
         ? "The previous narrative was truncated. Use the larger bounded completion allowance available on this retry, but keep the requested fields concise. Return exactly 3 concise strengths and 2 concise risks; keep executiveSummary 45–60 words and creativeIdentity 35–50 words. Preserve every schema minimum and evidence constraint."
         : "The previous section was truncated. Use the larger bounded completion allowance available on this retry; keep every field concise at the minimum length required by outputSchema and the word contract. Return JSON only.";
-      if (scheduleCorrection(conciseRecovery)) {
-        // A length finish proves the current completion allowance is insufficient.
-        // Increase only the output reserve; the next request still compacts input
-        // and is hard-capped by the shared 6,000-token budget.
+      // Groq keeps strict JSON-schema mode across truncation retries. Gemini
+      // deliberately retains its existing recovery ladder (out of scope here).
+      if (scheduleCorrection(conciseRecovery, providerName === "groq")) {
+        // A length finish proves the allowance actually sent was too small.
+        // Escalate from that sent value, but never past the headroom the current
+        // prompt estimate leaves inside the shared 6,000-token budget. Otherwise
+        // the next attempt's input-compaction target becomes unreachable and the
+        // escalation is silently clipped back (or rejected by preflight).
         if (providerName === "groq") {
+          const feasibleHeadroom = Math.max(
+            MIN_COMPLETION_TOKENS,
+            MAX_SHARED_PROVIDER_TOTAL_TOKENS - estimatedInputTokens,
+          );
           const nextBudget = Math.min(
             maxCompletionTokens,
-            Math.max(adaptiveCompletionTokenBudget + MIN_COMPLETION_TOKENS, Math.ceil(adaptiveCompletionTokenBudget * 1.5)),
+            feasibleHeadroom,
+            Math.max(completionTokenBudget + MIN_COMPLETION_TOKENS, Math.ceil(completionTokenBudget * 1.5)),
           );
-          adaptiveCompletionTokenBudget = Math.max(adaptiveCompletionTokenBudget, nextBudget);
+          adaptiveCompletionTokenBudget = Math.max(completionTokenBudget, nextBudget);
         }
         continue;
       }
@@ -1286,7 +1313,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         });
       }
       const correction = formatThresholdViolations(wordErrors);
-      if (scheduleCorrection(correction + " Repair every named field and preserve the evidence-bounded meaning.")) continue;
+      // A pure word-count miss must not cost Groq its strict schema enforcement.
+      // The correction already names each deficient field and its exact minimum.
+      if (scheduleCorrection(correction + " Repair every named field and preserve the evidence-bounded meaning.", providerName === "groq")) continue;
       break;
     }
     try {
