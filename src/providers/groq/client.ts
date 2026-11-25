@@ -120,97 +120,163 @@ export interface GroqAssessmentInput {
 export interface GroqAssessmentClient { assess(input: GroqAssessmentInput, signal?: AbortSignal): Promise<ArAssessment>; }
 
 const SYSTEM_PROMPT = [
-  "You are the A&R intelligence analyst for a private music-audit service. Use supplied evidence only. Never invent streams, sales, revenue, playlist data, named playlists, curators, demographics, market size, audience metrics, label interest, placements or external facts.",
-  "Evidence classes are distinct: OBSERVED=measured directly from uploaded audio master; RECOGNIZED=claim from one named external/DSP source; RECONCILED=at least two independent named providers agree without conflict; INFERRED=labelled hypothesis (including genre/lane/positioning/comparables); INDUSTRY PRACTICE=general craft guidance, not a fifth evidence tier or track fact. Every label names its actual source: groq_assessment for INFERRED, industry_practice for INDUSTRY PRACTICE.",
-  "Keep provider-backed genre labels exact; separate region/city-scene tags; retain unmapped tags as unresolved. Null/abstained primary genre means no definitive genre or confirmed A&R lane. Tempo is at most 15% of genre score and never establishes genre alone.",
-  "Tempo is usable only when tempoConfidence >=0.5 and a confirmed tempo is present. Missing/low confidence means do not repeat BPM, infer speed/energy, score tempoLaneFit/rhythmicConsistency or use it in recommendations. If candidate/window/independent-estimator evidence exists while confirmed tempo is null, report provisional evidence and its consensus limitation, not absence of analysis.",
-  "Key/mode and tempo are CONFIRMED only from supplied voting/window-consensus-stabilized results. If confirmed values are null, preserve candidates/disagreement as provisional and never promote a candidate.",
-  "Provisional mood labels are heuristic signal descriptors, not calibrated probabilities, listener emotion or demand. Provisional energy is a low/moderate/high heuristic with its score out of 100, never a probability.",
-  "Use vocalFeatures only when status=analyzed; report measured activity/pitch with limitations. Otherwise abstain; never infer voice presence, delivery, layering or lyrics. Discuss verse/chorus/bridge/intro/outro only when explicit track-structure analysis supplies boundaries.",
-  "Use reconciled identity, field provenance, catalogSources and provider records. Name a provider only if it returned a record; preserve ISRC conflicts and ambiguous matches. DSP/catalog links are not audio: never claim OBSERVED audio measurements or invent audio analysis from a link. No external stem/separation/render workers.",
-  "Strengths, risks and actions cite supplied sonic, vocal, genre and catalog evidence. Distinguish unavailable analysis from a calculated low-confidence candidate; do not replace specific evidence/conflicts with generic prose. Recommendations are actionable and grounded in evidence or separately labelled INDUSTRY PRACTICE. Never invent artist/track comparables; give verification criteria.",
-  "Absent verified commercial-performance evidence, marketability is undetermined; never infer demand from genre, tempo, catalog popularity or metadata. Release date is DETERMINED only from supplied verified date evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict remains PROPOSED unless deterministic evidence rules establish otherwise.",
-  "Null score means insufficient evidence. RMS spread/dBFS are descriptive, not mastering readiness; keep delivery readiness unscored without destination-specific integrated loudness, range and true-peak targets. Near -11 LUFS alone is not a fault; never recommend loudness changes without measured fault and target. Centroid <=2,000 Hz is not bright. Mono is a compatibility risk to check, not proof of incompatibility.",
-  "Do not score taste: hook, originality, production quality, replay value and lane clarity belong only in the unscored human listening checklist, with a distinct first-listen question for each. scorecard.rhythmicConsistency.rationale must contain at least 25 words even when null and explain missing timing evidence in a complete sentence.",
-  "Return JSON only as one complete object; obey schema and local word-count requirements without repeated boilerplate."
-].join(" ");
-
-const NARRATIVE_SYSTEM_PROMPT = [
   "Use supplied evidence only; never invent streams, sales, revenue, playlists, curators, demographics, audience metrics, label interest, placements or external facts.",
-  "Labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=industry_practice guidance, never a track fact. Name only providers with returned records.",
-  "Preserve exact provider genre labels and separate scene tags; null primary genre means no confirmed lane. Tempo contributes <=15% to genre scoring and never proves genre.",
-  "Use BPM only when confirmed at confidence >=0.5; otherwise omit BPM, speed/energy inference and tempo scoring. Unconfirmed candidates/windows stay provisional.",
-  "Key/mode are CONFIRMED only by supplied voting/window-consensus-stabilized results; null/disagreement stays provisional. Mood/energy are heuristics, not probabilities, listener emotion or demand; use only supplied energy label and score/100.",
-  "Use vocals only when status=analyzed; otherwise infer no voice, delivery, layering or lyrics. Sections require explicit boundaries.",
-  "Use reconciled identity, provenance, catalogSources and provider records; preserve ISRC conflicts/ambiguity. DSP/catalog links are not audio; never claim OBSERVED audio from links. No external stem, separation or render workers.",
-  "Ground strengths, risks and actions in supplied sonic, vocal, genre and catalog facts. Label general guidance INDUSTRY PRACTICE; do not invent comparables.",
-  "Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks; each item must be a complete, specific statement tied to a supplied fact or an explicitly stated evidence limitation. Do not pad counts with repeated or generic claims.",
-  "Without verified commercial performance, marketability is undetermined. Release date is DETERMINED only from verified evidence; preserve PRE_RELEASE versus POST_RELEASE. Market verdict stays PROPOSED unless deterministic rules establish otherwise.",
-  "Do not score hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return JSON only; obey schema/word limits."
- ].join(" ");
-
-const POSITIONING_INSTRUCTIONS = "For aAndRPositioning.rationale and commercialRead.rationale, each must contain at least 40 words (>= 40 words each). Give one concise, evidence-bounded rationale per field; cite supplied evidence or explicitly name the evidence gap. Never pad, repeat boilerplate, or infer commercial demand without verified commercial telemetry. Keep marketability undetermined when such telemetry is absent.";
-
-const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS do not prove mastering readiness; do not recommend loudness changes without a measured fault and target. Centroid <=2,000 Hz is not bright; mono is a risk to check, not proof of incompatibility.";
-
-const EVIDENCE_SCORE_SYSTEM_PROMPT = [
-  "Use supplied facts only; never invent streams, sales, playlists, curators, audience metrics, label interest, placements or external facts.",
-  "Always include the evidenceLabels array; each item has label, claim and actual source. OBSERVED=uploaded-master measurement; RECOGNIZED=one provider; RECONCILED=2+ agreeing independent providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=industry_practice guidance, not track fact.",
-  "DSP/catalog links are not audio. Without uploaded-master provenance, do not claim OBSERVED audio or infer BPM, key, vocals, lyrics, arrangement or sections. No external stem/separation/render workers.",
-  "Tempo/key are CONFIRMED only by voting/window-consensus-stabilized results; null/candidates stay provisional and disagreement visible. Missing tempo or confidence <0.5 means no BPM, tempoLaneFit or rhythmicConsistency score. Tempo is <=15% of genre scoring; preserve provider genres and separate scene tags.",
-  "Mood/energy are heuristics, not probability, emotion or demand. Use vocals only when analyzed; sections need explicit boundaries. Preserve provider names, identity conflicts, ISRC ambiguity and provenance; name only providers with returned records.",
-  "Without verified commercial evidence, marketability is undetermined. Release date DETERMINED only from verified evidence; preserve PRE_RELEASE/POST_RELEASE. Market verdict PROPOSED unless deterministic rules establish otherwise; never infer demand from genre, tempo, popularity or metadata.",
-  "Each evidenceGaps and limitations item must contain at least 8 words; null scores mean insufficient evidence. Every scorecard rationale, including tempoLaneFit, rhythmicConsistency, dynamicRangeLoudness, metadataCompleteness and releaseReadiness, must contain at least 25 words even when its score is null; explain the evidence, limitation or reason for abstention without inventing measurements. RMS/dBFS do not prove mastering readiness; no delivery score without destination targets or loudness change without measured fault/target. Centroid <=2,000 Hz is not bright; mono is risk, not incompatibility.",
-  "Do not score hook, originality, production quality, replay value or lane clarity; keep them unscored with distinct listening checks. scorecard.rhythmicConsistency.rationale must contain at least 25 words even when null. Separate track evidence from INDUSTRY PRACTICE. JSON only; local Zod/word-count validation is authoritative."
+  "Evidence labels: OBSERVED=uploaded-master measurement; RECOGNIZED=one named provider; RECONCILED=2+ independent agreeing providers; INFERRED=groq_assessment hypothesis; INDUSTRY PRACTICE=industry_practice guidance, never a track fact. Name only providers with returned records.",
+  "Preserve exact provider genre labels and separate scene tags; null primary genre means no confirmed lane. Tempo contributes at most 15% to genre scoring and never proves genre.",
+  "Tempo is usable only when confirmed and confidence >=0.5. Key/mode and tempo are CONFIRMED only from voting/window-consensus-stabilized results; null or disagreement stays provisional. Never promote candidates.",
+  "Mood/energy are heuristics, not probabilities, listener emotion or demand. Use vocals only when status=analyzed; otherwise infer no voice, delivery, layering or lyrics. Section labels require explicit boundaries.",
+  "Use reconciled identity, source provenance and catalog records; preserve ISRC conflicts and ambiguous matches. DSP/catalog links are not audio: never claim OBSERVED audio from a link. No external stem, separation or render workers; no external stem/separation/render workers.",
+  "Without verified commercial-performance telemetry, marketability is undetermined. Release date is DETERMINED only from verified date evidence; preserve PRE_RELEASE versus POST_RELEASE and PRE_RELEASE/POST_RELEASE. Market verdict remains PROPOSED unless deterministic evidence rules establish otherwise.",
+  "Null score means insufficient evidence. RMS/dBFS do not prove mastering readiness; do not recommend loudness changes without a measured fault and destination target. Centroid <=2,000 Hz is not bright; mono is a compatibility risk to check, not proof of incompatibility.",
+  "Do not score taste, hook, originality, production quality, replay value or lane clarity; keep them in the unscored human-listening checklist. Return one complete JSON object only and obey every local validation rule."
 ].join(" ");
+const NARRATIVE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Return at least 3 distinct evidence-grounded strengths and at least 2 distinct evidence-grounded risks. Each must be a complete, specific statement tied to a supplied fact or explicit evidence limitation; do not pad with repeated or generic claims.";
+const POSITIONING_INSTRUCTIONS = "For aAndRPositioning.rationale and commercialRead.rationale, each must contain at least 40 words (>= 40 words each). Give one concise, evidence-bounded rationale per field; cite supplied evidence or explicitly name the evidence gap. Never pad, repeat boilerplate, or infer commercial demand without verified commercial telemetry. Keep marketability undetermined when such telemetry is absent.";
+const PRODUCTION_SYSTEM_PROMPT = NARRATIVE_SYSTEM_PROMPT + " RMS/dBFS are descriptive, not mastering readiness; do not recommend loudness changes without a measured fault and destination target.";
+const EVIDENCE_SCORE_SYSTEM_PROMPT = SYSTEM_PROMPT + " Always include evidenceLabels with label, claim and actual source. Null scores mean insufficient evidence. Every supplied scorecard rationale must contain at least 25 words, including optional tonalConsensus when present; explain evidence or abstention without inventing measurements. Do not score hook, originality, production quality, replay value or lane clarity; provide distinct unscored listening checks.";
 
 function words(value: string): number { return value.trim().split(/\s+/).filter(Boolean).length; }
-function safeThresholdDiagnostic(group: string, value: unknown, message: string): Pick<ProviderAttemptDiagnostic, "validationField" | "validationRule" | "minimumWords" | "actualWords" | "minimumItems" | "actualItems"> {
-  const d = value as Record<string, any>;
-  const wordMatch = message.match(/^(.+?) must contain at least ([0-9]+) words/);
-  const itemMatch = message.match(/^(.+?) must contain at least ([0-9]+) items/);
-  const match = wordMatch ?? itemMatch;
-  const label = match?.[1] ?? "unknown";
-  const minimum = Number(match?.[2] ?? 0);
-  const fieldMap: Record<string, string> = {
-    "positioning rationale": "aAndRPositioning.rationale",
-    "commercial rationale": "commercialRead.rationale",
-    executiveSummary: "executiveSummary", creativeIdentity: "creativeIdentity",
-    recommendation: "releaseStrategy.recommendation",
-    productionArrangementGuidance: "productionArrangementGuidance",
-    industryPractice: group === "production" ? "industryPractice" : group === "promotion" ? "promotionPlan.industryPractice" : "labelPartnerFit.industryPractice",
-    laneHypothesis: "laneHypothesis", verificationMethod: "verificationMethod",
-    preRelease: "promotionPlan.preRelease", releaseWindow: "promotionPlan.releaseWindow", postRelease: "promotionPlan.postRelease",
-    partnerProfile: "labelPartnerFit.partnerProfile", diligenceBeforeContact: "labelPartnerFit.diligenceBeforeContact",
-    days30: "executionPlan.days30", days60: "executionPlan.days60", days90: "executionPlan.days90",
-  };
-  const validationField = fieldMap[label] ?? label;
-  const actual = validationField.replace(/\[([0-9]+)\]/g, ".$1").split(".").filter(Boolean).reduce((current: any, key) => current?.[/^[0-9]+$/.test(key) ? Number(key) : key], d);
-  if (itemMatch) return { validationField, validationRule: "minimum_item_count", minimumItems: minimum, actualItems: Array.isArray(actual) ? actual.length : 0 };
-  return { validationField, validationRule: "minimum_word_count", minimumWords: minimum, actualWords: typeof actual === "string" ? words(actual) : 0 };
+type SectionWordRule = {
+  path: string;
+  minWords?: number;
+  minItems?: number;
+  itemMinWords?: number;
+  optional?: boolean;
+};
+
+const SECTION_WORD_RULES: Record<string, SectionWordRule[]> = {
+  narrative: [
+    { path: "executiveSummary", minWords: 45 }, { path: "creativeIdentity", minWords: 35 },
+    { path: "strengths", minItems: 3, itemMinWords: 10 }, { path: "risks", minItems: 2, itemMinWords: 10 },
+  ],
+  positioning: [
+    { path: "aAndRPositioning.rationale", minWords: 40 },
+    { path: "commercialRead.rationale", minWords: 40 },
+  ],
+  release: [
+    { path: "releaseStrategy.recommendation", minWords: 40 },
+    { path: "releaseStrategy.priorities", minItems: 3, itemMinWords: 8 },
+  ],
+  "evidence-score": [
+    { path: "evidenceGaps", minItems: 1, itemMinWords: 8 },
+    { path: "limitations", minItems: 1, itemMinWords: 8 },
+    { path: "scorecard.tempoLaneFit.rationale", minWords: 25 },
+    { path: "scorecard.rhythmicConsistency.rationale", minWords: 25 },
+    { path: "scorecard.tonalConsensus.rationale", minWords: 25, optional: true },
+    { path: "scorecard.dynamicRangeLoudness.rationale", minWords: 25 },
+    { path: "scorecard.metadataCompleteness.rationale", minWords: 25 },
+    { path: "scorecard.releaseReadiness.rationale", minWords: 25 },
+    { path: "humanListeningChecklist", minItems: 5, itemMinWords: 5 },
+  ],
+  production: [
+    { path: "productionArrangementGuidance", minWords: 40 }, { path: "industryPractice", minWords: 25 },
+    { path: "listeningChecks", minItems: 4, itemMinWords: 5 },
+  ],
+  comparables: [
+    { path: "laneHypothesis", minWords: 20 }, { path: "referencesToVerify", minItems: 3, itemMinWords: 8 },
+    { path: "verificationMethod", minWords: 20 },
+  ],
+  promotion: [
+    { path: "promotionPlan.preRelease", minWords: 20 }, { path: "promotionPlan.releaseWindow", minWords: 20 },
+    { path: "promotionPlan.postRelease", minWords: 20 }, { path: "promotionPlan.contentIdeas", minItems: 4, itemMinWords: 5 },
+    { path: "promotionPlan.pitchingAngles", minItems: 3, itemMinWords: 5 },
+    { path: "promotionPlan.playlistCategories", minItems: 3, itemMinWords: 3 },
+    { path: "promotionPlan.industryPractice", minWords: 20 },
+  ],
+  "label-fit": [
+    { path: "labelPartnerFit.partnerProfile", minWords: 25 },
+    { path: "labelPartnerFit.criteriaToDemonstrate", minItems: 4, itemMinWords: 5 },
+    { path: "labelPartnerFit.diligenceBeforeContact", minWords: 20 },
+    { path: "labelPartnerFit.industryPractice", minWords: 20 },
+  ],
+  timeline: [
+    { path: "executionPlan.days30", minWords: 20 }, { path: "executionPlan.days60", minWords: 20 },
+    { path: "executionPlan.days90", minWords: 20 },
+  ],
+};
+
+interface ThresholdViolation {
+  validationField: string;
+  validationRule: "minimum_word_count" | "minimum_item_count";
+  minimumWords?: number;
+  actualWords?: number;
+  minimumItems?: number;
+  actualItems?: number;
 }
-function thresholdError(name: string, value: unknown): string | null {
-  const d = value as Record<string, any>;
-  const text = (label: string, v: unknown, min: number) => typeof v === "string" && words(v) >= min ? null : label + " must contain at least " + min + " words.";
-  const list = (label: string, v: unknown, count: number, min: number) => {
-    if (!Array.isArray(v) || v.length < count) return label + " must contain at least " + count + " items.";
-    for (let i=0;i<v.length;i++){const e=text(label+"["+i+"]",v[i],min);if(e)return e;} return null;
-  };
-  if(name==="narrative") return text("executiveSummary",d.executiveSummary,45) ?? text("creativeIdentity",d.creativeIdentity,35)
-    ?? list("strengths",d.strengths,3,10) ?? list("risks",d.risks,2,10);
-  if(name==="positioning") return text("positioning rationale",d.aAndRPositioning?.rationale,40) ?? text("commercial rationale",d.commercialRead?.rationale,40);
-  if(name==="release") return text("recommendation",d.releaseStrategy?.recommendation,40) ?? list("priorities",d.releaseStrategy?.priorities,3,8);
-  if(name==="evidence-score") {
-    const s=d.scorecard??{};
-    for(const key of ["tempoLaneFit","rhythmicConsistency","dynamicRangeLoudness","metadataCompleteness","releaseReadiness"]){const e=text("scorecard."+key+".rationale",s[key]?.rationale,25);if(e)return e;}
-    return list("evidenceGaps",d.evidenceGaps,1,8) ?? list("limitations",d.limitations,1,8) ?? list("humanListeningChecklist",d.humanListeningChecklist,5,5);
+
+function readAssessmentPath(value: unknown, path: string): unknown {
+  return path.replace(/\\[(\\d+)\\]/g, ".$1").split(".").filter(Boolean)
+    .reduce((current: any, key) => current?.[/^\\d+$/.test(key) ? Number(key) : key], value);
+}
+
+function thresholdViolations(group: string, value: unknown): ThresholdViolation[] {
+  const violations: ThresholdViolation[] = [];
+  for (const rule of SECTION_WORD_RULES[group] ?? []) {
+    const actual = readAssessmentPath(value, rule.path);
+    if (actual === undefined && rule.optional) continue;
+    if (rule.minItems !== undefined) {
+      const items = Array.isArray(actual) ? actual : [];
+      if (!Array.isArray(actual) || items.length < rule.minItems) {
+        violations.push({ validationField: rule.path, validationRule: "minimum_item_count", minimumItems: rule.minItems, actualItems: items.length });
+        continue;
+      }
+      if (rule.itemMinWords !== undefined) {
+        items.forEach((item, index) => {
+          const count = typeof item === "string" ? words(item) : 0;
+          if (count < rule.itemMinWords!) violations.push({
+            validationField: rule.path + "[" + index + "]", validationRule: "minimum_word_count",
+            minimumWords: rule.itemMinWords, actualWords: count,
+          });
+        });
+      }
+      continue;
+    }
+    const count = typeof actual === "string" ? words(actual) : 0;
+    if (rule.minWords !== undefined && count < rule.minWords) violations.push({
+      validationField: rule.path, validationRule: "minimum_word_count",
+      minimumWords: rule.minWords, actualWords: count,
+    });
   }
-  if(name==="production") return text("productionArrangementGuidance",d.productionArrangementGuidance,40) ?? text("industryPractice",d.industryPractice,25) ?? list("listeningChecks",d.listeningChecks,4,5);
-  if(name==="comparables") return text("laneHypothesis",d.laneHypothesis,20) ?? list("referencesToVerify",d.referencesToVerify,3,8) ?? text("verificationMethod",d.verificationMethod,20);
-  if(name==="promotion") return text("preRelease",d.promotionPlan?.preRelease,20) ?? text("releaseWindow",d.promotionPlan?.releaseWindow,20) ?? text("postRelease",d.promotionPlan?.postRelease,20) ?? list("contentIdeas",d.promotionPlan?.contentIdeas,4,5) ?? list("pitchingAngles",d.promotionPlan?.pitchingAngles,3,5) ?? list("playlistCategories",d.promotionPlan?.playlistCategories,3,3) ?? text("industryPractice",d.promotionPlan?.industryPractice,20);
-  if(name==="label-fit") return text("partnerProfile",d.labelPartnerFit?.partnerProfile,25) ?? list("criteriaToDemonstrate",d.labelPartnerFit?.criteriaToDemonstrate,4,5) ?? text("diligenceBeforeContact",d.labelPartnerFit?.diligenceBeforeContact,20) ?? text("industryPractice",d.labelPartnerFit?.industryPractice,20);
-  if(name==="timeline") return text("days30",d.executionPlan?.days30,20) ?? text("days60",d.executionPlan?.days60,20) ?? text("days90",d.executionPlan?.days90,20);
-  return null;
+  return violations;
+}
+
+function formatThresholdViolations(violations: ThresholdViolation[]): string {
+  return violations.map(issue => issue.validationRule === "minimum_item_count"
+    ? issue.validationField + " must contain at least " + issue.minimumItems + " items (received " + issue.actualItems + ")."
+    : issue.validationField + " must contain at least " + issue.minimumWords + " words (received " + issue.actualWords + ")."
+  ).join(" ");
+}
+
+function thresholdContractInstructions(group: string): string {
+  const rules = SECTION_WORD_RULES[group] ?? [];
+  const limits = rules.map(rule => rule.minItems !== undefined
+    ? rule.path + ": at least " + rule.minItems + " items" + (rule.itemMinWords !== undefined ? ", each at least " + rule.itemMinWords + " words" : "")
+    : rule.path + ": at least " + rule.minWords + " words" + (rule.optional ? " when present" : ""));
+  return limits.length ? "Mandatory locally validated word-count contract: " + limits.join("; ") + "." : "";
+}
+
+function compactedSchemaConstraintInstructions(schema: unknown): string {
+  const constraints: string[] = [];
+  const visit = (node: unknown, path: string): void => {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return;
+    const record = node as Record<string, any>;
+    if (typeof record.minLength === "number") constraints.push(path + " string minimum " + record.minLength + " characters");
+    if (typeof record.maxLength === "number") constraints.push(path + " string maximum " + record.maxLength + " characters");
+    if (typeof record.minItems === "number") constraints.push(path + " array minimum " + record.minItems + " items");
+    if (typeof record.maxItems === "number") constraints.push(path + " array maximum " + record.maxItems + " items");
+    if (typeof record.minimum === "number") constraints.push(path + " numeric minimum " + record.minimum);
+    if (typeof record.maximum === "number") constraints.push(path + " numeric maximum " + record.maximum);
+    if (record.properties && typeof record.properties === "object") {
+      for (const [key, child] of Object.entries(record.properties)) visit(child, path ? path + "." + key : key);
+    }
+    if (record.items) visit(record.items, path + "[]");
+  };
+  visit(schema, "");
+  return constraints.length ? "Compacted JSON-schema constraints retained as mandatory instructions: " + constraints.join("; ") + "." : "";
+}
+
+function safeThresholdDiagnostic(violation: ThresholdViolation): ThresholdViolation {
+  return violation;
 }
 
 const MAX_PROVIDER_RETRY_DELAY_MS = 60_000;
@@ -665,10 +731,12 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const tokenField = providerName === "groq" ? "max_completion_tokens" : "max_tokens";
   const rawOutputSchema = z.toJSONSchema(schema);
   const outputSchema = ["evidence-score", "narrative", "positioning", "release", "promotion"].includes(groupName) ? compactStructuredSchema(rawOutputSchema) : rawOutputSchema;
+  const schemaConstraintGuidance = compactedSchemaConstraintInstructions(rawOutputSchema);
+  const wordContractGuidance = thresholdContractInstructions(groupName);
   const completed = await input.loadCompletedSectionGroup?.(cacheGroupName);
   if (completed !== null && completed !== undefined) {
     const cached = schema.safeParse(completed);
-    if (cached.success && !thresholdError(groupName, cached.data)) return cached.data;
+    if (cached.success && thresholdViolations(groupName, cached.data).length === 0) return cached.data;
   }
 
   const scheduleCorrection = (reason: string): boolean => {
@@ -708,7 +776,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? " The user payload includes outputSchema, the exact normative output contract. Match every property, nested object, required field, type, enum, nullable value, array bound and minimum length. Return one complete JSON object only. Do not include outputSchema in the returned object. Local Zod and section word-count validation are mandatory."
       : "";
     const messages = [
-      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release", "promotion"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + schemaGuidance },
+      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release", "promotion"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + " " + wordContractGuidance + " " + schemaConstraintGuidance + schemaGuidance },
       {
         role: "user",
         content: JSON.stringify({
@@ -790,13 +858,21 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         });
       } catch (error) {
         const timedOut = requestTimeoutSignal.aborted && !signal?.aborted;
+        const retryable = !signal?.aborted && networkAttempt < MAX_NETWORK_ATTEMPTS - 1;
         await recordProviderAttempt(input, {
           provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: null,
           errorType: timedOut ? "timeout" : "provider_unavailable",
           retryable: !signal?.aborted, attempt: networkAttempt + 1, group: groupName,
         });
+        if (signal?.aborted) throw error;
+        if (retryable) {
+          const delay = Math.min(MAX_PROVIDER_RETRY_DELAY_MS, Math.ceil(1000 * (2 ** networkAttempt) * (0.8 + Math.random() * 0.4)));
+          await sleepImpl(delay, signal);
+          signal?.throwIfAborted();
+          continue;
+        }
         if (timedOut) {
-          throw new Error(providerLabel + " " + groupName + " request timed out after " + requestTimeoutMs + "ms", { cause: error });
+          throw new Error(providerLabel + " " + groupName + " request timed out after " + requestTimeoutMs + "ms and bounded network retries", { cause: error });
         }
         throw error;
       }
@@ -898,7 +974,18 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         + (detail ? ": " + detail.slice(0, 300) : ""));
     }
 
-    const payload = await response.json() as { choices?: Array<{ message?: { content?: string | null } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
+    let payload: { choices?: Array<{ message?: { content?: string | null } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
+    try {
+      payload = await response.json() as typeof payload;
+    } catch {
+      await recordProviderAttempt(input, {
+        provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
+        errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName,
+        failureKind: "invalid_json",
+      });
+      if (scheduleCorrection("The provider returned a non-JSON response envelope with HTTP success. Return one complete JSON object in the required response format.")) continue;
+      break;
+    }
     console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, actualPromptTokens: payload.usage?.prompt_tokens ?? null, actualCompletionTokens: payload.usage?.completion_tokens ?? null, actualTotalTokens: payload.usage?.total_tokens ?? null }));
     const content = payload.choices?.[0]?.message?.content;
     if (!content) {
@@ -926,17 +1013,24 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       break;
     }
 
-    const wordError = thresholdError(groupName, result.data);
-    if (wordError) {
-      await recordProviderAttempt(input, { provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status, errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName, failureKind: "threshold_violation", ...safeThresholdDiagnostic(groupName, result.data, wordError) });
-      if (scheduleCorrection(wordError + " Repair the exact field and preserve the evidence-bounded meaning.")) continue;
+    const wordErrors = thresholdViolations(groupName, result.data);
+    if (wordErrors.length) {
+      for (const violation of wordErrors.slice(0, 12)) {
+        await recordProviderAttempt(input, {
+          provider: providerName as ProviderAttemptDiagnostic["provider"], model, status: response.status,
+          errorType: "malformed_output", retryable: true, attempt: attempt + 1, group: groupName,
+          failureKind: "threshold_violation", ...safeThresholdDiagnostic(violation),
+        });
+      }
+      const correction = formatThresholdViolations(wordErrors);
+      if (scheduleCorrection(correction + " Repair every named field and preserve the evidence-bounded meaning.")) continue;
       break;
     }
     await input.saveCompletedSectionGroup?.(cacheGroupName, result.data);
     return result.data;
   }
 
-  throw new Error("" + providerLabel + " " + groupName + " response failed Zod validation after one retry: " + lastError);
+  throw new Error("" + providerLabel + " " + groupName + " response failed validation after bounded recovery: " + lastError);
 }
 
 export class GroqClient implements GroqAssessmentClient {
