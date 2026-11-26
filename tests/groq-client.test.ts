@@ -222,7 +222,7 @@ describe("GroqClient section groups",()=>{
    expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(7000);
   }
  });
- it("keeps production-shaped assessment evidence under the Groq 6,000-token request ceiling",async()=>{
+ it("keeps production-shaped assessment evidence under the Groq 7,000-token request ceiling",async()=>{
   const evidence={
    auditType:"full_a_and_r",artist:"Fixture Artist",title:"Evidence-rich single release",
    releaseDate:"2026-10-18",label:"Independent",isrc:"USAAA2700001",upc:"198765432109",
@@ -1011,7 +1011,7 @@ describe("safe assessment validation diagnostics", () => {
 });
 
 describe("Groq narrative token projection regression", () => {
-  it("keeps a production-shaped verbose evidence payload under the unchanged 6,000-token ceiling", async () => {
+  it("keeps a production-shaped verbose evidence payload under the 7,000-token ceiling", async () => {
     const logs: string[] = [];
     const info = vi.spyOn(console, "info").mockImplementation((message?: unknown) => { if (typeof message === "string") logs.push(message); });
     try {
@@ -1325,7 +1325,7 @@ describe("complete local A&R provider contract", () => {
 
 
 describe("Groq narrative prompt budget recovery", () => {
-  it("compacts an HTTP 400 correction prompt under the 6,000-token ceiling without losing canonical evidence", async () => {
+  it("compacts an HTTP 400 correction prompt under the 7,000-token ceiling without losing canonical evidence", async () => {
     const provenance = Object.fromEntries(Array.from({ length: 24 }, (_, index) => ["field" + index, {
       source: "musicbrainz_catalog_provider_" + index,
       provider: "musicbrainz",
@@ -1613,7 +1613,7 @@ describe("Groq narrative completion recovery", () => {
 
 
 describe("production A&R provider capacity regressions", () => {
-  it("continues concise Groq narrative recovery without escalating completion tokens or crossing the 6,000-token ceiling", async () => {
+  it("continues concise Groq narrative recovery without escalating completion tokens or crossing the 7,000-token ceiling", async () => {
     const budgets: number[] = [];
     let narrativeCalls = 0;
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -1902,7 +1902,7 @@ describe("Groq mode-preserving recovery (production truncation regression)", () 
       + " with source-attributed supporting catalog detail ").repeat(12);
     // All retained provenance keys carry long values so the initial
     // narrative prompt exceeds the compaction target on the repair attempt.
-    const provenance = Object.fromEntries(Array.from({ length: 12 }, (_, index) => ["field" + index, {
+    const provenance = Object.fromEntries(Array.from({ length: 36 }, (_, index) => ["field" + index, {
       source: verbose("source", index),
       provider: verbose("provider", index),
       status: verbose("status", index),
