@@ -90,10 +90,17 @@ describe("Groq release prompt budget regression", () => {
       },
     };
     const requests: Array<{ group: string; body: Record<string, any>; payload: Record<string, any> }> = [];
+    let rejectedPositioningOnce = false;
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       const payload = JSON.parse(body.messages[1].content);
       requests.push({ group: payload.sectionGroup, body, payload });
+      if (payload.sectionGroup === "positioning" && !rejectedPositioningOnce) {
+        rejectedPositioningOnce = true;
+        return new Response(JSON.stringify({
+          error: { code: "json_validate_failed", message: "The supplied response did not satisfy the structured-output contract." },
+        }), { status: 400 });
+      }
       return new Response(JSON.stringify({
         choices: [{ finish_reason: "stop", message: { content: JSON.stringify(section(payload.sectionGroup)) } }],
         usage: { prompt_tokens: 2500, completion_tokens: 500, total_tokens: 3000 },
@@ -104,7 +111,7 @@ describe("Groq release prompt budget regression", () => {
       .assess({ evidence: { auditType: "MASTER-BASED AUDIT", artist: "Budget Fixture", title: "Long Evidence Track" }, sonicDna });
 
     expect(result.assessmentVersion).toBe("3.0");
-    expect(requests.map(request => request.group).sort()).toEqual([...groups].sort());
+    expect(requests.map(request => request.group).sort()).toEqual([...groups, "positioning"].sort());
     const release = requests.find(request => request.group === "release");
     expect(release).toBeDefined();
     for (const request of requests) {
@@ -114,7 +121,11 @@ describe("Groq release prompt budget regression", () => {
       })).length;
       const enforcedInput = Math.ceil(serialized / 2) + 256;
       expect(enforcedInput + request.body.max_completion_tokens).toBeLessThanOrEqual(6000);
-      expect(request.body.response_format.type).toBe("json_schema");
+      if (request.group === "positioning" && request.body.response_format.type === "json_object") {
+        expect(request.payload).toHaveProperty("outputSchema");
+      } else {
+        expect(request.body.response_format.type).toBe("json_schema");
+      }
     }
     expect(release?.payload.sonicDna).toMatchObject({
       provenance: "uploaded_audio_master",
@@ -135,7 +146,11 @@ describe("Groq release prompt budget regression", () => {
     const releaseDescriptors = release?.payload.sonicDna.acousticFeatureProfile.descriptors;
     expect(Object.keys(releaseDescriptors ?? {})).toHaveLength(12);
     expect(releaseDescriptors?.descriptor11).toEqual({ median: 11.125, p10: 10.75, p90: 11.875, unit: "measured_unit_11", method: "windowed_fft_descriptor_11" });
-    const positioning = requests.find(request => request.group === "positioning");
+    const positioningAttempts = requests.filter(request => request.group === "positioning");
+    expect(positioningAttempts).toHaveLength(2);
+    expect(positioningAttempts[0].body.response_format.type).toBe("json_schema");
+    expect(positioningAttempts[1].body.response_format.type).toBe("json_object");
+    const positioning = positioningAttempts[1];
     expect(positioning?.payload.sonicDna.acousticFeatureProfile.descriptors.descriptor11)
       .toEqual({ median: 11.125, unit: "measured_unit_11", method: "windowed_fft_descriptor_11" });
     expect(positioning?.payload.sonicDna.acousticFeatureProfile).not.toHaveProperty("predictions");
