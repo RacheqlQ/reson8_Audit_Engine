@@ -760,7 +760,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
   const featureFamilies: Record<string, string[]> = {
     narrative: ["acousticFeatureProfile", "vocalFeatures"],
     positioning: ["acousticFeatureProfile", "vocalFeatures"],
-    release: ["acousticFeatureProfile", "rhythmFeatures", "harmonicFeatures"],
+    release: ["acousticFeatureProfile"],
     "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures"],
     production: ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
     comparables: [],
@@ -789,14 +789,14 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     compact.harmonicFeatures = summary;
   }
 
-  const compacted = (["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
+  const compacted = (["evidence-score", "narrative", "positioning", "release", "production", "promotion"].includes(group)
     ? compactEvidenceScoreValue(compact, 0, group === "production" ? 40 : group === "narrative" ? 48 : 72, ["evidence-score", "production", "narrative"].includes(group) ? 2 : 3)
     : compactPromptValue(compact)) as Record<string, unknown>;
   // Keep every bounded feature family that this section explicitly consumes,
   // even when numerous scalar telemetry fields precede it in the source object.
   for (const key of [...common, ...(featureFamilies[group] ?? [])]) {
     const value = compact[key];
-    if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning", "production", "promotion"].includes(group)
+    if (value !== undefined) compacted[key] = ["evidence-score", "narrative", "positioning", "release", "production", "promotion"].includes(group)
       ? compactEvidenceScoreValue(value, 0, group === "production" ? 40 : group === "narrative" ? 48 : 72, group === "narrative" ? 3 : group === "evidence-score" ? 4 : 3)
       : compactPromptValue(value);
   }
@@ -844,7 +844,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
           ? Object.fromEntries(Object.entries(raw.descriptors as Record<string, unknown>).map(([name, descriptor]) => {
             if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return [name, compactPromptValue(descriptor)];
             const measured = descriptor as Record<string, unknown>;
-            return [name, Object.fromEntries(["median", "p10", "p90", "unit"].filter(key => measured[key] !== undefined)
+            return [name, Object.fromEntries(["median", "p10", "p90", "unit", "method"].filter(key => measured[key] !== undefined)
               .map(key => [key, measured[key]]))];
           }))
           : compactPromptValue(raw.descriptors),
@@ -1053,7 +1053,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ? " Match the supplied outputSchema exactly. Return one complete JSON object only; do not include outputSchema in the result. Local Zod and word-count validation remain mandatory."
       : "";
     const messages = [
-      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : ["narrative", "positioning", "release", "promotion"].includes(groupName) ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + " " + wordContractGuidance + (fallbackMode ? "" : " " + schemaConstraintGuidance) + schemaGuidance },
+      { role: "system", content: (groupName === "evidence-score" ? EVIDENCE_SCORE_SYSTEM_PROMPT : groupName === "production" ? PRODUCTION_SYSTEM_PROMPT : groupName === "narrative" ? NARRATIVE_SYSTEM_PROMPT : SYSTEM_PROMPT) + " " + instructions + " " + wordContractGuidance + (fallbackMode ? "" : " " + schemaConstraintGuidance) + schemaGuidance },
       {
         role: "user",
         content: JSON.stringify({
