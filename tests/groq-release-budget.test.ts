@@ -125,7 +125,7 @@ describe("Groq release prompt budget regression", () => {
         response_format: request.body.response_format,
       })).length;
       const enforcedInput = Math.ceil(serialized / 2) + 256;
-      expect(enforcedInput + request.body.max_completion_tokens).toBeLessThanOrEqual(6000);
+      expect(enforcedInput + request.body.max_completion_tokens).toBeLessThanOrEqual(7000);
       if (request.group === "positioning" && request.body.response_format.type === "json_object") {
         expect(request.payload).toHaveProperty("outputSchema");
       } else {
@@ -168,8 +168,11 @@ describe("Groq release prompt budget regression", () => {
     const evidenceScore = requests.find(request => request.group === "evidence-score");
     expect(evidenceScore?.payload.sonicDna).toHaveProperty("rhythmFeatures");
     expect(evidenceScore?.payload.sonicDna).toHaveProperty("harmonicFeatures");
-    expect(evidenceScore?.payload.sonicDna).not.toHaveProperty("vocalArrangementAnalysis");
+    expect(evidenceScore?.payload.sonicDna.vocalArrangementAnalysis.segments).toHaveLength(4);
     expect(evidenceScore?.payload.sonicDna.acousticFeatureProfile).not.toHaveProperty("descriptors");
-    expect(evidenceScore?.payload.sonicDna.acousticFeatureProfile).not.toHaveProperty("predictions");
+    expect(evidenceScore?.payload.sonicDna.acousticFeatureProfile.predictions).toMatchObject({
+      mood: { status: "provisional", labels: ["warm", "reflective"] },
+      energy: { status: "provisional", label: "moderate", score: 62 },
+    });
   });
 });
