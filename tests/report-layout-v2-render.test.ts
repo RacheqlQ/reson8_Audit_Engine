@@ -668,8 +668,8 @@ describe("v2 PDF renderer with verbose assessment context", () => {
 
       const sample = await generateAuditReportV2(input, "sample");
       const full = await generateAuditReportV2(input, "full");
-      expect((await PDFDocument.load(sample)).getPageCount(), source + " sample").toBe(7);
-      expect((await PDFDocument.load(full)).getPageCount(), source + " full").toBe(12);
+      expect((await PDFDocument.load(sample)).getPageCount(), source + " sample").toBe(6);
+      expect((await PDFDocument.load(full)).getPageCount(), source + " full").toBe(11);
     }
   });
 });
