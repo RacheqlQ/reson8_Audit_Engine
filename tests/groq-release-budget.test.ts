@@ -137,7 +137,7 @@ describe("Groq release prompt budget regression", () => {
     expect(releaseDescriptors?.descriptor11).toEqual({ median: 11.125, p10: 10.75, p90: 11.875, unit: "measured_unit_11", method: "windowed_fft_descriptor_11" });
     const positioning = requests.find(request => request.group === "positioning");
     expect(positioning?.payload.sonicDna.acousticFeatureProfile.descriptors.descriptor11)
-      .toEqual({ median: 11.125, unit: "measured_unit_11" });
+      .toEqual({ median: 11.125, unit: "measured_unit_11", method: "windowed_fft_descriptor_11" });
     expect(positioning?.payload.sonicDna.acousticFeatureProfile).not.toHaveProperty("predictions");
     expect(positioning?.body.max_completion_tokens).toBeGreaterThanOrEqual(256);
     expect(positioning?.payload.sonicDna).toMatchObject({
