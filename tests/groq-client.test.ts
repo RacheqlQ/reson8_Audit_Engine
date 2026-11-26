@@ -2016,3 +2016,53 @@ describe("Groq mode-preserving recovery (production truncation regression)", () 
     assertSharedBudgetRespected(mock);
   });
 });
+
+
+describe("Groq usage-calibrated retry headroom", () => {
+  it("uses verified prompt usage to increase completion headroom after a truncated evidence-score response", async () => {
+    const provenance = Object.fromEntries(Array.from({ length: 60 }, (_, index) => ["field" + index, {
+      source: "musicbrainz_catalog_provider_" + index,
+      provider: "musicbrainz",
+      status: "recognized",
+      confidence: 0.91,
+      evidenceClass: "RECOGNIZED",
+      value: ("source-attributed identity value " + index + " with supporting catalog detail ").repeat(3),
+      normalizedValue: ("normalized identity value " + index + " with reconciled catalog detail ").repeat(3),
+    }]));
+    const evidence = {
+      auditType: "MASTER-BASED AUDIT", sourceType: "master", artist: "Usage Calibration Evidence Fixture",
+      title: "Long Evidence Track", isrc: "NGABC2600001",
+      sourceProviders: ["musicbrainz", "audD", "lastfm"],
+      fieldProvenance: provenance,
+      identity: { artist: "Usage Calibration Evidence Fixture", title: "Long Evidence Track", isrc: "NGABC2600001" },
+      reconciliation: { status: "RECONCILED", conflicts: [], matchedFields: ["artist", "title", "isrc"] },
+    };
+    const scoreBudgets: number[] = [];
+    let scoreAttempts = 0;
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      if (payload.sectionGroup === "evidence-score") {
+        scoreBudgets.push(body.max_completion_tokens);
+        scoreAttempts++;
+        if (scoreAttempts === 1) {
+          return new Response(JSON.stringify({
+            choices: [{ finish_reason: "length", message: { content: '{"evidenceGaps":[' } }],
+            usage: { prompt_tokens: 3204, completion_tokens: body.max_completion_tokens, total_tokens: 3204 + body.max_completion_tokens },
+          }), { status: 200 });
+        }
+      }
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+        usage: { prompt_tokens: 3204, completion_tokens: 500, total_tokens: 3704 },
+      }), { status: 200 });
+    });
+    const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+      .assess({ evidence, sonicDna: null });
+    expect(result.assessmentVersion).toBe("3.0");
+    expect(scoreBudgets.length).toBeGreaterThanOrEqual(2);
+    expect(scoreBudgets[0]).toBeGreaterThanOrEqual(256);
+    expect(scoreBudgets[1]).toBeGreaterThan(scoreBudgets[0]);
+    expect(scoreBudgets[1]).toBeLessThanOrEqual(2000);
+  });
+});

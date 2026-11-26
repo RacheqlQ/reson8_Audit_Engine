@@ -1198,10 +1198,17 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // telemetry is useful for diagnostics but must never be used to reserve
     // LESS input headroom than that estimator requires; doing so allowed
     // estimatedInput + completion to exceed the provider-specific ceiling on large evidence payloads.
-    const enforcedInputTokens = Math.max(
-      estimatePromptInputTokens(messages, requestBody.response_format),
-      estimatedInputTokens,
-    );
+    // Once Groq has reported prompt usage for this exact request shape, use
+    // the usage-calibrated projection (with its 25% safety margin and framing
+    // reserve) for subsequent retries. Taking Math.max with the byte heuristic
+    // here nullifies calibration on large JSON prompts and can strand retries
+    // at the same tiny completion allowance even after successful compaction.
+    // Before the first usage report, retain the conservative byte-based estimate.
+    const enforcedInputTokens = providerName === "groq"
+      && lastReportedPromptTokens !== null
+      && lastReportedPromptBytes !== null
+      ? estimatedInputTokens
+      : Math.max(estimatePromptInputTokens(messages, requestBody.response_format), estimatedInputTokens);
     completionTokenBudget = sharedTotalBudgetApplies
       ? Math.min(adaptiveCompletionTokenBudget, maxTotalTokens - enforcedInputTokens)
       : adaptiveCompletionTokenBudget;
