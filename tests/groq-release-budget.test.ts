@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GroqClient } from "../src/providers/groq/client.js";
 
 const long = (text: string, minimum = 65): string => {
-  const words = text.split(/\\s+/);
+  const words = text.split(/\s+/);
   return Array.from({ length: minimum }, (_, index) => words[index % words.length]).join(" ");
 };
 
