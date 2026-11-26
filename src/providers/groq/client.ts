@@ -104,7 +104,7 @@ export interface ProviderAttemptDiagnostic {
   validationIssues?: Array<{ code: string; path: string[] }>;
   failureClass?: "preflight_budget" | "malformed_output" | "threshold_violation" | "capacity_or_503" | "network" | "timeout" | "completion_truncated";
   estimatedInputTokens?: number;
-  actualUsage?: { status: "reported" | "unavailable"; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null };
+  actualUsage?: { status: "reported" | "unavailable"; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null; reasoningTokens?: number | null };
   finishReason?: string | null;
   completionTokenBudget?: number;
   validationField?: string;
@@ -356,6 +356,25 @@ const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
 const MIN_COMPLETION_TOKENS = 256;
 const NARRATIVE_INITIAL_HEADROOM_TOKENS = 500;
 const MAX_SECTION_REQUEST_ATTEMPTS = 16;
+
+/**
+ * HYPOTHESIS-BRANCH HARDENING (not merged). openai/gpt-oss-120b is a reasoning
+ * model: part of `completion_tokens` is consumed by internal reasoning tokens
+ * that produce no visible JSON. With the default reasoning effort that can
+ * leave too few visible tokens for a strict-schema section inside the 850-2000
+ * completion allowance, surfacing as finish_reason="length"/empty content even
+ * though the prompt/allowance are otherwise valid. Groq documents
+ * `reasoning_effort` = low|medium|high for GPT-OSS models only. We pin it to
+ * `low` by default for gpt-oss models to reserve visible output tokens, with an
+ * env override. Non-reasoning models are untouched. This is a HYPOTHESIS until
+ * a real production log confirms reasoning tokens in job 1715b942.
+ */
+const REASONING_EFFORT_VALUES = ["low", "medium", "high"] as const;
+function reasoningEffortForModel(providerName: string, model: string): "low" | "medium" | "high" | undefined {
+  if (providerName !== "groq" || !/gpt-oss/i.test(model)) return undefined;
+  const configured = (process.env.GROQ_REASONING_EFFORT ?? "").trim().toLowerCase();
+  return REASONING_EFFORT_VALUES.find(value => value === configured) ?? "low";
+}
 
 async function providerRetryDelayMs(response: Response, fallbackAttempt: number): Promise<number> {
   const retryAfter = response.headers.get("retry-after");
@@ -1062,6 +1081,11 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     } else if (responseMode === "json_object") {
       requestBody.response_format = { type: "json_object" };
     }
+    // Hypothesis-branch hardening: cap reasoning-token spend on GPT-OSS models
+    // so a strict-schema section has enough *visible* completion tokens. Only
+    // added for Groq + gpt-oss; never for Gemini/Ollama or other Groq models.
+    const reasoningEffort = reasoningEffortForModel(providerName, model);
+    if (reasoningEffort) requestBody.reasoning_effort = reasoningEffort;
     // prompt_only deliberately omits response_format. The exact schema is still
     // supplied to the model, and no response is accepted without local Zod checks.
     // Use a conservative 3-bytes-per-token estimate over the complete serialized
@@ -1316,7 +1340,13 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         + (detail ? ": " + detail.slice(0, 300) : ""));
     }
 
-    let payload: { choices?: Array<{ finish_reason?: string | null; message?: { content?: string | null } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
+    // `completion_tokens_details.reasoning_tokens` is reported by some OpenAI-
+    // compatible reasoning endpoints. Groq's docs confirm reasoning *content*
+    // in message.reasoning but do not document the token-usage breakdown, so it
+    // is parsed tolerantly and never required for any behavior. It is emitted
+    // purely as a diagnostic so a real production log can confirm/deny the
+    // reasoning-token hypothesis.
+    let payload: { choices?: Array<{ finish_reason?: string | null; message?: { content?: string | null; reasoning?: unknown } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; completion_tokens_details?: { reasoning_tokens?: number } } };
     try {
       const decoded: unknown = await response.json();
       if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
@@ -1332,10 +1362,19 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (scheduleCorrection("The provider returned an invalid JSON response envelope with HTTP success. Return one complete JSON object in the required response format.")) continue;
       break;
     }
+    const reportedReasoningTokens = payload.usage?.completion_tokens_details?.reasoning_tokens;
+    const reasoningTokens = typeof reportedReasoningTokens === "number" && Number.isFinite(reportedReasoningTokens) ? reportedReasoningTokens : null;
+    // `reasoningTokens` is attached only when the endpoint actually reported a
+    // numeric value, so the ProviderAttemptDiagnostic shape stays byte-identical
+    // for every existing caller/assertion when no reasoning telemetry exists.
+    const reasoningUsage = reasoningTokens !== null ? { reasoningTokens } : {};
     const actualUsage = payload.usage && [payload.usage.prompt_tokens, payload.usage.completion_tokens, payload.usage.total_tokens].some(value => typeof value === "number")
-      ? { status: "reported" as const, promptTokens: payload.usage.prompt_tokens ?? null, completionTokens: payload.usage.completion_tokens ?? null, totalTokens: payload.usage.total_tokens ?? null }
-      : { status: "unavailable" as const, promptTokens: null, completionTokens: null, totalTokens: null };
-    console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, usageStatus: actualUsage.status, actualPromptTokens: actualUsage.promptTokens, actualCompletionTokens: actualUsage.completionTokens, actualTotalTokens: actualUsage.totalTokens }));
+      ? { status: "reported" as const, promptTokens: payload.usage.prompt_tokens ?? null, completionTokens: payload.usage.completion_tokens ?? null, totalTokens: payload.usage.total_tokens ?? null, ...reasoningUsage }
+      : { status: "unavailable" as const, promptTokens: null, completionTokens: null, totalTokens: null, ...reasoningUsage };
+    // `reasoningContentPresent` proves the endpoint returned reasoning without
+    // assuming a specific token-usage field name.
+    const reasoningContentPresent = payload.choices?.[0]?.message?.reasoning != null;
+    console.info(JSON.stringify({ provider: providerName, event: "response_usage", group: groupName, estimatedInputTokens, usageStatus: actualUsage.status, actualPromptTokens: actualUsage.promptTokens, actualCompletionTokens: actualUsage.completionTokens, actualTotalTokens: actualUsage.totalTokens, actualReasoningTokens: reasoningTokens, reasoningContentPresent }));
     if (providerName === "groq" && actualUsage.status === "reported" && actualUsage.promptTokens !== null) {
       lastReportedPromptTokens = actualUsage.promptTokens;
       lastReportedPromptBytes = serializedPromptBytes;
