@@ -43,9 +43,9 @@ export class SharedTokenPerMinuteLimiter {
   }
 }
 
-export const GROQ_TPM_HARD_CAP = 6_000;
+export const GROQ_TPM_HARD_CAP = 7_000;
 
-/** Lower operator overrides are allowed; environment settings can never raise Groq above its plan cap. */
+/** Lower operator overrides are allowed; environment settings can never raise Groq above its application safety cap. */
 export function resolveGroqTokenBudget(rawValue: string | undefined): number {
   const configuredBudget = Number(rawValue ?? GROQ_TPM_HARD_CAP);
   if (!Number.isFinite(configuredBudget) || configuredBudget < 256) return GROQ_TPM_HARD_CAP;
