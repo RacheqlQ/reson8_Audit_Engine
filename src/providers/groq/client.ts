@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails.js";
-import { sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
+import { GROQ_TPM_EFFECTIVE_BUDGET, sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
 import { markAssessmentProviderUnavailable } from "../provider-policy.js";
 
 export const GROQ_PROMPT_VERSION = "audit-ar-v10-contract-recovery-2026-11-25";
@@ -349,6 +349,7 @@ export const OLLAMA_ASSESSMENT_TIMEOUT_MS = 2 * 60_000;
 const MAX_COMPLETION_TOKENS = 1600;
 const MAX_GROQ_COMPLETION_TOKENS = 2000;
 const MAX_SHARED_PROVIDER_TOTAL_TOKENS = 6000;
+const MAX_GROQ_TOTAL_TOKENS = GROQ_TPM_EFFECTIVE_BUDGET;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
   narrative: 850, positioning: 550, release: 500, "evidence-score": 1000,
   production: 650, comparables: 450, promotion: 900, "label-fit": 650, timeline: 500,
@@ -761,6 +762,9 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     narrative: ["acousticFeatureProfile", "vocalFeatures"],
     positioning: ["acousticFeatureProfile", "vocalFeatures"],
     release: ["acousticFeatureProfile"],
+    // Evidence-score consumes canonical scalar measurements and compact rhythm/harmonic summaries.
+    // The full acoustic descriptor distribution and vocal arrangement timeline remain persisted
+    // in Sonic DNA for reporting, but repeating them here adds tokens without changing scorecard inputs.
     "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures"],
     production: ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
     comparables: [],
@@ -968,6 +972,15 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const schemaConstraintGuidance = compactedSchemaConstraintInstructions(rawOutputSchema);
   const wordContractGuidance = thresholdContractInstructions(groupName);
   const sonicDnaForGroup = compactSonicDnaForGroq(input.sonicDna, groupName);
+  if (groupName === "evidence-score" && sonicDnaForGroup?.acousticFeatureProfile
+      && typeof sonicDnaForGroup.acousticFeatureProfile === "object"
+      && !Array.isArray(sonicDnaForGroup.acousticFeatureProfile)) {
+    // Descriptor distributions duplicate the canonical measured values used by the
+    // scorecard. Keep provisional classifier predictions and the compact vocal timeline:
+    // they carry distinct context and are already bounded by the Sonic DNA projection.
+    const profile = sonicDnaForGroup.acousticFeatureProfile as Record<string, unknown>;
+    delete profile.descriptors;
+  }
   if (groupName === "positioning" && sonicDnaForGroup?.acousticFeatureProfile
       && typeof sonicDnaForGroup.acousticFeatureProfile === "object"
       && !Array.isArray(sonicDnaForGroup.acousticFeatureProfile)) {
@@ -1114,7 +1127,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     let estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
     const sectionOutputBudget = adaptiveCompletionTokenBudget;
     const sharedTotalBudgetApplies = providerName === "groq" || providerName === "gemini";
-    const targetInputTokens = MAX_SHARED_PROVIDER_TOTAL_TOKENS
+    const maxTotalTokens = providerName === "groq" ? MAX_GROQ_TOTAL_TOKENS : MAX_SHARED_PROVIDER_TOTAL_TOKENS;
+    const targetInputTokens = maxTotalTokens
       - Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget)
       - (groupName === "narrative" && attempt === 0 ? NARRATIVE_INITIAL_HEADROOM_TOKENS : 0);
     if (sharedTotalBudgetApplies && estimatedInputTokens > targetInputTokens) {
@@ -1167,7 +1181,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         attempt: attempt + 1, estimatedInputTokensBefore: before,
         estimatedInputTokensAfter: estimatedInputTokens, targetInputTokens,
         reservedCompletionTokens: Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget),
-        maxTotalTokens: MAX_SHARED_PROVIDER_TOTAL_TOKENS, compactionPass,
+        maxTotalTokens: maxTotalTokens, compactionPass,
       }));
     }
     const serializedPromptBytes = new TextEncoder().encode(JSON.stringify({
@@ -1179,19 +1193,19 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ) + 128;
       estimatedInputTokens = Math.min(estimatedInputTokens, usageCalibratedEstimate);
     }
-    // The 6,000-token ceiling is defined against the conservative production
+    // The provider-specific total-token ceiling is defined against the conservative production
     // estimator (serialized bytes / 2 + 256 framing tokens). Provider usage
     // telemetry is useful for diagnostics but must never be used to reserve
     // LESS input headroom than that estimator requires; doing so allowed
-    // estimatedInput + completion to exceed 6,000 on large evidence payloads.
+    // estimatedInput + completion to exceed the provider-specific ceiling on large evidence payloads.
     const enforcedInputTokens = Math.max(
       estimatePromptInputTokens(messages, requestBody.response_format),
       estimatedInputTokens,
     );
     completionTokenBudget = sharedTotalBudgetApplies
-      ? Math.min(adaptiveCompletionTokenBudget, MAX_SHARED_PROVIDER_TOTAL_TOKENS - enforcedInputTokens)
+      ? Math.min(adaptiveCompletionTokenBudget, maxTotalTokens - enforcedInputTokens)
       : adaptiveCompletionTokenBudget;
-    if (sharedTotalBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || enforcedInputTokens + completionTokenBudget > MAX_SHARED_PROVIDER_TOTAL_TOKENS)) {
+    if (sharedTotalBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || enforcedInputTokens + completionTokenBudget > maxTotalTokens)) {
       const userPrompt = JSON.parse(messages[1].content) as Record<string, unknown>;
       const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
       await recordProviderAttempt(input, {
@@ -1203,7 +1217,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       console.warn(JSON.stringify({
         event: "provider_preflight_rejection", provider: providerName, model, group: groupName,
         failureKind: "prompt_budget_exceeded", failureClass: "preflight_budget", estimatedInputTokens,
-        minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: MAX_SHARED_PROVIDER_TOTAL_TOKENS,
+        minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: maxTotalTokens,
         promptBytes: {
           system: byteLength(messages[0].content),
           evidence: byteLength(userPrompt.evidence),
@@ -1212,10 +1226,10 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           responseSchema: byteLength(requestBody.response_format),
         },
       }));
-      throw new Error("PROVIDER_PROMPT_BUDGET_EXCEEDED: " + providerName + " section payload cannot fit within the shared 6,000-token request budget");
+      throw new Error("PROVIDER_PROMPT_BUDGET_EXCEEDED: " + providerName + " section payload cannot fit within the shared request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
-    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, enforcedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: sharedTotalBudgetApplies ? MAX_SHARED_PROVIDER_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget, enforcedTotalTokens: enforcedInputTokens + completionTokenBudget }));
+    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, enforcedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: sharedTotalBudgetApplies ? maxTotalTokens : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget, enforcedTotalTokens: enforcedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
     for (let networkAttempt = 0; networkAttempt < maxNetworkAttempts; networkAttempt++) {
@@ -1258,6 +1272,22 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         throw error;
       }
       const errorBody = response.ok ? "" : await response.clone().text().catch(() => "");
+      if (providerName === "groq") {
+        // Groq rate limits are organization-wide. Record the provider's live
+        // headers so production can verify the configured budget against the
+        // actual account limits without exposing credentials or response data.
+        console.info(JSON.stringify({
+          provider: providerName, event: "rate_limit_headers", model, group: groupName,
+          status: response.status,
+          limitTokens: response.headers.get("x-ratelimit-limit-tokens"),
+          remainingTokens: response.headers.get("x-ratelimit-remaining-tokens"),
+          resetTokens: response.headers.get("x-ratelimit-reset-tokens"),
+          limitRequests: response.headers.get("x-ratelimit-limit-requests"),
+          remainingRequests: response.headers.get("x-ratelimit-remaining-requests"),
+          resetRequests: response.headers.get("x-ratelimit-reset-requests"),
+          retryAfter: response.headers.get("retry-after"),
+        }));
+      }
       const dailyLimit = providerName === "groq" && response.status === 429
         && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody);
       let malformedProviderOutput = false;
@@ -1427,7 +1457,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (providerName === "groq" && truncationRecoveryPending
           && completionTokenBudget <= lastTruncatedCompletionAllowance) {
         lastError = "AI_PROVIDER_COMPLETION_TRUNCATED: Groq " + groupName
-          + " completion allowance cannot be increased within the shared 6,000-token budget after truncation.";
+          + " completion allowance cannot be increased within the provider-specific token budget after truncation.";
         break;
       }
       // Groq keeps strict JSON-schema mode across truncation retries. Gemini
@@ -1440,9 +1470,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         // escalation stall at the current clipped allowance on production-sized
         // evidence (measured: 850 -> 988 -> 1122 -> 1122 -> ...), so every
         // retry repeated the identical request. The next attempt reduces its
-        // input toward 6000 - adaptiveCompletionTokenBudget, and preflight
-        // still clips the sent allowance to 6000 - estimatedInputTokens, so
-        // the shared 6,000-token ceiling remains enforced on every request.
+        // input toward maxTotalTokens - adaptiveCompletionTokenBudget, and preflight
+        // still clips the sent allowance to maxTotalTokens - estimatedInputTokens, so
+        // the provider-specific ceiling remains enforced on every request.
         if (providerName === "groq") {
           lastTruncatedCompletionAllowance = completionTokenBudget;
           truncationRecoveryPending = true;

@@ -20,6 +20,48 @@ const p=(group:string):Record<string,unknown>=>{
  }
 };
 function fetchMock(invalid?:string){const counts=new Map<string,number>();const mock=vi.fn(async (_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const name=body.response_format.json_schema.name.replace(/^ar_/,"");const n=(counts.get(name)??0)+1;counts.set(name,n);const value=name===invalid&&n===1?{}:p(name);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});return {mock,counts};}
+describe("Groq organization rate-limit telemetry", () => {
+  it("records the provider's live token and request limit headers without logging response content", async () => {
+    const logs: string[] = [];
+    const info = vi.spyOn(console, "info").mockImplementation((...args: unknown[]) => {
+      logs.push(String(args[0] ?? ""));
+    });
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+      }), {
+        status: 200,
+        headers: {
+          "x-ratelimit-limit-tokens": "8000",
+          "x-ratelimit-remaining-tokens": "7600",
+          "x-ratelimit-reset-tokens": "2.5s",
+          "x-ratelimit-limit-requests": "1000",
+          "x-ratelimit-remaining-requests": "999",
+          "x-ratelimit-reset-requests": "1h",
+        },
+      });
+    });
+    try {
+      const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence: { artist: "Rate Limit Fixture" }, sonicDna: null });
+      expect(result.assessmentVersion).toBe("3.0");
+      const entries = logs.map(line => JSON.parse(line) as Record<string, unknown>)
+        .filter(entry => entry.event === "rate_limit_headers");
+      expect(entries).toHaveLength(9);
+      expect(entries[0]).toMatchObject({
+        provider: "groq", model: "test-model", group: "narrative", status: 200,
+        limitTokens: "8000", remainingTokens: "7600", resetTokens: "2.5s",
+        limitRequests: "1000", remainingRequests: "999", resetRequests: "1h",
+      });
+      expect(JSON.stringify(entries)).not.toContain("Rate Limit Fixture");
+    } finally {
+      info.mockRestore();
+    }
+  });
+});
+
 describe("Groq strict-schema compatibility recovery", () => {
   it("switches to locally validated JSON-object mode when Groq rejects strict schema with HTTP 400", async () => {
     const narrativeModes: unknown[] = [];
@@ -219,10 +261,10 @@ describe("GroqClient section groups",()=>{
    const estimatedInputBytes=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
    expect(body.max_completion_tokens).toBeLessThanOrEqual(2000);
-   expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(6000);
+   expect(estimatedInputBytes+body.max_completion_tokens).toBeLessThanOrEqual(7000);
   }
  });
- it("keeps production-shaped assessment evidence under the Groq 6,000-token request ceiling",async()=>{
+ it("keeps production-shaped assessment evidence under the Groq 7,000-token request ceiling",async()=>{
   const evidence={
    auditType:"full_a_and_r",artist:"Fixture Artist",title:"Evidence-rich single release",
    releaseDate:"2026-10-18",label:"Independent",isrc:"USAAA2600001",upc:"198765432109",
@@ -293,7 +335,7 @@ describe("GroqClient section groups",()=>{
    const estimatedInputTokens=Math.ceil(new TextEncoder().encode(JSON.stringify({messages:body.messages,response_format:body.response_format})).length/2)+256;
    expect(estimatedInputTokens).toBeGreaterThan(256);
    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
-   expect(estimatedInputTokens+body.max_completion_tokens).toBeLessThanOrEqual(6000);
+   expect(estimatedInputTokens+body.max_completion_tokens).toBeLessThanOrEqual(7000);
   }
  });
  it("bounds oversized catalog metadata before sending a Groq request",async()=>{
@@ -605,7 +647,7 @@ describe("GroqClient section groups",()=>{
   expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
 
- it("bounds production-sized provenance and vocal timelines without breaching Groq's 6,000-token request ceiling",async()=>{
+ it("bounds production-sized provenance and vocal timelines without breaching Groq's 7,000-token request ceiling",async()=>{
   const detail="Provider-returned reconciliation commentary with repeated raw source context that is not needed to preserve the actual source, status, confidence or normalized field value. ".repeat(8);
   const fieldProvenance=Object.fromEntries(Array.from({length:48},(_,index)=>["field"+index,{
    source:["musicbrainz","spotify","apple_music"][index%3],status:"recognized",confidence:0.82,
@@ -643,7 +685,7 @@ describe("GroqClient section groups",()=>{
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
   await client.assess({evidence,sonicDna,catalogMetadata});
   expect(requests).toHaveLength(9);
-  expect(requests.every(request=>request.total<=6000)).toBe(true);
+  expect(requests.every(request=>request.total<=7000)).toBe(true);
   const narrative=requests.find(request=>request.group==="narrative")!;
   expect(narrative.payload.sonicDna).not.toHaveProperty("vocalArrangementAnalysis");
   expect(Object.keys(narrative.payload.evidence.fieldProvenance)).toHaveLength(12);
@@ -716,7 +758,7 @@ describe("narrative prompt budget compaction",()=>{
   await new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{}).assess({evidence,sonicDna,catalogMetadata});
   expect(narrative).not.toBeNull();
   expect(narrative!.estimated).toBeLessThanOrEqual(5744);
-  expect(narrative!.estimated+narrative!.completion).toBeLessThanOrEqual(6000);
+  expect(narrative!.estimated+narrative!.completion).toBeLessThanOrEqual(7000);
   expect(narrative!.completion).toBeGreaterThanOrEqual(256);
   expect(narrative!.payload.evidence.identity).toMatchObject({artist:"Fixture Artist",isrc:"USAAA2600001"});
   expect(narrative!.payload.evidence.fieldProvenance.field0).toMatchObject({source:"musicbrainz",value:"normalized identity value 0"});
@@ -786,7 +828,7 @@ describe("evidence-score prompt budget compaction", () => {
     for (const item of observed) {
       expect(item.estimated, item.name).toBeLessThanOrEqual(5000);
       expect(item.completion, item.name).toBeGreaterThanOrEqual(256);
-      expect(item.estimated + item.completion, item.name).toBeLessThanOrEqual(6000);
+      expect(item.estimated + item.completion, item.name).toBeLessThanOrEqual(7000);
       expect(item.schemaBytes, item.name).toBeLessThan(2200);
     }
   });
@@ -1011,7 +1053,7 @@ describe("safe assessment validation diagnostics", () => {
 });
 
 describe("Groq narrative token projection regression", () => {
-  it("keeps a production-shaped verbose evidence payload under the unchanged 6,000-token ceiling", async () => {
+  it("keeps a production-shaped verbose evidence payload under the 7,000-token ceiling", async () => {
     const logs: string[] = [];
     const info = vi.spyOn(console, "info").mockImplementation((message?: unknown) => { if (typeof message === "string") logs.push(message); });
     try {
@@ -1062,8 +1104,8 @@ describe("Groq narrative token projection regression", () => {
         });
       const narrativeBudget = logs.map(line => JSON.parse(line) as Record<string, unknown>)
         .find(line => line.event === "request_budget" && line.group === "narrative");
-      expect(narrativeBudget).toMatchObject({ maxTotalTokens: 6000 });
-      expect(Number(narrativeBudget?.estimatedTotalTokens)).toBeLessThanOrEqual(6000);
+      expect(narrativeBudget).toMatchObject({ maxTotalTokens: 7000 });
+      expect(Number(narrativeBudget?.estimatedTotalTokens)).toBeLessThanOrEqual(7000);
       expect(Number(narrativeBudget?.maxCompletionTokens)).toBeGreaterThanOrEqual(256);
     } finally {
       info.mockRestore();
@@ -1325,8 +1367,8 @@ describe("complete local A&R provider contract", () => {
 
 
 describe("Groq narrative prompt budget recovery", () => {
-  it("compacts an HTTP 400 correction prompt under the 6,000-token ceiling without losing canonical evidence", async () => {
-    const provenance = Object.fromEntries(Array.from({ length: 12 }, (_, index) => ["field" + index, {
+  it("compacts an HTTP 400 correction prompt under the 7,000-token ceiling without losing canonical evidence", async () => {
+    const provenance = Object.fromEntries(Array.from({ length: 24 }, (_, index) => ["field" + index, {
       source: "musicbrainz_catalog_provider_" + index,
       provider: "musicbrainz",
       status: "recognized",
@@ -1393,8 +1435,8 @@ describe("Groq narrative prompt budget recovery", () => {
     const narrativeRequests = requests.filter(request =>
       JSON.parse(request.body.messages[1].content).sectionGroup === "narrative");
     expect(narrativeRequests).toHaveLength(2);
-    expect(narrativeRequests[0].estimatedInputTokens).toBeLessThanOrEqual(6000 - 500 - 850);
-    expect(narrativeRequests[1].estimatedInputTokens + narrativeRequests[1].body.max_completion_tokens).toBeLessThanOrEqual(6000);
+    expect(narrativeRequests[0].estimatedInputTokens).toBeLessThanOrEqual(7000 - 500 - 850);
+    expect(narrativeRequests[1].estimatedInputTokens + narrativeRequests[1].body.max_completion_tokens).toBeLessThanOrEqual(7000);
     expect(narrativeRequests[1].body.max_completion_tokens).toBeGreaterThanOrEqual(256);
     const correctedPayload = JSON.parse(narrativeRequests[1].body.messages[1].content);
     expect(correctedPayload.evidence).toMatchObject({
@@ -1606,14 +1648,14 @@ describe("Groq narrative completion recovery", () => {
       const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
         messages: body.messages, response_format: body.response_format,
       })).length / 3) + 256;
-      return estimate + body.max_completion_tokens <= 6000;
+      return estimate + body.max_completion_tokens <= 7000;
     })).toBe(true);
   });
 });
 
 
 describe("production A&R provider capacity regressions", () => {
-  it("continues concise Groq narrative recovery without escalating completion tokens or crossing the 6,000-token ceiling", async () => {
+  it("continues concise Groq narrative recovery without escalating completion tokens or crossing the 7,000-token ceiling", async () => {
     const budgets: number[] = [];
     let narrativeCalls = 0;
     const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -1648,7 +1690,7 @@ describe("production A&R provider capacity regressions", () => {
       const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
         messages: body.messages, response_format: body.response_format,
       })).length / 3) + 256;
-      return estimate + body.max_completion_tokens <= 6000;
+      return estimate + body.max_completion_tokens <= 7000;
     })).toBe(true);
   });
 
@@ -1829,7 +1871,7 @@ function assertSharedBudgetRespected(mock: ReturnType<typeof vi.fn>): void {
     const estimate = Math.ceil(new TextEncoder().encode(JSON.stringify({
       messages: body.messages, response_format: body.response_format,
     })).length / 2) + 256;
-    expect(estimate + body.max_completion_tokens).toBeLessThanOrEqual(6000);
+    expect(estimate + body.max_completion_tokens).toBeLessThanOrEqual(7000);
     expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
   }
 }
@@ -1897,11 +1939,11 @@ describe("Groq mode-preserving recovery (production truncation regression)", () 
     assertSharedBudgetRespected(mock);
   });
 
-  it("retains exact field-level word minima when a large narrative repair prompt is compacted", async () => {
+  it("retains exact field-level word minima on narrative repair within the 7,000-token budget", async () => {
     const verbose = (label: string, index: number) => (label + " " + index
       + " with source-attributed supporting catalog detail ").repeat(12);
-    // All eight retained provenance keys carry long values so the initial
-    // narrative prompt exceeds the compaction target on the repair attempt.
+    // The production projection bounds provenance to twelve canonical fields.
+    // At the 7,000-token budget this fixture should not need an extra compaction pass.
     const provenance = Object.fromEntries(Array.from({ length: 12 }, (_, index) => ["field" + index, {
       source: verbose("source", index),
       provider: verbose("provider", index),
@@ -1963,8 +2005,9 @@ describe("Groq mode-preserving recovery (production truncation regression)", () 
     }
 
     expect(result.assessmentVersion).toBe("3.0");
-    // The oversized production-shaped payload must actually exercise compaction.
-    expect(recoveryEvents.length).toBeGreaterThan(0);
+    // The 7,000-token budget leaves enough room for this already-projected repair prompt.
+    // Compaction is only expected when the actual prompt exceeds its completion reserve.
+    expect(recoveryEvents.length).toBe(0);
     expect(retryCorrections.length).toBeGreaterThan(0);
     // Compaction must never discard the exact field/minimum repair guidance.
     expect(retryCorrections[0]).toContain("creativeIdentity must contain at least 35 words");

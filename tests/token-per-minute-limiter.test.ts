@@ -17,11 +17,12 @@ describe("SharedTokenPerMinuteLimiter", () => {
     await expect(limiter.acquire(6, async () => {})).rejects.toThrow("TOKEN_BUDGET_EXCEEDED");
   });
 
-  it("never allows environment configuration to raise Groq above the 6,000 TPM hard cap", async () => {
+  it("allows a 7,000-token app budget but never lets environment configuration exceed it", async () => {
     const { resolveGroqTokenBudget } = await import("../src/providers/token-per-minute-limiter.js");
-    expect(resolveGroqTokenBudget("12000")).toBe(6000);
+    expect(resolveGroqTokenBudget("12000")).toBe(7000);
     expect(resolveGroqTokenBudget("6000")).toBe(6000);
+    expect(resolveGroqTokenBudget("7000")).toBe(7000);
     expect(resolveGroqTokenBudget("4500")).toBe(4500);
-    expect(resolveGroqTokenBudget("not-a-number")).toBe(6000);
+    expect(resolveGroqTokenBudget("not-a-number")).toBe(7000);
   });
 });

@@ -59,7 +59,7 @@ function assertBudgetInvariants(mock: ReturnType<typeof vi.fn>): void {
   for (const call of mock.mock.calls) {
     const body = JSON.parse(String(call[1]?.body));
     const estimate = estimatedInputTokens(body.messages, body.response_format);
-    expect(estimate + body.max_completion_tokens).toBeLessThanOrEqual(6000);
+    expect(estimate + body.max_completion_tokens).toBeLessThanOrEqual(7000);
     expect(body.max_completion_tokens).toBeGreaterThanOrEqual(256);
     expect(body.max_completion_tokens).toBeLessThanOrEqual(2000);
   }
