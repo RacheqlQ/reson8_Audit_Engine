@@ -1197,7 +1197,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     // estimator (serialized bytes / 2 + 256 framing tokens). Provider usage
     // telemetry is useful for diagnostics but must never be used to reserve
     // LESS input headroom than that estimator requires; doing so allowed
-    // estimatedInput + completion to exceed 6,000 on large evidence payloads.
+    // estimatedInput + completion to exceed the provider-specific ceiling on large evidence payloads.
     const enforcedInputTokens = Math.max(
       estimatePromptInputTokens(messages, requestBody.response_format),
       estimatedInputTokens,
@@ -1441,7 +1441,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       if (providerName === "groq" && truncationRecoveryPending
           && completionTokenBudget <= lastTruncatedCompletionAllowance) {
         lastError = "AI_PROVIDER_COMPLETION_TRUNCATED: Groq " + groupName
-          + " completion allowance cannot be increased within the shared 6,000-token budget after truncation.";
+          + " completion allowance cannot be increased within the provider-specific token budget after truncation.";
         break;
       }
       // Groq keeps strict JSON-schema mode across truncation retries. Gemini
@@ -1454,9 +1454,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         // escalation stall at the current clipped allowance on production-sized
         // evidence (measured: 850 -> 988 -> 1122 -> 1122 -> ...), so every
         // retry repeated the identical request. The next attempt reduces its
-        // input toward 6000 - adaptiveCompletionTokenBudget, and preflight
-        // still clips the sent allowance to 6000 - estimatedInputTokens, so
-        // the shared 6,000-token ceiling remains enforced on every request.
+        // input toward maxTotalTokens - adaptiveCompletionTokenBudget, and preflight
+        // still clips the sent allowance to maxTotalTokens - estimatedInputTokens, so
+        // the provider-specific ceiling remains enforced on every request.
         if (providerName === "groq") {
           lastTruncatedCompletionAllowance = completionTokenBudget;
           truncationRecoveryPending = true;
