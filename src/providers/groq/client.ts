@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { sanitizeAssessmentForEvidence } from "../../reports/evidence-guardrails.js";
-import { sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
+import { GROQ_TPM_EFFECTIVE_BUDGET, sharedGroqTokenLimiter } from "../token-per-minute-limiter.js";
 import { markAssessmentProviderUnavailable } from "../provider-policy.js";
 
 export const GROQ_PROMPT_VERSION = "audit-ar-v10-contract-recovery-2026-11-25";
@@ -349,7 +349,7 @@ export const OLLAMA_ASSESSMENT_TIMEOUT_MS = 2 * 60_000;
 const MAX_COMPLETION_TOKENS = 1600;
 const MAX_GROQ_COMPLETION_TOKENS = 2000;
 const MAX_SHARED_PROVIDER_TOTAL_TOKENS = 6000;
-const MAX_GROQ_TOTAL_TOKENS = 7000;
+const MAX_GROQ_TOTAL_TOKENS = GROQ_TPM_EFFECTIVE_BUDGET;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
   narrative: 850, positioning: 550, release: 500, "evidence-score": 1000,
   production: 650, comparables: 450, promotion: 900, "label-fit": 650, timeline: 500,
