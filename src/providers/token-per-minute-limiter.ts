@@ -52,6 +52,10 @@ export function resolveGroqTokenBudget(rawValue: string | undefined): number {
   return Math.min(Math.floor(configuredBudget), GROQ_TPM_HARD_CAP);
 }
 
+// Resolve once so request preflight and rolling-window reservations enforce
+// exactly the same effective budget, including any deliberately lower override.
+export const GROQ_TPM_EFFECTIVE_BUDGET = resolveGroqTokenBudget(process.env.GROQ_TPM_BUDGET);
+
 export const sharedGroqTokenLimiter = new SharedTokenPerMinuteLimiter(
-  resolveGroqTokenBudget(process.env.GROQ_TPM_BUDGET),
+  GROQ_TPM_EFFECTIVE_BUDGET,
 );
