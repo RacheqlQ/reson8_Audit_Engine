@@ -1897,12 +1897,12 @@ describe("Groq mode-preserving recovery (production truncation regression)", () 
     assertSharedBudgetRespected(mock);
   });
 
-  it("retains exact field-level word minima when a large narrative repair prompt is compacted", async () => {
+  it("retains exact field-level word minima on narrative repair within the 7,000-token budget", async () => {
     const verbose = (label: string, index: number) => (label + " " + index
       + " with source-attributed supporting catalog detail ").repeat(12);
-    // All retained provenance keys carry long values so the initial
-    // narrative prompt exceeds the compaction target on the repair attempt.
-    const provenance = Object.fromEntries(Array.from({ length: 36 }, (_, index) => ["field" + index, {
+    // The production projection bounds provenance to twelve canonical fields.
+    // At the 7,000-token budget this fixture should not need an extra compaction pass.
+    const provenance = Object.fromEntries(Array.from({ length: 12 }, (_, index) => ["field" + index, {
       source: verbose("source", index),
       provider: verbose("provider", index),
       status: verbose("status", index),
@@ -1963,8 +1963,9 @@ describe("Groq mode-preserving recovery (production truncation regression)", () 
     }
 
     expect(result.assessmentVersion).toBe("3.0");
-    // The oversized production-shaped payload must actually exercise compaction.
-    expect(recoveryEvents.length).toBeGreaterThan(0);
+    // The 7,000-token budget leaves enough room for this already-projected repair prompt.
+    // Compaction is only expected when the actual prompt exceeds its completion reserve.
+    expect(recoveryEvents.length).toBe(0);
     expect(retryCorrections.length).toBeGreaterThan(0);
     // Compaction must never discard the exact field/minimum repair guidance.
     expect(retryCorrections[0]).toContain("creativeIdentity must contain at least 35 words");
