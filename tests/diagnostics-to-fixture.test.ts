@@ -1,7 +1,10 @@
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const script = new URL("../scripts/diagnostics-to-fixture.mjs", import.meta.url);
+// URL.pathname yields "/C:/..." on Windows, which Node cannot resolve as a
+// module path. fileURLToPath produces the platform-native absolute path.
+const scriptPath = fileURLToPath(new URL("../scripts/diagnostics-to-fixture.mjs", import.meta.url));
 
 describe("audit diagnostics fixture converter", () => {
   it("exports only bounded tempo/key features and omits unrelated event payload data", () => {
@@ -36,7 +39,7 @@ describe("audit diagnostics fixture converter", () => {
         accessToken: "must-not-be-copied",
       },
     };
-    const output = execFileSync(process.execPath, [script.pathname], {
+    const output = execFileSync(process.execPath, [scriptPath], {
       input: JSON.stringify(input),
       encoding: "utf8",
     });
@@ -50,7 +53,7 @@ describe("audit diagnostics fixture converter", () => {
   });
 
   it("rejects payloads that do not contain an audio diagnostics object", () => {
-    expect(() => execFileSync(process.execPath, [script.pathname], {
+    expect(() => execFileSync(process.execPath, [scriptPath], {
       input: JSON.stringify({ payload: { originalAudioBytes: "not-a-diagnostic" } }),
       encoding: "utf8",
     })).toThrow();

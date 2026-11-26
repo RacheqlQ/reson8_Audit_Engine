@@ -7,6 +7,10 @@ vi.mock("../src/integrations/supabase-audit-store.js", () => ({
 }));
 vi.mock("../src/providers/groq/client.js", () => ({
   GroqClient: class { assess = vi.fn(); },
+  // worker.ts imports these named bindings as well; Vitest throws when a
+  // mocked module is missing an export that the importing module accesses.
+  GeminiClient: class { assess = vi.fn(); },
+  DEFAULT_GROQ_MODEL: "openai/gpt-oss-120b",
 }));
 
 import { processNextQueuedAudit } from "../src/jobs/worker.js";

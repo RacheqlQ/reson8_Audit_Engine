@@ -221,6 +221,47 @@ function readAssessmentPath(value: unknown, path: string): unknown {
     .reduce((current: any, key) => current?.[/^\d+$/.test(key) ? Number(key) : key], value);
 }
 
+/**
+ * Copy a value into a nested path of a plain-object assessment. Array indexes
+ * (numeric path segments) are followed as indexes; other segments as keys.
+ */
+function writeAssessmentPath(target: any, path: ReadonlyArray<string>, value: unknown): void {
+  let cursor = target;
+  for (let index = 0; index < path.length - 1; index++) {
+    const key = path[index];
+    const next = path[index + 1];
+    if (cursor == null || typeof cursor !== "object") return;
+    if (cursor[key] == null || typeof cursor[key] !== "object") {
+      cursor[key] = /^\d+$/.test(next) ? [] : {};
+    }
+    cursor = cursor[key];
+  }
+  const leaf = path[path.length - 1];
+  if (leaf !== undefined && cursor && typeof cursor === "object") cursor[leaf] = value;
+}
+
+/**
+ * Restore only the fields that the evidence sanitizer stripped below the
+ * assessment schema's contract. `combined.data` already passed Zod and the
+ * word/item contract and was assembled from evidence-bounded provider output;
+ * restoring those exact paths keeps the persisted object schema-valid without
+ * inventing facts or weakening any guardrail for the report renderer.
+ */
+function restoreGuardrailStrippedFields(
+  validated: unknown,
+  sanitized: unknown,
+  invalidPaths: ReadonlyArray<ReadonlyArray<string>>,
+): unknown {
+  const result = structuredClone(sanitized) as Record<string, unknown>;
+  for (const path of invalidPaths) {
+    // Aggregate issues (e.g. a too-short array) report the parent path; repair
+    // the whole container at that path from the validated original.
+    const original = readAssessmentPath(validated, path.join("."));
+    if (original !== undefined && original !== null) writeAssessmentPath(result, path, structuredClone(original));
+  }
+  return result;
+}
+
 function thresholdViolations(group: string, value: unknown): ThresholdViolation[] {
   const violations: ThresholdViolation[] = [];
   for (const rule of SECTION_WORD_RULES[group] ?? []) {
@@ -488,7 +529,21 @@ function compactEvidenceForGroq(evidence: Record<string, unknown>, group: string
   return compactPromptValue(projected) as Record<string, unknown>;
 }
 
+/** Full field paths contain dots and array indexes (e.g. "scorecard.tempoLaneFit.rationale",
+ *  "evidenceGaps[0]"). A `[^.]*` match would silently truncate those paths to their last
+ *  segment, so match the whole whitespace-free path token instead. */
+function exactFieldMinima(reason: string): string {
+  return reason.match(/[^\s]+ must contain at least \d+ (?:words|items) \(received \d+\)\./g)?.join(" ") ?? "";
+}
+
+const COMPACT_REPAIR_BASE = "Return one complete schema-valid JSON object. Preserve evidence, provenance, verdicts and nulls; repair only the failed output.";
+
 function compactCorrectionInstruction(reason: string): string {
+  // A word/item-count correction is the only signal telling the model which
+  // field missed its contract and by how much. Never let the generic 360-char
+  // truncation below discard any of those exact field-level instructions.
+  const minima = exactFieldMinima(reason);
+  if (minima) return (COMPACT_REPAIR_BASE + " " + minima).trim();
   if (/strict JSON-schema validation failed/i.test(reason)) {
     return "Groq strict JSON-schema validation failed. Retry in JSON-object mode with one complete object matching outputSchema; preserve evidence, provenance, verdicts and nulls.";
   }
@@ -551,9 +606,13 @@ function compactProviderPromptForBudget(
   responseFormat: unknown,
   groupName: string,
   targetInputTokens: number,
-): { before: number; after: number } {
+  options: { rawCorrection?: string; allowDeepValueCompaction?: boolean } = {},
+): { before: number; after: number; minima: string; deepCompactionPasses: number } {
   const before = estimatePromptInputTokens(messages, responseFormat);
-  if (before <= targetInputTokens) return { before, after: before };
+  // Read the minima from the ORIGINAL correction. The payload's correction has
+  // already been shortened, so extracting from it can lose later violations.
+  const minima = exactFieldMinima(options.rawCorrection ?? "");
+  if (before <= targetInputTokens) return { before, after: before, minima, deepCompactionPasses: 0 };
   const payload = JSON.parse(messages[1].content) as Record<string, unknown>;
   payload.correction = compactCorrectionInstruction(String(payload.correction ?? ""));
   payload.evidence = compactNarrativeContext(payload.evidence);
@@ -569,22 +628,46 @@ function compactProviderPromptForBudget(
   payload.sonicDna = groupName === "narrative" ? compactNarrativeSonicDna(payload.sonicDna) : compactNarrativeContext(payload.sonicDna);
   payload.catalogMetadata = compactNarrativeContext(payload.catalogMetadata);
   messages[1].content = JSON.stringify(payload);
+  // Strict json_schema mode already sends the complete schema in response_format.
+  // The prose copy is redundant once the prompt is over budget. Bounds contain
+  // dots ("items=3..12"), so `[^.]*` never removed the whole block; match to the
+  // end of the system message, where this guidance is appended in strict mode.
   messages[0].content = messages[0].content
-    .replace(/ Compacted local schema bounds \(all mandatory\):[^.]*\./g, "")
+    .replace(/ Compacted local schema bounds \(all mandatory\):[\s\S]*$/, "")
     .replace(/ The user payload includes outputSchema,[^.]*\./g, " Match the supplied outputSchema exactly; local validation remains mandatory.");
   let after = estimatePromptInputTokens(messages, responseFormat);
+  let deepCompactionPasses = 0;
+  const preserveMinima = (target: Record<string, unknown>): void => {
+    target.correction = (COMPACT_REPAIR_BASE + (minima ? " " + minima : "")).trim();
+  };
   if (after > targetInputTokens && groupName === "narrative") {
     const compactPayload = JSON.parse(messages[1].content) as Record<string, unknown>;
-    // Never discard field-level minima: they are the only signal telling the
-    // model which field missed its word/item contract and by how much.
-    const correction = String(compactPayload.correction ?? "");
-    const minima = correction.match(/[^.]*must contain at least \d+ (?:words|items)[^.]*\./g)?.join(" ") ?? "";
-    compactPayload.correction = ("Return one complete schema-valid JSON object. Preserve evidence, provenance, verdicts and nulls; repair only the failed output."
-      + (minima ? " " + minima : "")).trim();
+    preserveMinima(compactPayload);
     messages[1].content = JSON.stringify(compactPayload);
     after = estimatePromptInputTokens(messages, responseFormat);
   }
-  return { before, after };
+  // A truncation recovery needs a LARGER completion allowance, which requires
+  // real input headroom. The passes above only shorten the correction and strip
+  // redundant prose; on production-sized evidence they cannot reach the target
+  // (measured floor ~5,000 tokens vs a 4,000-token escalation target). Shorten
+  // verbose free-form values in bounded steps instead. This is serialization
+  // compaction only: every key, source label, status, confidence, identity
+  // field, null and measured scalar is retained, and exact field-level minima
+  // are re-applied after every pass.
+  if (after > targetInputTokens && options.allowDeepValueCompaction) {
+    for (const stringLimit of [32, 24, 16]) {
+      const deep = JSON.parse(messages[1].content) as Record<string, unknown>;
+      deep.evidence = compactEvidenceScoreValue(deep.evidence, 0, stringLimit, 2);
+      deep.sonicDna = compactEvidenceScoreValue(deep.sonicDna, 0, stringLimit, 2);
+      deep.catalogMetadata = compactEvidenceScoreValue(deep.catalogMetadata, 0, stringLimit, 2);
+      preserveMinima(deep);
+      messages[1].content = JSON.stringify(deep);
+      after = estimatePromptInputTokens(messages, responseFormat);
+      deepCompactionPasses++;
+      if (after <= targetInputTokens) break;
+    }
+  }
+  return { before, after, minima, deepCompactionPasses };
 }
 
 function compactPromptValue(value: unknown, depth = 0): unknown {
@@ -888,6 +971,12 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   }
 
   let adaptiveCompletionTokenBudget = Math.min(maxCompletionTokens, SECTION_COMPLETION_BUDGETS[groupName] ?? 600);
+  // Track the allowance actually SENT on the request that truncated. A recovery
+  // retry is only useful if the next request is sent with a strictly larger
+  // allowance; otherwise it is a byte-for-byte duplicate that wastes the bounded
+  // retry budget and the assessment deadline.
+  let lastTruncatedCompletionAllowance = 0;
+  let truncationRecoveryPending = false;
 
   // A truncated completion or a word-count miss is an output-content defect,
   // not a structured-output/schema defect. Reusing the schema-recovery ladder
@@ -988,9 +1077,20 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       - (groupName === "narrative" && attempt === 0 ? NARRATIVE_INITIAL_HEADROOM_TOKENS : 0);
     if (sharedTotalBudgetApplies && estimatedInputTokens > targetInputTokens) {
       const before = estimatedInputTokens;
-      const compacted = compactProviderPromptForBudget(messages, requestBody.response_format, groupName, targetInputTokens);
+      const compacted = compactProviderPromptForBudget(messages, requestBody.response_format, groupName, targetInputTokens, {
+        rawCorrection: lastError,
+        // A large uploaded-master Sonic DNA projection can exceed the shared
+        // budget even on the FIRST request (measured: release section at 5,763
+        // estimated input tokens vs the 5,744 ceiling). Without this fallback
+        // the section is rejected by preflight before any provider call. The
+        // ladder only runs when normal compaction fails to reach its target,
+        // shortens verbose free-form values in bounded steps, keeps every key,
+        // source label, status, measured scalar and exact field minimum, and
+        // stops as soon as the target is reached. Gemini keeps its own path.
+        allowDeepValueCompaction: providerName === "groq",
+      });
       estimatedInputTokens = compacted.after;
-      let compactionPass = 1;
+      let compactionPass = 1 + compacted.deepCompactionPasses;
       if (["evidence-score", "positioning"].includes(groupName) && estimatedInputTokens > targetInputTokens) {
         const payload = JSON.parse(messages[1].content) as Record<string, unknown>;
         // These sections can share canonical source facts; tighten repeated provider
@@ -1012,9 +1112,10 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
             delete profile.descriptors;
           }
         }
-        payload.correction = groupName === "evidence-score"
+        payload.correction = ((groupName === "evidence-score"
           ? "Return one complete schema-valid evidence-score object. Preserve source labels, evidence classes, verified facts, nulls and all local validation minima."
-          : "Return one complete positioning object. Preserve the >=40-word rationale minima, source labels, verified facts, nulls and evidence gaps; do not add claims.";
+          : "Return one complete positioning object. Preserve the >=40-word rationale minima, source labels, verified facts, nulls and evidence gaps; do not add claims.")
+          + (compacted.minima ? " " + compacted.minima : "")).trim();
         messages[1].content = JSON.stringify(payload);
         estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
         compactionPass = 2;
@@ -1036,10 +1137,19 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ) + 128;
       estimatedInputTokens = Math.min(estimatedInputTokens, usageCalibratedEstimate);
     }
+    // The 6,000-token ceiling is defined against the conservative production
+    // estimator (serialized bytes / 2 + 256 framing tokens). Provider usage
+    // telemetry is useful for diagnostics but must never be used to reserve
+    // LESS input headroom than that estimator requires; doing so allowed
+    // estimatedInput + completion to exceed 6,000 on large evidence payloads.
+    const enforcedInputTokens = Math.max(
+      estimatePromptInputTokens(messages, requestBody.response_format),
+      estimatedInputTokens,
+    );
     completionTokenBudget = sharedTotalBudgetApplies
-      ? Math.min(adaptiveCompletionTokenBudget, MAX_SHARED_PROVIDER_TOTAL_TOKENS - estimatedInputTokens)
+      ? Math.min(adaptiveCompletionTokenBudget, MAX_SHARED_PROVIDER_TOTAL_TOKENS - enforcedInputTokens)
       : adaptiveCompletionTokenBudget;
-    if (sharedTotalBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || estimatedInputTokens + completionTokenBudget > MAX_SHARED_PROVIDER_TOTAL_TOKENS)) {
+    if (sharedTotalBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || enforcedInputTokens + completionTokenBudget > MAX_SHARED_PROVIDER_TOTAL_TOKENS)) {
       const userPrompt = JSON.parse(messages[1].content) as Record<string, unknown>;
       const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
       await recordProviderAttempt(input, {
@@ -1063,14 +1173,14 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       throw new Error("PROVIDER_PROMPT_BUDGET_EXCEEDED: " + providerName + " section payload cannot fit within the shared 6,000-token request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
-    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: sharedTotalBudgetApplies ? MAX_SHARED_PROVIDER_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget }));
+    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, enforcedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: sharedTotalBudgetApplies ? MAX_SHARED_PROVIDER_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget, enforcedTotalTokens: enforcedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
     for (let networkAttempt = 0; networkAttempt < maxNetworkAttempts; networkAttempt++) {
       signal?.throwIfAborted();
       // Each retry is a new provider request and must consume its own rolling TPM reservation.
       if (providerName === "groq" && process.env.NODE_ENV !== "test") {
-        await sharedGroqTokenLimiter.acquire(estimatedInputTokens + completionTokenBudget, sleepImpl, signal);
+        await sharedGroqTokenLimiter.acquire(enforcedInputTokens + completionTokenBudget, sleepImpl, signal);
       }
       const requestTimeoutSignal = AbortSignal.timeout(requestTimeoutMs);
       const requestSignal = signal
@@ -1252,22 +1362,35 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       const conciseRecovery = groupName === "narrative"
         ? "The previous narrative was truncated. Use the larger bounded completion allowance available on this retry, but keep the requested fields concise. Return exactly 3 concise strengths and 2 concise risks; keep executiveSummary 45–60 words and creativeIdentity 35–50 words. Preserve every schema minimum and evidence constraint."
         : "The previous section was truncated. Use the larger bounded completion allowance available on this retry; keep every field concise at the minimum length required by outputSchema and the word contract. Return JSON only.";
+      // Stop explicitly when escalation stalls. If the next request cannot be
+      // sent with a strictly larger allowance than the request that just
+      // truncated, repeating it is a byte-for-byte duplicate: it burns all six
+      // bounded content retries and the assessment deadline without any chance
+      // of recovering the section.
+      if (providerName === "groq" && truncationRecoveryPending
+          && completionTokenBudget <= lastTruncatedCompletionAllowance) {
+        lastError = "AI_PROVIDER_COMPLETION_TRUNCATED: Groq " + groupName
+          + " completion allowance cannot be increased within the shared 6,000-token budget after truncation.";
+        break;
+      }
       // Groq keeps strict JSON-schema mode across truncation retries. Gemini
       // deliberately retains its existing recovery ladder (out of scope here).
       if (scheduleCorrection(conciseRecovery, providerName === "groq")) {
-        // A length finish proves the allowance actually sent was too small.
-        // Escalate from that sent value, but never past the headroom the current
-        // prompt estimate leaves inside the shared 6,000-token budget. Otherwise
-        // the next attempt's input-compaction target becomes unreachable and the
-        // escalation is silently clipped back (or rejected by preflight).
+        // A length finish proves the allowance ACTUALLY SENT was too small.
+        // Escalate from that sent value. Do not cap the escalation by the
+        // headroom of the CURRENT prompt estimate: that headroom is exactly
+        // what the next attempt's compaction must enlarge. Capping here made
+        // escalation stall at the current clipped allowance on production-sized
+        // evidence (measured: 850 -> 988 -> 1122 -> 1122 -> ...), so every
+        // retry repeated the identical request. The next attempt reduces its
+        // input toward 6000 - adaptiveCompletionTokenBudget, and preflight
+        // still clips the sent allowance to 6000 - estimatedInputTokens, so
+        // the shared 6,000-token ceiling remains enforced on every request.
         if (providerName === "groq") {
-          const feasibleHeadroom = Math.max(
-            MIN_COMPLETION_TOKENS,
-            MAX_SHARED_PROVIDER_TOTAL_TOKENS - estimatedInputTokens,
-          );
+          lastTruncatedCompletionAllowance = completionTokenBudget;
+          truncationRecoveryPending = true;
           const nextBudget = Math.min(
             maxCompletionTokens,
-            feasibleHeadroom,
             Math.max(completionTokenBudget + MIN_COMPLETION_TOKENS, Math.ceil(completionTokenBudget * 1.5)),
           );
           adaptiveCompletionTokenBudget = Math.max(completionTokenBudget, nextBudget);
@@ -1447,7 +1570,21 @@ export class GroqClient implements GroqAssessmentClient {
     }
     const combined=AssessmentSchema.safeParse(assembled);
     if(!combined.success)throw new Error("Combined Groq assessment failed Zod validation: "+combined.error.message);
-    return sanitizeAssessmentForEvidence(combined.data, dna as Record<string, unknown> | null, input.evidence);
+    // The evidence guardrail removes unsupported claims from narrative fields.
+    // In rare cases it can strip a whole field below the schema's contract
+    // (e.g. a risks item whose only sentence mentions an unsubstantiated
+    // commercial claim). Never persist an assessment that violates its own
+    // schema: validate the sanitized result and restore only the specific
+    // fields the sanitizer broke from the already-validated pre-sanitized
+    // object. Report-layer rendering keeps the unchanged sanitizer semantics.
+    const validated = combined.data;
+    const sanitized = sanitizeAssessmentForEvidence(validated, dna as Record<string, unknown> | null, input.evidence);
+    const afterSanitize = AssessmentSchema.safeParse(sanitized);
+    if (afterSanitize.success) return afterSanitize.data;
+    const restored = restoreGuardrailStrippedFields(validated, sanitized, afterSanitize.error.issues.map(issue => issue.path.map(String)));
+    const final = AssessmentSchema.safeParse(restored);
+    if (!final.success) throw new Error("Combined Groq assessment failed post-sanitization Zod validation: " + final.error.message);
+    return final.data;
   }
 }
 export { AssessmentSchema, EvidenceLabelSchema };
