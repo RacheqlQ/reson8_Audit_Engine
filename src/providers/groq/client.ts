@@ -761,7 +761,10 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     narrative: ["acousticFeatureProfile", "vocalFeatures"],
     positioning: ["acousticFeatureProfile", "vocalFeatures"],
     release: ["acousticFeatureProfile"],
-    "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures"],
+    // Evidence-score consumes canonical scalar measurements and compact rhythm/harmonic summaries.
+    // The full acoustic descriptor distribution and vocal arrangement timeline remain persisted
+    // in Sonic DNA for reporting, but repeating them here adds tokens without changing scorecard inputs.
+    "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures"],
     production: ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
     comparables: [],
     promotion: ["acousticFeatureProfile"],
@@ -968,6 +971,16 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const schemaConstraintGuidance = compactedSchemaConstraintInstructions(rawOutputSchema);
   const wordContractGuidance = thresholdContractInstructions(groupName);
   const sonicDnaForGroup = compactSonicDnaForGroq(input.sonicDna, groupName);
+  if (groupName === "evidence-score" && sonicDnaForGroup?.acousticFeatureProfile
+      && typeof sonicDnaForGroup.acousticFeatureProfile === "object"
+      && !Array.isArray(sonicDnaForGroup.acousticFeatureProfile)) {
+    // Scorecard dimensions use the canonical top-level measurements and compact feature
+    // summaries. Descriptor distributions and classifier predictions are already retained
+    // in persisted Sonic DNA and do not need to be retransmitted in this scoring prompt.
+    const profile = sonicDnaForGroup.acousticFeatureProfile as Record<string, unknown>;
+    delete profile.descriptors;
+    delete profile.predictions;
+  }
   if (groupName === "positioning" && sonicDnaForGroup?.acousticFeatureProfile
       && typeof sonicDnaForGroup.acousticFeatureProfile === "object"
       && !Array.isArray(sonicDnaForGroup.acousticFeatureProfile)) {
