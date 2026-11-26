@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { processAuditJob, type AuditProcessorDependencies } from "../src/jobs/process-audit-job.js";
 import { GroqClient, AssessmentSchema, type ArAssessment, type ProviderAttemptDiagnostic } from "../src/providers/groq/client.js";
 import { getAuditProgress } from "../src/jobs/audit-progress.js";
+import { sanitizeAssessmentForEvidence } from "../src/reports/evidence-guardrails.js";
 import type { CatalogMetadata } from "../src/providers/dsp/catalog.js";
 
 const CLAIM_TOKEN = "11111111-1111-4111-8111-111111111111";
@@ -159,6 +160,10 @@ describe("end-to-end A&R audit acceptance", () => {
       expect(state.savedAssessment).not.toBeNull();
       const parsed = AssessmentSchema.safeParse(state.savedAssessment);
       expect(parsed.success, parsed.success ? "" : JSON.stringify(parsed.error.issues.slice(0, 6))).toBe(true);
+      // The v2 report renderer sanitizes again. The persisted object must stay
+      // schema-valid after that second pass (no empty stripped narrative fields).
+      const twice = AssessmentSchema.safeParse(sanitizeAssessmentForEvidence(state.savedAssessment!, null, {}));
+      expect(twice.success, twice.success ? "" : JSON.stringify(twice.error.issues.slice(0, 6))).toBe(true);
       expect(state.savedAssessment?.generationProvenance.provider).toBe("groq");
       expect(state.savedAssessment?.assessmentVersion).toBe("3.0");
       // Both report tiers persisted.

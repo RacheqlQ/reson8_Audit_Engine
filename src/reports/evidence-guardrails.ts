@@ -12,7 +12,7 @@ export { MIN_RELIABLE_KEY_CONFIDENCE, MIN_RELIABLE_TEMPO_CONFIDENCE };
  * Only fields that were actually shortened by a guardrail are repaired; short
  * scalar values such as enums and versions are left untouched.
  */
-const EVIDENCE_BOUNDARY_CAVEAT = "The supplied evidence does not support a further track-specific claim in this field. Keep this item provisional and verify the recording identity, measured audio evidence and source-attributed context with a human listening review before any external decision. No audience, commercial, tempo, key or vocal performance is asserted here.";
+const EVIDENCE_BOUNDARY_CAVEAT = "The supplied evidence does not support a further track-specific claim in this field. Keep this item provisional and require an independent human listening review and source verification before any external decision. No additional measurement or claim is asserted here.";
 
 function boundedStrippedText(sentenceCount: number, kept: string[]): string {
   const joined = kept.join(" ").trim();
