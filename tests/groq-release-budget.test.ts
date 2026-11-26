@@ -88,6 +88,11 @@ describe("Groq release prompt budget regression", () => {
         status: "measured", key: "A minor", confidence: 0.88,
         segmentChroma: Array.from({ length: 128 }, () => Array.from({ length: 12 }, (_, index) => index / 12)),
       },
+      vocalArrangementAnalysis: {
+        status: "signal_derived", method: "windowed",
+        segments: Array.from({ length: 128 }, (_, index) => ({ startSeconds: index, endSeconds: index + 1, role: "unknown", confidence: 0.5, commentary: "verbose arrangement detail ".repeat(8) })),
+        sections: Array.from({ length: 128 }, (_, index) => ({ label: "section_" + index, startSeconds: index, endSeconds: index + 1, provisional: true })),
+      },
     };
     const requests: Array<{ group: string; body: Record<string, any>; payload: Record<string, any> }> = [];
     let rejectedPositioningOnce = false;
@@ -163,5 +168,8 @@ describe("Groq release prompt budget regression", () => {
     const evidenceScore = requests.find(request => request.group === "evidence-score");
     expect(evidenceScore?.payload.sonicDna).toHaveProperty("rhythmFeatures");
     expect(evidenceScore?.payload.sonicDna).toHaveProperty("harmonicFeatures");
+    expect(evidenceScore?.payload.sonicDna).not.toHaveProperty("vocalArrangementAnalysis");
+    expect(evidenceScore?.payload.sonicDna.acousticFeatureProfile).not.toHaveProperty("descriptors");
+    expect(evidenceScore?.payload.sonicDna.acousticFeatureProfile).not.toHaveProperty("predictions");
   });
 });
