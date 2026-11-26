@@ -675,13 +675,8 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   if((hasScore||timeline.length>0||hasPlaybackMeasurements)&&!data.sonicAxes)
    pages.push({title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"});
  }
- pages.push({title:"A&R notes",blocks:[],lines:[
-  ...arr(a.humanListeningChecklist).map(value=>str(value,"")).filter(value=>value&&!/^not supplied$/i.test(value)).map(value=>"[ ] "+value),
-  notesContext.verdict,
-  notesContext.summary,
-  ...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),
-  "Record the A&R decision, owner, follow-up date and evidence still required."
- ],kind:"ar-notes"});
+ // The A&R Notes worksheet is temporarily disabled. Human-listening
+ // prompts remain in the assessment data but are not rendered as a separate page.
  return pages;
 }
 
