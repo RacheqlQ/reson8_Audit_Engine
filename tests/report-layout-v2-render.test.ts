@@ -477,13 +477,13 @@ describe("v2 cover key and playback presentation", () => {
 
 
 describe("v2 report structure and release framing regressions", () => {
-  it("omits evidence-and-limitations and places A&R notes last in both report tiers", () => {
+  it("omits the temporary A&R Notes worksheet and evidence-and-limitations page from both report tiers", () => {
     const sample = reportV2Render.buildReportSectionTitles(fullAudioFixture as any, "sample");
     const full = reportV2Render.buildReportSectionTitles(fullAudioFixture as any, "full");
     expect(sample).not.toContain("Evidence and limitations");
     expect(full).not.toContain("Evidence and limitations");
-    expect(sample.at(-1)).toBe("A&R notes");
-    expect(full.at(-1)).toBe("A&R notes");
+    expect(sample).not.toContain("A&R notes");
+    expect(full).not.toContain("A&R notes");
     expect(full).not.toContain("Tempo and energy spectrum");
   });
 
@@ -536,9 +536,9 @@ describe("v2 final-page and executive report contracts", () => {
     expect(release).toMatchObject({ value: "2025-08-24", status: "DETERMINED", source: "Apple Music" });
   });
 
-  it("keeps the final A&R notes page and removes the limitations and unmeasured spectrum pages", () => {
+  it("omits the temporary A&R Notes worksheet while retaining substantive report sections", () => {
     const titles = reportV2Render.buildReportSectionTitles(fullAudioFixture as any, "full");
-    expect(titles.at(-1)).toBe("A&R notes");
+    expect(titles).not.toContain("A&R notes");
     expect(titles).not.toContain("Evidence and limitations");
     expect(titles).not.toContain("Tempo and energy spectrum");
     expect(titles.join(" ")).not.toMatch(/INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i);
