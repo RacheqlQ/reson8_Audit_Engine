@@ -32,7 +32,7 @@ for(const [name,input,expected] of [
  const extracted=execFileSync("pdftotext",["-layout",file.pathname,"-"],{encoding:"utf8"});
  const extractedPages=extracted.split("\f").filter(page=>page.trim().length>0);
   if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED/i.test(extracted))throw new Error(name+" contains a forbidden dead-end verdict or limitations section");
- if(extractedPages.some(page=>page.toUpperCase().includes("A&R NOTES")))throw new Error(name+" unexpectedly contains the disabled A&R Notes page");
+ if(pdf.getForm().getFields().some(field=>field.getName().startsWith("ar_")))throw new Error(name+" unexpectedly contains A&R Notes form fields");
  process.stdout.write(name+": "+pdf.getPageCount()+" pages; page-count and verdict checks passed.\n");
 }
 
@@ -46,7 +46,7 @@ const philloFullText=execFileSync("pdftotext",["-layout",philloFullFile.pathname
 const philloFullPages=philloFullText.split("\f").filter(page=>page.trim().length>0);
 if(/EVIDENCE AND LIMITATIONS|INSUFFICIENT EVIDENCE|NOT ESTABLISHED|NOT CLEARED/i.test(philloFullText))throw new Error("Phillo full fixture contains a forbidden dead-end verdict or limitations section");
 if(/No definitive platform-backed primary genre|Keep lane positioning unconfirmed/i.test(philloFullText))throw new Error("Phillo full fixture contains dead-end lane positioning copy");
-if(philloFullPages.some(page=>page.toUpperCase().includes("A&R NOTES")))throw new Error("Phillo full fixture unexpectedly contains the disabled A&R Notes page");
+if(philloFullPdf.getForm().getFields().some(field=>field.getName().startsWith("ar_")))throw new Error("Phillo full fixture unexpectedly contains A&R Notes form fields");
 const normalizedPhilloText=philloFullText.replace(/\s+/g," ").toUpperCase().replace(/[–—]/g,"-");
 if(!normalizedPhilloText.includes("DAYS 61")||normalizedPhilloText.includes("DAYS 61-90 NOT SUPPLIED")||!normalizedPhilloText.includes("CURATOR")||!normalizedPhilloText.includes("CREATOR")||!normalizedPhilloText.includes("ISRC")||!normalizedPhilloText.includes("PERFORMANCE REVIEW"))throw new Error("Phillo full fixture is missing its complete post-release Days 61-90 plan");
 if(!normalizedPhilloText.includes("RELEASE DATE DETERMINED")||!normalizedPhilloText.includes("PRE-RELEASE STAGE (HISTORICAL; ALREADY PASSED)")||!normalizedPhilloText.includes("RELEASE WINDOW (HISTORICAL; ALREADY PASSED)")||!normalizedPhilloText.includes("POST-RELEASE GROWTH AND REACTIVATION"))throw new Error("Phillo fixture does not preserve determined post-release campaign framing");
