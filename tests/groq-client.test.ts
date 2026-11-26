@@ -1326,7 +1326,7 @@ describe("complete local A&R provider contract", () => {
 
 describe("Groq narrative prompt budget recovery", () => {
   it("compacts an HTTP 400 correction prompt under the 6,000-token ceiling without losing canonical evidence", async () => {
-    const provenance = Object.fromEntries(Array.from({ length: 12 }, (_, index) => ["field" + index, {
+    const provenance = Object.fromEntries(Array.from({ length: 24 }, (_, index) => ["field" + index, {
       source: "musicbrainz_catalog_provider_" + index,
       provider: "musicbrainz",
       status: "recognized",
@@ -1792,8 +1792,8 @@ describe("shared Groq and Gemini request token budget", () => {
       expect(Number(evidenceScoreBudget?.estimatedInputTokens)).toBeLessThanOrEqual(5000);
       expect(Number(evidenceScoreBudget?.maxCompletionTokens)).toBe(1000);
       for (const budget of budgetLogs) {
-        expect(budget.maxTotalTokens).toBe(7000);
-        expect(Number(budget.estimatedTotalTokens)).toBeLessThanOrEqual(7000);
+        expect(budget.maxTotalTokens).toBe(6000);
+        expect(Number(budget.estimatedTotalTokens)).toBeLessThanOrEqual(6000);
         expect(Number(budget.maxCompletionTokens)).toBeGreaterThanOrEqual(256);
       }
       console.log(JSON.stringify({ test: "gemini_shared_budget", requests: budgetLogs.map(({ group, estimatedInputTokens, maxCompletionTokens, estimatedTotalTokens }) => ({ group, estimatedInputTokens, maxCompletionTokens, estimatedTotalTokens })), compaction: recoveryLogs, sonicDnaProjection: projectionLogs }));
@@ -1900,7 +1900,7 @@ describe("Groq mode-preserving recovery (production truncation regression)", () 
   it("retains exact field-level word minima when a large narrative repair prompt is compacted", async () => {
     const verbose = (label: string, index: number) => (label + " " + index
       + " with source-attributed supporting catalog detail ").repeat(12);
-    // All eight retained provenance keys carry long values so the initial
+    // All retained provenance keys carry long values so the initial
     // narrative prompt exceeds the compaction target on the repair attempt.
     const provenance = Object.fromEntries(Array.from({ length: 12 }, (_, index) => ["field" + index, {
       source: verbose("source", index),
