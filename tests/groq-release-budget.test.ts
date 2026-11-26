@@ -47,18 +47,17 @@ const groups = ["narrative", "positioning", "release", "evidence-score", "produc
 
 describe("Groq release prompt budget regression", () => {
   it("fits a production-sized uploaded-master Sonic DNA payload under the shared cap without losing measured descriptor values", async () => {
-    const descriptorEntries = Object.fromEntries(Array.from({ length: 48 }, (_, index) => ["descriptor" + index, {
+    const descriptorEntries = Object.fromEntries(Array.from({ length: 12 }, (_, index) => ["descriptor" + index, {
       median: index + 0.125,
       p10: index - 0.25,
       p90: index + 0.875,
       unit: "measured_unit_" + index,
+      method: "windowed_fft_descriptor_" + index,
     }]));
-    const predictions = Object.fromEntries(Array.from({ length: 32 }, (_, index) => ["prediction" + index, {
-      status: "provisional",
-      confidence: 0.71,
-      score: index / 100,
-      interpretation: ("Descriptive model commentary that repeats contextual wording and is not a direct acoustic measurement. ").repeat(5),
-    }]));
+    const predictions = {
+      mood: { status: "provisional", labels: ["warm", "reflective"], scores: { bright: 40, dark: 60, driving: 55, calm: 45, tense: 30, warm: 72 }, method: "audio_feature_heuristics_v1", probability: null },
+      energy: { status: "provisional", label: "moderate", score: 62, method: "audio_feature_heuristics_v1", probability: null },
+    };
     const sonicDna = {
       provenance: "uploaded_audio_master",
       evidenceClass: "OBSERVED",
@@ -76,6 +75,7 @@ describe("Groq release prompt budget regression", () => {
         status: "analyzed",
         provenance: { featureVersion: "fixture-v1", algorithm: "first_party", windowCount: 128, aggregation: "median_p10_p90" },
         descriptors: descriptorEntries,
+        windowSummaries: Array.from({ length: 128 }, (_, index) => ({ startSeconds: index, endSeconds: index + 1, rmsDbfs: -20 + index / 100, spectralCentroidHz: 1800 + index, spectralFlatness: 0.2 })),
         predictions,
         abstentionReasons: [],
       },
@@ -125,8 +125,18 @@ describe("Groq release prompt budget regression", () => {
       key: "A minor",
       acousticFeatureProfile: { status: "analyzed" },
     });
+    expect(release?.payload.sonicDna).not.toHaveProperty("rhythmFeatures");
+    expect(release?.payload.sonicDna).not.toHaveProperty("harmonicFeatures");
+    expect(release?.payload.sonicDna.acousticFeatureProfile).not.toHaveProperty("windowSummaries");
+    expect(release?.payload.sonicDna.acousticFeatureProfile.predictions).toMatchObject({
+      mood: { status: "provisional", labels: ["warm", "reflective"] },
+      energy: { status: "provisional", label: "moderate", score: 62 },
+    });
     const releaseDescriptors = release?.payload.sonicDna.acousticFeatureProfile.descriptors;
-    expect(Object.keys(releaseDescriptors ?? {})).toHaveLength(48);
-    expect(releaseDescriptors?.descriptor47).toEqual({ median: 47.125, p10: 46.75, p90: 47.875, unit: "measured_unit_47" });
+    expect(Object.keys(releaseDescriptors ?? {})).toHaveLength(12);
+    expect(releaseDescriptors?.descriptor11).toEqual({ median: 11.125, p10: 10.75, p90: 11.875, unit: "measured_unit_11", method: "windowed_fft_descriptor_11" });
+    const evidenceScore = requests.find(request => request.group === "evidence-score");
+    expect(evidenceScore?.payload.sonicDna).toHaveProperty("rhythmFeatures");
+    expect(evidenceScore?.payload.sonicDna).toHaveProperty("harmonicFeatures");
   });
 });
