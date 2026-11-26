@@ -20,6 +20,48 @@ const p=(group:string):Record<string,unknown>=>{
  }
 };
 function fetchMock(invalid?:string){const counts=new Map<string,number>();const mock=vi.fn(async (_url:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));const name=body.response_format.json_schema.name.replace(/^ar_/,"");const n=(counts.get(name)??0)+1;counts.set(name,n);const value=name===invalid&&n===1?{}:p(name);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}),{status:200});});return {mock,counts};}
+describe("Groq organization rate-limit telemetry", () => {
+  it("records the provider's live token and request limit headers without logging response content", async () => {
+    const logs: string[] = [];
+    const info = vi.spyOn(console, "info").mockImplementation((...args: unknown[]) => {
+      logs.push(String(args[0] ?? ""));
+    });
+    const mock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const payload = JSON.parse(body.messages[1].content);
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(p(payload.sectionGroup)) } }],
+      }), {
+        status: 200,
+        headers: {
+          "x-ratelimit-limit-tokens": "8000",
+          "x-ratelimit-remaining-tokens": "7600",
+          "x-ratelimit-reset-tokens": "2.5s",
+          "x-ratelimit-limit-requests": "1000",
+          "x-ratelimit-remaining-requests": "999",
+          "x-ratelimit-reset-requests": "1h",
+        },
+      });
+    });
+    try {
+      const result = await new GroqClient("test-key", "test-model", mock as typeof fetch, async () => {})
+        .assess({ evidence: { artist: "Rate Limit Fixture" }, sonicDna: null });
+      expect(result.assessmentVersion).toBe("3.0");
+      const entries = logs.map(line => JSON.parse(line) as Record<string, unknown>)
+        .filter(entry => entry.event === "rate_limit_headers");
+      expect(entries).toHaveLength(9);
+      expect(entries[0]).toMatchObject({
+        provider: "groq", model: "test-model", group: "narrative", status: 200,
+        limitTokens: "8000", remainingTokens: "7600", resetTokens: "2.5s",
+        limitRequests: "1000", remainingRequests: "999", resetRequests: "1h",
+      });
+      expect(JSON.stringify(entries)).not.toContain("Rate Limit Fixture");
+    } finally {
+      info.mockRestore();
+    }
+  });
+});
+
 describe("Groq strict-schema compatibility recovery", () => {
   it("switches to locally validated JSON-object mode when Groq rejects strict schema with HTTP 400", async () => {
     const narrativeModes: unknown[] = [];
