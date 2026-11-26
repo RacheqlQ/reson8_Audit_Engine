@@ -3,23 +3,6 @@ import { MIN_RELIABLE_KEY_CONFIDENCE, MIN_KEY_SEGMENT_AGREEMENT } from "../audio
 import { MIN_RELIABLE_TEMPO_CONFIDENCE } from "../audio/sonic-dna.js";
 export { MIN_RELIABLE_KEY_CONFIDENCE, MIN_RELIABLE_TEMPO_CONFIDENCE };
 
-/**
- * When an evidence guardrail removes every sentence of a narrative field, an
- * empty string would silently persist an assessment that violates its own Zod
- * contract (and its word/item minima). Emit a neutral evidence-boundary
- * statement instead. It asserts no track-specific, numeric, audience,
- * commercial, tempo, key or vocal fact, so no fabricated evidence is added.
- * Only fields that were actually shortened by a guardrail are repaired; short
- * scalar values such as enums and versions are left untouched.
- */
-const EVIDENCE_BOUNDARY_CAVEAT = "The supplied evidence does not support a further track-specific claim in this field. Keep this item provisional and require an independent human listening review and source verification before any external decision. No additional measurement or claim is asserted here.";
-
-function boundedStrippedText(sentenceCount: number, kept: string[]): string {
-  const joined = kept.join(" ").trim();
-  if (kept.length === sentenceCount || joined.length >= 120) return joined;
-  return (joined ? joined + " " : "") + EVIDENCE_BOUNDARY_CAVEAT;
-}
-
 type TempoEvidence = {
   bpm?: unknown;
   tempoConfidence?: unknown;
@@ -150,7 +133,7 @@ function stripUnsupportedClaims(value: unknown, suppressTempo: boolean, suppress
       const hasUnsupportedKeyClaim = suppressKey && keyClaim;
       return !(suppressTempo && hasTempoClaim) && !hasGenreClaim && !contradictsProviderGenre && !hasCommercialClaim && !hasUnsupportedVocalClaim && !hasUnsupportedKeyClaim;
     });
-    return boundedStrippedText(sentences.length, kept);
+    return kept.join(" ").trim();
   }
   if (Array.isArray(value)) return value.map((item) => stripUnsupportedClaims(item, suppressTempo, suppressGenre, suppressCommercial, suppressVocal, suppressKey));
   if (value && typeof value === "object") {
@@ -177,7 +160,7 @@ function stripUnsupportedTechnicalClaims(
 ): unknown {
  if (typeof value === "string") {
   const sentences = value.split(/(?<=[.!?])\s+(?=[A-Z])/);
-  const kept = sentences.flatMap((sentence): string[] => {
+  const kept = sentences.flatMap((sentence) => {
    if (suppressLoudnessOptimisation && /\b(?:LUFS|loudness)\b/i.test(sentence)
      && /\b(?:optimis\w*|increas\w*|rais\w*|louder|target level|push the level)\b/i.test(sentence)) return [];
    if (suppressBrightTimbre && /\bbright(?:ness)?\b/i.test(sentence)) return [];
@@ -193,7 +176,7 @@ function stripUnsupportedTechnicalClaims(
    }
    return [sentence];
   });
-  return boundedStrippedText(sentences.length, kept);
+  return kept.join(" ").trim();
  }
  if (Array.isArray(value)) return value.map((item) => stripUnsupportedTechnicalClaims(item, suppressLoudnessOptimisation, suppressBrightTimbre, rmsEnvelopeSpreadDb));
  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value as Record<string, unknown>)
@@ -213,7 +196,7 @@ function sanitizeAlbumConflictClaims(value:unknown):unknown {
  if(typeof value==="string"){
   const sentences=value.split(/(?<=[.!?])\s+(?=[A-Z])/);
   const kept=sentences.filter(sentence=>!(/\balbum\b/i.test(sentence)&&/\b(?:missing|unavailable|not supplied|not provided|absent|not present)\b/i.test(sentence)));
-  return boundedStrippedText(sentences.length, kept);
+  return kept.join(" ").trim();
  }
  if(Array.isArray(value))return value.map(sanitizeAlbumConflictClaims);
  if(value&&typeof value==="object")return Object.fromEntries(Object.entries(value as Record<string,unknown>).map(([key,item])=>[key,sanitizeAlbumConflictClaims(item)]));

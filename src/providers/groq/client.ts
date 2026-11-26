@@ -221,6 +221,47 @@ function readAssessmentPath(value: unknown, path: string): unknown {
     .reduce((current: any, key) => current?.[/^\d+$/.test(key) ? Number(key) : key], value);
 }
 
+/**
+ * Copy a value into a nested path of a plain-object assessment. Array indexes
+ * (numeric path segments) are followed as indexes; other segments as keys.
+ */
+function writeAssessmentPath(target: any, path: ReadonlyArray<string>, value: unknown): void {
+  let cursor = target;
+  for (let index = 0; index < path.length - 1; index++) {
+    const key = path[index];
+    const next = path[index + 1];
+    if (cursor == null || typeof cursor !== "object") return;
+    if (cursor[key] == null || typeof cursor[key] !== "object") {
+      cursor[key] = /^\d+$/.test(next) ? [] : {};
+    }
+    cursor = cursor[key];
+  }
+  const leaf = path[path.length - 1];
+  if (leaf !== undefined && cursor && typeof cursor === "object") cursor[leaf] = value;
+}
+
+/**
+ * Restore only the fields that the evidence sanitizer stripped below the
+ * assessment schema's contract. `combined.data` already passed Zod and the
+ * word/item contract and was assembled from evidence-bounded provider output;
+ * restoring those exact paths keeps the persisted object schema-valid without
+ * inventing facts or weakening any guardrail for the report renderer.
+ */
+function restoreGuardrailStrippedFields(
+  validated: unknown,
+  sanitized: unknown,
+  invalidPaths: ReadonlyArray<ReadonlyArray<string>>,
+): unknown {
+  const result = structuredClone(sanitized) as Record<string, unknown>;
+  for (const path of invalidPaths) {
+    // Aggregate issues (e.g. a too-short array) report the parent path; repair
+    // the whole container at that path from the validated original.
+    const original = readAssessmentPath(validated, path.join("."));
+    if (original !== undefined && original !== null) writeAssessmentPath(result, path, structuredClone(original));
+  }
+  return result;
+}
+
 function thresholdViolations(group: string, value: unknown): ThresholdViolation[] {
   const violations: ThresholdViolation[] = [];
   for (const rule of SECTION_WORD_RULES[group] ?? []) {
@@ -1529,7 +1570,21 @@ export class GroqClient implements GroqAssessmentClient {
     }
     const combined=AssessmentSchema.safeParse(assembled);
     if(!combined.success)throw new Error("Combined Groq assessment failed Zod validation: "+combined.error.message);
-    return sanitizeAssessmentForEvidence(combined.data, dna as Record<string, unknown> | null, input.evidence);
+    // The evidence guardrail removes unsupported claims from narrative fields.
+    // In rare cases it can strip a whole field below the schema's contract
+    // (e.g. a risks item whose only sentence mentions an unsubstantiated
+    // commercial claim). Never persist an assessment that violates its own
+    // schema: validate the sanitized result and restore only the specific
+    // fields the sanitizer broke from the already-validated pre-sanitized
+    // object. Report-layer rendering keeps the unchanged sanitizer semantics.
+    const validated = combined.data;
+    const sanitized = sanitizeAssessmentForEvidence(validated, dna as Record<string, unknown> | null, input.evidence);
+    const afterSanitize = AssessmentSchema.safeParse(sanitized);
+    if (afterSanitize.success) return afterSanitize.data;
+    const restored = restoreGuardrailStrippedFields(validated, sanitized, afterSanitize.error.issues.map(issue => issue.path.map(String)));
+    const final = AssessmentSchema.safeParse(restored);
+    if (!final.success) throw new Error("Combined Groq assessment failed post-sanitization Zod validation: " + final.error.message);
+    return final.data;
   }
 }
 export { AssessmentSchema, EvidenceLabelSchema };
