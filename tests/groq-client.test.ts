@@ -193,7 +193,7 @@ describe("GroqClient section groups",()=>{
    dynamicRangeDb:8.2, rmsLevelDbfs:-12, sampleRate:44100, channels:2,
    privateRawWaveform:Array(1000).fill(0.2),
   };
-  const catalogMetadata={apple_music:{title:"Track",isrc:"USAAA2700001"},spotify:{artist:"Artist"}};
+  const catalogMetadata={apple_music:{title:"Track",isrc:"USAAA2600001"},spotify:{artist:"Artist"}};
   const {mock}=fetchMock();
   const client=new GroqClient("test-key","test-model",mock as typeof fetch);
   await client.assess({evidence:{artist:"Artist",title:"Track"},sonicDna,catalogMetadata});
@@ -267,14 +267,14 @@ describe("GroqClient section groups",()=>{
  it("keeps production-shaped assessment evidence under the Groq 7,000-token request ceiling",async()=>{
   const evidence={
    auditType:"full_a_and_r",artist:"Fixture Artist",title:"Evidence-rich single release",
-   releaseDate:"2026-10-18",label:"Independent",isrc:"USAAA2700001",upc:"198765432109",
+   releaseDate:"2026-10-18",label:"Independent",isrc:"USAAA2600001",upc:"198765432109",
    genres:["Contemporary R&B","Alternative R&B"],
    sourceProviders:["musicbrainz","spotify","apple_music","youtube"],
    fieldProvenance:Object.fromEntries(Array.from({length:14},(_,index)=>["field"+index,{
     source:["musicbrainz","spotify","apple_music"][index%3],
     status:"recognized",confidence:0.82,detail:"Provider-returned identity and release evidence retained for reconciliation."
    }])),
-   identity:{artist:"Fixture Artist",title:"Evidence-rich single release",isrc:"USAAA2700001",matchStatus:"reconciled"},
+   identity:{artist:"Fixture Artist",title:"Evidence-rich single release",isrc:"USAAA2600001",matchStatus:"reconciled"},
    reconciliation:{status:"partial",conflicts:["Release date differs between two provider records."],matchedFields:["artist","title","isrc"]},
    genreClassification:{genres:["Contemporary R&B"],primaryGenre:"Contemporary R&B",abstained:false},
    catalogSources:["musicbrainz","spotify","apple_music"],
@@ -301,7 +301,7 @@ describe("GroqClient section groups",()=>{
   };
   const catalogMetadata={
    musicbrainz:{status:"matched",artistCredit:"Fixture Artist",recordingTitle:"Evidence-rich single release",releaseDate:"2026-10-18"},
-   spotify:{status:"matched",artist:"Fixture Artist",track:"Evidence-rich single release",isrc:"USAAA2700001"},
+   spotify:{status:"matched",artist:"Fixture Artist",track:"Evidence-rich single release",isrc:"USAAA2600001"},
    apple_music:{status:"matched",artist:"Fixture Artist",title:"Evidence-rich single release"},
    youtube:{status:"checked",officialArtistChannel:true},
    reconciliation:{status:"partial",conflicts:["Release date requires manual verification."]}
@@ -325,7 +325,7 @@ describe("GroqClient section groups",()=>{
   expect(evidenceScorePayloads[0].evidence).not.toHaveProperty("genres");
   expect(evidenceScorePayloads[0].evidence).not.toHaveProperty("catalogSources");
   expect(evidenceScorePayloads[0].evidence).toMatchObject({
-   identity:{artist:"Fixture Artist",isrc:"USAAA2700001"},
+   identity:{artist:"Fixture Artist",isrc:"USAAA2600001"},
    reconciliation:{status:"partial"},
    fieldProvenance:expect.objectContaining({field0:expect.objectContaining({source:"musicbrainz"})})
   });
@@ -556,7 +556,7 @@ describe("GroqClient section groups",()=>{
    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(p(group))}}]}),{status:200});
   });
   const client=new GroqClient("test-key","test-model",mock as typeof fetch,async()=>{});
-  const result=await client.assess({evidence:{artist:"Regression Artist",title:"Regression Track"},sonicDna:{provenance:"uploaded_audio_master",bpm:96},catalogMetadata:{apple_music:{title:"Regression Track",isrc:"USAAA2700001"}}});
+  const result=await client.assess({evidence:{artist:"Regression Artist",title:"Regression Track"},sonicDna:{provenance:"uploaded_audio_master",bpm:96},catalogMetadata:{apple_music:{title:"Regression Track",isrc:"USAAA2600001"}}});
   expect(evidenceScoreCalls).toBe(4);
   expect(prompts[1]).toContain("strict JSON-schema validation failed");
   expect(prompts[1]).toContain("evidenceLabels");
@@ -656,7 +656,7 @@ describe("GroqClient section groups",()=>{
   const evidence={
    auditType:"full_a_and_r",artist:"Fixture Artist",title:"Production-sized evidence fixture",
    sourceProviders:["musicbrainz","spotify","apple_music","youtube"],fieldProvenance,
-   identity:{artist:"Fixture Artist",title:"Production-sized evidence fixture",isrc:"USAAA2700001",matchStatus:"reconciled"},
+   identity:{artist:"Fixture Artist",title:"Production-sized evidence fixture",isrc:"USAAA2600001",matchStatus:"reconciled"},
    reconciliation:{status:"partial",matchedFields:["artist","title","isrc"],conflicts:Array.from({length:40},(_,index)=>"Conflict "+index+": "+detail)},
    genreClassification:{primaryGenre:"Contemporary R&B",genres:["Contemporary R&B"],abstained:false},
    commercialEvidence:{verified:false,reason:detail},rightsStatus:{status:"unverified",notes:detail}
@@ -708,7 +708,7 @@ describe("narrative prompt budget compaction",()=>{
     source:["musicbrainz","spotify","apple_music"][i%3],status:"recognized",confidence:0.82,
     value:"normalized identity value "+i,detail,rawPayload:detail
    }])),
-   identity:{artist:"Fixture Artist",title:"Production-sized narrative fixture",isrc:"USAAA2700001",matchStatus:"reconciled"},
+   identity:{artist:"Fixture Artist",title:"Production-sized narrative fixture",isrc:"USAAA2600001",matchStatus:"reconciled"},
    reconciliation:{status:"partial",matchedFields:["artist","title","isrc"],conflicts:Array.from({length:40},(_,i)=>"Conflict "+i+": "+detail)},
    genreClassification:{primaryGenre:"Contemporary R&B",genres:["Contemporary R&B"],abstained:false},
    catalogSources:["musicbrainz","spotify","apple_music"].map((platform)=>({platform,status:"matched",canonicalUrl:"https://example.invalid/"+platform})),
@@ -760,7 +760,7 @@ describe("narrative prompt budget compaction",()=>{
   expect(narrative!.estimated).toBeLessThanOrEqual(5744);
   expect(narrative!.estimated+narrative!.completion).toBeLessThanOrEqual(7000);
   expect(narrative!.completion).toBeGreaterThanOrEqual(256);
-  expect(narrative!.payload.evidence.identity).toMatchObject({artist:"Fixture Artist",isrc:"USAAA2700001"});
+  expect(narrative!.payload.evidence.identity).toMatchObject({artist:"Fixture Artist",isrc:"USAAA2600001"});
   expect(narrative!.payload.evidence.fieldProvenance.field0).toMatchObject({source:"musicbrainz",value:"normalized identity value 0"});
   expect(narrative!.payload.sonicDna.acousticFeatureProfile.descriptors.spectralCentroidHz).toMatchObject({median:0.42,unit:"ratio"});
   expect(narrative!.payload.sonicDna.vocalFeatures).toMatchObject({status:"analyzed",voicePresence:"likely_present"});
@@ -789,7 +789,7 @@ describe("evidence-score prompt budget compaction", () => {
           source: ["musicbrainz", "spotify", "apple_music"][i % 3], status: "recognized",
           confidence: 0.82, value: "normalized identity value " + i, detail, rawPayload: detail,
         }])),
-        identity: { artist: "Fixture Artist", title: profile.name, isrc: "USAAA2700001", matchStatus: "reconciled" },
+        identity: { artist: "Fixture Artist", title: profile.name, isrc: "USAAA2600001", matchStatus: "reconciled" },
         reconciliation: { status: "partial", matchedFields: ["artist", "title", "isrc"],
           conflicts: Array.from({ length: profile.conflicts }, (_, i) => "Conflict " + i + ": " + detail) },
         genreClassification: { primaryGenre: "Contemporary R&B", genres: ["Contemporary R&B"], abstained: false },
@@ -1073,7 +1073,7 @@ describe("Groq narrative token projection regression", () => {
       const evidence = {
         auditType: "MASTER-BASED AUDIT", artist: "Fixture Artist", title: "Fixture Track",
         album: "Fixture Album", releaseDate: "2025-08-27", label: "Fixture Label",
-        isrc: "NGABC2700001", upc: "123456789012", genres: ["Afrobeats", "Alternative R&B"],
+        isrc: "NGABC2600001", upc: "123456789012", genres: ["Afrobeats", "Alternative R&B"],
         sourceProviders: ["musicbrainz", "audd", "spotify"], fieldProvenance,
         identity: { artist: "Fixture Artist", title: "Fixture Track", album: "Fixture Album", releaseDate: "2025-08-27" },
         reconciliation: { status: "reconciled", matchedFields: Array.from({ length: 20 }, (_, i) => "field-" + i), conflicts: [] },
@@ -1379,10 +1379,10 @@ describe("Groq narrative prompt budget recovery", () => {
     }]));
     const evidence = {
       auditType: "MASTER-BASED AUDIT", sourceType: "master", artist: "Budget Fixture",
-      title: "Budget Recovery Track", isrc: "NGABC2700001",
+      title: "Budget Recovery Track", isrc: "NGABC2600001",
       sourceProviders: ["musicbrainz", "audD", "lastfm"],
       fieldProvenance: provenance,
-      identity: { artist: "Budget Fixture", title: "Budget Recovery Track", isrc: "NGABC2700001" },
+      identity: { artist: "Budget Fixture", title: "Budget Recovery Track", isrc: "NGABC2600001" },
       reconciliation: { status: "RECONCILED", conflicts: [], matchedFields: ["artist", "title", "isrc"] },
       catalogSources: Array.from({ length: 12 }, (_, index) => ({ platform: "provider-" + index, status: "matched", provider: "provider-" + index, source: "catalog" })),
     };
@@ -1440,7 +1440,7 @@ describe("Groq narrative prompt budget recovery", () => {
     expect(narrativeRequests[1].body.max_completion_tokens).toBeGreaterThanOrEqual(256);
     const correctedPayload = JSON.parse(narrativeRequests[1].body.messages[1].content);
     expect(correctedPayload.evidence).toMatchObject({
-      artist: "Budget Fixture", title: "Budget Recovery Track", isrc: "NGABC2700001",
+      artist: "Budget Fixture", title: "Budget Recovery Track", isrc: "NGABC2600001",
       sourceProviders: ["musicbrainz", "audD", "lastfm"],
     });
     expect(correctedPayload.evidence.fieldProvenance).toHaveProperty("field0");
@@ -1711,10 +1711,10 @@ describe("Groq retry prompt-usage calibration", () => {
     }]));
     const evidence = {
       auditType: "MASTER-BASED AUDIT", sourceType: "master", artist: "Usage Calibration Fixture",
-      title: "Long Evidence Track", isrc: "NGABC2700001",
+      title: "Long Evidence Track", isrc: "NGABC2600001",
       sourceProviders: ["musicbrainz", "audD", "lastfm"],
       fieldProvenance: provenance,
-      identity: { artist: "Usage Calibration Fixture", title: "Long Evidence Track", isrc: "NGABC2700001" },
+      identity: { artist: "Usage Calibration Fixture", title: "Long Evidence Track", isrc: "NGABC2600001" },
       reconciliation: { status: "RECONCILED", conflicts: [], matchedFields: ["artist", "title", "isrc"] },
     };
     const narrativeBudgets: number[] = [];
@@ -1956,10 +1956,10 @@ describe("Groq mode-preserving recovery (production truncation regression)", () 
     }]));
     const evidence = {
       auditType: "MASTER-BASED AUDIT", sourceType: "master", artist: "Compacted Repair Fixture",
-      title: "Long Evidence Track", isrc: "NGABC2700001",
+      title: "Long Evidence Track", isrc: "NGABC2600001",
       sourceProviders: ["musicbrainz", "audD", "lastfm"],
       fieldProvenance: provenance,
-      identity: { artist: "Compacted Repair Fixture", title: "Long Evidence Track", isrc: "NGABC2700001" },
+      identity: { artist: "Compacted Repair Fixture", title: "Long Evidence Track", isrc: "NGABC2600001" },
       reconciliation: { status: "RECONCILED", conflicts: [], matchedFields: ["artist", "title", "isrc"] },
     };
     let narrativeCalls = 0;
