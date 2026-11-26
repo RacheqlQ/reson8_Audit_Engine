@@ -1272,6 +1272,22 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         throw error;
       }
       const errorBody = response.ok ? "" : await response.clone().text().catch(() => "");
+      if (providerName === "groq") {
+        // Groq rate limits are organization-wide. Record the provider's live
+        // headers so production can verify the configured budget against the
+        // actual account limits without exposing credentials or response data.
+        console.info(JSON.stringify({
+          provider: providerName, event: "rate_limit_headers", model, group: groupName,
+          status: response.status,
+          limitTokens: response.headers.get("x-ratelimit-limit-tokens"),
+          remainingTokens: response.headers.get("x-ratelimit-remaining-tokens"),
+          resetTokens: response.headers.get("x-ratelimit-reset-tokens"),
+          limitRequests: response.headers.get("x-ratelimit-limit-requests"),
+          remainingRequests: response.headers.get("x-ratelimit-remaining-requests"),
+          resetRequests: response.headers.get("x-ratelimit-reset-requests"),
+          retryAfter: response.headers.get("retry-after"),
+        }));
+      }
       const dailyLimit = providerName === "groq" && response.status === 429
         && /tokens?\s+per\s+day|\bTPD\b|daily[\s_-]*limit|limit[\s_-]*reached.*daily/i.test(errorBody);
       let malformedProviderOutput = false;
