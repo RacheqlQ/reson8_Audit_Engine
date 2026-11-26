@@ -16,9 +16,9 @@ describe("sample-report command",()=>{
   expect(script).toContain('rendered the removed evidence ledger and scorecard page');
   expect(script).toContain("generatedAt: new Date().toISOString()");
   const v2=await readFile(new URL("scripts/sample-report-v2.mjs",root),"utf8");
-  expect(v2).toContain("philloFullPdf.getPageCount()!==12");
-  expect(v2).toContain('["v2-phillo-stunixx-reference",phillo,7]');
-  expect(v2).toContain("fullPdf.getPageCount()!==12");
+  expect(v2).toContain("philloFullPdf.getPageCount()!==11");
+  expect(v2).toContain('["v2-phillo-stunixx-reference",phillo,6]');
+  expect(v2).toContain("fullPdf.getPageCount()!==11");
   expect(script).not.toContain("fetch(");
   const ambiguous=await readFile(new URL("scripts/fixtures/ambiguous-audio.mjs",root),"utf8");
   expect(ambiguous).toContain("insufficient_evidence");
