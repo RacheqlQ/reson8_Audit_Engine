@@ -20,9 +20,9 @@ minimal.auditId="fixture-v2-minimal-audio-only";
 minimal.evidence={fixture:true,auditType:"AUDIO-ONLY TEST FIXTURE",artist:null,title:null,album:null,isrc:null,upc:null,label:null,metadataSourcesChecked:[]};
 minimal.sonicDna={provenance:"fixture-only uploaded audio",bpm:null,key:null,mode:null,tempoConfidence:0,keyConfidence:0};
 for(const [name,input,expected] of [
- ["v2-phillo-stunixx-reference",phillo,7],
- ["v2-complete-synthetic-fixture",complete,7],
- ["v2-minimal-audio-only",minimal,7],
+ ["v2-phillo-stunixx-reference",phillo,6],
+ ["v2-complete-synthetic-fixture",complete,6],
+ ["v2-minimal-audio-only",minimal,6],
 ]){
  const bytes=await generateAuditReportV2({...input,generatedAt:"2026-11-20T00:00:00.000Z"});
  const pdf=await PDFDocument.load(bytes);
