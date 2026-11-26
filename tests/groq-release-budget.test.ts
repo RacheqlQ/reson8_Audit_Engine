@@ -135,6 +135,16 @@ describe("Groq release prompt budget regression", () => {
     const releaseDescriptors = release?.payload.sonicDna.acousticFeatureProfile.descriptors;
     expect(Object.keys(releaseDescriptors ?? {})).toHaveLength(12);
     expect(releaseDescriptors?.descriptor11).toEqual({ median: 11.125, p10: 10.75, p90: 11.875, unit: "measured_unit_11", method: "windowed_fft_descriptor_11" });
+    const positioning = requests.find(request => request.group === "positioning");
+    expect(positioning?.payload.sonicDna.acousticFeatureProfile.descriptors.descriptor11)
+      .toEqual({ median: 11.125, unit: "measured_unit_11" });
+    expect(positioning?.payload.sonicDna.acousticFeatureProfile).not.toHaveProperty("predictions");
+    expect(positioning?.body.max_completion_tokens).toBeGreaterThanOrEqual(256);
+    expect(positioning?.payload.sonicDna).toMatchObject({
+      provenance: "uploaded_audio_master",
+      bpm: 96,
+      key: "A minor",
+    });
     const evidenceScore = requests.find(request => request.group === "evidence-score");
     expect(evidenceScore?.payload.sonicDna).toHaveProperty("rhythmFeatures");
     expect(evidenceScore?.payload.sonicDna).toHaveProperty("harmonicFeatures");
