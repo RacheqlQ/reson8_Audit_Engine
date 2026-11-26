@@ -605,7 +605,7 @@ describe("GroqClient section groups",()=>{
   expect(prompts[1]).toContain("evidenceGaps[0] must contain at least 8 words");
  });
 
- it("bounds production-sized provenance and vocal timelines without breaching Groq's 6,000-token request ceiling",async()=>{
+ it("bounds production-sized provenance and vocal timelines without breaching Groq's 7,000-token request ceiling",async()=>{
   const detail="Provider-returned reconciliation commentary with repeated raw source context that is not needed to preserve the actual source, status, confidence or normalized field value. ".repeat(8);
   const fieldProvenance=Object.fromEntries(Array.from({length:48},(_,index)=>["field"+index,{
    source:["musicbrainz","spotify","apple_music"][index%3],status:"recognized",confidence:0.82,
