@@ -350,7 +350,7 @@ const MAX_COMPLETION_TOKENS = 1600;
 const MAX_GROQ_COMPLETION_TOKENS = 2000;
 const MAX_SHARED_PROVIDER_TOTAL_TOKENS = 6000;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
-  narrative: 850, positioning: 650, release: 500, "evidence-score": 1000,
+  narrative: 850, positioning: 550, release: 500, "evidence-score": 1000,
   production: 650, comparables: 450, promotion: 900, "label-fit": 650, timeline: 500,
 };
 const MIN_COMPLETION_TOKENS = 256;
@@ -968,6 +968,24 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   const schemaConstraintGuidance = compactedSchemaConstraintInstructions(rawOutputSchema);
   const wordContractGuidance = thresholdContractInstructions(groupName);
   const sonicDnaForGroup = compactSonicDnaForGroq(input.sonicDna, groupName);
+  if (groupName === "positioning" && sonicDnaForGroup?.acousticFeatureProfile
+      && typeof sonicDnaForGroup.acousticFeatureProfile === "object"
+      && !Array.isArray(sonicDnaForGroup.acousticFeatureProfile)) {
+    // Positioning needs the measured centre of each acoustic descriptor, not
+    // repeated distribution bounds or provisional classifier payloads. Keep
+    // every descriptor name, median, unit and provenance method; the complete
+    // measured profile remains persisted and available to the report layer.
+    const profile = sonicDnaForGroup.acousticFeatureProfile as Record<string, unknown>;
+    if (profile.descriptors && typeof profile.descriptors === "object" && !Array.isArray(profile.descriptors)) {
+      profile.descriptors = Object.fromEntries(Object.entries(profile.descriptors as Record<string, unknown>).map(([name, raw]) => {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [name, raw];
+        const descriptor = raw as Record<string, unknown>;
+        return [name, Object.fromEntries(["median", "unit", "method"].filter(key => descriptor[key] !== undefined)
+          .map(key => [key, descriptor[key]]))];
+      }));
+    }
+    delete profile.predictions;
+  }
   if (groupName === "evidence-score" && input.sonicDna) {
     const originalBytes = new TextEncoder().encode(JSON.stringify(input.sonicDna)).length;
     const projectedBytes = new TextEncoder().encode(JSON.stringify(sonicDnaForGroup)).length;
@@ -1119,7 +1137,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         const payload = JSON.parse(messages[1].content) as Record<string, unknown>;
         // These sections can share canonical source facts; tighten repeated provider
         // commentary and descriptive audio context while retaining source/status labels.
-        const evidenceStringLimit = groupName === "evidence-score" ? 24 : 32;
+        const evidenceStringLimit = groupName === "evidence-score" ? 24 : 16;
         payload.evidence = compactEvidenceScoreValue(payload.evidence, 0, evidenceStringLimit, 2);
         payload.sonicDna = compactEvidenceScoreValue(payload.sonicDna, 0, evidenceStringLimit, 2);
         payload.catalogMetadata = compactEvidenceScoreValue(payload.catalogMetadata, 0, 24, 2);
