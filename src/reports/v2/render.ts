@@ -669,19 +669,14 @@ function buildReportSections(input:AuditReportInput,data:ReportV2Data,tier:Audit
   const hasScore=data.headlineScore!==null||(data.scoreDrivers?.length??0)>0;
   const hasPlaybackMeasurements=["integrated_loudness_lufs","true_peak_dbfs","rms_level_dbfs"].some(key=>typeof contract[key]==="number"&&Number.isFinite(contract[key]));
   // When the Sonic DNA dashboard is present, keep the full report at its
-  // approved 12-page allocation. The cover already carries the supplied score,
+  // approved 11-page allocation. The cover already carries the supplied score,
   // the execution-plan narrative carries the campaign timeline, and the track
   // snapshot carries available playback measurements; avoid a redundant extra page.
   if((hasScore||timeline.length>0||hasPlaybackMeasurements)&&!data.sonicAxes)
    pages.push({title:"Scorecard, execution timeline and loudness",blocks:[],kind:"full-depth"});
  }
- pages.push({title:"A&R notes",blocks:[],lines:[
-  ...arr(a.humanListeningChecklist).map(value=>str(value,"")).filter(value=>value&&!/^not supplied$/i.test(value)).map(value=>"[ ] "+value),
-  notesContext.verdict,
-  notesContext.summary,
-  ...notesContext.prompts.map(prompt=>"Review prompt: "+prompt),
-  "Record the A&R decision, owner, follow-up date and evidence still required."
- ],kind:"ar-notes"});
+ // The A&R Notes worksheet is temporarily disabled. Human-listening
+ // prompts remain in the assessment data but are not rendered as a separate page.
  return pages;
 }
 
@@ -1180,7 +1175,7 @@ export async function generateAuditReportV2(source:AuditReportInput,tier:AuditRe
  });
  if(consistencyErrors.length)throw new Error("Chart data reconciliation failed: "+consistencyErrors.join(" "));
 
- if((tier==="sample"&&pages.length!==7)||(tier==="full"&&pages.length<12))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
+ if((tier==="sample"&&pages.length!==6)||(tier==="full"&&pages.length<11))throw new Error("Report section configuration does not match the approved "+tier+" page allocation.");
  for(let index=0;index<pages.length;index++){
   const spec=pages[index],page=pageBase(pdf,tier==="full"&&index===0?"Full A&R report":spec.title,fonts);
   let chartCursor=H-380;

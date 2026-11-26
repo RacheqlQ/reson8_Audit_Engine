@@ -30,7 +30,7 @@ describe("v2-only report generation", () => {
     const bytes = await ensurePdfReport(metadataOnlyFixture, "full");
     const pdf = await PDFDocument.load(bytes);
     expect(pdf.getPageCount()).toBeGreaterThan(0);
-    expect(pdf.getForm().getFields().map(field => field.getName())).toContain("ar_notes");
+    expect(pdf.getForm().getFields().map(field => field.getName())).not.toContain("ar_notes");
   });
 
   it("does not silently fall back to v1 if the v2 renderer fails", async () => {

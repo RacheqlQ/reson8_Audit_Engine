@@ -51,8 +51,8 @@ for(const [name,input] of variants){
   const reportInput={...input,generatedAt: new Date().toISOString()};
   const bytes=await ensurePdfReport(reportInput,tier);
   const pdf=await PDFDocument.load(bytes);
-  if(tier==="sample"&&pdf.getPageCount()!==7)throw new Error(name+" sample report must be exactly 7 pages; got "+pdf.getPageCount());
-  if(tier==="full"&&(pdf.getPageCount()<12||pdf.getPageCount()>15))throw new Error(name+" full report must contain 6 core pages, 5 narrative pages and up to 3 evidence-gated deep dives (12–15 pages); got "+pdf.getPageCount());
+  if(tier==="sample"&&pdf.getPageCount()!==6)throw new Error(name+" sample report must be exactly 7 pages; got "+pdf.getPageCount());
+  if(tier==="full"&&(pdf.getPageCount()<11||pdf.getPageCount()>14))throw new Error(name+" full report must contain 6 core pages, 5 narrative pages and up to 3 evidence-gated deep dives (11–14 pages); got "+pdf.getPageCount());
   const filename=name+"-"+tier+"-audit-report.pdf";
   const fileUrl=new URL(filename,out),filePath=fileUrl.pathname;
   await writeFile(fileUrl,bytes);
@@ -83,17 +83,7 @@ for(const [name,input] of variants){
     if(!footerWords.includes("AUDIT"))throw new Error(filename+" is missing its V2 audit footer on page "+(pageIndex+1));
    }
   }
-  const editableFields=pdf.getForm().getFields();
-  const requiredArFields=["ar_notes","ar_owner","ar_followup_date","ar_decision_hold","ar_decision_reaudit","ar_decision_proceed"];
-  const arFieldNames=editableFields.map(field=>field.getName());
-  if(requiredArFields.some(field=>!arFieldNames.includes(field))||arFieldNames.length!==requiredArFields.length)throw new Error(filename+" is missing or has unexpected A&R Notes fields");
-  const notesWidget=pdf.getForm().getTextField("ar_notes").acroField.getWidgets()[0];
-  if(!notesWidget||notesWidget.getRectangle().height<841.89*0.35)throw new Error(filename+" A&R Notes working area is smaller than 35% of A4 page height");
-  const finalPage=extracted.split("\f").filter(page=>page.trim().length>0).at(-1)??"";
-  const normalizedFinalPage=finalPage.replace(/\s+/g," ");
-  for(const label of ["A&R NOTES","AUDIO","IDENTITY","MARKET","RELEASE READINESS","HUMAN LISTENING REVIEW","DECISION CONTEXT","WORKING NOTES","A&R OWNER","FOLLOW-UP DATE","HOLD","RE-AUDIT","PROCEED"])if(!normalizedFinalPage.toUpperCase().includes(label))throw new Error(filename+" A&R Notes page is missing "+label);
-  for(const item of Array.isArray(input.assessment?.humanListeningChecklist)?input.assessment.humanListeningChecklist:[])if(!normalizedFinalPage.includes(String(item).replace(/\s+/g," ").trim()))throw new Error(filename+" A&R Notes page omitted a complete listening-review item");
-  if(normalizedFinalPage.includes("..."))throw new Error(filename+" A&R Notes page contains truncated text: "+normalizedFinalPage.split(" ").filter(word=>word.includes("...")).join(" | "));
+  if(pdf.getForm().getFields().some(field=>field.getName().startsWith("ar_")))throw new Error(filename+" unexpectedly contains A&R Notes form fields");
   const safeAssessment=sanitizeAssessmentForEvidence(input.assessment,input.sonicDna,input.evidence);
   const chartLabels=[safeAssessment.aAndRPositioning.primaryLane,...safeAssessment.aAndRPositioning.adjacentLanes].filter(value=>typeof value==="string"&&value.trim());
   const normalizedExtracted=extracted.replace(/\s+/g," ");
@@ -130,17 +120,9 @@ for(const [name,input] of variants){
   if(name==="combined-master-and-dsp"&&tier==="full"){
    if(normalizedExtracted.toUpperCase().includes("EVIDENCE LEDGER AND SCORECARD"))throw new Error(filename+" rendered the removed evidence ledger and scorecard page");
   }
-  if(name==="long-form-audio"&&tier==="full"){
-   const tokens=buildArNotesDecisionContext(input).summary.split(/\s+/).map(token=>token.replace(/[^\p{L}\p{N}#'-]/gu,"")).filter(Boolean);
-   let cursor=0;
-   for(const token of tokens){
-    const position=normalizedExtracted.toLocaleLowerCase().indexOf(token.toLocaleLowerCase(),cursor);
-    if(position<0)throw new Error(filename+" has a missing or out-of-order A&R Notes summary token: "+token);
-    cursor=position+token.length;
-   }
-  }
+  if(name==="long-form-audio"&&tier==="full"&&!buildArNotesDecisionContext(input).summary.trim())throw new Error(filename+" lost its retained human-review decision context");
   const checksum=createHash("sha256").update(await readFile(fileUrl)).digest("hex");
-  process.stdout.write(filename+": "+pdf.getPageCount()+" pages; A4; disclosure, text continuity, sequential numbering, footer clearance, chart labels and editable field verified; SHA256 "+checksum+"\n");
+  process.stdout.write(filename+": "+pdf.getPageCount()+" pages; A4; disclosure, text continuity, sequential numbering, footer clearance, chart labels and A&R Notes page omitted; report layout verified; SHA256 "+checksum+"\n");
  }
 
 const evidenceCheckPath=new URL("evidence-sanitization-regression.pdf",out).pathname;

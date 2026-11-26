@@ -8,20 +8,14 @@ import { isReliableTempo } from "../src/reports/evidence-guardrails.js";
 import { fullAudioFixture } from "../scripts/fixtures/sample-report-input.mjs";
 
 describe("A&R Notes report page", () => {
-  it("renders all requested sign-off fields and a notes workspace covering at least 35% of A4 height", async () => {
+  it("omits the separate A&R Notes worksheet from the sample PDF", async () => {
     const input = structuredClone(fullAudioFixture) as any;
     const pdf = await PDFDocument.load(await generateAuditReportV2(input, "sample"));
-    const fields = pdf.getForm().getFields();
-    const names = fields.map(field => field.getName());
-    expect(names).toHaveLength(6);
-    expect(names).toEqual(expect.arrayContaining([
-      "ar_notes", "ar_owner", "ar_followup_date",
-      "ar_decision_hold", "ar_decision_reaudit", "ar_decision_proceed",
-    ]));
-    const notes = pdf.getForm().getTextField("ar_notes");
-    const rectangle = notes.acroField.getWidgets()[0]!.getRectangle();
-    expect(rectangle.height).toBeGreaterThanOrEqual(841.89 * 0.35);
-    expect(pdf.getPageCount()).toBe(7);
+    const names = pdf.getForm().getFields().map(field => field.getName());
+    expect(pdf.getPageCount()).toBe(6);
+    expect(names).not.toContain("ar_notes");
+    expect(names).not.toContain("ar_owner");
+    expect(names).not.toContain("ar_followup_date");
   });
 
   it("never promotes a stale BPM when the explicit tempo verdict is only a candidate", () => {
