@@ -349,6 +349,7 @@ export const OLLAMA_ASSESSMENT_TIMEOUT_MS = 2 * 60_000;
 const MAX_COMPLETION_TOKENS = 1600;
 const MAX_GROQ_COMPLETION_TOKENS = 2000;
 const MAX_SHARED_PROVIDER_TOTAL_TOKENS = 6000;
+const MAX_GROQ_TOTAL_TOKENS = 7000;
 const SECTION_COMPLETION_BUDGETS: Record<string, number> = {
   narrative: 850, positioning: 550, release: 500, "evidence-score": 1000,
   production: 650, comparables: 450, promotion: 900, "label-fit": 650, timeline: 500,
@@ -764,7 +765,7 @@ function compactSonicDnaForGroq(sonicDna: Record<string, unknown> | null, group:
     // Evidence-score consumes canonical scalar measurements and compact rhythm/harmonic summaries.
     // The full acoustic descriptor distribution and vocal arrangement timeline remain persisted
     // in Sonic DNA for reporting, but repeating them here adds tokens without changing scorecard inputs.
-    "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures"],
+    "evidence-score": ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures"],
     production: ["acousticFeatureProfile", "vocalFeatures", "vocalArrangementAnalysis", "rhythmFeatures", "harmonicFeatures", "dynamicRangeDb", "rmsLevelDbfs", "rmsEnergy", "loudnessLufs", "loudnessRangeLu", "truePeakDbfs", "spectralCentroidHz", "spectralBandwidthHz", "spectralRolloffHz", "zeroCrossingRate", "sampleRate", "channels", "durationSeconds", "loudnessFeatures", "audioProperties"],
     comparables: [],
     promotion: ["acousticFeatureProfile"],
@@ -974,12 +975,11 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
   if (groupName === "evidence-score" && sonicDnaForGroup?.acousticFeatureProfile
       && typeof sonicDnaForGroup.acousticFeatureProfile === "object"
       && !Array.isArray(sonicDnaForGroup.acousticFeatureProfile)) {
-    // Scorecard dimensions use the canonical top-level measurements and compact feature
-    // summaries. Descriptor distributions and classifier predictions are already retained
-    // in persisted Sonic DNA and do not need to be retransmitted in this scoring prompt.
+    // Descriptor distributions duplicate the canonical measured values used by the
+    // scorecard. Keep provisional classifier predictions and the compact vocal timeline:
+    // they carry distinct context and are already bounded by the Sonic DNA projection.
     const profile = sonicDnaForGroup.acousticFeatureProfile as Record<string, unknown>;
     delete profile.descriptors;
-    delete profile.predictions;
   }
   if (groupName === "positioning" && sonicDnaForGroup?.acousticFeatureProfile
       && typeof sonicDnaForGroup.acousticFeatureProfile === "object"
@@ -1127,7 +1127,8 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
     let estimatedInputTokens = estimatePromptInputTokens(messages, requestBody.response_format);
     const sectionOutputBudget = adaptiveCompletionTokenBudget;
     const sharedTotalBudgetApplies = providerName === "groq" || providerName === "gemini";
-    const targetInputTokens = MAX_SHARED_PROVIDER_TOTAL_TOKENS
+    const maxTotalTokens = providerName === "groq" ? MAX_GROQ_TOTAL_TOKENS : MAX_SHARED_PROVIDER_TOTAL_TOKENS;
+    const targetInputTokens = maxTotalTokens
       - Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget)
       - (groupName === "narrative" && attempt === 0 ? NARRATIVE_INITIAL_HEADROOM_TOKENS : 0);
     if (sharedTotalBudgetApplies && estimatedInputTokens > targetInputTokens) {
@@ -1180,7 +1181,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
         attempt: attempt + 1, estimatedInputTokensBefore: before,
         estimatedInputTokensAfter: estimatedInputTokens, targetInputTokens,
         reservedCompletionTokens: Math.max(MIN_COMPLETION_TOKENS, sectionOutputBudget),
-        maxTotalTokens: MAX_SHARED_PROVIDER_TOTAL_TOKENS, compactionPass,
+        maxTotalTokens: maxTotalTokens, compactionPass,
       }));
     }
     const serializedPromptBytes = new TextEncoder().encode(JSON.stringify({
@@ -1192,7 +1193,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       ) + 128;
       estimatedInputTokens = Math.min(estimatedInputTokens, usageCalibratedEstimate);
     }
-    // The 6,000-token ceiling is defined against the conservative production
+    // The provider-specific total-token ceiling is defined against the conservative production
     // estimator (serialized bytes / 2 + 256 framing tokens). Provider usage
     // telemetry is useful for diagnostics but must never be used to reserve
     // LESS input headroom than that estimator requires; doing so allowed
@@ -1202,9 +1203,9 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       estimatedInputTokens,
     );
     completionTokenBudget = sharedTotalBudgetApplies
-      ? Math.min(adaptiveCompletionTokenBudget, MAX_SHARED_PROVIDER_TOTAL_TOKENS - enforcedInputTokens)
+      ? Math.min(adaptiveCompletionTokenBudget, maxTotalTokens - enforcedInputTokens)
       : adaptiveCompletionTokenBudget;
-    if (sharedTotalBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || enforcedInputTokens + completionTokenBudget > MAX_SHARED_PROVIDER_TOTAL_TOKENS)) {
+    if (sharedTotalBudgetApplies && (completionTokenBudget < MIN_COMPLETION_TOKENS || enforcedInputTokens + completionTokenBudget > maxTotalTokens)) {
       const userPrompt = JSON.parse(messages[1].content) as Record<string, unknown>;
       const byteLength = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value ?? null)).length;
       await recordProviderAttempt(input, {
@@ -1216,7 +1217,7 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
       console.warn(JSON.stringify({
         event: "provider_preflight_rejection", provider: providerName, model, group: groupName,
         failureKind: "prompt_budget_exceeded", failureClass: "preflight_budget", estimatedInputTokens,
-        minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: MAX_SHARED_PROVIDER_TOTAL_TOKENS,
+        minimumCompletionTokens: MIN_COMPLETION_TOKENS, maxTotalTokens: maxTotalTokens,
         promptBytes: {
           system: byteLength(messages[0].content),
           evidence: byteLength(userPrompt.evidence),
@@ -1225,10 +1226,10 @@ async function requestGroup<T>(fetchImpl: typeof fetch, apiKey: string, model: s
           responseSchema: byteLength(requestBody.response_format),
         },
       }));
-      throw new Error("PROVIDER_PROMPT_BUDGET_EXCEEDED: " + providerName + " section payload cannot fit within the shared 6,000-token request budget");
+      throw new Error("PROVIDER_PROMPT_BUDGET_EXCEEDED: " + providerName + " section payload cannot fit within the shared request budget");
     }
     requestBody[tokenField] = completionTokenBudget;
-    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, enforcedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: sharedTotalBudgetApplies ? MAX_SHARED_PROVIDER_TOTAL_TOKENS : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget, enforcedTotalTokens: enforcedInputTokens + completionTokenBudget }));
+    console.info(JSON.stringify({ provider: providerName, event: "request_budget", group: groupName, estimatedInputTokens, enforcedInputTokens, maxCompletionTokens: completionTokenBudget, sectionOutputBudget, maxTotalTokens: sharedTotalBudgetApplies ? maxTotalTokens : null, estimatedTotalTokens: estimatedInputTokens + completionTokenBudget, enforcedTotalTokens: enforcedInputTokens + completionTokenBudget }));
 
     let response: Response | null = null;
     for (let networkAttempt = 0; networkAttempt < maxNetworkAttempts; networkAttempt++) {
